@@ -1,8 +1,8 @@
 # Data
 /data/
 
-# Lab/course material (converted to references/MLOps-lab.md via docling)
-/MLOps-lab.pdf
+# PDFs are not tracked (e.g. lab/course material, generated reports)
+*.pdf
 
 # Mac OS-specific storage files
 .DS_Store
