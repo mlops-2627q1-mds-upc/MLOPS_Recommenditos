@@ -5,9 +5,8 @@ Team conventions for how we work together on this project.
 
 ## Sprint
 
-- Sprint length: _e.g. 1 week_
-- Sprint Planning day: _fill in_
-- Sprint Review / Retrospective day: _fill in_
+- Sprint length: 1 week, Tuesday to Tuesday.
+- Sprint Planning, Review, and Retrospective all happen in the Tuesday lab session, since that's our only fixed sync slot.
 
 ## Git and PRs
 
@@ -17,7 +16,8 @@ Team conventions for how we work together on this project.
 
 ## Communication
 
-- Daily standup update posted in Discord by _fill in time_.
+- No daily standup: the team is only together in person on Tuesdays, so that's our sync point.
+- Outside of Tuesdays, we work async and post progress updates in Discord as they happen.
 - Blockers are raised in Discord as soon as they come up, not saved for the next ceremony.
 
 _Extend this list as the team agrees on new conventions._
