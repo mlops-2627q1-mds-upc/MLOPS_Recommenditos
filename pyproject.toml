@@ -1,0 +1,50 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "recommenditos"
+version = "0.0.1"
+description = "Car price estimation ML system \u2013 MLOps course project (UPC 2026/27)"
+authors = [
+  { name = "Team Recommenditos" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+dependencies = [
+    "ipython",
+    "jupyterlab",
+    "loguru",
+    "matplotlib",
+    "mkdocs",
+    "notebook",
+    "nbstripout",
+    "numpy",
+    "pandas",
+    "pip",
+    "pre-commit",
+    "pytest",
+    "python-dotenv",
+    "ruff",
+    "scikit-learn",
+    "tqdm",
+    "typer",
+]
+requires-python = "~=3.11.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["recommenditos"]
+include = ["pyproject.toml", "recommenditos/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["recommenditos"]
+force-sort-within-sections = true
