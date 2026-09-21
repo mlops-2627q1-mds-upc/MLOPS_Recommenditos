@@ -24,7 +24,7 @@ How the Recommenditos team runs Scrum for this project.
 _Fill in who holds each role for the current sprint._
 
 - Product Owner:
-- Scrum Master:
+- Scrum Master: @lukas2510
 - Development Team:
 
 ## Ceremonies
