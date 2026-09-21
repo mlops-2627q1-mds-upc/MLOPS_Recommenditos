@@ -13,9 +13,10 @@ Full process details (roles, ceremonies, Definition of Done, working agreements)
 1. Pick an issue, assign yourself, move it to **In Progress** on the board.
 2. Branch off `main`: `feature/<short-description>` or `fix/<short-description>`.
 3. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (enforced by pre-commit) - e.g. `feat: add price model training script`.
-4. Open a pull request into `main`. Move the issue to **In Review**.
+4. Open a pull request into `main` with a title that also follows Conventional Commits (checked in CI) - it becomes the squash commit message. Move the issue to **In Review**.
 5. At least one approval and passing checks required before merging. No direct pushes to `main`.
-6. After merge, move the issue to **Done**.
+6. **Always squash merge** - it's the only merge method enabled on the repo, so `main` gets exactly one commit per PR and stays readable. Merging deletes the branch automatically.
+7. After merge, move the issue to **Done**.
 
 ## Local setup
 
