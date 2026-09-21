@@ -33,7 +33,6 @@ dependencies = [
     "scikit-learn",
     "tqdm",
     "typer",
-    "docling>=2.129.0",
 ]
 requires-python = "~=3.11.0"
 
