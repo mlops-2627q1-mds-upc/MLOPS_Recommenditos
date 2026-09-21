@@ -36,6 +36,19 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest
 
+  docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run mkdocs build --strict
+        working-directory: docs
+
   pr-title:
     name: Conventional commit PR title
     if: github.event_name == 'pull_request'
