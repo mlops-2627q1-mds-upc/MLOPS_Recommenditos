@@ -14,6 +14,28 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - "recommenditos/**"
+              - "tests/**"
+              - "pyproject.toml"
+              - "uv.lock"
+              - ".github/workflows/ci.yml"
+            docs:
+              - "docs/**"
+              - ".github/workflows/ci.yml"
+
   pre-commit:
     name: Lint & format
     runs-on: ubuntu-latest
@@ -26,27 +48,37 @@ jobs:
 
   test:
     name: Tests
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - uses: astral-sh/setup-uv@v10.1.0
+        if: needs.changes.outputs.code == 'true'
         with:
           python-version: "3.11"
           enable-cache: true
       - run: uv sync --locked
+        if: needs.changes.outputs.code == 'true'
       - run: uv run pytest
+        if: needs.changes.outputs.code == 'true'
 
   docs:
     name: Build docs
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.docs == 'true'
       - uses: astral-sh/setup-uv@v10.1.0
+        if: needs.changes.outputs.docs == 'true'
         with:
           python-version: "3.11"
           enable-cache: true
       - run: uv sync --locked
+        if: needs.changes.outputs.docs == 'true'
       - run: uv run mkdocs build --strict
+        if: needs.changes.outputs.docs == 'true'
         working-directory: docs
 
   pr-title:
