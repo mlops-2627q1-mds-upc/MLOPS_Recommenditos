@@ -6,6 +6,7 @@ How the Recommenditos team runs Scrum for this project.
 ## Channels and tools
 
 - **Discord** – the team's communication channel: daily updates, quick questions, ad-hoc discussion.
+  Server: <https://discord.gg/uG2eACGng>
 - **GitHub Issues** – the backlog: user stories, tasks, and bugs.
 - **GitHub Projects (board)** – the Kanban board used to track work through the sprint.
   Board: <https://github.com/orgs/mlops-2627q1-mds-upc/projects/1>
