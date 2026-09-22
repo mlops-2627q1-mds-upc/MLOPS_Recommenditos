@@ -29,9 +29,9 @@ Between Tuesdays, we work async and update each other in Discord as things happe
 
 _Fill in who holds each role for the current sprint._
 
-- Product Owner:
+- Product Owner: @lukas2510
 - Scrum Master: @lukas2510
-- Development Team:
+- Development Team: @kadameit, @W11W11W11, @michudud04
 
 ## Ceremonies
 
