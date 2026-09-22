@@ -52,7 +52,7 @@ The allowed categorical values and the supported makes are not fixed in the sche
 
 ## 2. Non-functional requirements
 
-Targets for latency, throughput and resources (NFR-02 to NFR-05) are estimates for the planned 4 GB, CPU-only VM **[proposed]**.
+Targets for latency, throughput and resources (NFR-02 to NFR-04) are estimates for the planned 4 GB, CPU-only VM **[proposed]**.
 They are checked with the first load test in M4 and adjusted there if needed.
 
 | ID | Quality | Requirement and target | Verified by |
@@ -61,7 +61,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-02 | Latency | On the target VM, p95 latency is at most 200 ms for `/predict` (including SHAP) and at most 300 ms for `/price-range` and `/comparables`. | Load test and the Prometheus latency histogram |
 | NFR-03 | Throughput and scalability | The API sustains 20 requests/s for 5 minutes with less than 1 % errors. The API keeps no state in memory between requests, so it scales by adding replicas. | Load test |
 | NFR-04 | Resources | The full stack runs in 4 GB RAM; the API container stays below 1 GB RSS under the NFR-03 load; the API image is at most 1 GB and contains no GPU or deep-learning libraries; the drift job runs in its own container (project brief section 6). | `docker stats` during the load test; image size check in CI |
-| NFR-05 | Availability | All services restart automatically; the API is ready at most 30 s after start; uptime is at least 99 % in the weeks before each presentation. | Prometheus `up` metric |
+| NFR-05 | Availability | **[decided, EDN-10]** All services use `restart: unless-stopped` and the API reaches `/health` = 200 within 30 s of a crash or VM reboot. The API has zero unplanned downtime during each live presentation and its warm-up, checked immediately beforehand. Outside those windows the stack runs unattended on a single VM with no redundancy or SLA, so uptime is monitored and reported, not contractually targeted. | Chaos test (kill the API container, measure recovery); manual health check before each presentation; Better Uptime external ping and Grafana dashboard for the monitored period |
 | NFR-06 | Reproducibility | `dvc repro` on a clean clone produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | Re-run before each delivery; MLflow run check |
 | NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
 | NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. **[decided]** The raw data is never re-hosted in our own remote; it is imported from its Zenodo DOI ([EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). | Great Expectations suite and tests on the response and log schemas; CI check that the raw file is absent from the DagsHub remote |
@@ -92,7 +92,7 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
      The two use cases have different validation rules, so each endpoint has one clear contract.
    - **B:** one `/valuation` endpoint that returns the estimate and the interval.
      Fewer endpoints, but the required fields would depend on the use case inside one schema.
-4. **Performance and resource targets (NFR-02 to NFR-05).**
+4. **Performance and resource targets (NFR-02 to NFR-04).**
    - **A (proposed):** commit to the estimated targets now and revisit them after the first M4 load test.
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.

@@ -147,6 +147,7 @@ client --> FastAPI (model + SHAP + intervals)
          Storage for listings (processed, no PII), prediction log, feedback
          MLflow experiment tracking (DagsHub), not called by the API
          Prometheus + Grafana (resources, latency, errors)
+         Better Uptime (external availability check, presentation windows)
          Alibi Detect job (input drift on logged requests, interval coverage)
 ```
 
@@ -186,7 +187,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 | M3 | Quality assurance: energy, static analysis, data and model tests (optional: SHAP, AIF360, TrustML) | CodeCarbon, ruff/Pylint, Pynblint, Pytest, Great Expectations | 15 |
 | M4 | Deployment: system design, API, API tests | FastAPI, Pytest, FIB VM / cloud | 25 |
 | M5 | Packaging: containers, CI/CD | Docker, Docker Compose, GitHub Actions | 15 |
-| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Alibi Detect | 10 |
+| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Better Uptime, Alibi Detect | 10 |
 
 Deliveries (via Atenea, 23:55):
 
@@ -206,6 +207,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-07: raw data hosting (import from Zenodo, never push to our own remote).
 - EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
 - EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
+- EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
 
 Made in M1, still to be written up:
 
@@ -227,4 +229,4 @@ Made in M1, still to be written up:
 - LightGBM: <https://lightgbm.readthedocs.io/>, CatBoost: <https://catboost.ai/docs/>, MAPIE: <https://mapie.readthedocs.io/>
 - SHAP: <https://shap.readthedocs.io/>, AIF360: <https://aif360.readthedocs.io/>
 - FastAPI: <https://fastapi.tiangolo.com/>, Docker Compose: <https://docs.docker.com/compose/>, GitHub Actions: <https://docs.github.com/actions>
-- Prometheus: <https://prometheus.io/docs/>, Grafana: <https://grafana.com/docs/>, Alibi Detect: <https://docs.seldon.io/projects/alibi-detect/>
+- Prometheus: <https://prometheus.io/docs/>, Grafana: <https://grafana.com/docs/>, Better Uptime: <https://betterstack.com/docs/uptime/start.html>, Alibi Detect: <https://docs.seldon.io/projects/alibi-detect/>
