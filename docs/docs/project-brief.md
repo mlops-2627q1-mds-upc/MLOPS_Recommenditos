@@ -127,6 +127,10 @@ Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) o
 Train with random masking of optional fields so the model produces wider intervals for partial inputs.
 The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
 
+**[open]:** whether the point model (UC1, steps 1-4 above) needs the same random masking, or can rely on native missing-value handling, depends on per-field fill rates in the training data that have not been profiled yet.
+`nr_prev_owners` is naturally missing often enough (55 % filled) that the model should learn real "missing" behaviour for it; the other optional basic-set fields (`body_type`, `drive_train`, `gears`, `cylinders_volume_cc`, `nr_seats`, `nr_doors`, `seller_type`) have no documented fill rate and may be close to always present, in which case the model never sees them missing during training and falls back to an unvalidated default at serving time (see [requirements](requirements.md) FR-01).
+No current success criterion would catch this: SC-04's segments do not include "with optional field X masked", and SC-05's partial-input check (P1) covers UC2's intervals, not UC1's point estimate.
+
 Comparable listings: k-nearest-neighbour search over the processed listings, returned next to the prediction.
 
 Explainability: SHAP (TreeExplainer) per prediction and globally.
@@ -220,6 +224,7 @@ Made in M1, still to be written up:
 
 - Deduplication key and split strategy.
 - Feedback loop: simulated labels or no `/feedback` endpoint.
+- Whether the point model needs random masking of optional fields, like the UC2 interval models, or a narrower optional-field list in FR-01; depends on fill rates not yet profiled (section 4).
 
 ## 9. Reference links
 
