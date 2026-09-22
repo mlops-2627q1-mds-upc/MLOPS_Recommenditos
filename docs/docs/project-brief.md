@@ -184,13 +184,16 @@ Deliveries (via Atenea, 23:55):
 - **1st report (M1-M3): 2026-10-13**, max 15 pages; presentation on 2026-10-14.
 - **2nd report (M4-M6): 2026-12-08**, max 30 pages; presentation on 2026-12-09.
 
-## 8. Decisions to record in the EDN
+## 8. Decisions and the EDN
 
-Already made in M1, to be written up in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md):
+Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md):
+
+- EDN-01: dataset choice (AutoScout24).
+- EDN-02: model family (gradient boosting, LightGBM as main model).
+
+Made in M1, still to be written up:
 
 - Project choice (car price vs. route safety, recommender and grocery ideas).
-- Dataset choice (AutoScout24).
-- Model family (gradient boosting).
 
 **[open]**, to decide with the team:
 
