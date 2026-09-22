@@ -175,6 +175,8 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 - **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9.
   Run it isolated with `uvx pynblint`, not as a project dependency.
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
+  **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
+  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [requirements](requirements.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8".
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 
@@ -208,6 +210,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
 - EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
 - EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
+- EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
 
 Made in M1, still to be written up:
 
