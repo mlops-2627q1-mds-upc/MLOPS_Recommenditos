@@ -1,0 +1,49 @@
+\subsection{Milestone 2: Model Building -- Reproducibility}
+\label{sec:m2}
+\guidance{
+  \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
+  EDN entries here only for reproducibility decisions that go beyond what the course prescribes.
+}
+
+\subsubsection{Project structure}
+\label{sec:m2-structure}
+\guidance{
+  \textbf{Template:} e.g.\ Cookiecutter.\\
+  \textbf{Rubric (5 pts):} How well does the project structure support clarity, maintainability, and adaptation to the project's needs?\\
+  We use the Cookiecutter Data Science template \cite{ccds} with uv as dependency manager.
+  Justify any deviations from it (the course allows justified deviations).
+}
+
+\tbd{project structure and deviations from the template}
+
+\subsubsection{Code versioning}
+\label{sec:m2-code-versioning}
+\guidance{
+  \textbf{Template:} e.g.\ GitHub Flow.\\
+  \textbf{Rubric (15 pts, shared with data versioning):} How do our version control practices keep collaboration smooth and minimise mistakes?\\
+  Already in place: GitHub Flow with \texttt{feature/} and \texttt{fix/} branches, branch protection on \texttt{main}, squash merge as the only merge method, Conventional Commits enforced by pre-commit and by a CI check on PR titles, pre-commit hooks (ruff, nbstripout, file hygiene).
+}
+
+\tbd{code versioning workflow}
+
+\subsubsection{Data versioning}
+\label{sec:m2-data-versioning}
+\guidance{
+  \textbf{Template:} e.g.\ DVC.\\
+  \textbf{Rubric:} How effectively does our data versioning strategy guarantee reproducibility and scalability?\\
+  The demo uses DVC with a DagsHub remote (HTTP option) and a \texttt{dvc.yaml} pipeline \texttt{download -> preprocess -> validate -> split -> train} with code files as dependencies; commit \texttt{dvc.lock}.
+  Consider a pipeline figure.
+}
+
+\tbd{data versioning and DVC pipeline}
+
+\subsubsection{Experiment tracking}
+\label{sec:m2-experiment-tracking}
+\guidance{
+  \textbf{Template:} e.g.\ MLflow.\\
+  \textbf{Rubric (5 pts):} How does our experiment tracking help us and others compare, understand, and extend our results?\\
+  The demo uses DagsHub as shared MLflow tracking server with credentials in \texttt{.env}.
+  Show what we log (parameters, metrics, artifacts, emissions) and a comparison of runs.
+}
+
+\tbd{experiment tracking setup and results}

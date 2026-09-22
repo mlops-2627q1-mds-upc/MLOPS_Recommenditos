@@ -1,0 +1,78 @@
+\section{Introduction}
+\label{sec:introduction}
+
+\subsection{Goal of the project}
+\label{sec:goal}
+\guidance{
+  Briefly describe what the project is about and which problem it solves.
+  \textbf{Must include the success criteria of the project} (course template).
+  Think of the ML component as deployed and used in operation, since the course focuses on building and deploying one ML component rather than a whole ML-based system.
+}
+
+\tbd{project goal and problem statement}
+
+\paragraph{Success criteria.}
+\tbd{measurable success criteria, e.g.\ target metric on the test set, latency, cost}
+
+\subsection{Teammates' evaluation}
+\label{sec:teammates-evaluation}
+\guidance{
+  Default is option~1 (full consensus).
+  If there is no consensus, switch to option~2 below by setting \texttt{\textbackslash consensusfalse} and fill in the CATME ratings (received evaluations in rows, scale 1--5).
+  Peer ratings feed into each member's individual grading factor.
+}
+
+\newif\ifconsensus
+\consensustrue
+
+\ifconsensus
+  $\boxtimes$~\textbf{\enquote{All team members agree that they had an equal contribution to this delivery and project: completing a fair share of the team's work with acceptable/high quality, keeping commitments, and completing assignments on time, helping teammates who are having difficulty when it is easy or important.}}
+\else
+  There is no consensus on an equal contribution.
+  Each team member rated their peers' contributions to this delivery using the CATME scale in \cref{tab:catme-scale}; \cref{tab:catme-ratings} shows the received ratings in rows.
+
+  \begin{table}[ht]
+    \centering\small
+    \begin{tabularx}{\textwidth}{@{}cX@{}}
+      \toprule
+      Rating & Description \\
+      \midrule
+      5 & Does more or higher-quality work than expected. Makes important contributions that improve the team's work. Helps teammates who are having difficulty completing their work. \\
+      4 & Demonstrates behaviors described immediately above and below. \\
+      3 & Completes a fair share of the team's work with acceptable quality. Keeps commitments and completes assignments on time. Helps teammates who are having difficulty when it is easy or important. \\
+      2 & Demonstrates behaviors described immediately above and below. \\
+      1 & Does not do a fair share of the team's work. Delivers sloppy or incomplete work. \\
+      \bottomrule
+    \end{tabularx}
+    \caption{CATME ratings (from \url{https://info.catme.org/features/catme-five-dimensions/}).}
+    \label{tab:catme-scale}
+  \end{table}
+
+  \begin{table}[ht]
+    \centering\small
+    \begin{tabular}{@{}lcccccc@{}}
+      \toprule
+      & \MemberA & \MemberB & \MemberC & \MemberD & \MemberE & Average \\
+      \midrule
+      \MemberA & -- & & & & & \\
+      \MemberB & & -- & & & & \\
+      \MemberC & & & -- & & & \\
+      \MemberD & & & & -- & & \\
+      \MemberE & & & & & -- & \\
+      \bottomrule
+    \end{tabular}
+    \caption{Received peer evaluations (rows: evaluated member).}
+    \label{tab:catme-ratings}
+  \end{table}
+\fi
+
+\subsection{Engineering Decision Notebook}
+\label{sec:edn}
+\guidance{
+  Not part of the course report template.
+  The course asks every team to keep an Engineering Decision Notebook (EDN) throughout the project (references/Instruction\_EDN\_MLOps\_v2026.md).
+  We keep it as a separate document built from the same sources (\texttt{edn.tex}); refer to its entries by ID in the methodology, e.g.\ \enquote{(EDN-03)}.
+}
+
+The relevant engineering decisions behind this work, and the role AI played in them, are recorded in our Engineering Decision Notebook (MLOps\_\TeamName\_EDN.pdf, delivered alongside this report).
+Methodology sections refer to its entries by ID.

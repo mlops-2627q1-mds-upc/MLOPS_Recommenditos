@@ -1,8 +1,10 @@
 # Data
 /data/
 
-# PDFs are not tracked (e.g. lab/course material, generated reports)
+# PDFs and Word files are not tracked (e.g. lab/course material, generated reports).
+# Their Markdown conversions live in references/.
 *.pdf
+*.docx
 
 # Mac OS-specific storage files
 .DS_Store

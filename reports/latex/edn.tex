@@ -1,0 +1,124 @@
+% Engineering Decision Notebook (EDN), following the course instructions
+% (references/Instruction_EDN_MLOps_v2026.md). Entries are drafted in
+% reports/edn.md, then transferred to one file per entry in edn/ (copied from
+% edn/_template.tex) and added to the list at the bottom.
+\documentclass[11pt, a4paper]{article}
+\input{preamble}
+
+\fancyhead[L]{\small MLOps\_\TeamName}
+\fancyhead[R]{\small Engineering Decision Notebook}
+
+% --- \ednentry{key=value, ...} ---------------------------------------------
+% Keys mirror the fields of the course instructions. Required: id, title,
+% milestone, participants, decision, rationale, ai. Brace any value that
+% contains a comma or an equals sign. Values may span several paragraphs.
+\newtcolorbox{ednbox}[1]{
+  breakable, enhanced, colback=white, colframe=black!60, boxrule=0.5pt,
+  fonttitle=\bfseries, title={#1}, left=6pt, right=6pt,
+}
+
+\ExplSyntaxOn
+\clist_const:Nn \c__edn_fields_clist
+  { id, title, date, milestone, topic, participants, decision, rationale,
+    ai, response, assessment, aievidence, evidence }
+\clist_const:Nn \c__edn_required_clist
+  { id, title, milestone, participants, decision, rationale, ai }
+\clist_map_inline:Nn \c__edn_fields_clist
+  {
+    \tl_new:c { l__edn_#1_tl }
+    \keys_define:nn { edn } { #1 .tl_set:c = { l__edn_#1_tl } }
+  }
+
+\cs_new_protected:Npn \__edn_field:nn #1#2
+  {
+    \tl_if_empty:cF { l__edn_#2_tl }
+      { \item [#1] \tl_use:c { l__edn_#2_tl } }
+  }
+
+\NewDocumentCommand \ednentry { +m }
+  {
+    \group_begin:
+    \clist_map_inline:Nn \c__edn_fields_clist { \tl_clear:c { l__edn_##1_tl } }
+    \keys_set:nn { edn } {#1}
+    \clist_map_inline:Nn \c__edn_required_clist
+      {
+        \tl_if_empty:cT { l__edn_##1_tl }
+          {
+            \msg_error:nnVn { edn } { missing-field } \l__edn_id_tl {##1}
+          }
+      }
+    \phantomsection
+    \addcontentsline { toc } { section } { \l__edn_id_tl :~ \l__edn_title_tl }
+    \begin { ednbox } { \l__edn_id_tl :~ \l__edn_title_tl }
+      \begin { description }
+        [ leftmargin = 4.3cm, labelwidth = 4.1cm, labelsep = 0.2cm,
+          align = parleft, font = \small\bfseries, itemsep = 3pt ]
+        \__edn_field:nn { Date } { date }
+        \__edn_field:nn { Milestone } { milestone }
+        \__edn_field:nn { Activity~/~Topic } { topic }
+        \__edn_field:nn { Participants } { participants }
+        \__edn_field:nn { Decision } { decision }
+        \__edn_field:nn { Rationale } { rationale }
+        \__edn_field:nn { AI~involvement } { ai }
+        \__edn_field:nn { Response~to~AI } { response }
+        \__edn_field:nn { Assessment~of~the~AI~contribution } { assessment }
+        \__edn_field:nn { AI~interaction~evidence } { aievidence }
+        \__edn_field:nn { Other~evidence } { evidence }
+      \end { description }
+    \end { ednbox }
+    \group_end:
+  }
+
+\msg_new:nnn { edn } { missing-field }
+  { Entry~`#1'~is~missing~the~required~field~`#2'. }
+\cs_generate_variant:Nn \msg_error:nnnn { nnVn }
+\ExplSyntaxOff
+
+% Quote a prompt or response inside the aievidence field.
+\newcommand{\ednprompt}[1]{\textit{Prompt:} \enquote{#1}\par}
+\newcommand{\ednresponse}[1]{\textit{Response:} \enquote{#1}\par}
+
+\begin{document}
+
+\begin{center}
+  {\small \CourseName\ -- \CourseTerm\par}
+  \vspace{0.5em}
+  {\LARGE\bfseries MLOps\_\TeamName\par}
+  \vspace{0.3em}
+  {\Large Engineering Decision Notebook\par}
+  \vspace{0.3em}
+  {\small \RepoLink\par}
+\end{center}
+
+This notebook records a selected set of engineering decisions that meaningfully shaped our ML system, and how AI contributed to them.
+It does not list every decision or every use of AI, nor the use of tools the course prescribes.
+
+\tableofcontents
+\bigskip
+
+\guidance{
+  Create an entry when a decision could reasonably have been made differently and the choice has meaningful consequences for the project.
+  Entries are written first in \texttt{reports/edn.md} and transferred here before a delivery: copy \texttt{edn/\_template.tex} to \texttt{edn/NN-short-slug.tex}, fill it in from the Markdown entry (alternatives with pros and cons go into the rationale) and add an \texttt{\textbackslash input} line below.
+  IDs are stable (EDN-01, EDN-02, \dots) so the report can refer to them; never renumber.
+  Link issues, PRs and commits as other evidence.
+  The example below is Example~3 of the course instructions and only shows in draft builds.
+}
+
+\ifguidance
+  \ednentry{
+    id = {EDN-00},
+    title = {Example: test that the API rejects missing input},
+    milestone = {M3: Quality Assurance},
+    topic = {Testing Strategy},
+    participants = {All team members},
+    decision = {We decided to add a test to verify that the API rejects requests with missing input data.},
+    rationale = {Missing input data is a likely source of invalid requests. We therefore decided to explicitly test this behavior before deployment.},
+    ai = {No AI involvement.},
+    evidence = {Link to the corresponding test.},
+  }
+\fi
+
+% Entries, oldest first.
+% \input{edn/01-short-slug}
+
+\end{document}

@@ -68,6 +68,26 @@ data: requirements
 	$(PYTHON_INTERPRETER) recommenditos/dataset.py
 
 
+# initial (Milestones 1-3, max 15 pages) or final (Milestones 1-6, max 30 pages)
+DELIVERABLE ?= initial
+
+## Build draft report and EDN with writing guidance into reports/latex/build/
+.PHONY: report
+report:
+	reports/latex/build.sh draft
+
+## Build submission PDFs without guidance: make report-submit DELIVERABLE=initial|final
+.PHONY: report-submit
+report-submit:
+	reports/latex/build.sh $(DELIVERABLE)
+
+## Same as `make report`, but inside Docker (no local LaTeX needed)
+.PHONY: report-docker
+report-docker:
+	docker build -t mlops-latex reports/latex
+	docker run --rm -v "$(CURDIR)/reports/latex:/report" mlops-latex draft
+
+
 #################################################################################
 # Self Documenting Commands                                                     #
 #################################################################################

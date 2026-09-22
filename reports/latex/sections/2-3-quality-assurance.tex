@@ -1,0 +1,49 @@
+\subsection{Milestone 3: Model Building -- Quality Assurance}
+\label{sec:m3}
+\guidance{
+  \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
+  The testing strategy for code, data and model is a typical M3 EDN entry.
+}
+
+\subsubsection{Energy efficiency awareness}
+\label{sec:m3-energy}
+\guidance{
+  \textbf{Template:} e.g.\ CodeCarbon. Reason about the energy efficiency of your ML component.\\
+  \textbf{Rubric (5 pts):} How do our energy tracking practices help us reflect on the efficiency and sustainability of our choices?\\
+  The demo wraps only the \texttt{fit} call in CodeCarbon's \texttt{EmissionsTracker} and logs the result to MLflow per run.
+  Go beyond reporting a number: compare models or configurations by energy versus accuracy.
+}
+
+\tbd{energy measurements and what we concluded from them}
+
+\subsubsection{Static code analysis}
+\label{sec:m3-static-analysis}
+\guidance{
+  \textbf{Template:} e.g.\ pylint.\\
+  \textbf{Rubric (10 pts, shared with model and data testing):} To what degree does our linting contribute to the overall quality and consistency of the codebase?\\
+  The lab lists Pynblint (notebook and repository QA), Pylint or flake8.
+  We run ruff through pre-commit and CI; the demo additionally enables Pylint rules in ruff (\texttt{PL}), which our config does not yet.
+}
+
+\tbd{static analysis tools, configuration and findings}
+
+\subsubsection{Model testing}
+\label{sec:m3-model-testing}
+\guidance{
+  \textbf{Template:} e.g.\ pytest.\\
+  \textbf{Rubric:} To what extent do our tests give confidence that the code and model behave as expected under different conditions?\\
+  The demo tests a metric threshold on the test set and uses parametrized invariance tests.
+  Optional extension listed by the demo repo: non-functional requirements (explainability with SHAP, fairness with AIF360, trustworthiness with TrustML).
+}
+
+\tbd{model tests and coverage}
+
+\subsubsection{Data testing}
+\label{sec:m3-data-testing}
+\guidance{
+  \textbf{Template:} e.g.\ Great Expectations, Deepchecks.\\
+  \textbf{Rubric:} How effectively does our data validation strategy anticipate and prevent potential issues in the pipeline?\\
+  The demo validates raw and clean data with Great Expectations as a DVC stage and publishes Data Docs.
+}
+
+\tbd{data validation strategy and expectations}

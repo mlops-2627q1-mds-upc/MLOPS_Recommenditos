@@ -1,0 +1,46 @@
+% Cover page. Course rules: team/project name, which deliverable, links to
+% resources, one contact for the whole team, and every member's surname,
+% name, UPC e-mail and GitHub account. All values come from config.tex.
+\iffinalreport
+  \newcommand{\ApiRow}{Deployed API & \ApiLink \\}
+\else
+  \newcommand{\ApiRow}{}
+\fi
+
+\begin{titlepage}
+  \centering
+  {\large \CourseName\par}
+  {\CourseProgram\par}
+  {\CourseTerm\par}
+  \vspace{3cm}
+  {\Huge\bfseries MLOps\_\TeamName\par}
+  \vspace{0.5cm}
+  {\Large \ProjectTitle\par}
+  \vspace{1cm}
+  {\Large\bfseries \Deliverable\par}
+  \vspace{0.5cm}
+  {\large \today\par}
+  \vfill
+
+  \raggedright
+  \textbf{Resources}\\[0.3em]
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    GitHub repository & \RepoLink \\
+    Project board & \BoardLink \\
+    Team chat (Discord) & \DiscordLink \\
+    DVC remote and MLflow & \DagsHubLink \\
+    Presentation slides & \SlidesLink \\
+    \ApiRow
+    Team contact & \TeamContact \\
+  \end{tabularx}
+
+  \vspace{1em}
+  \textbf{Team members}\\[0.3em]
+  \begin{tabularx}{\textwidth}{@{}llXl@{}}
+    \toprule
+    Surname & Name & UPC e-mail & GitHub \\
+    \midrule
+    \TeamMemberRows
+    \bottomrule
+  \end{tabularx}
+\end{titlepage}

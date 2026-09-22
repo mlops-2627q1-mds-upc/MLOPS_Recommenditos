@@ -1,0 +1,47 @@
+% Team report, following the course template (references/mlops_report_template.md).
+% Build with `make report` (draft) or `make report-submit` (see reports/latex/README.md).
+\documentclass[11pt, a4paper]{article}
+\input{preamble}
+
+\iffinalreport
+  \newcommand{\Deliverable}{Final report (Milestones 1--6)}
+\else
+  \newcommand{\Deliverable}{Initial report (Milestones 1--3)}
+\fi
+
+\fancyhead[L]{\small MLOps\_\TeamName}
+\fancyhead[R]{\small \Deliverable}
+
+\setcounter{tocdepth}{2}
+
+\begin{document}
+
+\input{sections/cover}
+
+\tableofcontents
+\newpage
+
+\input{sections/1-introduction}
+
+\section{Methodology}
+\label{sec:methodology}
+\guidance{
+  One subsection per milestone, one sub-subsection per software engineering practice.
+  For each practice describe \emph{how} we applied it and \emph{why} that way, not only which tool we used.
+  The rubric grades every practice as Poor / Fair (replicated the demo with minor changes) / Good (major changes) / Excellent (extended or innovative), so point out what goes beyond the demo repo.
+  Page limit: 15 pages for the initial report, 30 for the final one.
+  Update earlier milestones in the final report when things changed (e.g.\ the model card).
+}
+\input{sections/2-1-inception}
+\input{sections/2-2-reproducibility}
+\input{sections/2-3-quality-assurance}
+\iffinalreport
+  \input{sections/2-4-api}
+  \input{sections/2-5-packaging}
+  \input{sections/2-6-monitoring}
+  \input{sections/3-retrospective}
+\fi
+
+\printbibliography[heading=bibintoc]
+
+\end{document}

@@ -20,6 +20,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       docs: ${{ steps.filter.outputs.docs }}
+      report: ${{ steps.filter.outputs.report }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -34,6 +35,10 @@ jobs:
               - ".github/workflows/ci.yml"
             docs:
               - "docs/**"
+              - ".github/workflows/ci.yml"
+            report:
+              - "reports/latex/**"
+              - "Makefile"
               - ".github/workflows/ci.yml"
 
   pre-commit:
@@ -80,6 +85,41 @@ jobs:
       - run: uv run mkdocs build --strict
         if: needs.changes.outputs.docs == 'true'
         working-directory: docs
+
+  report:
+    name: Build report (${{ matrix.arch }})
+    needs: changes
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          # Apple Silicon and other ARM machines run the arm64 image.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        if: needs.changes.outputs.report == 'true'
+      - uses: docker/setup-buildx-action@v4
+        if: needs.changes.outputs.report == 'true'
+      - uses: docker/build-push-action@v7
+        if: needs.changes.outputs.report == 'true'
+        with:
+          context: reports/latex
+          tags: mlops-latex
+          load: true
+          cache-from: type=gha,scope=latex-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=latex-${{ matrix.arch }}
+      - run: docker run --rm -v "$PWD/reports/latex:/report" mlops-latex initial
+        if: needs.changes.outputs.report == 'true'
+      - run: docker run --rm -v "$PWD/reports/latex:/report" mlops-latex final
+        if: needs.changes.outputs.report == 'true'
+      - uses: actions/upload-artifact@v7
+        if: needs.changes.outputs.report == 'true' && matrix.arch == 'amd64'
+        with:
+          name: report-pdfs
+          path: reports/latex/build/MLOps_*.pdf
 
   pr-title:
     name: Conventional commit PR title
