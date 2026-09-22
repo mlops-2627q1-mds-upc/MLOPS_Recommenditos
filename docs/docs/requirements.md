@@ -65,7 +65,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-06 | Reproducibility | `dvc repro` on a clean clone produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | Re-run before each delivery; MLflow run check |
 | NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
 | NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. **[decided]** The raw data is never re-hosted in our own remote; it is imported from its Zenodo DOI ([EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). | Great Expectations suite and tests on the response and log schemas; CI check that the raw file is absent from the DagsHub remote |
-| NFR-09 | Security | Request bodies are limited to 10 KB; no secrets are committed, and the `/feedback` API key is passed to the container as an environment variable; containers run as a non-root user; all dependencies are locked in `uv.lock`. | API test, secret scan in CI, Dockerfile review |
+| NFR-09 | Security | Request bodies are limited to 10 KB, enforced by middleware that checks `Content-Length` before the body is read, not left to an optional reverse proxy alone. The prediction endpoints are rate-limited per client IP, protecting NFR-03's throughput budget and NFR-05's presentation-day uptime from a single client. **[proposed]** Endpoints carrying the `/feedback` API key (FR-10) are served over TLS, pending confirmation that the FIB Virtech VM can get a domain and certificate; otherwise the key travels in cleartext. No secrets are committed; the API key is passed as an environment variable; containers run as a non-root user. Dependencies are locked in `uv.lock` and scanned for known vulnerabilities in CI (`pip-audit`, Dependabot alerts); the built image is scanned before deploy (`trivy`). | API test (body limit, rate limit); secret scan, `pip-audit` and `trivy` in CI; Dockerfile review; TLS check in the deployment smoke test once confirmed feasible |
 | NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; a full training run takes at most 15 minutes on a laptop CPU. | MLflow |
 | NFR-11 | Observability | The drift job flags the `ES` replay as drift within its first 1,000 requests. | M6 replay |
 | NFR-12 | Portability | `docker compose up` starts the whole stack on a fresh VM; no LLM or paid external service is needed at runtime. | Deployment smoke test |
@@ -97,6 +97,11 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.
      Avoids guessing, but leaves M4 without acceptance criteria.
+5. **TLS for the `/feedback` API key (NFR-09).**
+   - **A (proposed):** serve over TLS once the FIB Virtech VM can get a domain and certificate (e.g. Let's Encrypt).
+     Otherwise the API key added in FR-10 travels in cleartext, which defeats most of the point of adding it.
+   - **B:** skip TLS if no domain is available on the VM, and accept that the key is only a casual-access deterrent, not a real secret.
+     Simpler, but weakens the guarantee FR-10 was decided for.
 
 **Decided:** raw data hosting (NFR-08), recorded as [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 The raw file contains PII (street, zip, coordinates, seller company name for private sellers) and comes from an immutable, versioned Zenodo DOI, so it is pulled with `dvc import-url` and never pushed to our own DagsHub remote, instead of being tracked like a normal pipeline input (see [Data versioning](data-versioning.md)).
