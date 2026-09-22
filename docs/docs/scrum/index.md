@@ -31,7 +31,7 @@ _Fill in who holds each role for the current sprint._
 
 - Product Owner: @lukas2510
 - Scrum Master: @lukas2510
-- Development Team: @kadameit, @W11W11W11, @michudud04
+- Development Team: @kadameit, @W11W11W11, @michudud04, @ulasawczuk
 
 ## Ceremonies
 
