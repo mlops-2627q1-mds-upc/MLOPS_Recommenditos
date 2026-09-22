@@ -54,29 +54,35 @@ Verified facts (profiled on 2026-09-22):
 - Categorical labels are English, but `description` and `model_version` are free text in local languages (84,171 unique versions).
 - Price ranges from 1 to 13.5M EUR (median 39,980); mileage from 0 to 2.57M km.
 
-### 3.2 Complementary dataset **[open]**
+### 3.2 New-market drift scenario **[decided]**
 
-**DataMarket, Spanish second-hand cars (free sample)**: <https://github.com/Data-Market/vehiculos-de-segunda-mano>
+Decision and reasoning: [EDN-03](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 
-- 50,000 listings, one extraction (2021-01-15), Spanish labels, 21 columns, no license file.
-  It is a sample of a commercial dataset, so we must not re-host it in a public DVC remote.
-- About 10 fields overlap with AutoScout24 (make, model, version, price, year, km, power in CV, fuel, transmission, doors, colour, dealer flag, province); no equipment or description fields.
-- Known issues: `price_financed` 52.9 % missing, `power` 17.1 % missing, mileage 0 to 5M km, colour is free text (3,565 variants).
+We hold out all AutoScout24 `ES` listings (8,015, 6.8 % of the rows) as a "new market" the model has never seen.
+Schema, scrape date and source portal stay the same, so any drift the monitoring detects on these listings comes from the market itself.
 
-Original plan: map it to the AutoScout24 schema in its own pipeline stage and use it as an out-of-distribution "new market" set for drift monitoring, not for training.
-The supervisor (S. del Rey) asked us to check whether that is feasible given the feature mismatch.
-Our checks show three problems with that plan:
+- The split stage of the DVC pipeline removes `ES` after deduplication and before the train/validation/calibration split, and writes it as its own versioned artefact.
+  No `ES` row reaches training, validation or conformal calibration.
+- In M6 we replay the `ES` listings against the API as simulated traffic.
+  Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
+  The same prices can serve as the delayed labels for `/feedback` (see 5).
+- After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
+- **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
+  An API test covers this case.
+- **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
+
+**DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
+It was the original drift set, and the supervisor (S. del Rey) asked us to check whether it is feasible given the feature mismatch.
+It is not, for three reasons:
 
 - Spain is not a new market: AutoScout24 already has 8,015 `ES` listings.
 - 36.5 % of the DataMarket rows are makes the model never sees (Peugeot, Citroën, SEAT, ...), and the overlapping mass-market makes have under 400 training rows each.
 - Market, time (2021 vs 2025), source portal and brand mix all shift at once, so a drift alarm cannot be attributed to any one of them.
   Example: BMW median price is 16,000 EUR in DataMarket vs 24,819 EUR in AutoScout24 `ES`.
 
-Options under discussion:
-
-- **Hold out one AutoScout24 country** (e.g. IT or ES) as the new-market drift scenario: same schema, time and source, so the drift really is the market.
-- **Keep DataMarket as an optional stress test**, restricted to makes both datasets share.
-- **Drop DataMarket.**
+Using it would also need a dedicated schema-mapping stage: 50,000 listings from one extraction (2021-01-15), Spanish labels, 21 columns of which only about 10 overlap, no equipment or description fields, `price_financed` 52.9 % and `power` 17.1 % missing, mileage up to 5M km, and free-text colour (3,565 variants).
+It has no license file and is a sample of a commercial dataset, so we could not re-host it in a public DVC remote either.
+The report describes this check as part of the data decisions.
 
 ### 3.3 Known data issues (handle in code, document in the dataset card)
 
@@ -91,7 +97,7 @@ Options under discussion:
 - **Duplicates:** `vin` is only 34 % filled, so VIN-based deduplication is not enough.
   A key on make, model, version, mileage, registration date, price and power finds 6,347 duplicate rows.
   Deduplicate **before** splitting.
-- **Splits:** grouped split (e.g. by dealer), not purely random.
+- **Splits:** hold out `ES` first (see 3.2), then a grouped split (e.g. by dealer), not purely random.
   The dealer key comes from `seller_company_name`, which is PII, so hash it into a group id **before** the PII-removal stage.
   No listing date exists, so a temporal split is not possible.
 - **Useless or empty fields:** `warranty` and `has_warranty` are 100 % empty; `had_accident` is True for 3 rows; `fuel_cons_city_l100_km` and `fuel_cons_highway_l100_km` are empty.
@@ -153,7 +159,7 @@ Open points:
   The full stack is tight on 4 GB.
 - Storage: PostgreSQL only pays off if monitoring reads the prediction log; a lighter store may be enough.
 - MLflow hosting: DagsHub (as in the course demo) or self-hosted.
-- Feedback loop: simulate delayed labels from held-out data, or drop `/feedback`.
+- Feedback loop: simulate delayed labels from the held-out `ES` listings (see 3.2), or drop `/feedback`.
 
 ## 6. Tooling constraints
 
@@ -190,6 +196,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 
 - EDN-01: dataset choice (AutoScout24).
 - EDN-02: model family (gradient boosting, LightGBM as main model).
+- EDN-03: new-market drift scenario (hold out AutoScout24 `ES`, drop DataMarket).
 
 Made in M1, still to be written up:
 
@@ -197,7 +204,6 @@ Made in M1, still to be written up:
 
 **[open]**, to decide with the team:
 
-- Handling of the Spanish dataset after supervisor feedback (see 3.2).
 - Component scope: premium brands only, stated in the model card, or a broader dataset.
 - New and pre-registered cars: filter them out or keep them with a flag.
 - Deduplication key and split strategy.
