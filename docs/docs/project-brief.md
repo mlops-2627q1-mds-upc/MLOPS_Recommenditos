@@ -68,6 +68,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
   The same prices can serve as the delayed labels for `/feedback` (see 5).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
+  **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
 - **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
   An API test covers this case.
 - **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
@@ -215,6 +216,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
 - EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
 - EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
+- EDN-12: retraining and promotion are human-triggered, not automated.
 
 Made in M1, still to be written up:
 
