@@ -37,6 +37,11 @@ dependencies = [
 requires-python = "~=3.12.0"
 
 
+[tool.pytest.ini_options]
+markers = [
+    "req(*ids): requirement IDs this test verifies, e.g. req(\"FR-04\") or req(\"FR-15\", \"NFR-01\"); see docs/docs/requirements.md",
+]
+
 [tool.ruff]
 line-length = 99
 src = ["recommenditos"]

@@ -6,7 +6,7 @@ The requirements are derived from the use cases UC1 (car valuation) and UC2 (pur
 What the model learns, its features and its quality targets live in the [problem specification](problem-spec.md); this page links to it instead of repeating it.
 
 Every requirement has an ID (`FR-xx` for functional, `NFR-xx` for non-functional).
-Tests reference the IDs they verify in their name, e.g. `test_fr04_rejects_unsupported_make`.
+Tests mark the IDs they verify with `@pytest.mark.req("FR-04")` (supports multiple IDs per test, e.g. a test that covers both FR-15 and NFR-01).
 
 Status markers as in the project brief:
 
@@ -67,12 +67,32 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-04 | Resources | The full stack runs in 4 GB RAM; the API container stays below 1 GB RSS under the NFR-03 load; the API image is at most 1 GB and contains no GPU or deep-learning libraries; the drift job runs in its own container (project brief section 6). | `docker stats` during the load test; image size check in CI |
 | NFR-05 | Availability | **[decided, EDN-10]** All services use `restart: unless-stopped` and the API reaches `/health` = 200 within 30 s of a crash or VM reboot. The API has zero unplanned downtime during the M4-M6 presentation (Dec. 9) and its warm-up, checked immediately beforehand; the API does not exist yet for the M1-M3 presentation (Oct. 14). Outside the presentation window the stack runs unattended on a single VM with no redundancy or SLA, so uptime is monitored and reported, not contractually targeted. | Chaos test (kill the API container, measure recovery); manual health check before the December presentation; Better Uptime external ping and Grafana dashboard for the monitored period |
 | NFR-06 | Reproducibility | `dvc repro` on a clean clone produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | Re-run before each delivery; MLflow run check |
-| NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
+| NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. From M3 onward, CI generates a requirement-to-test coverage matrix from the `req` markers and fails if any `FR-xx`/`NFR-xx` has no test. | CI |
 | NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. This also covers the caller's own IP address: neither FR-13's prediction log nor uvicorn's own access log records it, since uvicorn's default access-log format includes the client address unless reconfigured. **[decided]** The raw data is never re-hosted in our own remote; it is imported from its Zenodo DOI ([EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). | Great Expectations suite and tests on the response and log schemas; CI check that the raw file is absent from the DagsHub remote; log format/config check confirming no client-address field is emitted |
 | NFR-09 | Security | Request bodies are limited to 10 KB, enforced by middleware that checks `Content-Length` before the body is read, not left to an optional reverse proxy alone. The prediction endpoints are rate-limited per client IP, protecting NFR-03's throughput budget and NFR-05's presentation-day uptime from a single client. **[proposed]** Endpoints carrying the `/feedback` API key (FR-10) are served over TLS, pending confirmation that the FIB Virtech VM can get a domain and certificate; otherwise the key travels in cleartext. No secrets are committed; the API key is passed as an environment variable; containers run as a non-root user. Dependencies are locked in `uv.lock` and scanned for known vulnerabilities in CI (`pip-audit`, Dependabot alerts); the built image is scanned before deploy (`trivy`). | API test (body limit, rate limit); secret scan, `pip-audit` and `trivy` in CI; Dockerfile review; TLS check in the deployment smoke test once confirmed feasible |
 | NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; training the final chosen configuration (no hyperparameter search) takes at most 15 minutes on a laptop CPU. CodeCarbon also measures the API's energy during the NFR-03 load test, reported as average energy per request, not tracked per individual request: CodeCarbon's measurement granularity does not match single-digit-millisecond events, and a per-request tracker would risk NFR-02's latency budget. | MLflow; energy-per-request figure from the NFR-03 load test |
 | NFR-11 | Observability | The drift job flags the `ES` replay as drift within its first 1,000 requests, including at least one feature other than `country_code`. Replaying an equal-sized sample of the held-out test set through the same harness does not flag drift. | M6 replay (`ES`); M6 replay (test-set control, expecting no alarm) |
 | NFR-12 | Portability | `docker compose up` starts the whole stack on a fresh VM; no LLM or paid external service is needed at runtime. | Deployment smoke test |
+| NFR-13 | CI/CD | On every merge to `main` that changes `recommenditos/`, `pyproject.toml` or `uv.lock`, CI builds the API image (baking in the `dvc pull`-pinned model, FR-12), pushes it to GHCR, deploys it to the FIB Virtech VM (SSH, `docker compose pull && up -d`), and runs NFR-12's smoke test. Avoid merging code changes in the 48 hours before a presentation, given NFR-05's zero-downtime commitment. | CD pipeline run on a merge to `main`; smoke test result |
+
+### Quality model
+
+The `Quality` column maps to [ISO/IEC 25010](https://www.iso.org/standard/78176.html) (software product quality) and [ISO/IEC 25059](https://www.iso.org/standard/80655.html) (its extension for AI systems), except where noted.
+Three rows have no equivalent in either standard; they are here because the course grades them as their own practice, not because a quality model names them.
+
+| Quality (this page) | ISO/IEC 25010 / 25059 characteristic |
+|----------------------|----------------------------------------|
+| Model quality (NFR-01) | AI-specific functional correctness (25059); 25010 covers software only, not model behaviour |
+| Latency, Throughput and scalability, Resources (NFR-02 to NFR-04) | Performance efficiency (Time behaviour, Capacity, Resource utilization) |
+| Availability (NFR-05) | Reliability (Availability) |
+| Reproducibility (NFR-06) | Reliability (Recoverability), extended: not itself a named 25010 sub-characteristic, but standard in ML-specific quality work |
+| Maintainability (NFR-07) | Maintainability |
+| Privacy (NFR-08) | Security (Confidentiality) |
+| Security (NFR-09) | Security |
+| Energy efficiency (NFR-10) | Not in 25010/25059; graded as its own M3 practice |
+| Observability (NFR-11) | Maintainability (Analysability), extended for MLOps monitoring |
+| Portability (NFR-12) | Portability |
+| CI/CD (NFR-13) | Not in 25010/25059; graded as its own M5 practice |
 
 ## Decisions pending confirmation
 

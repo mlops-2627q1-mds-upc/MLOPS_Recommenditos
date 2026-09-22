@@ -130,6 +130,9 @@ A model is good enough to deploy when it meets all of the following on the test 
 | SC-04 | Every segment of section 6 with at least 500 test rows (price buckets excluded) has MdAPE ≤ 15 %. |
 | SC-05 | Nominal 90 % intervals reach an empirical coverage between 88 % and 92 %, both for full inputs and for the partial-input scenario P1 (only make, model, registration date and mileage given). |
 
+SC-04's per-segment breakdown (including country and seller type) also serves as a basic fairness check across market segments.
+Classification-oriented fairness metrics (e.g. AIF360's demographic parity) do not directly apply to this regression task; per-segment error parity is the task-appropriate equivalent.
+
 ### Reference values
 
 The targets are set from a one-off exploratory run on 2026-09-22 (not tracked; the experiment ladder reproduces it in MLflow).
