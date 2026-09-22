@@ -8,6 +8,12 @@ We work in Scrum, tracked as GitHub Issues on the [project board](https://github
 Team communication happens on [Discord](https://discord.gg/uG2eACGng).
 Full process details (roles, ceremonies, Definition of Done, working agreements) live in [docs/docs/scrum/](docs/docs/scrum/) - read that before picking up work.
 
+## Data versioning
+
+We use DVC for data and models, backed by DagsHub Storage.
+Conventions for tracking granularity, the remote, and pipeline ownership live in
+[docs/docs/data-versioning.md](docs/docs/data-versioning.md) - read that before running `dvc add`.
+
 ## Workflow
 
 1. Pick an issue, assign yourself, move it to **In Progress** on the board.
