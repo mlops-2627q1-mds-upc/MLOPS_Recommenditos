@@ -31,8 +31,13 @@ For the details, see:
 
 ## Team and contact
 
-- **Lukas Häussler** ([@lukas2510](https://github.com/lukas2510)) - Product Owner and Scrum Master, <luk.haeussler@tum.de>
-- Development Team: [@kadameit](https://github.com/kadameit), [@W11W11W11](https://github.com/W11W11W11), [@michudud04](https://github.com/michudud04), [@ulasawczuk](https://github.com/ulasawczuk)
+| Name | GitHub | E-mail | Role |
+|------|--------|--------|------|
+| Lukas Häußler | [@lukas2510](https://github.com/lukas2510) | <lukas.haeussler@estudiantat.upc.edu> | Product Owner, Scrum Master |
+| Kevin Adameit | [@kadameit](https://github.com/kadameit) | <kevin.adameit@estudiantat.upc.edu> | Development Team |
+| Urszula Sawczuk | [@ulasawczuk](https://github.com/ulasawczuk) | <urszula.wanda.sawczuk@estudiantat.upc.edu> | Development Team |
+| Michal Dudek | [@michudud04](https://github.com/michudud04) | <michal.feliks.dudek@estudiant.upc.edu> | Development Team |
+| Mark Atzberger | [@W11W11W11](https://github.com/W11W11W11) | <mark.welf.atzberger@estudiant.upc.edu> | Development Team |
 
 For questions about the project, reach out by email or open an issue.
 Day-to-day team communication happens on [Discord](https://discord.gg/uG2eACGng), and we track our work on the [project board](https://github.com/orgs/mlops-2627q1-mds-upc/projects/1).
