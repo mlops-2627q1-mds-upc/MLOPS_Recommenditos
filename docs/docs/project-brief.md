@@ -145,7 +145,7 @@ client --> FastAPI (model + SHAP + intervals)
              '-- /health, /metrics (Prometheus)
 
          Storage for listings (processed, no PII), prediction log, feedback
-         MLflow tracking + model registry
+         MLflow experiment tracking (DagsHub), not called by the API
          Prometheus + Grafana (resources, latency, errors)
          Alibi Detect job (input drift on logged requests, interval coverage)
 ```
@@ -153,6 +153,8 @@ client --> FastAPI (model + SHAP + intervals)
 Everything runs via Docker Compose.
 The API contract (Pydantic schemas) is the boundary: models can be swapped without changing clients.
 Endpoints, inputs and outputs are specified in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
+Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the model is a DVC-tracked pipeline artifact baked into the API image at CI build time (`dvc pull`, pinned to the version `main` points to), not fetched from the MLflow registry at build or run time.
+Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [requirements](requirements.md) FR-12).
 
 Open points:
 
@@ -202,6 +204,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
 - EDN-07: raw data hosting (import from Zenodo, never push to our own remote).
+- EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
 
 Made in M1, still to be written up:
 
