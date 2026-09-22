@@ -32,6 +32,7 @@ Out of scope for the core: free-text parsing via an external LLM (optional add-o
 
 Scope **[decided]**: used passenger cars of the makes with enough listings (currently 11, mostly premium brands) in 8 European countries.
 The exact scope, target, features and success criteria live in the [problem specification](problem-spec.md).
+What the component must do and under which constraints (endpoints, input validation, latency, resources, privacy) is defined in the [requirements](requirements.md).
 
 ## 3. Data
 
@@ -151,6 +152,7 @@ client --> FastAPI (model + SHAP + intervals)
 
 Everything runs via Docker Compose.
 The API contract (Pydantic schemas) is the boundary: models can be swapped without changing clients.
+Endpoints, inputs and outputs are specified in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
 
 Open points:
 

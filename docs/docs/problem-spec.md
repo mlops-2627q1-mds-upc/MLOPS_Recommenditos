@@ -2,7 +2,7 @@ Problem specification
 =====================
 
 What the model learns, on which data, and when it is good enough.
-This page owns the ML framing: the [requirements](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/14), the dataset card, the model card and the report link here instead of repeating it.
+This page owns the ML framing: the [requirements](requirements.md), the dataset card, the model card and the report link here instead of repeating it.
 For the overall plan see the [project brief](project-brief.md); for facts about the data see the dataset card.
 
 ## 1. Problem statement
@@ -50,7 +50,7 @@ It does not forecast future prices.
 ## 4. Features
 
 The features describe the car the way a user can describe it.
-`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [requirements](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/14).
+`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [requirements](requirements.md).
 
 ### Basic feature set (experiment ladder step 3)
 
