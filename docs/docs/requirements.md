@@ -32,6 +32,8 @@ The allowed categorical values and the supported makes are not fixed in the sche
 
 ### Outputs and endpoints
 
+All endpoint paths are served under `/v1` (omitted from the table below for brevity).
+
 | ID | Requirement | Verified by |
 |----|-------------|-------------|
 | FR-06 | **Valuation (UC1) [proposed]:** `POST /predict` returns the point estimate of the asking price in EUR, the model version and a request ID. | API test |
@@ -44,6 +46,7 @@ The allowed categorical values and the supported makes are not fixed in the sche
 | FR-13 | **Prediction log:** every request is logged with its validated inputs, outputs, warnings, model version, timestamp and latency, without PII. | Integration test |
 | FR-14 | **Drift monitoring:** a separate job compares the logged inputs of each time window with the training reference and reports input drift; when feedback exists, it also reports error and interval coverage. | Test with the `ES` replay (NFR-11) |
 | FR-15 | **Retraining and promotion [decided, EDN-12]:** when FR-14's drift job flags input drift on the `ES` replay (per NFR-11), a team member retrains the pipeline with `ES` included (`dvc repro`) and opens a PR updating the model pointer. The candidate must pass NFR-01's gate before that PR is merged; merging is the promotion (EDN-08). Retraining and promotion are human-triggered, not automated: no PR is opened or merged without a person reviewing the gate result. If a promoted model regresses after deployment, rollback is redeploying the previous image tag (EDN-08). | `ES` replay integration test: drift flagged → retrain → gate → promotion PR opened; a rollback drill redeploying a previous image tag |
+| FR-16 | **API documentation and errors:** the OpenAPI schema (`/docs`, `/redoc`) includes a request and response example for every endpoint. All error responses share one envelope, including validation errors (FR-03), the scope check (FR-04), a missing or invalid API key (FR-10), and rate limiting or the body-size limit (NFR-09); none differ in shape. | OpenAPI schema test: every endpoint has a request and response example; API tests confirm every error path returns the same envelope shape |
 
 ### Out of scope
 
