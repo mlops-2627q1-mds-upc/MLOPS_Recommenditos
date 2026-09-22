@@ -6,7 +6,7 @@ The requirements are derived from the use cases UC1 (car valuation) and UC2 (pur
 What the model learns, its features and its quality targets live in the [problem specification](problem-spec.md); this page links to it instead of repeating it.
 
 Every requirement has an ID (`FR-xx` for functional, `NFR-xx` for non-functional).
-Tests reference the IDs they verify in their name, e.g. `test_fr05_rejects_unsupported_make`.
+Tests reference the IDs they verify in their name, e.g. `test_fr04_rejects_unsupported_make`.
 
 Status markers as in the project brief:
 
@@ -20,22 +20,23 @@ Status markers as in the project brief:
 
 Input fields are the features of the [problem specification](problem-spec.md#4-features) and use its names.
 The API schema only adds the validation rules below; it does not define features of its own.
+The allowed categorical values and the supported makes are not fixed in the schema: they are read from the metadata of the loaded model version and checked at runtime, so a new model version needs no schema change (FR-12).
 
 | ID | Requirement | Verified by |
 |----|-------------|-------------|
 | FR-01 | **UC1 required fields [proposed]:** `/predict` requires `make`, `model`, `registration_date` (year and month), `mileage_km_raw`, `power_kw`, `fuel_category`, `transmission` and `country_code`. All other features of the basic and extended set are optional; a missing optional field is passed to the model as missing. | API test per required field, e.g. `test_fr01_rejects_missing_power_kw` |
 | FR-02 | **UC2 required fields:** `/price-range` requires only `make`; any subset of the other features is accepted. | API test with `make` only and with the partial-input scenario P1 of SC-05 |
-| FR-03 | **Validation:** fields are type-checked; `registration_date` lies between 1900-01 and the request month; `mileage_km_raw` is between 0 and 1,000,000; `power_kw` is between 1 and 1,200; low-cardinality categoricals (`fuel_category`, `transmission`, `body_type`, `drive_train`, `seller_type`) must be one of the values in the training data; `country_code` is an ISO 3166-1 alpha-2 code. An invalid request gets HTTP 422 with one error per invalid field. | Parametrised API tests |
+| FR-03 | **Validation:** fields are type-checked; `registration_date` lies between 1900-01 and the request month; `mileage_km_raw` is between 0 and 1,000,000; `power_kw` is between 1 and 1,200; low-cardinality categoricals (`fuel_category`, `transmission`, `body_type`, `drive_train`, `seller_type`) must be one of the values in the training data of the loaded model; `country_code` is one of the 8 countries of the data (problem specification section 2), so any other country is rejected as out of scope. An invalid request gets HTTP 422 with one error per invalid field. | Parametrised API tests, including a country outside the 8 (e.g. `US`) |
 | FR-04 | **Scope check:** a `make` outside the supported makes (computed by the pipeline, [EDN-05](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) is rejected with HTTP 422, and the response lists the supported makes. | API test |
-| FR-05 | **Unseen values [proposed]:** a `country_code` or `model` that is valid but missing from the training data (e.g. `ES`, see project brief section 3.2) is accepted, passed to the model as unknown, and reported in a `warnings` field of the response. | API test for `ES` and for an unseen model |
+| FR-05 | **Unseen values [proposed]:** a `country_code` among the 8 countries or a `model` that is missing from the training data (currently the country `ES`, see project brief section 3.2) is accepted, passed to the model as unknown, and reported in a `warnings` field of the response. | API test for `ES` and for an unseen model |
 
 ### Outputs and endpoints
 
 | ID | Requirement | Verified by |
 |----|-------------|-------------|
 | FR-06 | **Valuation (UC1) [proposed]:** `POST /predict` returns the point estimate of the asking price in EUR, the model version and a request ID. | API test |
-| FR-07 | **Price range (UC2) [proposed]:** `POST /price-range` returns the point estimate and the lower and upper bound of the nominal 90 % interval in EUR, the model version and a request ID. | API test (lower ≤ estimate ≤ upper) |
-| FR-08 | **Explanation:** `/predict` returns the five features with the largest SHAP contribution, each as its effect on the price in percent. | API test: all contributions plus the base value reproduce the prediction |
+| FR-07 | **Price range (UC2) [proposed]:** `POST /price-range` returns the point estimate and the lower and upper bound of the nominal 90 % interval in EUR, the model version and a request ID. The point estimate and the bounds come from different models, so the bounds are widened where needed to contain the estimate; widening only raises coverage, so the conformal guarantee still holds. | API test (lower ≤ estimate ≤ upper) |
+| FR-08 | **Explanation:** `/predict` returns the base price and the five features with the largest absolute SHAP contribution, plus the combined contribution of all other features. The model predicts `log(price)`, so a contribution φ is reported as its multiplicative effect on the price, `exp(φ) - 1` in percent, and the effects multiply rather than add. | API test: the base price times the product of `1 + effect` over all six reported effects reproduces the estimate |
 | FR-09 | **Comparables:** `POST /comparables` takes the same input as `/price-range` and returns the k most similar processed listings (default 5, at most 20) with their price and key features, without PII. | API test, PII test (NFR-08) |
 | FR-10 | **Feedback [open]:** `POST /feedback` takes a request ID and an observed price and stores it as a delayed label. It is fed with simulated prices from the `ES` holdout. Whether the endpoint exists depends on the feedback-loop decision in project brief section 5. | API test |
 | FR-11 | **Operations:** `GET /health` returns the status and the loaded model version; `GET /metrics` exposes request count, latency and error metrics in Prometheus format. | API test |
@@ -62,7 +63,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-04 | Resources | The full stack runs in 4 GB RAM; the API container stays below 1 GB RSS under the NFR-03 load; the API image is at most 1 GB and contains no GPU or deep-learning libraries; the drift job runs in its own container (project brief section 6). | `docker stats` during the load test; image size check in CI |
 | NFR-05 | Availability | All services restart automatically; the API is ready at most 30 s after start; uptime is at least 99 % in the weeks before each presentation. | Prometheus `up` metric |
 | NFR-06 | Reproducibility | `dvc repro` on a clean clone produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | Re-run before each delivery; MLflow run check |
-| NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `src/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
+| NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
 | NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. The raw data is never re-hosted in a public remote. | Great Expectations suite and tests on the response and log schemas |
 | NFR-09 | Security | Request bodies are limited to 10 KB; no secrets are committed; containers run as a non-root user; all dependencies are locked in `uv.lock`. | API test, secret scan in CI, Dockerfile review |
 | NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; a full training run takes at most 15 minutes on a laptop CPU. | MLflow |
