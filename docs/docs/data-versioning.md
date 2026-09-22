@@ -22,20 +22,39 @@ dvc remote modify origin --local secret_access_key <token>
 
 This writes to `.dvc/config.local`, which is gitignored by DVC itself.
 
+## Raw data: import, don't host
+
+**[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+The raw AutoScout24 file contains PII (street, zip, exact coordinates, seller company name for private
+sellers, see [Requirements](requirements.md) NFR-08). It comes from an immutable, versioned Zenodo DOI,
+so we pull it with `dvc import-url` instead of `dvc add`, and we never `dvc push` it to our own remote:
+
+```bash
+dvc import-url https://zenodo.org/records/17643343/files/autoscout24_dataset_20251108.csv data/raw/cars.csv
+```
+
+This creates `data/raw/cars.csv.dvc` like any other pointer, commit it as usual. `dvc repro` (or
+`dvc update` for this path) re-fetches straight from Zenodo, so every contributor and CI run gets the
+same file without a second, PII-bearing copy ever reaching DagsHub. CI checks that this file's hash is
+absent from the DagsHub remote.
+
 ## Tracking granularity
 
 Track individual files, or a self-contained dataset directory made up of many small files (for example
 thousands of images that always belong together).
 Do not `dvc add` the whole `data/` tree, and do not `dvc add` a whole subfolder like `data/raw` unless
 it truly is one indivisible dataset.
+This applies to everything except the raw file above, which is imported, not added (see previous
+section).
 
 ```bash
 # Good
-dvc add data/raw/cars.csv
+dvc add data/interim/cars_clean.csv
 
 # Avoid
 dvc add data
 dvc add data/raw
+dvc add data/raw/cars.csv   # import it instead, see above
 ```
 
 Why:

@@ -64,7 +64,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-05 | Availability | All services restart automatically; the API is ready at most 30 s after start; uptime is at least 99 % in the weeks before each presentation. | Prometheus `up` metric |
 | NFR-06 | Reproducibility | `dvc repro` on a clean clone produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | Re-run before each delivery; MLflow run check |
 | NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
-| NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. The raw data is never re-hosted in a public remote. | Great Expectations suite and tests on the response and log schemas |
+| NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. **[decided]** The raw data is never re-hosted in our own remote; it is imported from its Zenodo DOI ([EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). | Great Expectations suite and tests on the response and log schemas; CI check that the raw file is absent from the DagsHub remote |
 | NFR-09 | Security | Request bodies are limited to 10 KB; no secrets are committed, and the `/feedback` API key is passed to the container as an environment variable; containers run as a non-root user; all dependencies are locked in `uv.lock`. | API test, secret scan in CI, Dockerfile review |
 | NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; a full training run takes at most 15 minutes on a laptop CPU. | MLflow |
 | NFR-11 | Observability | The drift job flags the `ES` replay as drift within its first 1,000 requests. | M6 replay |
@@ -97,3 +97,6 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.
      Avoids guessing, but leaves M4 without acceptance criteria.
+
+**Decided:** raw data hosting (NFR-08), recorded as [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+The raw file contains PII (street, zip, coordinates, seller company name for private sellers) and comes from an immutable, versioned Zenodo DOI, so it is pulled with `dvc import-url` and never pushed to our own DagsHub remote, instead of being tracked like a normal pipeline input (see [Data versioning](data-versioning.md)).

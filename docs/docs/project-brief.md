@@ -90,7 +90,7 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII, so **[open]**: pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote (see [Data versioning](data-versioning.md)).
+  The raw file itself contains this PII, so we pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote, **[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), see [Requirements](requirements.md) NFR-08 and [Data versioning](data-versioning.md).
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** 36 % of descriptions contain a currency amount and about 7 % contain the exact listing price.
@@ -201,6 +201,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
+- EDN-07: raw data hosting (import from Zenodo, never push to our own remote).
 
 Made in M1, still to be written up:
 
