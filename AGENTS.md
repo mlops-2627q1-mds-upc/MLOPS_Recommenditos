@@ -5,6 +5,11 @@
 Full workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md) - read it before opening a PR.
 Key point for agents: branch protection blocks direct pushes to `main`, and squash merge is the only merge method enabled on GitHub - never merge commit or rebase merge.
 
+## Project brief
+
+[docs/docs/project-brief.md](docs/docs/project-brief.md) holds the project goal, the verified data facts, the modelling and architecture plan and the open decisions.
+Read it before working on data, pipeline, model or API code, and keep it up to date when any of these change.
+
 ## Keeping instructions up to date
 
 These instructions, `CONTRIBUTING.md`, and other documented best practices are not fixed.
