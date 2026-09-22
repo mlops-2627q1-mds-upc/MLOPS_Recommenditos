@@ -1,0 +1,29 @@
+% EDN entry template. Transfer an entry from reports/edn.md: copy this file to
+% edn/NN-short-slug.tex, fill it in, and add
+% \input{edn/NN-short-slug} to the entry list in edn.tex.
+% Brace every value. Delete optional lines you do not need.
+\ednentry{
+  id = {EDN-NN},
+  title = {Short name of the decision},
+  date = {YYYY-MM-DD},                   % optional
+  % M1: Project Inception | M2: Reproducibility | M3: Quality Assurance |
+  % M4: Model Deployment | M5: Model Packaging | M6: Monitoring | Other
+  milestone = {M1: Project Inception},
+  topic = {e.g. Testing Strategy},       % optional
+  participants = {All team members},     % or the names of who decided
+  decision = {What we decided.},
+  rationale = {Why; alternatives with their pros and cons, constraints, trade-offs, evidence.},
+  % Select all that apply: No AI involvement; Information seeking;
+  % Alternative generation; Alternative assessment; Recommendation;
+  % Solution generation; Other (describe).
+  ai = {No AI involvement.},
+  % Only if AI contributed. Select one: Accepted; Accepted with modifications;
+  % Rejected; Used as input for further analysis; Other (describe).
+  response = {},
+  assessment = {},                       % why we accepted/modified/rejected it
+  % Optional: link to the conversation (say which part), or quote it:
+  % \ednprompt{...} \ednresponse{...}
+  % Review shared content first; never share personal or sensitive data.
+  aievidence = {},
+  evidence = {},                         % optional: issues, PRs, commits, runs
+}

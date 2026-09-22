@@ -1,0 +1,26 @@
+\subsection{Milestone 5: Model Deployment -- Model Packaging}
+\label{sec:m5}
+\guidance{
+  \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
+  Containerization and CI/CD strategies are typical M5 EDN entries.
+}
+
+\subsubsection{Container and orchestration}
+\label{sec:m5-containers}
+\guidance{
+  \textbf{Template:} e.g.\ Docker, Docker Compose.\\
+  \textbf{Rubric (5 pts):} In what ways does our containerization approach guarantee portability, modularity, consistency, and efficiency across environments?\\
+  The demo Dockerfile is minimal (pip + requirements.txt); building from \texttt{uv.lock} with a multi-stage, slim, non-root image is an easy way to go beyond it.
+}
+
+\tbd{container images and orchestration}
+
+\subsubsection{CI/CD}
+\label{sec:m5-cicd}
+\guidance{
+  \textbf{Template:} e.g.\ GitHub Actions.\\
+  \textbf{Rubric (10 pts):} What aspects of our CI/CD pipeline demonstrate that automation and collaboration are fully integrated into our process?\\
+  Already in place: GitHub Actions running pre-commit, tests, the docs build, this report's build and a Conventional Commits check on PR titles, with path filters that skip jobs unrelated to a change.
+}
+
+\tbd{CI/CD pipeline}

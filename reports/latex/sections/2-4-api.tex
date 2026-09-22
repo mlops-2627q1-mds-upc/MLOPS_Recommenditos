@@ -1,0 +1,36 @@
+\subsection{Milestone 4: Model Deployment -- API}
+\label{sec:m4}
+\guidance{
+  \textbf{Template:} Describe how you have deployed your model and the technologies used.
+}
+
+\subsubsection{ML-based component/system architecture}
+\label{sec:m4-architecture}
+\guidance{
+  \textbf{Template:} Physical and logical architectures of the system, including diagrams.
+  Design patterns used.
+  Selection and justification of design decisions (e.g.\ cloud provider).\\
+  \textbf{Rubric (15 pts, the largest single item):} In what ways does our system design balance clarity and justified complexity while applying suitable architectural patterns and principles?\\
+  Component responsibilities and interactions are typical M4 EDN entries.
+}
+
+\tbd{logical and physical architecture with diagrams}
+
+\subsubsection{API design}
+\label{sec:m4-api-design}
+\guidance{
+  \textbf{Template:} e.g.\ FastAPI.\\
+  \textbf{Rubric (10 pts, shared with API testing):} To what extent do our API design and its documentation make the system robust, intuitive, and easy to adopt by others?\\
+  The demo separates the FastAPI app from its Pydantic request/response schemas and relies on the generated Swagger UI (\texttt{/docs}) and ReDoc (\texttt{/redoc}).
+}
+
+\tbd{endpoints, schemas and API documentation}
+
+\subsubsection{API testing}
+\label{sec:m4-api-testing}
+\guidance{
+  \textbf{Template:} e.g.\ FastAPI, pytest.\\
+  The demo tests the endpoints with FastAPI's \texttt{TestClient}, covering the happy path and invalid input.
+}
+
+\tbd{API tests}
