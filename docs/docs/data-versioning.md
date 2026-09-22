@@ -72,3 +72,18 @@ git pull && dvc pull   # after pulling, get the data that matches this commit
 # ... make changes ...
 dvc push && git push   # push data before (or together with) the commit that references it
 ```
+
+### Commit the pointer, push the data - always both
+
+`git push` alone is not enough.
+After `dvc add` (creates/updates a `.dvc` file) or `dvc repro` (creates/updates `dvc.lock`):
+
+1. Commit the pointer file (`*.dvc` or `dvc.lock`) to Git.
+2. Run `dvc push` so the actual data reaches the DagsHub remote.
+
+If you skip step 2, the commit still looks fine in GitHub, but the data was never uploaded.
+Anyone else running `git pull && dvc pull` gets a "failed to pull data" error and is stuck, because the
+hash the pointer references does not exist on the remote yet.
+If you skip step 1, `dvc push` has nothing tracked to upload, and nobody sees a new pointer to pull in
+the first place.
+Neither step alone is enough to hand data off to the rest of the team.
