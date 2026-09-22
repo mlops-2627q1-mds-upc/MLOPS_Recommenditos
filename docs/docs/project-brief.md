@@ -30,8 +30,8 @@ The course grades how well we apply MLOps practices (reproducibility, QA, deploy
 
 Out of scope for the core: free-text parsing via an external LLM (optional add-on, must never be required for the API to work).
 
-Scope limit: the dataset covers only 25 makes, dominated by premium brands (see 3.1).
-Whether we accept that scope or look for broader data is **[open]**.
+Scope **[decided]**: used passenger cars of the makes with enough listings (currently 11, mostly premium brands) in 8 European countries.
+The exact scope, target, features and success criteria live in the [problem specification](problem-spec.md).
 
 ## 3. Data
 
@@ -108,8 +108,7 @@ The report describes this check as part of the data decisions.
 
 ## 4. Modelling plan **[planned]**
 
-Target: `log(price)`.
-Report MAE (EUR) and MAPE overall **and per segment** (brand, premium vs. rest, EVs, dealer vs. private, country).
+Target, features, metrics, baselines and success criteria (`SC-01` to `SC-05`) are defined in the [problem specification](problem-spec.md).
 
 Experiment ladder (each step is one or more MLflow runs in the same experiment):
 
@@ -197,6 +196,9 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-01: dataset choice (AutoScout24).
 - EDN-02: model family (gradient boosting, LightGBM as main model).
 - EDN-03: new-market drift scenario (hold out AutoScout24 `ES`, drop DataMarket).
+- EDN-04: used cars only.
+- EDN-05: minimum listing support per make.
+- EDN-06: success criteria.
 
 Made in M1, still to be written up:
 
@@ -204,8 +206,6 @@ Made in M1, still to be written up:
 
 **[open]**, to decide with the team:
 
-- Component scope: premium brands only, stated in the model card, or a broader dataset.
-- New and pre-registered cars: filter them out or keep them with a flag.
 - Deduplication key and split strategy.
 - Feedback loop: simulated labels or no `/feedback` endpoint.
 
