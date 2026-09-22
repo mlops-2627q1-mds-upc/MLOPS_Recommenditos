@@ -117,7 +117,7 @@ How to add an entry:
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Problem Specification
 - **Participants:** @lukas2510
-- **Decision:** Only makes with at least 300 listings in the cleaned used-car data (counted before the split) are supported; the pipeline computes the list and the API rejects other makes. With the current data this gives 11 makes covering 98.6 % of the used listings after the `ES` holdout (EDN-03).
+- **Decision:** Only makes with at least 300 listings in the cleaned used-car data (counted after the `ES` holdout, before the split) are supported; the pipeline computes the list and the API rejects other makes. With the current data this gives 11 makes covering 98.6 % of the used listings after the `ES` holdout (EDN-03).
 - **Alternatives considered:**
   - **Option A (chosen): minimum support threshold, reject the rest.**
     Pros: honest and testable scope; no silent low-quality predictions; easy to state in the model card.
@@ -128,7 +128,7 @@ How to add an entry:
   - **Option C: accept all makes without any rule.**
     Pros: simplest.
     Cons: no clear scope statement; hidden weaknesses for rare makes.
-- **Rationale:** The dataset is skewed toward premium brands (EDN-01 accepts this as a scope limit). A threshold turns that limit into an explicit, testable rule. 300 keeps 11 makes and 98.5 % of the data; 200 would add three makes (0.7 % of the data), 500 would drop Aston Martin and Volkswagen.
+- **Rationale:** The dataset is skewed toward premium brands (EDN-01 accepts this as a scope limit). A threshold turns that limit into an explicit, testable rule. 300 keeps 11 makes and 98.5 % of the data (98.6 % after the `ES` holdout); 200 would add three makes (0.7 % of the data), 500 would drop Aston Martin and Volkswagen.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI counted the listings per make after scoping and deduplication, compared thresholds of 200, 300 and 500, and recommended option A. Lukas accepted it because it states the dataset's brand skew openly instead of hiding it behind a warning.
