@@ -38,7 +38,7 @@ The allowed categorical values and the supported makes are not fixed in the sche
 | FR-07 | **Price range (UC2) [proposed]:** `POST /price-range` returns the point estimate and the lower and upper bound of the nominal 90 % interval in EUR, the model version and a request ID. The point estimate and the bounds come from different models, so the bounds are widened where needed to contain the estimate; widening only raises coverage, so the conformal guarantee still holds. | API test (lower ≤ estimate ≤ upper) |
 | FR-08 | **Explanation:** `/predict` returns the base price and the five features with the largest absolute SHAP contribution, plus the combined contribution of all other features. The model predicts `log(price)`, so a contribution φ is reported as its multiplicative effect on the price, `exp(φ) - 1` in percent, and the effects multiply rather than add. | API test: the base price times the product of `1 + effect` over all six reported effects reproduces the estimate |
 | FR-09 | **Comparables:** `POST /comparables` takes the same input as `/price-range` and returns the k most similar processed listings (default 5, at most 20) with their price and key features, without PII. | API test, PII test (NFR-08) |
-| FR-10 | **Feedback [open]:** `POST /feedback` takes a request ID and an observed price and stores it as a delayed label. It is fed with simulated prices from the `ES` holdout. Whether the endpoint exists depends on the feedback-loop decision in project brief section 5. | API test |
+| FR-10 | **Feedback [open]:** `POST /feedback` takes a request ID and an observed price and stores it as a delayed label. It is fed with simulated prices from the `ES` holdout. Whether the endpoint exists depends on the feedback-loop decision in project brief section 5. **[decided]** The endpoint requires an API key in the `X-API-Key` header, because its labels feed retraining and must not be open to anyone; a missing or wrong key gets HTTP 401. | API test, including `test_fr10_rejects_missing_api_key` |
 | FR-11 | **Operations:** `GET /health` returns the status and the loaded model version; `GET /metrics` exposes request count, latency and error metrics in Prometheus format. | API test |
 | FR-12 | **Model loading:** at startup the API loads the current production model from the MLflow model registry. A new model version needs no change to the API schema. | Integration test with two registered versions |
 | FR-13 | **Prediction log:** every request is logged with its validated inputs, outputs, warnings, model version, timestamp and latency, without PII. | Integration test |
@@ -48,7 +48,7 @@ The allowed categorical values and the supported makes are not fixed in the sche
 
 - Batch prediction: the `ES` replay sends single requests, like real clients.
 - Free-text input or parsing via an LLM (problem specification section 2).
-- User accounts and authentication: the API is public and read-only apart from `/feedback`.
+- User accounts and per-user authentication: the prediction endpoints are public and read-only; `/feedback`, the only endpoint that writes data, is protected by a single shared API key (FR-10).
 
 ## 2. Non-functional requirements
 
@@ -65,7 +65,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-06 | Reproducibility | `dvc repro` on a clean clone produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | Re-run before each delivery; MLflow run check |
 | NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %; Pynblint reports no issues on the notebooks; CI passes before every merge. | CI |
 | NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts. The raw data is never re-hosted in a public remote. | Great Expectations suite and tests on the response and log schemas |
-| NFR-09 | Security | Request bodies are limited to 10 KB; no secrets are committed; containers run as a non-root user; all dependencies are locked in `uv.lock`. | API test, secret scan in CI, Dockerfile review |
+| NFR-09 | Security | Request bodies are limited to 10 KB; no secrets are committed, and the `/feedback` API key is passed to the container as an environment variable; containers run as a non-root user; all dependencies are locked in `uv.lock`. | API test, secret scan in CI, Dockerfile review |
 | NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; a full training run takes at most 15 minutes on a laptop CPU. | MLflow |
 | NFR-11 | Observability | The drift job flags the `ES` replay as drift within its first 1,000 requests. | M6 replay |
 | NFR-12 | Portability | `docker compose up` starts the whole stack on a fresh VM; no LLM or paid external service is needed at runtime. | Deployment smoke test |
