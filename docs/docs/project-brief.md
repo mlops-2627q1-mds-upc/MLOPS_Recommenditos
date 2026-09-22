@@ -173,7 +173,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Its license is Business Source License 1.1 (free for non-production use); mention this in the report.
 - **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9.
   Run it isolated with `uvx pynblint`, not as a project dependency.
-- **SHAP 0.52** requires Python 3.12+; we pin 3.11, so uv resolves an older SHAP unless we bump Python.
+- **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8".
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 
@@ -205,6 +205,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-06: success criteria.
 - EDN-07: raw data hosting (import from Zenodo, never push to our own remote).
 - EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
+- EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
 
 Made in M1, still to be written up:
 
