@@ -132,7 +132,8 @@ The calibration set must use the same masking, and the coverage guarantee is mar
 `nr_prev_owners` is naturally missing often enough (55 % filled) that the model should learn real "missing" behaviour for it; the other optional basic-set fields (`body_type`, `drive_train`, `gears`, `cylinders_volume_cc`, `nr_seats`, `nr_doors`, `seller_type`) have no documented fill rate and may be close to always present, in which case the model never sees them missing during training and falls back to an unvalidated default at serving time (see [requirements](requirements.md) FR-01).
 No current success criterion would catch this: SC-04's segments do not include "with optional field X masked", and SC-05's partial-input check (P1) covers UC2's intervals, not UC1's point estimate.
 
-Comparable listings: k-nearest-neighbour search over the processed listings, returned next to the prediction.
+Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
+The exact window is defined in the [requirements](requirements.md) FR-09.
 
 Explainability: SHAP (TreeExplainer) per prediction and globally.
 
