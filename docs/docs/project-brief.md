@@ -32,6 +32,7 @@ Out of scope for the core: free-text parsing via an external LLM (optional add-o
 
 Scope **[decided]**: used passenger cars of the makes with enough listings (currently 11, mostly premium brands) in 8 European countries.
 The exact scope, target, features and success criteria live in the [problem specification](problem-spec.md).
+What the component must do and under which constraints (endpoints, input validation, latency, resources, privacy) is defined in the [requirements](requirements.md).
 
 ## 3. Data
 
@@ -65,11 +66,16 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   No `ES` row reaches training, validation or conformal calibration.
 - In M6 we replay the `ES` listings against the API as simulated traffic.
   Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
-  The same prices can serve as the delayed labels for `/feedback` (see 5).
+  The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
+  **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
 - **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
   An API test covers this case.
 - **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
+- Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded.
+  Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
+  The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
+  That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
 It was the original drift set, and the supervisor (S. del Rey) asked us to check whether it is feasible given the feature mismatch.
@@ -89,7 +95,7 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII, so **[open]**: pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote (see [Data versioning](data-versioning.md)).
+  The raw file itself contains this PII, so we pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote, **[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), see [Requirements](requirements.md) NFR-08 and [Data versioning](data-versioning.md).
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** 36 % of descriptions contain a currency amount and about 7 % contain the exact listing price.
@@ -126,7 +132,12 @@ Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) o
 Train with random masking of optional fields so the model produces wider intervals for partial inputs.
 The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
 
-Comparable listings: k-nearest-neighbour search over the processed listings, returned next to the prediction.
+**[open]:** whether the point model (UC1, steps 1-4 above) needs the same random masking, or can rely on native missing-value handling, depends on per-field fill rates in the training data that have not been profiled yet.
+`nr_prev_owners` is naturally missing often enough (55 % filled) that the model should learn real "missing" behaviour for it; the other optional basic-set fields (`body_type`, `drive_train`, `gears`, `cylinders_volume_cc`, `nr_seats`, `nr_doors`, `seller_type`) have no documented fill rate and may be close to always present, in which case the model never sees them missing during training and falls back to an unvalidated default at serving time (see [requirements](requirements.md) FR-01).
+No current success criterion would catch this: SC-04's segments do not include "with optional field X masked", and SC-05's partial-input check (P1) covers UC2's intervals, not UC1's point estimate.
+
+Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
+The exact window is defined in the [requirements](requirements.md) FR-09.
 
 Explainability: SHAP (TreeExplainer) per prediction and globally.
 
@@ -136,29 +147,35 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 ## 5. Target architecture **[planned]**
 
 ```
-client --> FastAPI (model + SHAP + intervals)
-             |-- /predict       (UC1)
-             |-- /price-range   (UC2)
-             |-- /comparables
-             |-- /feedback      (reported sale prices; no real users, so simulated)
-             '-- /health, /metrics (Prometheus)
+client --> reverse proxy --> FastAPI (model + SHAP + intervals)
+                               |-- /predict       (UC1)
+                               |-- /price-range   (UC2)
+                               |-- /comparables
+                               |-- /health, /metrics (Prometheus)
+                               '-- /feedback      (internal only: the proxy refuses it
+                                                   from outside; reported prices, no real
+                                                   users, so replayed from the ES holdout)
 
          Storage for listings (processed, no PII), prediction log, feedback
-         MLflow tracking + model registry
+         MLflow experiment tracking (DagsHub), not called by the API
          Prometheus + Grafana (resources, latency, errors)
+         Better Uptime (external availability check, presentation windows)
          Alibi Detect job (input drift on logged requests, interval coverage)
 ```
 
 Everything runs via Docker Compose.
 The API contract (Pydantic schemas) is the boundary: models can be swapped without changing clients.
+Endpoints, inputs and outputs are specified in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
+Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the model is a DVC-tracked pipeline artifact baked into the API image at CI build time (`dvc pull`, pinned to the version `main` points to), not fetched from the MLflow registry at build or run time.
+Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [requirements](requirements.md) FR-12).
 
 Open points:
 
 - Deployment target: FIB Virtech VM (free, 4 GB RAM, 20 GB disk, one semester) or another cloud.
   The full stack is tight on 4 GB.
 - Storage: PostgreSQL only pays off if monitoring reads the prediction log; a lighter store may be enough.
+  Monitoring does read it: FR-14 joins the prediction log and the feedback labels, so the store has to support that join.
 - MLflow hosting: DagsHub (as in the course demo) or self-hosted.
-- Feedback loop: simulate delayed labels from the held-out `ES` listings (see 3.2), or drop `/feedback`.
 
 ## 6. Tooling constraints
 
@@ -169,7 +186,9 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Its license is Business Source License 1.1 (free for non-production use); mention this in the report.
 - **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9.
   Run it isolated with `uvx pynblint`, not as a project dependency.
-- **SHAP 0.52** requires Python 3.12+; we pin 3.11, so uv resolves an older SHAP unless we bump Python.
+- **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
+  **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
+  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [requirements](requirements.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8".
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 
@@ -182,7 +201,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 | M3 | Quality assurance: energy, static analysis, data and model tests (optional: SHAP, AIF360, TrustML) | CodeCarbon, ruff/Pylint, Pynblint, Pytest, Great Expectations | 15 |
 | M4 | Deployment: system design, API, API tests | FastAPI, Pytest, FIB VM / cloud | 25 |
 | M5 | Packaging: containers, CI/CD | Docker, Docker Compose, GitHub Actions | 15 |
-| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Alibi Detect | 10 |
+| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Better Uptime, Alibi Detect | 10 |
 
 Deliveries (via Atenea, 23:55):
 
@@ -199,6 +218,14 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
+- EDN-07: raw data hosting (import from Zenodo, never push to our own remote).
+- EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
+- EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
+- EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
+- EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
+- EDN-12: retraining and promotion are human-triggered, not automated.
+- EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
+- EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
 
 Made in M1, still to be written up:
 
@@ -207,7 +234,7 @@ Made in M1, still to be written up:
 **[open]**, to decide with the team:
 
 - Deduplication key and split strategy.
-- Feedback loop: simulated labels or no `/feedback` endpoint.
+- Whether the point model needs random masking of optional fields, like the UC2 interval models, or a narrower optional-field list in FR-01; depends on fill rates not yet profiled (section 4).
 
 ## 9. Reference links
 
@@ -220,4 +247,4 @@ Made in M1, still to be written up:
 - LightGBM: <https://lightgbm.readthedocs.io/>, CatBoost: <https://catboost.ai/docs/>, MAPIE: <https://mapie.readthedocs.io/>
 - SHAP: <https://shap.readthedocs.io/>, AIF360: <https://aif360.readthedocs.io/>
 - FastAPI: <https://fastapi.tiangolo.com/>, Docker Compose: <https://docs.docker.com/compose/>, GitHub Actions: <https://docs.github.com/actions>
-- Prometheus: <https://prometheus.io/docs/>, Grafana: <https://grafana.com/docs/>, Alibi Detect: <https://docs.seldon.io/projects/alibi-detect/>
+- Prometheus: <https://prometheus.io/docs/>, Grafana: <https://grafana.com/docs/>, Better Uptime: <https://betterstack.com/docs/uptime/start.html>, Alibi Detect: <https://docs.seldon.io/projects/alibi-detect/>

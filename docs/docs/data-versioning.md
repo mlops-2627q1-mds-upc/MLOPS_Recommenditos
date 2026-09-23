@@ -22,20 +22,58 @@ dvc remote modify origin --local secret_access_key <token>
 
 This writes to `.dvc/config.local`, which is gitignored by DVC itself.
 
+## Raw data: import, don't host
+
+**[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+The raw AutoScout24 file contains PII (street, zip, exact coordinates, seller company name for private sellers, see [Requirements](requirements.md) NFR-08).
+It comes from an immutable, versioned Zenodo DOI, so we import it with `dvc import-url` instead of `dvc add`, and it never reaches our own remote.
+
+```bash
+dvc import-url https://zenodo.org/records/17643343/files/autoscout24_dataset_20251108.csv data/raw/cars.csv
+```
+
+`dvc push` uploads imported files like any other tracked output, so the import alone does not keep the file off DagsHub.
+Before committing `data/raw/cars.csv.dvc`, add `push: false` to its output:
+
+```yaml
+# data/raw/cars.csv.dvc, outs section
+outs:
+- md5: ...
+  path: cars.csv
+  push: false
+```
+
+`dvc push` then skips the file, and `dvc update` keeps the field when it re-imports.
+A test checks that the field stays there (NFR-08).
+
+Because the file is never on the remote, `dvc pull` cannot fetch it, and in a fresh clone `dvc repro` stops at the missing file.
+Download it from Zenodo once per clone, before you run the pipeline:
+
+```bash
+dvc update data/raw/cars.csv.dvc   # downloads the raw file from Zenodo into the local cache
+dvc repro
+```
+
+After that, `dvc pull` works as usual, because the raw file is already in the local cache.
+A job that needs only some outputs, like the CI build that bakes the model into the API image (FR-12), pulls them by target (`dvc pull <target>`) and never needs the raw file.
+
 ## Tracking granularity
 
 Track individual files, or a self-contained dataset directory made up of many small files (for example
 thousands of images that always belong together).
 Do not `dvc add` the whole `data/` tree, and do not `dvc add` a whole subfolder like `data/raw` unless
 it truly is one indivisible dataset.
+This applies to everything except the raw file above, which is imported, not added (see previous
+section).
 
 ```bash
 # Good
-dvc add data/raw/cars.csv
+dvc add data/interim/cars_clean.csv
 
 # Avoid
 dvc add data
 dvc add data/raw
+dvc add data/raw/cars.csv   # import it instead, see above
 ```
 
 Why:
@@ -55,8 +93,8 @@ Once a `dvc.yaml` pipeline exists (separate issue, follows once the training cod
 are tracked automatically by the pipeline, not by a manual `dvc add`.
 In practice that means:
 
-- `data/raw` (or whatever the download stage produces): tracked manually now via `dvc add`, or later
-  produced by a `download` stage, per the demo.
+- `data/raw/cars.csv`: imported with `dvc import-url` (see [Raw data](#raw-data-import-dont-host)), not
+  tracked with `dvc add` and not produced by a `download` stage as in the demo.
 - `data/interim`, `data/processed`, `models/`: once a stage declares them as `-o` outputs, don't
   `dvc add` them separately. Let `dvc repro` manage them.
 
@@ -72,6 +110,9 @@ git pull && dvc pull   # after pulling, get the data that matches this commit
 # ... make changes ...
 dvc push && git push   # push data before (or together with) the commit that references it
 ```
+
+In a fresh clone, run `dvc update data/raw/cars.csv.dvc` once before the first `dvc pull`.
+Otherwise `dvc pull` fails on the raw file, which is never on the remote (see [Raw data](#raw-data-import-dont-host)).
 
 ### Commit the pointer, push the data - always both
 

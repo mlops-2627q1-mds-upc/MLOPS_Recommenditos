@@ -2,7 +2,7 @@ Problem specification
 =====================
 
 What the model learns, on which data, and when it is good enough.
-This page owns the ML framing: the [requirements](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/14), the dataset card, the model card and the report link here instead of repeating it.
+This page owns the ML framing: the [requirements](requirements.md), the dataset card, the model card and the report link here instead of repeating it.
 For the overall plan see the [project brief](project-brief.md); for facts about the data see the dataset card.
 
 ## 1. Problem statement
@@ -50,7 +50,7 @@ It does not forecast future prices.
 ## 4. Features
 
 The features describe the car the way a user can describe it.
-`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [requirements](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/14).
+`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [requirements](requirements.md).
 
 ### Basic feature set (experiment ladder step 3)
 
@@ -129,6 +129,9 @@ A model is good enough to deploy when it meets all of the following on the test 
 | SC-03 | MdAPE at least 30 % lower than baseline B0. |
 | SC-04 | Every segment of section 6 with at least 500 test rows (price buckets excluded) has MdAPE ≤ 15 %. |
 | SC-05 | Nominal 90 % intervals reach an empirical coverage between 88 % and 92 %, both for full inputs and for the partial-input scenario P1 (only make, model, registration date and mileage given). |
+
+SC-04's per-segment breakdown (including country and seller type) also serves as a basic fairness check across market segments.
+Classification-oriented fairness metrics (e.g. AIF360's demographic parity) do not directly apply to this regression task; per-segment error parity is the task-appropriate equivalent.
 
 ### Reference values
 
