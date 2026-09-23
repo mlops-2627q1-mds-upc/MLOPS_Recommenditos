@@ -324,6 +324,34 @@ How to add an entry:
 - **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-10, FR-14, NFR-09; [project brief](../docs/docs/project-brief.md) sections 3.2 and 5; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket), [EDN-12](#edn-12-retraining-and-promotion-are-human-triggered-not-automated); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
+### EDN-14: NFR-11's drift control is an i.i.d. sample, not a seller-grouped one
+
+- **Date:** 2026-09-23
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Performance Criteria
+- **Participants:** @lukas2510
+- **Decision:** NFR-11 is rewritten after measuring it on the real dataset. The drift job compares each window against a reference of 10,000 listings sampled from the training data. The `ES` replay must be flagged within its first 100 requests (was 1,000) and must name at least three drifted features other than `country_code`. The control is an i.i.d. sample of held-out listings, of which at most 1 in 20 windows may be flagged; a seller-grouped sample is explicitly not a valid control.
+- **Alternatives considered:**
+  - **Option A: keep the seller-grouped test split as the control, as NFR-11 originally said.**
+    Pros: the strongest possible claim, namely that the detector stays quiet even on sellers it has never seen; reuses the split the evaluation protocol already produces.
+    Cons: measured impossible, not merely hard. 200 of 200 seller-grouped control windows of 1,000 rows were flagged, at every reference size from 2,000 to 76,142 rows. Held-out dealers are genuinely a different distribution: their mean effect size is larger than Spain's on `make` (0.117 vs 0.070), `gears` (0.130 vs 0.034), `mileage_km_raw` (0.108 vs 0.091) and `age_years` (0.113 vs 0.099), and equal on `model` (0.245 vs 0.244). Keeping this control would make NFR-11 permanently red for a reason that has nothing to do with monitoring quality.
+  - **Option B: keep the seller-grouped control but add an effect-size floor on top of the p-value.**
+    Pros: would have kept the stronger claim and is a standard remedy for over-powered statistical tests.
+    Cons: measured not to separate the two cases. At a floor of 0.10, `ES` and the control both have 5 features above it; at 0.15 it is 2 against 1. Rejected on evidence, not on principle.
+  - **Option C: drop the control clause and only require that `ES` is flagged.**
+    Pros: simplest; the `ES` half passes comfortably.
+    Cons: a detector that flags everything would pass. The control is what makes the requirement say anything about the monitoring at all.
+  - **Option D (chosen): keep the control, but define it as an i.i.d. sample of held-out listings, and cap the reference at 10,000 rows.**
+    Pros: measured to work. The same detector gives a 1 to 10 % false-alarm rate on i.i.d. windows (2 % at a 10,000-row reference, against a nominal 5 %) while still flagging `ES` in 100 % of trials, so it separates the two cases the requirement is about. The reference cap keeps the false-alarm rate from growing with the training set, since power against irrelevant differences rises with reference size (1 % at 2,000 rows, 10 % at 78,330).
+    Cons: a weaker claim than option A. It states that the detector is quiet on in-distribution traffic, not that it is quiet on unseen dealers, and the requirement now has to say which sample counts as the control, which is one more thing to get right in the M6 harness.
+- **Rationale:** NFR-11 asserted a property of the data ("at least one feature other than `country_code` drifts", "the test-set control does not flag") that nobody had checked. Measured on the scoped, deduplicated dataset (105,431 listings; 5,981 `ES` rows that the API would accept under FR-04; reference 76,142), the first half holds with a large margin: 200 of 200 `ES` windows are flagged at every window size from 100 to 1,000, and still 200 of 200 when `country_code` is excluded. Spain is separable for substantive reasons, above all listing completeness: `nr_prev_owners` is missing in 95.5 % of `ES` rows against 40.0 % in the reference, `nr_seats` in 10.9 % against 3.0 %, and the mix differs in `body_type` (station wagon 6.6 % against 14.8 %), `transmission` (semi-automatic 0.1 % against 4.0 %) and `fuel_category` (diesel 42.1 % against 31.9 %). The second half was simply false, and the i.i.d. cross-check shows the detector is not at fault: the same code gives a near-nominal false-alarm rate as soon as the control window is drawn i.i.d. The requirement is therefore aligned with what can be demonstrated, and the finding behind it, that dealer-level shift is as large as country-level shift on this data, is recorded in the project brief because it also justifies the seller-grouped split and is a risk for SC-04.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** While reviewing PR #19, AI flagged NFR-11 as the one requirement that makes an unverified claim about the data rather than about the system. Asked for an in-depth feasibility check, AI downloaded the raw dataset from the Zenodo DOI, reproduced the scope, deduplication and split protocol, emulated alibi-detect's `TabularDrift` with scipy after confirming its tests, defaults and Bonferroni rule against the v0.13 source (including that it does no NaN handling, so missing indicators had to be added), and ran 200 trials per window size. It reported that the first half of the requirement passes with margin and the second half fails, ran two controlled cross-checks to separate a detector fault from a data property (i.i.d. split, reference size), and tested and then rejected its own effect-size remedy on the measurements. Lukas reviewed the evidence and chose option D.
+- **AI interaction evidence:** Claude Code session on 2026-09-23 while reviewing PR #19: Lukas asked "NFR-11 please make an in depth analysis if this is feasible [...] we need to be really sure about this"; AI ran the measurement described above, reported the pass, the failure and the limits of the study, proposed options A to D and recommended D; Lukas replied "ja bitte".
+- **Other evidence:** [Requirements](../docs/docs/requirements.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_check.py`, `nfr11_diag.py`, `nfr11_results.json`, run of 2026-09-23); [project brief](../docs/docs/project-brief.md) section 3.2; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** no
+
 ## Template
 
 ```markdown

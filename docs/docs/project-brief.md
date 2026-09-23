@@ -72,6 +72,10 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
 - **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
   An API test covers this case.
 - **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
+- Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded.
+  Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
+  The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
+  That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
 It was the original drift set, and the supervisor (S. del Rey) asked us to check whether it is feasible given the feature mismatch.
@@ -221,6 +225,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
 - EDN-12: retraining and promotion are human-triggered, not automated.
 - EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
+- EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
 
 Made in M1, still to be written up:
 

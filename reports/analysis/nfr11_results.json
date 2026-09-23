@@ -1,0 +1,397 @@
+{
+  "counts": {
+    "raw_rows": 118382,
+    "scoped_rows": 109938,
+    "dedup_rows": 105431
+  },
+  "full": [
+    {
+      "feature": "country_code",
+      "p": 0.0,
+      "stat": 82123.0,
+      "drift": true
+    },
+    {
+      "feature": "nr_prev_owners__missing",
+      "p": 0.0,
+      "stat": 6939.068343732974,
+      "drift": true
+    },
+    {
+      "feature": "model",
+      "p": 2.427928368845e-311,
+      "stat": 2682.2034263244254,
+      "drift": true
+    },
+    {
+      "feature": "nr_seats__missing",
+      "p": 4.756835630515079e-227,
+      "stat": 1034.8589358003323,
+      "drift": true
+    },
+    {
+      "feature": "body_type",
+      "p": 4.768928815779213e-192,
+      "stat": 914.2477798727193,
+      "drift": true
+    },
+    {
+      "feature": "gears__missing",
+      "p": 7.789226701179728e-110,
+      "stat": 495.80146527273575,
+      "drift": true
+    },
+    {
+      "feature": "fuel_category",
+      "p": 6.307475588907399e-94,
+      "stat": 462.428844489587,
+      "drift": true
+    },
+    {
+      "feature": "make",
+      "p": 1.9314453562165063e-60,
+      "stat": 309.01152915107474,
+      "drift": true
+    },
+    {
+      "feature": "transmission",
+      "p": 7.553609094772858e-57,
+      "stat": 263.580972649067,
+      "drift": true
+    },
+    {
+      "feature": "drive_train",
+      "p": 1.6190340953997835e-53,
+      "stat": 248.18094627319502,
+      "drift": true
+    },
+    {
+      "feature": "age_years",
+      "p": 9.67474514163698e-53,
+      "stat": 0.10406747180898845,
+      "drift": true
+    },
+    {
+      "feature": "cylinders_volume_cc__missing",
+      "p": 1.2609727074228929e-47,
+      "stat": 210.17032546758995,
+      "drift": true
+    },
+    {
+      "feature": "nr_doors",
+      "p": 3.892056517326315e-46,
+      "stat": 0.09744778502903934,
+      "drift": true
+    },
+    {
+      "feature": "mileage_km_raw",
+      "p": 4.0483969127986274e-43,
+      "stat": 0.09402985865490393,
+      "drift": true
+    },
+    {
+      "feature": "seller_type",
+      "p": 1.5542988016918821e-24,
+      "stat": 109.64203543862777,
+      "drift": true
+    },
+    {
+      "feature": "power_kw__missing",
+      "p": 2.3546902871870613e-12,
+      "stat": 49.16369191167778,
+      "drift": true
+    },
+    {
+      "feature": "cylinders_volume_cc",
+      "p": 5.879630504697467e-12,
+      "stat": 0.052862159187053614,
+      "drift": true
+    },
+    {
+      "feature": "nr_doors__missing",
+      "p": 7.744171440376259e-12,
+      "stat": 46.82942914855286,
+      "drift": true
+    },
+    {
+      "feature": "power_kw",
+      "p": 9.102723327137699e-07,
+      "stat": 0.03664051658365386,
+      "drift": true
+    },
+    {
+      "feature": "gears",
+      "p": 0.00020817363591165114,
+      "stat": 0.03341381306148242,
+      "drift": true
+    },
+    {
+      "feature": "nr_seats",
+      "p": 0.003356084322851574,
+      "stat": 0.025322669966884453,
+      "drift": false
+    },
+    {
+      "feature": "nr_prev_owners",
+      "p": 0.5440687593639341,
+      "stat": 0.048262848505614686,
+      "drift": false
+    },
+    {
+      "feature": "age_years__missing",
+      "p": 1.0,
+      "stat": 0.0,
+      "drift": false
+    },
+    {
+      "feature": "mileage_km_raw__missing",
+      "p": 1.0,
+      "stat": 0.0,
+      "drift": false
+    }
+  ],
+  "es": {
+    "100": {
+      "detection_rate": 1.0,
+      "detection_rate_excl_country": 1.0,
+      "per_feature_rate": {
+        "age_years": 0.1,
+        "mileage_km_raw": 0.115,
+        "power_kw": 0.005,
+        "nr_prev_owners": 0.0,
+        "gears": 0.0,
+        "cylinders_volume_cc": 0.005,
+        "nr_seats": 0.0,
+        "nr_doors": 0.005,
+        "make": 0.045,
+        "model": 0.41,
+        "body_type": 0.41,
+        "fuel_category": 0.25,
+        "transmission": 0.0,
+        "drive_train": 0.1,
+        "seller_type": 0.0,
+        "country_code": 1.0,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.0,
+        "power_kw__missing": 0.075,
+        "nr_prev_owners__missing": 1.0,
+        "gears__missing": 0.36,
+        "cylinders_volume_cc__missing": 0.14,
+        "nr_seats__missing": 0.755,
+        "nr_doors__missing": 0.0
+      }
+    },
+    "250": {
+      "detection_rate": 1.0,
+      "detection_rate_excl_country": 1.0,
+      "per_feature_rate": {
+        "age_years": 0.44,
+        "mileage_km_raw": 0.405,
+        "power_kw": 0.005,
+        "nr_prev_owners": 0.0,
+        "gears": 0.0,
+        "cylinders_volume_cc": 0.03,
+        "nr_seats": 0.0,
+        "nr_doors": 0.22,
+        "make": 0.26,
+        "model": 0.645,
+        "body_type": 0.99,
+        "fuel_category": 0.515,
+        "transmission": 0.155,
+        "drive_train": 0.38,
+        "seller_type": 0.07,
+        "country_code": 1.0,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.0,
+        "power_kw__missing": 0.07,
+        "nr_prev_owners__missing": 1.0,
+        "gears__missing": 0.97,
+        "cylinders_volume_cc__missing": 0.385,
+        "nr_seats__missing": 1.0,
+        "nr_doors__missing": 0.0
+      }
+    },
+    "500": {
+      "detection_rate": 1.0,
+      "detection_rate_excl_country": 1.0,
+      "per_feature_rate": {
+        "age_years": 0.94,
+        "mileage_km_raw": 0.865,
+        "power_kw": 0.01,
+        "nr_prev_owners": 0.0,
+        "gears": 0.0,
+        "cylinders_volume_cc": 0.09,
+        "nr_seats": 0.0,
+        "nr_doors": 0.775,
+        "make": 0.79,
+        "model": 0.93,
+        "body_type": 1.0,
+        "fuel_category": 0.97,
+        "transmission": 1.0,
+        "drive_train": 0.86,
+        "seller_type": 0.325,
+        "country_code": 1.0,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.0,
+        "power_kw__missing": 0.2,
+        "nr_prev_owners__missing": 1.0,
+        "gears__missing": 1.0,
+        "cylinders_volume_cc__missing": 0.805,
+        "nr_seats__missing": 1.0,
+        "nr_doors__missing": 0.0
+      }
+    },
+    "1000": {
+      "detection_rate": 1.0,
+      "detection_rate_excl_country": 1.0,
+      "per_feature_rate": {
+        "age_years": 1.0,
+        "mileage_km_raw": 1.0,
+        "power_kw": 0.1,
+        "nr_prev_owners": 0.0,
+        "gears": 0.0,
+        "cylinders_volume_cc": 0.34,
+        "nr_seats": 0.0,
+        "nr_doors": 1.0,
+        "make": 1.0,
+        "model": 1.0,
+        "body_type": 1.0,
+        "fuel_category": 1.0,
+        "transmission": 1.0,
+        "drive_train": 1.0,
+        "seller_type": 0.82,
+        "country_code": 1.0,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.0,
+        "power_kw__missing": 0.49,
+        "nr_prev_owners__missing": 1.0,
+        "gears__missing": 1.0,
+        "cylinders_volume_cc__missing": 0.995,
+        "nr_seats__missing": 1.0,
+        "nr_doors__missing": 0.295
+      }
+    }
+  },
+  "control": {
+    "100": {
+      "detection_rate": 0.61,
+      "detection_rate_excl_country": 0.61,
+      "per_feature_rate": {
+        "age_years": 0.09,
+        "mileage_km_raw": 0.08,
+        "power_kw": 0.005,
+        "nr_prev_owners": 0.0,
+        "gears": 0.01,
+        "cylinders_volume_cc": 0.005,
+        "nr_seats": 0.0,
+        "nr_doors": 0.0,
+        "make": 0.31,
+        "model": 0.32,
+        "body_type": 0.005,
+        "fuel_category": 0.1,
+        "transmission": 0.01,
+        "drive_train": 0.015,
+        "seller_type": 0.025,
+        "country_code": 0.025,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.01,
+        "power_kw__missing": 0.0,
+        "nr_prev_owners__missing": 0.01,
+        "gears__missing": 0.05,
+        "cylinders_volume_cc__missing": 0.0,
+        "nr_seats__missing": 0.0,
+        "nr_doors__missing": 0.0
+      }
+    },
+    "250": {
+      "detection_rate": 0.93,
+      "detection_rate_excl_country": 0.93,
+      "per_feature_rate": {
+        "age_years": 0.385,
+        "mileage_km_raw": 0.395,
+        "power_kw": 0.015,
+        "nr_prev_owners": 0.01,
+        "gears": 0.23,
+        "cylinders_volume_cc": 0.0,
+        "nr_seats": 0.0,
+        "nr_doors": 0.0,
+        "make": 0.83,
+        "model": 0.565,
+        "body_type": 0.0,
+        "fuel_category": 0.025,
+        "transmission": 0.015,
+        "drive_train": 0.035,
+        "seller_type": 0.03,
+        "country_code": 0.045,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.04,
+        "power_kw__missing": 0.005,
+        "nr_prev_owners__missing": 0.015,
+        "gears__missing": 0.355,
+        "cylinders_volume_cc__missing": 0.0,
+        "nr_seats__missing": 0.005,
+        "nr_doors__missing": 0.0
+      }
+    },
+    "500": {
+      "detection_rate": 1.0,
+      "detection_rate_excl_country": 1.0,
+      "per_feature_rate": {
+        "age_years": 0.885,
+        "mileage_km_raw": 0.865,
+        "power_kw": 0.07,
+        "nr_prev_owners": 0.065,
+        "gears": 0.9,
+        "cylinders_volume_cc": 0.025,
+        "nr_seats": 0.0,
+        "nr_doors": 0.0,
+        "make": 0.995,
+        "model": 0.855,
+        "body_type": 0.005,
+        "fuel_category": 0.075,
+        "transmission": 0.02,
+        "drive_train": 0.125,
+        "seller_type": 0.08,
+        "country_code": 0.16,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.0,
+        "power_kw__missing": 0.0,
+        "nr_prev_owners__missing": 0.11,
+        "gears__missing": 0.82,
+        "cylinders_volume_cc__missing": 0.01,
+        "nr_seats__missing": 0.0,
+        "nr_doors__missing": 0.0
+      }
+    },
+    "1000": {
+      "detection_rate": 1.0,
+      "detection_rate_excl_country": 1.0,
+      "per_feature_rate": {
+        "age_years": 0.995,
+        "mileage_km_raw": 1.0,
+        "power_kw": 0.23,
+        "nr_prev_owners": 0.32,
+        "gears": 1.0,
+        "cylinders_volume_cc": 0.13,
+        "nr_seats": 0.0,
+        "nr_doors": 0.0,
+        "make": 1.0,
+        "model": 1.0,
+        "body_type": 0.01,
+        "fuel_category": 0.125,
+        "transmission": 0.065,
+        "drive_train": 0.375,
+        "seller_type": 0.055,
+        "country_code": 0.555,
+        "age_years__missing": 0.0,
+        "mileage_km_raw__missing": 0.005,
+        "power_kw__missing": 0.0,
+        "nr_prev_owners__missing": 0.38,
+        "gears__missing": 0.995,
+        "cylinders_volume_cc__missing": 0.015,
+        "nr_seats__missing": 0.01,
+        "nr_doors__missing": 0.0
+      }
+    }
+  }
+}
