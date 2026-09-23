@@ -80,7 +80,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 | NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; training the final chosen configuration (no hyperparameter search) takes at most 15 minutes on a laptop CPU. CodeCarbon also measures the API's energy during the NFR-03 load test, reported as average energy per request, not tracked per individual request: CodeCarbon's measurement granularity does not match single-digit-millisecond events, and a per-request tracker would risk NFR-02's latency budget. | **[manual]** MLflow; energy-per-request figure from the NFR-03 load test |
 | NFR-11 | Observability | The drift job flags the `ES` replay as drift within its first 1,000 requests, including at least one feature other than `country_code`. Replaying an equal-sized sample of the held-out test set through the same harness does not flag drift. | **[manual]** M6 replay (`ES`); M6 replay (test-set control, expecting no alarm) |
 | NFR-12 | Portability | `docker compose up` starts the whole stack on a fresh VM; no LLM or paid external service is needed at runtime. | **[manual]** Deployment smoke test |
-| NFR-13 | CI/CD | On every merge to `main` that changes `recommenditos/`, `pyproject.toml` or `uv.lock`, CI builds the API image (baking in the `dvc pull`-pinned model, FR-12), pushes it to GHCR, deploys it to the FIB Virtech VM (SSH, `docker compose pull && up -d`), and runs NFR-12's smoke test. Avoid merging code changes in the 48 hours before a presentation, given NFR-05's zero-downtime commitment. | **[manual]** CD pipeline run on a merge to `main`; smoke test result |
+| NFR-13 | CI/CD | Every merge to `main` deploys, unless it touches nothing but `docs/`, `reports/` and the Markdown files at the top level. The trigger is stated as that exclusion, not as a list of paths that deploy: a forgotten path then costs one needless build instead of silently leaving the VM on an older version. This is what connects a model promotion to the running system, since promoting a model is a merge that changes `dvc.lock` and nothing else (FR-12, EDN-08). CD builds the API image (baking in the `dvc pull`-pinned model and comparables index), tags it with the commit SHA and `latest`, pushes both to GHCR, and deploys the SHA tag to the FIB Virtech VM (`docker compose pull && up -d`, with the tag read from a variable in the VM's environment file). A deployment counts as successful only once NFR-12's smoke test passes against it; if it fails, the previous SHA tag is put back, which is the rollback EDN-08 refers to. **[proposed]** The runner reaches the VM over SSH; if the VM turns out not to be reachable from GitHub-hosted runners, the fallback is a self-hosted runner on the VM itself, which needs no inbound connection. Because the repository is public, such a runner may only ever run on `push` to `main`, never on `pull_request`. | **[manual]** CD pipeline run on a merge to `main`; smoke test result; a rollback drill putting the previous SHA tag back (FR-15) |
 
 ### Quality model
 
@@ -128,6 +128,13 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.
      Avoids guessing, but leaves M4 without acceptance criteria.
+5. **How CD reaches the VM (NFR-13).**
+   Nobody has tried yet whether a GitHub-hosted runner can reach the FIB Virtech VM, so this is decided once someone has.
+   - **A (proposed):** SSH from the GitHub-hosted runner.
+     Keeps the whole pipeline in GitHub Actions and needs nothing running on the VM, but only works if the VM's SSH port is reachable from outside the UPC network.
+   - **B:** a self-hosted runner on the VM, which polls GitHub and needs no inbound connection.
+     Works behind NAT and still leaves the deployment record in Actions, but costs RAM on the 4 GB VM, and since the repository is public it may only run on `push` to `main`, never on `pull_request`.
+
 **Decided:** the feedback endpoint and its exposure (FR-10, NFR-09), recorded as [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 `/feedback` stays, because the delayed labels are what let FR-14 report a real error and coverage drop instead of input drift alone, and because the `ES` holdout was chosen for exactly that (EDN-03).
 It is not exposed publicly, which removes the need for TLS on a VM that probably cannot get a certificate.
