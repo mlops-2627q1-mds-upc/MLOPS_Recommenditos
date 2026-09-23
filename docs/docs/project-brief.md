@@ -66,7 +66,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   No `ES` row reaches training, validation or conformal calibration.
 - In M6 we replay the `ES` listings against the API as simulated traffic.
   Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
-  The same prices can serve as the delayed labels for `/feedback` (see 5).
+  The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
 - **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
@@ -142,12 +142,14 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 ## 5. Target architecture **[planned]**
 
 ```
-client --> FastAPI (model + SHAP + intervals)
-             |-- /predict       (UC1)
-             |-- /price-range   (UC2)
-             |-- /comparables
-             |-- /feedback      (reported sale prices; no real users, so simulated)
-             '-- /health, /metrics (Prometheus)
+client --> reverse proxy --> FastAPI (model + SHAP + intervals)
+                               |-- /predict       (UC1)
+                               |-- /price-range   (UC2)
+                               |-- /comparables
+                               |-- /health, /metrics (Prometheus)
+                               '-- /feedback      (internal only: the proxy refuses it
+                                                   from outside; reported prices, no real
+                                                   users, so replayed from the ES holdout)
 
          Storage for listings (processed, no PII), prediction log, feedback
          MLflow experiment tracking (DagsHub), not called by the API
@@ -167,8 +169,8 @@ Open points:
 - Deployment target: FIB Virtech VM (free, 4 GB RAM, 20 GB disk, one semester) or another cloud.
   The full stack is tight on 4 GB.
 - Storage: PostgreSQL only pays off if monitoring reads the prediction log; a lighter store may be enough.
+  Monitoring does read it: FR-14 joins the prediction log and the feedback labels, so the store has to support that join.
 - MLflow hosting: DagsHub (as in the course demo) or self-hosted.
-- Feedback loop: simulate delayed labels from the held-out `ES` listings (see 3.2), or drop `/feedback`.
 
 ## 6. Tooling constraints
 
@@ -217,6 +219,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
 - EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
 - EDN-12: retraining and promotion are human-triggered, not automated.
+- EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
 
 Made in M1, still to be written up:
 
@@ -225,7 +228,6 @@ Made in M1, still to be written up:
 **[open]**, to decide with the team:
 
 - Deduplication key and split strategy.
-- Feedback loop: simulated labels or no `/feedback` endpoint.
 - Whether the point model needs random masking of optional fields, like the UC2 interval models, or a narrower optional-field list in FR-01; depends on fill rates not yet profiled (section 4).
 
 ## 9. Reference links
