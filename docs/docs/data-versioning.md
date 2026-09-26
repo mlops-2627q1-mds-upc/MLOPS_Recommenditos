@@ -10,17 +10,48 @@ This page only documents the conventions we've settled on for this project, on t
 ## Remote
 
 We use DagsHub Storage as the DVC remote, configured over **HTTP** (not S3), as the demo prescribes.
-Setup status is tracked in [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10).
+The DagsHub repo is <https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos>.
+It mirrors our GitHub repo by its public URL, because we cannot grant DagsHub access to the course organisation on GitHub.
 
-Credentials never go into a commit.
-Each person configures their own token locally:
+The shared part of the configuration is committed in `.dvc/config`:
 
-```bash
-dvc remote modify origin --local access_key_id <token>
-dvc remote modify origin --local secret_access_key <token>
+```ini
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos.dvc
+    auth = basic
 ```
 
-This writes to `.dvc/config.local`, which is gitignored by DVC itself.
+### First-time setup
+
+1. Create a [DagsHub](https://dagshub.com) account and ask the repo owner to add you as a collaborator with write access
+   (repo **Settings → Collaborators**), otherwise `dvc push` is rejected.
+2. Install the project environment, which includes DVC:
+
+    ```bash
+    uv sync
+    ```
+
+3. Copy your token from DagsHub (profile picture → **Settings → Tokens**) and store your credentials locally:
+
+    ```bash
+    uv run dvc remote modify origin --local user <your-dagshub-username>
+    uv run dvc remote modify origin --local password <your-dagshub-token>
+    ```
+
+4. Check that it works:
+
+    ```bash
+    uv run dvc pull
+    ```
+
+    Before any data is tracked, this prints "Everything is up to date".
+    A 401 or 403 error means the username, the token or the collaborator access is wrong.
+
+Credentials never go into a commit.
+The commands in step 3 write to `.dvc/config.local`, which DVC's own `.dvc/.gitignore` keeps out of Git.
+Never run them without `--local`: that would write the token into the committed `.dvc/config`.
 
 ## Tracking granularity
 

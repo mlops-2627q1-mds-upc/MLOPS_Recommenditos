@@ -49,6 +49,8 @@ uv sync
 pre-commit install
 ```
 
+To get the data, set up your DagsHub credentials once as described in [Data versioning](docs/docs/data-versioning.md#first-time-setup), then run `uv run dvc pull`.
+
 Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md).
 It covers our Git workflow, data versioning with DVC and the checks a PR has to pass.
 

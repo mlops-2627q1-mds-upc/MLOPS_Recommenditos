@@ -1,6 +1,3 @@
-# Data
-/data/
-
 # PDFs and Word files are not tracked (e.g. lab/course material, generated reports).
 # Their Markdown conversions live in references/.
 *.pdf
