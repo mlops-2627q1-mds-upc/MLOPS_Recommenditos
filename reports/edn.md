@@ -161,6 +161,31 @@ How to add an entry:
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md), sections 6 to 8; [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
 - **In LaTeX:** no
 
+### EDN-07: Raw data acquisition: `dvc add` and push to a private DagsHub remote
+
+- **Date:** 2026-09-26
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning
+- **Participants:** @W11W11W11
+- **Decision:** Download the raw file `autoscout24_dataset_20251108.csv` once from Zenodo, track it with `dvc add data/raw/autoscout24_dataset_20251108.csv` and push it to our DagsHub remote, which is a private repo. Teammates get it with `dvc pull`; PII is removed later in preprocessing.
+- **Alternatives considered:**
+  - **Option A: `dvc import-url` from Zenodo.** The `.dvc` file records the Zenodo URL and the file hash; the raw file is fetched from Zenodo and never stored on our remote.
+    Pros: no second copy of the raw PII (`vin`, `street`, `seller_company_name`, coordinates); provenance is recorded in the pointer file itself.
+    Cons: every fresh setup downloads 548.6 MB from Zenodo and depends on it being online; Zenodo sends no ETag, so `dvc update` change detection is less reliable; differs from the course demo, which uses `dvc add`.
+  - **Option B (chosen): `dvc add` plus `dvc push` to DagsHub.**
+    Pros: the workflow of the course demo and of issue #3; one place to pull all data from, independent of Zenodo; fast pulls.
+    Cons: we store a copy of the raw PII ourselves, so the DagsHub repo must stay private, and every teammate or grader who wants the data needs collaborator access.
+  - **Option C: `dvc add` plus push, but only to a remote that is explicitly made private.**
+    Pros: same as B without public exposure.
+    Cons: same access overhead as B; it turned out to be what B already gives us, because the DagsHub repo is private.
+- **Rationale:** B follows the DVC workflow the course demo prescribes. The PII concern behind option A is mitigated because the DagsHub repo is private (anonymous access is redirected to the login page and an anonymous data download returns 401), and the data is already public on Zenodo under the MIT license. The MD5 of our copy matches the checksum Zenodo publishes (`b23a122cc51baf7de39f449193ff0d28`), so provenance is still verifiable.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Rejected
+- **Assessment of the AI contribution:** AI (Claude Code) checked the Zenodo endpoint (size, MD5, no ETag), laid out options A to C and recommended A to keep the raw PII off our infrastructure. Mark chose B because it follows the course demo. After the choice, AI checked the DagsHub repo's visibility and found it private, which addresses the main risk it had raised against B.
+- **AI interaction evidence:** Claude Code session on 2026-09-26 while working on issue #3: prompt "How should the raw AutoScout24 file get into DVC (PII handling)?" with options A to C and the recommendation for A; Mark chose B, reason "because it follows the demo".
+- **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3.
+- **In LaTeX:** no
+
 ## Template
 
 ```markdown
