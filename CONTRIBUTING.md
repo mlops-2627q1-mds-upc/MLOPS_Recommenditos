@@ -5,7 +5,7 @@ This applies to every contributor to this repo, human or AI agent.
 ## Process
 
 We work in Scrum, tracked as GitHub Issues on the [project board](https://github.com/orgs/mlops-2627q1-mds-upc/projects/1) (Backlog → To Do → In Progress → In Review → Done).
-Team communication happens on [Discord](https://discord.gg/uG2eACGng).
+Team communication happens on Discord.
 Full process details (roles, ceremonies, Definition of Done, working agreements) live in [docs/docs/scrum/](docs/docs/scrum/) - read that before picking up work.
 
 ## Data versioning

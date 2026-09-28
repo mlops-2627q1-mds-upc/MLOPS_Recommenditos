@@ -40,7 +40,7 @@ For the details, see:
 | Mark Atzberger | [@W11W11W11](https://github.com/W11W11W11) | <mark.welf.atzberger@estudiant.upc.edu> | Development Team |
 
 For questions about the project, reach out by email or open an issue.
-Day-to-day team communication happens on [Discord](https://discord.gg/uG2eACGng), and we track our work on the [project board](https://github.com/orgs/mlops-2627q1-mds-upc/projects/1).
+Day-to-day team communication happens on Discord, and we track our work on the [project board](https://github.com/orgs/mlops-2627q1-mds-upc/projects/1).
 
 ## Getting started
 
