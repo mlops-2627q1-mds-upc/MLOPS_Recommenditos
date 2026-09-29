@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from recommenditos.config import PARAMS_FILE
+from recommenditos.config import METRICS_FILE, PARAMS_FILE, REPORTS_DIR
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.pipeline import load_params
 
@@ -31,6 +31,28 @@ PII_COLUMNS = (
     "longitude",
     "seller_company_name",
 )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _repo_artefacts_stay_untouched():
+    """Fail the suite if a test writes over the pipeline's own outputs.
+
+    Every stage's path arguments default into the repository, so a test that
+    forgets to redirect one silently overwrites a committed artefact. That
+    happened once with the validation summary, and the only symptom was a
+    mysterious diff after the next `dvc repro`.
+    """
+    watched = [METRICS_FILE, REPORTS_DIR / "data-validation" / "summary.json"]
+    before = {path: _fingerprint(path) for path in watched}
+
+    yield
+
+    changed = sorted(str(path) for path in watched if _fingerprint(path) != before[path])
+    assert not changed, f"the test suite wrote to {', '.join(changed)}"
+
+
+def _fingerprint(path: Path) -> str | None:
+    return path.read_text(encoding="utf-8") if path.exists() else None
 
 
 @pytest.fixture(scope="session")

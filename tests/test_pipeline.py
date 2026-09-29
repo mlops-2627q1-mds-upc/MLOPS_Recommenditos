@@ -73,9 +73,14 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     models = root / "models"
     metrics_dir = root / "metrics"
     summary_path = root / "metrics.json"
+    validation_path = root / "data-validation" / "summary.json"
 
     preprocess.main(raw_path, interim_path, PARAMS_FILE)
-    validate_data.main(raw_path, interim_path)
+    # Every path is passed explicitly. A stage's defaults point into the real
+    # repository, so a test that relies on them writes its result over the
+    # pipeline's - which is exactly how a test run's validation summary once
+    # ended up committed.
+    validate_data.main(raw_path, interim_path, validation_path)
     split_data.main(interim_path, processed, PARAMS_FILE)
     for feature_set in params["features"]["sets"]:
         build_features.main(feature_set, processed, features, PARAMS_FILE)
@@ -91,6 +96,7 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
         "models": models,
         "metrics_dir": metrics_dir,
         "summary": summary_path,
+        "validation": validation_path,
     }
 
 
@@ -229,7 +235,12 @@ def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
     broken.to_parquet(broken_path, index=False)
 
     with pytest.raises(SchemaError):
-        validate_data.main(pipeline["raw"], broken_path)
+        validate_data.main(pipeline["raw"], broken_path, tmp_path / "summary.json")
+
+    # The summary is written before the raise, so a failed run leaves a record
+    # of which artefact broke rather than only a traceback in the DVC log.
+    written = json.loads((tmp_path / "summary.json").read_text())
+    assert written["interim"]["passed"] is False
 
 
 # --------------------------------------------------------------------------
