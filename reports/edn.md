@@ -759,6 +759,29 @@ How to add an entry:
 
 - **In LaTeX:** no
 
+### EDN-28: One module per DVC stage, deviating from the flat Cookiecutter layout
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Project Structure
+- **Participants:** @lukas2510
+- **Decision:** The pipeline code is one module per DVC stage, `recommenditos/data/{download_raw_dataset,preprocess,gx_context_configuration,validate_data,split_data,build_features}.py` and `recommenditos/modeling/{train,evaluate}.py`, instead of the flat Cookiecutter Data Science layout of `dataset.py`, `features.py` and `modeling/train.py` that the template generates. This is the structure the course demo repository uses.
+- **Alternatives considered:**
+  - **Option A (chosen): one module per stage, as in the teachers' demo.**
+    Pros: it is the layout the course demonstrates, so it needs no defending against the graders' own example; each `dvc.yaml` stage declares exactly its own module in `deps`, so a code change reruns that stage and no other; and each ticket owns one file, which is what lets five people build a sequential pipeline in parallel without colliding.
+    Cons: a deviation from the prescribed template, which has to be justified in the report.
+  - **Option B: keep the flat Cookiecutter layout as generated.**
+    Pros: zero deviation from the prescribed template.
+    Cons: download, preprocessing and the split would share `dataset.py`, so three people would edit one file in the same week; `deps` would be coarse, so any edit to that file reruns every stage that lists it, which weakens exactly the reproducibility property the milestone is about.
+  - **Option C: keep the Cookiecutter file names and split only where a collision forces it.**
+    Pros: a smaller deviation.
+    Cons: neither the template nor the demo, so the report would have to justify a third structure that follows nothing; and the split boundary would be decided by whoever hits the collision first rather than by the pipeline.
+- **Rationale:** Cookiecutter Data Science is prescribed "justified deviations allowed", and the teachers' own demo repository deviates in exactly this way, which makes it the best-supported choice rather than a liberty we take. The technical argument is the DVC dependency graph: a stage's `deps` should name the code that stage actually runs, so that `dvc repro` reruns the minimum. The flat layout cannot express that, because one file backs several stages. The organisational argument is the sprint 2 cut: the pipeline is sequential, so parallel work is only possible if each ticket owns its own files, and one module per stage gives that for free.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** Asked whether the sprint plan matched the course demo repository, AI read the demo's file tree and its `dvc.yaml` rather than relying on the existing notes, and reported that the demo splits one module per stage while our repository still carried the flat template. It connected that to the parallelisation problem the sprint was being cut around, laid out the three options with the trade-offs above and recommended A. Lukas reviewed the comparison and chose A. The contribution was useful mainly because it checked the demo directly instead of arguing from the template's documentation.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 during sprint 2 planning: Lukas gave the demo repository's URL and asked whether the planned milestones and tickets fit it; AI fetched its tree and `dvc.yaml`, reported what to adopt and what we deliberately add, and presented the three layout options; Lukas chose the demo layout.
+- **Other evidence:** [sprint 2 planning notes](../docs/docs/scrum/sprints.md); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32); [references/course-demos.md](../references/course-demos.md); [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45).
 ### EDN-29: The drift job runs at a significance level of 0.005, not 0.05
 
 - **Date:** 2026-09-29
