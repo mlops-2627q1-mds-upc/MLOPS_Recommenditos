@@ -15,11 +15,8 @@ Priorities follow MoSCoW.
 **Must** means the component is not worth delivering without it.
 **Should** means it is part of the plan and is dropped only if a milestone is at risk.
 
-Status markers as in the project brief:
-
-- **[decided]** agreed by the team.
-- **[proposed]** proposed and pending team confirmation; the alternatives are in the [specification](specification.md#decisions-pending-confirmation).
-- **[open]** depends on a decision that is not made yet.
+Status markers **[decided]**, **[proposed]** and **[open]** mean what the [project brief](project-brief.md) defines them to mean; that is the only place they are defined.
+The alternatives behind a **[proposed]** marker are in the [specification](specification.md#decisions-pending-confirmation).
 
 ## Who the component is for
 
