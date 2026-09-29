@@ -145,7 +145,7 @@ The calibration set must use the same masking, and the coverage guarantee is mar
 
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
 
-- `body_type` is filled in **100.000 %** of the training listings and `seller_type` in **99.986 %** (14 of 97,913 rows), so a model trained on them effectively never learns a direction for their absence.
+- `body_type` is filled in **100.000 %** of the training listings and `seller_type` in **99.986 %** (14 of 97,889 rows), so a model trained on them effectively never learns a direction for their absence.
   Both are now required fields of `/predict` ([specification](specification.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
 - `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %) are missing rarely, so the signal for their absence is thin but real.
 - `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.

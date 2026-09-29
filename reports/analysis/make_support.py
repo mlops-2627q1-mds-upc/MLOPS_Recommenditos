@@ -6,7 +6,7 @@ it holds 500 test rows. Which supported makes are therefore never checked by the
 Scope matches the evaluation protocol, problem specification sections 2 and 5: used cars only
 (EDN-04), listings registered after the age reference date dropped (EDN-22), the training price
 range, deduplicated before any split, `ES` held out (EDN-03), and only makes with at least 300
-listings (EDN-05). The raw dataset comes from DVC (`dvc pull`), see the README.
+listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-07), see the README.
 """
 
 import sys
