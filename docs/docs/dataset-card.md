@@ -72,7 +72,8 @@ See [Data versioning](data-versioning.md).
 
 | Group | Fields |
 |---|---|
-| Identifiers | `id`, `description` |
+| Identifiers | `id` |
+| Free text | `description` (96.3 % filled, multilingual) |
 | Ratings | `ratings_average`, `ratings_count`, `ratings_recommend_percentage` |
 | Pricing | `price_currency`, `price`, `price_tax_deductible`, `price_negotiable`, `price_net`, `price_vat_rate` |
 | Vehicle identity and body | `vin`, `make`, `model`, `model_version`, `german_hsn_tsn`, `mileage_km_raw`, `mileage_km`, `registration_date`, `production_year`, `vehicle_type`, `body_type`, `nr_seats`, `nr_doors`, `body_color`, `paint_type`, `body_color_original`, `upholstery`, `upholstery_color` |
@@ -113,7 +114,7 @@ There are 25 makes in total, but the distribution is extremely skewed:
 
 Other key distributions:
 
-- **Offer type:** 114,127 used (`U`), 4,252 new (`N`), 3 other (`A`). A further 3,702 rows are flagged `is_preregistered`, and 32,199 cars were first registered in 2025.
+- **Offer type:** 114,127 used (`U`), 4,252 new (`N`), 3 other (`A`). 3,702 of the `U` rows are additionally flagged `is_preregistered`, and 32,199 cars were first registered in 2025.
 - **Vehicle type:** 117,926 `Car` and 456 `Transporter`.
 - **Seller:** 98,565 dealer listings and 19,802 private listings, across 17,141 distinct company names.
 - **Price:** 1 to 13,500,000 EUR, median 39,980. Eight rows are priced below 100 EUR.
@@ -122,7 +123,7 @@ Other key distributions:
 
 ### Completeness
 
-Twenty-two columns are fully populated. The sparsest are:
+Twenty-two columns are fully populated. The columns sparse enough to matter for modelling are:
 
 | Column | Filled |
 |---|---|
@@ -137,7 +138,11 @@ Twenty-two columns are fully populated. The sparsest are:
 | `german_hsn_tsn` | 26.0 % |
 | `price_net` | 28.7 % |
 | `vin` | 34.0 % |
-| `nr_prev_owners` | 54.8 % |
+| `fuel_cons_comb_l100_km` | 35.3 % |
+| `original_market` | 38.5 % |
+| `co2_emission_grper_wltp_km` | 39.2 % |
+| `primary_fuel` | 50.7 % |
+| `nr_prev_owners` | 54.7 % |
 
 Some of this is structural rather than missing data: the electric-range and WLTP columns only apply to the matching vehicle types.
 
@@ -147,10 +152,10 @@ These are the issues we found when profiling the file, and each one needs handli
 
 - **Asking price, not transaction price.** `price` is what the seller asked for, never what the car sold for.
 - **Four columns are completely empty:** `warranty`, `has_warranty`, `fuel_cons_city_l100_km` and `fuel_cons_highway_l100_km`. A fifth, `had_accident`, is `True` in only 3 of 118,382 rows, so it carries no usable signal.
-- **The condition flags contradict each other.** 14,744 rows are flagged as neither used, new nor pre-registered, and 18,446 rows have `is_used = False` while `offer_type = 'U'`. `False` in these boolean flags most likely encodes "unknown" rather than "no", so they cannot be read as reliable negatives. The same caution applies to `has_full_service_history`, `non_smoking` and `is_rental`.
+- **The condition flags contradict each other.** 14,744 rows are flagged as neither used, new nor pre-registered, and 18,446 of the 114,127 `offer_type = 'U'` rows have `is_used = False`. `False` in these boolean flags most likely encodes "unknown" rather than "no", so they cannot be read as reliable negatives. The same caution applies to `has_full_service_history`, `non_smoking` and `is_rental`.
 - **164 listings are registered after the snapshot date,** the latest being 2026-11-01 and 137 of them falling in January 2026. Any age feature computed as "snapshot date minus registration date" is negative for these rows.
 - **Duplicate listings.** `vin` is only 34.0 % filled, so deduplicating on it is not enough. A composite key of make, model, version, mileage, registration date, price and power finds 6,347 duplicate rows. There are no exact full-row duplicates.
-- **The listing price leaks into the free text.** About 6.9 % of `description` values contain the exact listing price, and many more contain some currency amount. Prices must be stripped before any text feature is built.
+- **The listing price leaks into the free text.** About 6.9 % of all rows have the exact listing price inside `description`, and many more contain some currency amount. Prices must be stripped before any text feature is built.
 - **Redundant column pairs.** `mileage_km` duplicates `mileage_km_raw` as text, `power_hp` duplicates `power_kw` in another unit, `body_color_original` is a free-text variant of `body_color`, and `primary_fuel` is a finer-grained `fuel_category`. Use one of each pair, not both.
 - **Outliers at both ends.** Prices from 1 EUR and mileages up to 2,570,000 km are present and need explicit range checks.
 - **15 rows have no seller or location data at all,** missing `country_code`, `seller_type`, `city`, `zip` and `street`, although they still carry coordinates.
@@ -160,10 +165,10 @@ These are the issues we found when profiling the file, and each one needs handli
 
 The full framing lives in the [problem specification](problem-spec.md); this section records only what directly concerns the data.
 
-- **Scope.** Used passenger cars, which is `offer_type = 'U'` and `vehicle_type = 'Car'`, leaving 113,708 rows.
+- **Scope.** Used passenger cars that are not pre-registered, which is `offer_type = 'U'`, `vehicle_type = 'Car'` and `is_preregistered = False`, leaving 110,013 of the 118,382 rows (113,708 before the pre-registered filter). Preprocessing additionally drops the listings registered after the snapshot date and keeps only prices between 500 EUR and 2,000,000 EUR.
 - **Excluded as leakage.** `price_net` and `price_vat_rate` are derived from the target. `price_tax_deductible` and `price_negotiable` are seller-side listing options tied to the price rather than properties of the car.
 - **Excluded as identifiers or PII.** `id`, `vin`, `german_hsn_tsn`, `street`, `zip`, `city`, `latitude`, `longitude` and `seller_company_name`. The last is used only in hashed form, as the grouping key for the split.
-- **Splits.** Listings are deduplicated first. All 8,015 `ES` listings are then held out as a simulated new market for drift monitoring and never reach training, validation or calibration. The remainder is split into train, validation, calibration and test grouped by seller, so that no seller appears in two splits. A purely random split would leak near-identical listings from the same dealer across splits, and no listing date exists, so a temporal split is not possible.
+- **Splits.** Listings are deduplicated first, and every remaining `ES` listing (8,015 before deduplication) is then held out as a simulated new market for drift monitoring, never reaching training, validation or calibration. The remainder is split into train, validation, calibration and test grouped by seller, so that no seller appears in two splits. A purely random split would leak near-identical listings from the same dealer across splits, and no listing date exists, so a temporal split is not possible.
 - **Not yet fixed.** The split proportions and the random seed will be pinned in `params.yaml` once the DVC pipeline exists, and this section will be updated with the realised split sizes.
 
 ## Dataset Creation
@@ -196,8 +201,10 @@ The raw file carries a real re-identification risk and is handled accordingly.
 - `seller_company_name`, `city`, `street` and exact `latitude` and `longitude` identify a dealership, or for the 19,802 private listings, a specific location.
 - The free-text `description` may contain seller-inserted contact details.
 
-In this project the raw file is never copied to our own storage.
-It is imported directly from its Zenodo DOI and excluded from our DVC remote, and the PII columns are dropped in preprocessing so that no downstream artefact contains them.
+In this project the raw file is tracked with `dvc add` and pushed to our own DVC remote, so the team pulls one copy of it instead of each member re-downloading it from Zenodo (EDN-25).
+That means we re-host the personal data ourselves, on a remote that is public (EDN-20).
+We record this as an accepted risk rather than a solved problem: the marginal exposure is small, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the same licence, but we are publishers of that personal data in our own right.
+The PII columns are dropped in preprocessing, so no processed dataset, prediction log, comparable listing or model artefact contains them.
 See [Data versioning](data-versioning.md).
 
 Anyone else redistributing or deploying from this data should drop or hash `vin`, `street` and the exact coordinates, and treat `seller_company_name` as sensitive.
@@ -206,7 +213,7 @@ Anyone else redistributing or deploying from this data should drop or hash `vin`
 
 - **Severe brand skew.** BMW, Porsche, Mercedes-Benz and Audi account for 82.9 % of all rows. Mass-market brands are almost absent, with 352 Volkswagen, 60 Renault and 60 Opel listings, and Toyota, SEAT, Peugeot, Fiat and Škoda do not appear at all. A model trained on this data will be unreliable for ordinary mass-market cars, and this is the single biggest limitation of the dataset.
 - **Geographic skew.** Germany alone is 38.5 % of the rows, and Germany, Italy and the Netherlands together are 73.2 %. Luxembourg contributes 789 listings.
-- **Not purely used cars.** 4,252 listings are new and 3,702 are pre-registered, and 456 rows are light commercial vehicles rather than passenger cars.
+- **Not purely used cars.** 4,252 listings are new (`offer_type = 'N'`) and a further 3,702, all of them inside the used bucket, are flagged as pre-registered; 456 rows are light commercial vehicles rather than passenger cars.
 - **Asking price, not transaction price.** The target is what sellers hoped to get, which sits above realised sale prices by an unknown and probably segment-dependent margin.
 - **Snapshot bias.** One point in time with no per-listing date means no trend analysis, and the data ages relative to any deployed model.
 - **Unverified self-reported fields.** Condition and history flags are seller claims, and the `False` values are ambiguous between "no" and "unknown".
@@ -267,4 +274,12 @@ We cite the Zenodo record, because it identifies the exact file and version used
 ## Provenance of the figures
 
 Every number on this page was measured on the Zenodo file `autoscout24_dataset_20251108.csv`, verified against the published checksum md5 `b23a122cc51baf7de39f449193ff0d28`, and profiled on 2026-09-29.
-The publisher's own description gives round figures such as "~120K records" and was written with AI assistance, as the Zenodo record itself notes, so we treat it as a claim rather than as evidence and report our own measurements instead.
+The publisher's own description gives round figures such as "~120K listings" and was written with AI assistance, as the Zenodo record itself notes, so we treat it as a claim rather than as evidence and report our own measurements instead.
+
+## Dataset Card Authors
+
+Team Recommenditos (UPC, MLOps 2026/27): @lukas2510, @kadameit, @ulasawczuk, @W11W11W11, @michudud04.
+
+## Dataset Card Contact
+
+Through the [project repository](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos), by opening an issue.
