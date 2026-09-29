@@ -41,15 +41,19 @@ The exact scope, target, features and success criteria live in the [problem spec
 
 - Zenodo (DVC source): <https://zenodo.org/records/17643343>, file `autoscout24_dataset_20251108.csv`, 548.6 MB, DOI `10.5281/zenodo.17643343`, version 1.0.0 (2025-11-18).
 - Kaggle mirror: <https://www.kaggle.com/datasets/clkmuhammed/autoscout24-car-listings-dataset> (not verified).
-- License: MIT. The author asks for a citation when publishing analyses, so we cite it in the dataset card and the report.
+- License: the upstream record contradicts itself. The Zenodo metadata field says MIT, while the author's own description on the same record restricts use to "research, educational, or analytical purposes".
+  Both readings permit this project, so we document both in the dataset card instead of asking the author to resolve it.
+  The author asks for a citation when publishing analyses, so we cite it in the dataset card and the report.
 
-Verified facts (profiled on 2026-09-22):
+Verified facts (profiled on 2026-09-22, re-verified on 2026-09-29 against the Zenodo file with md5 `b23a122cc51baf7de39f449193ff0d28`):
 
 - 118,382 listings, 75 columns, currency EUR, single scrape, no listing date column.
 - 8 countries: DE 45,611, IT 23,957, NL 17,059, BE 9,582, **ES 8,015**, AT 7,213, FR 6,141, LU 789.
+  15 rows have no `country_code` at all, and are also missing `seller_type`, `city`, `zip` and `street`.
 - 25 makes, heavily skewed: BMW 37,745, Porsche 25,511, Mercedes-Benz 19,400, Audi 15,469 (together 83 %).
   Mass-market brands are nearly absent (VW 352, Renault 60, Opel 60) or missing (Toyota, SEAT, Peugeot, Fiat, Skoda).
 - Not only used cars: 4,252 new (`offer_type = N`), 3,702 pre-registered, 32,199 registered in 2025.
+  `offer_type` has a third value `A` in 3 rows.
 - 456 rows are `vehicle_type = Transporter`.
 - Categorical labels are English, but `description` and `model_version` are free text in local languages (84,171 unique versions).
 - Price ranges from 1 to 13.5M EUR (median 39,980); mileage from 0 to 2.57M km.
@@ -92,7 +96,8 @@ The report describes this check as part of the data decisions.
   The raw file itself contains this PII, so **[open]**: pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote (see [Data versioning](data-versioning.md)).
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
-- **Price in the description:** 36 % of descriptions contain a currency amount and about 7 % contain the exact listing price.
+- **Price in the description:** about 7 % of descriptions contain the exact listing price (6.85 % measured on 2026-09-29).
+  How many contain any currency amount depends entirely on the pattern used (29 % for a currency token next to digits, 44 % for any euro token), so we do not quote a single figure for it.
   Strip currency and number patterns before any text feature.
 - **Duplicates:** `vin` is only 34 % filled, so VIN-based deduplication is not enough.
   A key on make, model, version, mileage, registration date, price and power finds 6,347 duplicate rows.
@@ -102,6 +107,10 @@ The report describes this check as part of the data decisions.
   No listing date exists, so a temporal split is not possible.
 - **Useless or empty fields:** `warranty` and `has_warranty` are 100 % empty; `had_accident` is True for 3 rows; `fuel_cons_city_l100_km` and `fuel_cons_highway_l100_km` are empty.
   The boolean flags likely encode "unknown" as False; there is no condition field.
+- **Condition flags contradict each other:** 14,744 rows are flagged as neither used, new nor pre-registered, and 18,446 rows have `is_used = False` while `offer_type = U`.
+  So `is_used` and `is_preregistered` are not constant once we scope to used passenger cars, and a False in any of these flags cannot be read as a reliable "no".
+- **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
+  Age computed as snapshot date minus registration date is negative for these rows, so the Great Expectations suite needs a bound on it.
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   Great Expectations checks must cover these ranges.

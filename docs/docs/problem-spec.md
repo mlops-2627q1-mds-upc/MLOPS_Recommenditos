@@ -69,8 +69,9 @@ As time passes, served cars therefore get older than anything seen in training a
 Added on top of the basic set, to measure what they are worth:
 
 - Equipment: the four equipment lists (`equipment_comfort`, `equipment_entertainment`, `equipment_extra`, `equipment_safety`) as multi-hot features.
-- History flags: `has_full_service_history`, `non_smoking`, `is_rental`.
+- History flags: `has_full_service_history`, `non_smoking`, `is_rental`, `is_preregistered`.
   "False" may mean "unknown" in these flags; the dataset card documents this.
+  `is_preregistered` is True for 3,695 rows that survive the scoping, and a pre-registered car is genuinely priced differently, so it stays a candidate feature rather than being dropped as constant.
 - Appearance: `body_color`, `paint_type`, `upholstery`, `upholstery_color`.
 - Further technical data: `model_version` (normalised), `weight_kg`, `cylinders`, `electric_range_km`, `envir_standard`, `original_market`.
 
@@ -86,7 +87,8 @@ Added on top of the basic set, to measure what they are worth:
 | `description` | Contains the listing price in about 7 % of rows and is multilingual. Only an optional later experiment (ladder step 6), after stripping prices. |
 | `warranty`, `has_warranty`, `fuel_cons_city_l100_km`, `fuel_cons_highway_l100_km` | Empty. |
 | `had_accident` | True in only 3 rows. |
-| `price_currency`, `offer_type`, `is_used`, `is_new`, `is_preregistered`, `vehicle_type` | Constant after scoping. |
+| `price_currency`, `offer_type`, `is_new`, `vehicle_type` | Constant after scoping. |
+| `is_used` | Contradicts `offer_type`: False in 18,446 of the scoped rows, so it is not a usable negative. |
 | `mileage_km`, `power_hp`, `body_color_original`, `primary_fuel` | Duplicate another column (as text, other unit, free-text variant or finer fuel label). |
 | `production_year`, `electric_range_city_km`, fuel consumption and CO2 columns | Sparse (0.5-39 % filled) and rarely known by users. |
 
