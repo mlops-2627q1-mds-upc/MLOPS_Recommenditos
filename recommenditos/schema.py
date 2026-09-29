@@ -84,11 +84,45 @@ class Schema:
 
     def extend(self, columns: "tuple[Column, ...]", *, name: str = "") -> "Schema":
         """This contract plus `columns`, for the columns a stage derives itself."""
+        added = [column.name for column in columns]
         known = set(self.names)
-        clashes = sorted(column.name for column in columns if column.name in known)
+        # Two equipment items that normalise to the same column name would
+        # otherwise produce a schema with a repeated column, and the failure
+        # would surface much later as a TypeError out of `conform`.
+        clashes = sorted({name for name in added if name in known or added.count(name) > 1})
         if clashes:
-            raise SchemaError(f"{self.name!r} already defines {', '.join(clashes)}")
+            raise SchemaError(f"{self.name!r} would repeat column(s) {', '.join(clashes)}")
         return Schema(name=name or self.name, columns=self.columns + columns)
+
+    def drop(self, names: "list[str] | tuple[str, ...]", *, name: str = "") -> "Schema":
+        """This contract without `names`.
+
+        For a stage that replaces a column with something derived from it: the
+        equipment lists become multi-hot columns, so `build_features` drops the
+        four repr strings and extends with what it built. Doing that here keeps
+        the change inside that stage instead of in this module.
+        """
+        unknown = sorted(set(names) - set(self.names))
+        if unknown:
+            raise SchemaError(f"{self.name!r} has no column(s) {', '.join(unknown)}")
+        kept = tuple(column for column in self.columns if column.name not in set(names))
+        return Schema(name=name or self.name, columns=kept)
+
+    def with_dtype(self, column: str, dtype: str, *, name: str = "") -> "Schema":
+        """This contract with one column's dtype changed.
+
+        A stage that parses a column keeps its name but changes its type:
+        `weight_kg` arrives as the text `'1,945 kg'` and leaves `build_features`
+        as a number, and `train` may want the categoricals as `category` for
+        LightGBM's native handling (EDN-02). Both are that stage's business, so
+        they are expressed here rather than by editing the constants below.
+        """
+        changed = tuple(
+            replace(each, dtype=dtype) if each.name == column else each for each in self.columns
+        )
+        if changed == self.columns:
+            raise SchemaError(f"{self.name!r} has no column {column!r}")
+        return Schema(name=name or self.name, columns=changed)
 
     def validate(self, frame: pd.DataFrame) -> None:
         """Raise `SchemaError` naming every way `frame` breaks this contract."""
@@ -346,20 +380,38 @@ _KEPT_RAW_COLUMNS: tuple[str, ...] = (
     "has_particle_filter",
 )
 
+
+def _as_interim(column: Column) -> Column:
+    """One raw column as the interim contract sees it.
+
+    Two differences from the raw frame, both deliberate.
+
+    `preprocess` parses the date, so the interim frame carries a real
+    timestamp and EDN-22's "registered after the snapshot" rule is a date
+    comparison rather than a string one.
+
+    Nullability becomes *structural* rather than measured. In the raw contract
+    a column is non-null because the published file happens to fill it; here it
+    is non-null only when it cannot be otherwise - a `bool` column, because the
+    dtype has no way to represent a missing value. `make` and `body_type` are
+    filled in every row of the snapshot, but that is a fill rate, and a fill
+    rate is an expectation for the Great Expectations suite to assert with a
+    tolerance, not a promise this contract should make on the data's behalf. If
+    it made it, one missing `body_type` in a future scrape would fail five
+    stages with a message that reads like a bug in our code.
+    """
+    if column.name == "registration_date":
+        return replace(column, dtype="datetime64[ns]", nullable=True)
+    return replace(column, nullable=column.dtype != "bool")
+
+
 INTERIM_SCHEMA = (
-    RAW_SCHEMA.select(_KEPT_RAW_COLUMNS, name="interim")
+    Schema(
+        name="interim",
+        columns=tuple(_as_interim(RAW_SCHEMA.column(name)) for name in _KEPT_RAW_COLUMNS),
+    )
     .extend(_TARGET_COLUMNS)
     .extend(_GROUP_COLUMNS, name="interim")
-)
-# `preprocess` parses the date, so the interim frame carries a real timestamp
-# and the "registered after the snapshot" rule of EDN-22 is a date comparison
-# rather than a string one.
-INTERIM_SCHEMA = Schema(
-    name="interim",
-    columns=tuple(
-        replace(column, dtype="datetime64[ns]") if column.name == "registration_date" else column
-        for column in INTERIM_SCHEMA.columns
-    ),
 )
 
 # --------------------------------------------------------------------------

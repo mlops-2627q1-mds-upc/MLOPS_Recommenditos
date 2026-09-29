@@ -1,0 +1,10 @@
+{
+  "raw": {
+    "passed": true,
+    "rows": 2000
+  },
+  "interim": {
+    "passed": false,
+    "rows": null
+  }
+}

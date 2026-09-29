@@ -30,6 +30,9 @@ from recommenditos.schema import INTERIM_SCHEMA, PROCESSED_SCHEMA
 #: iterate this, so adding a set is a change here and in params.yaml only.
 SPLIT_NAMES: tuple[str, ...] = ("train", "validation", "calibration", "test")
 
+#: How far the ratios may sum away from 1 before the split refuses to run.
+_RATIO_TOLERANCE = 1e-9
+
 #: Resolution of the group hash. A group's bucket is its hash modulo this,
 #: so the ratios are honoured to within one bucket.
 _BUCKETS = 10_000
@@ -44,6 +47,17 @@ def assign_split(groups: pd.Series, ratios: dict[str, float], seed: int) -> pd.S
     depends on the seed and the key alone: the same seller lands in the same
     set whatever order the frame arrives in, and no seller is ever split.
     """
+    missing = sorted(set(SPLIT_NAMES) - set(ratios))
+    if missing:
+        raise ValueError(f"no ratio given for {', '.join(missing)}")
+
+    total = sum(ratios[name] for name in SPLIT_NAMES)
+    if abs(total - 1.0) > _RATIO_TOLERANCE:
+        # Without this a one-character edit in params.yaml silently produces an
+        # empty calibration set, so the UC2 intervals calibrate on nothing, or
+        # an empty test set, so every success criterion is computed on no rows.
+        raise ValueError(f"the split ratios must sum to 1, but {ratios} sums to {total}")
+
     edges: list[tuple[str, float]] = []
     cumulative = 0.0
     for name in SPLIT_NAMES:
@@ -56,6 +70,8 @@ def assign_split(groups: pd.Series, ratios: dict[str, float], seed: int) -> pd.S
         for name, edge in edges:
             if position < edge:
                 return name
+        # Only reachable through floating-point slack at the very top of the
+        # range, because the ratios are checked above to sum to 1.
         return SPLIT_NAMES[-1]
 
     return groups.map(bucket)

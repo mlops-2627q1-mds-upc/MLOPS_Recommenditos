@@ -1,11 +1,16 @@
 """A synthetic stand-in for the raw AutoScout24 snapshot.
 
-The real file is 548 MB and carries PII, so it is neither committed nor sampled
-from: everything below is generated from the public catalogues in the dataset
-card (make and model names, the category value sets) plus a seeded random
-number generator. Nothing here is derived from a real listing, which is what
-lets the whole test suite run without the download, without DagsHub
-credentials and without re-hosting personal data (NFR-08, EDN-07).
+The real file is 548 MB and carries PII, so nothing here is sampled from it:
+everything below is generated from the public catalogues in the dataset card
+(make and model names, the category value sets) plus a seeded random number
+generator.
+
+EDN-25 does track the raw file with DVC and push it to our remote, so this is
+not about the file being unavailable. It is that a fixture is committed to Git,
+and a sample of real listings would put personal data in the repository itself
+rather than behind a DVC pointer (NFR-08). Generating also makes the whole test
+suite runnable without the download and without DagsHub credentials, which is
+what lets the stage tickets be built in parallel.
 
 It is used in two places:
 
@@ -45,7 +50,20 @@ from recommenditos.schema import RAW_SCHEMA
 SNAPSHOT_DATE = pd.Timestamp("2025-11-08")
 
 # How many rows are appended to guarantee the edge cases above.
-EDGE_CASE_ROWS = 11
+EDGE_CASE_ROWS = 14
+
+#: The composite key preprocessing deduplicates on (params.yaml,
+#: `preprocess.dedup_key`). Repeated here because the edge cases have to be
+#: built so that only the row meant to be a duplicate is one.
+_DEDUP_KEY = (
+    "make",
+    "model",
+    "model_version",
+    "mileage_km_raw",
+    "registration_date",
+    "price",
+    "power_kw",
+)
 
 # Make shares from the dataset card, renormalised. The real distribution is
 # extremely skewed (four makes are 83 % of the file) and the skew is what the
@@ -158,8 +176,11 @@ def generate_raw_listings(n_rows: int = 2000, *, seed: int = 20251108) -> pd.Dat
     The same seed always gives the same frame, including the edge-case rows,
     which are appended last so their row positions are stable.
     """
-    if n_rows <= EDGE_CASE_ROWS:
-        raise ValueError(f"n_rows must be greater than {EDGE_CASE_ROWS}, got {n_rows}")
+    # Each edge case is built from its own body row, so there have to be at
+    # least as many body rows as edge cases.
+    minimum = 2 * EDGE_CASE_ROWS
+    if n_rows < minimum:
+        raise ValueError(f"n_rows must be at least {minimum}, got {n_rows}")
 
     rng = np.random.default_rng(seed)
     body = _random_listings(rng, n_rows - EDGE_CASE_ROWS)
@@ -426,15 +447,36 @@ def _price_columns(rng: np.random.Generator, frame: pd.DataFrame) -> pd.DataFram
 
 
 def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
-    """The rows that guarantee every pipeline rule has something to act on."""
-    rows = [body.iloc[0].copy() for _ in range(EDGE_CASE_ROWS)]
+    """The rows that guarantee every pipeline rule has something to act on.
+
+    Each row is built from a *different* body row and then given a price
+    nobody else has, for two reasons that both bite hard if ignored:
+
+    - Cloning one body row would make most of these duplicates of it on the
+      seven-column deduplication key, so preprocessing would delete the very
+      cases the fixture exists to provide. Only row 1 is meant to be a
+      duplicate, and it is made one deliberately.
+    - Cloning one body row would also copy its `country_code` into all of
+      them. If that row happened to be Spanish, `split` would divert the whole
+      block into the holdout and the train, validation, calibration and test
+      frames would contain none of these cases at all.
+    """
+    rows = [body.iloc[index].copy() for index in range(EDGE_CASE_ROWS)]
+    for index, row in enumerate(rows):
+        # A price nobody else has, so no row below collides on the dedup key
+        # by accident. The price-specific cases overwrite it again.
+        row["price"] = 9_000_000.0 + index
+        # Never the holdout country unless the row is the holdout case.
+        row["country_code"] = "DE"
 
     # 1. Registered after the snapshot: age would be negative (EDN-22).
     rows[0]["registration_date"] = "2026-01-01"
-    # 2. An exact duplicate of row 1 on the 7-column dedup key. The columns
-    #    outside the key differ, which is what makes it a realistic duplicate
-    #    rather than a repeated row.
-    rows[1]["non_smoking"] = not bool(body.iloc[0]["non_smoking"])
+    # 2. The one intended duplicate: identical to row 0 on all seven columns of
+    #    the deduplication key, different outside it, which is what a real
+    #    duplicate listing looks like.
+    for column in _DEDUP_KEY:
+        rows[1][column] = rows[0][column]
+    rows[1]["non_smoking"] = not bool(rows[0]["non_smoking"])
     # 3. An `ES` listing for the drift holdout (EDN-03).
     rows[2]["country_code"] = "ES"
     # 4. A make far below any support threshold (EDN-05, FR-04).
@@ -460,6 +502,17 @@ def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
     rows[10]["seller_type"] = "PrivateSeller"
     # The one-sided flag of EDN-23: used by `offer_type`, not by `is_used`.
     rows[10]["is_used"] = False
+    # 12. No seller and no location at all, as 15 rows of the real file have.
+    #     Every such listing falls into one shared group, which is the safe
+    #     direction but worth having something to assert against.
+    for column in ("seller_company_name", "country_code", "zip", "city", "seller_type"):
+        rows[11][column] = None
+    rows[11]["seller_is_dealer"] = False
+    rows[11]["country_code"] = None
+    # 13. and 14. Exactly on each price bound, so the range rule's
+    #     inclusive-or-exclusive edge is testable rather than assumed.
+    rows[12]["price"] = 500.0
+    rows[13]["price"] = 2_000_000.0
 
     return pd.DataFrame(rows).reset_index(drop=True)
 

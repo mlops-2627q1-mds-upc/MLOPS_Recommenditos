@@ -161,6 +161,17 @@ features:
   # training rows, so the matrix does not grow a tail of near-constant columns.
   equipment_min_frequency: 0.01
 
+validate:
+  # Bounds the Great Expectations suites assert (#25). The price range lives
+  # under `preprocess`, because there it is a scope filter rather than a check.
+  mileage_min_km: 0
+  mileage_max_km: 1000000
+  # The raw suite asserts `registration_date <= reference_date` with this
+  # tolerance rather than as a hard rule, so a future scrape carrying many such
+  # rows is flagged instead of silently cleaned. The cleaned frame asserts it
+  # hard, because preprocessing has dropped them by then.
+  raw_mostly: 0.99
+
 train:
   # One MLflow experiment; each variant below is one run in it (#37).
   mlflow_experiment: recommenditos-price
@@ -214,6 +225,21 @@ evaluate:
   age_bucket_edges: [0, 1, 3, 6, 10, 20]
   # The model variant SC-03 compares against.
   baseline_variant: b0
+  # The fields specification FR-01 requires of `/predict` (EDN-15). SC-06 masks
+  # every *other* field of the feature set, on its own and all at once, so this
+  # list is what decides which fields the criterion covers. The API reads the
+  # same list, so the two cannot disagree about what is optional.
+  required_input_fields:
+    - make
+    - model
+    - registration_date
+    - mileage_km_raw
+    - power_kw
+    - fuel_category
+    - transmission
+    - country_code
+    - body_type
+    - seller_type
   # SC-01 to SC-06 of problem-spec section 8, as numbers the `evaluate` stage
   # can check. NFR-01 gates deployment on all six, so each one is written to
   # metrics.json with its measured value and a pass or fail.

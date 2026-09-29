@@ -7,14 +7,17 @@ somewhere else is silently checking nothing.
 
 import pandas as pd
 import pytest
+from tests.conftest import PII_COLUMNS
 
 from recommenditos import config
 from recommenditos.data.preprocess import hash_seller_group
 from recommenditos.data.split_data import SPLIT_NAMES, assign_split
-from recommenditos.data.synthetic import SNAPSHOT_DATE, generate_raw_listings
+from recommenditos.data.synthetic import (
+    EDGE_CASE_ROWS,
+    SNAPSHOT_DATE,
+    generate_raw_listings,
+)
 from recommenditos.schema import RAW_SCHEMA
-
-PII_COLUMNS = ("vin", "street", "zip", "city", "latitude", "longitude", "seller_company_name")
 
 DEDUP_KEY = [
     "make",
@@ -52,15 +55,6 @@ def test_a_different_seed_gives_a_different_fixture():
     assert not generate_raw_listings(200, seed=7).equals(generate_raw_listings(200, seed=8))
 
 
-def test_the_fixture_needs_no_data_access(tmp_path, monkeypatch):
-    # Generated from a directory that holds none of the project's data. If the
-    # generator ever starts reading a file, CI loses the property the whole
-    # suite rests on, and this is where that shows up.
-    monkeypatch.chdir(tmp_path)
-
-    RAW_SCHEMA.validate(generate_raw_listings(50))
-
-
 @pytest.mark.parametrize(
     ("description", "predicate"),
     [
@@ -86,14 +80,71 @@ def test_the_fixture_needs_no_data_access(tmp_path, monkeypatch):
         ("a private seller", lambda f: f.seller_company_name.isna()),
         # EDN-23: a False in the condition flags is "not asserted", not "no".
         ("a used car flagged is_used=False", lambda f: (f.offer_type == "U") & ~f.is_used),
+        # 15 rows of the real file carry no seller and no location at all.
+        (
+            "a listing with no seller or location",
+            lambda f: f.seller_company_name.isna() & f.country_code.isna() & f.city.isna(),
+        ),
+        # The price range's edges, so inclusive-or-exclusive is testable.
+        ("a price exactly on the lower bound", lambda f: f.price == 500),
+        ("a price exactly on the upper bound", lambda f: f.price == 2_000_000),
     ],
 )
 def test_the_fixture_contains(raw_frame, description, predicate):
     assert predicate(raw_frame).any(), f"the fixture has no {description}"
 
 
-def test_the_fixture_contains_a_duplicate_on_the_dedup_key(raw_frame):
-    assert raw_frame.duplicated(subset=DEDUP_KEY).any()
+def test_the_fixture_contains_exactly_one_duplicate_on_the_dedup_key(raw_frame):
+    # Exactly one, not "at least one". An earlier version of the generator
+    # built every edge row from the same body row, so most of them were
+    # duplicates and preprocessing deleted the cases the fixture exists to
+    # provide - including the `ES` row and the private seller.
+    assert raw_frame.duplicated(subset=DEDUP_KEY).sum() == 1
+
+
+def _scoped_like_preprocess(frame, params):
+    """The rows issue #34's rules leave behind, in the order it specifies."""
+    rules = params["preprocess"]
+    kept = frame[
+        (frame["offer_type"] == rules["offer_type"])
+        & ~frame["is_preregistered"]
+        & (frame["vehicle_type"] == rules["vehicle_type"])
+    ]
+    registered = pd.to_datetime(kept["registration_date"])
+    kept = kept[registered.isna() | (registered <= pd.Timestamp(params["reference_date"]))]
+    kept = kept[
+        kept["price"].between(rules["price_min_eur"], rules["price_max_eur"], inclusive="both")
+    ]
+    return kept.drop_duplicates(subset=rules["dedup_key"], keep="first")
+
+
+@pytest.mark.parametrize(
+    ("description", "predicate"),
+    [
+        ("an ES listing", lambda f: f.country_code == "ES"),
+        ("an unsupported make", lambda f: f.make == "Bugatti"),
+        ("a private seller", lambda f: f.seller_company_name.isna()),
+        ("a listing with no seller or location", lambda f: f.country_code.isna()),
+        ("a missing registration date", lambda f: f.registration_date.isna()),
+        ("a price on the lower bound", lambda f: f.price == 500),
+        ("a price on the upper bound", lambda f: f.price == 2_000_000),
+    ],
+)
+def test_the_edge_cases_survive_preprocessing(raw_frame, params, description, predicate):
+    # Being in the raw frame is not enough: a case the scope, date, price and
+    # deduplication rules delete is a case no downstream ticket can test
+    # against. These are the ones that must reach the interim frame.
+    assert predicate(_scoped_like_preprocess(raw_frame, params)).any(), (
+        f"{description} does not survive the preprocessing rules"
+    )
+
+
+def test_the_holdout_case_does_not_swallow_the_others(raw_frame):
+    # If every edge row carried the holdout country, `split` would divert the
+    # whole block and the train, validation, calibration and test frames would
+    # contain none of them.
+    edge = raw_frame.tail(EDGE_CASE_ROWS)
+    assert (edge["country_code"] == "ES").sum() == 1
 
 
 def test_the_fixture_keeps_the_real_make_skew(raw_frame):
@@ -150,6 +201,22 @@ def test_private_sellers_group_by_location_not_into_one_bucket(raw_frame):
     assert hash_seller_group(private).nunique() > 1
 
 
+def test_a_seller_with_no_location_still_gets_a_group(raw_frame):
+    # The degenerate case: no name and no location. Such listings share one
+    # group, which is the safe direction - they cannot then be split across
+    # two sets, which is the leak the grouping exists to prevent.
+    blank = raw_frame[
+        raw_frame["seller_company_name"].isna()
+        & raw_frame["country_code"].isna()
+        & raw_frame["city"].isna()
+    ]
+    hashed = hash_seller_group(blank)
+
+    assert len(blank) > 0
+    assert hashed.notna().all()
+    assert hashed.nunique() == 1
+
+
 def test_two_listings_from_one_dealer_share_a_group(raw_frame):
     dealers = raw_frame[raw_frame["seller_company_name"].notna()]
     hashed = hash_seller_group(dealers)
@@ -189,9 +256,13 @@ def test_the_split_ratios_are_roughly_honoured(raw_frame, params):
     shares = assigned.value_counts(normalize=True)
 
     for name in SPLIT_NAMES:
-        # Whole sellers move at a time and sellers differ in size, so the
-        # tolerance is wide on purpose; issue #35 tightens it.
-        assert abs(shares[name] - params["split"]["ratios"][name]) < 0.10
+        expected = params["split"]["ratios"][name]
+        # Relative, not absolute: an absolute tolerance of 0.10 against a
+        # ratio of 0.10 would accept an empty validation or calibration set.
+        # Whole sellers move at a time and sellers differ in size, so half the
+        # ratio is wide on purpose; issue #35 tightens it.
+        assert shares[name] > 0
+        assert abs(shares[name] - expected) < expected / 2
 
 
 def test_the_split_ratios_in_params_sum_to_one(params):

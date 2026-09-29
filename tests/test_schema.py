@@ -148,6 +148,44 @@ def test_the_interim_contract_carries_the_target_and_the_group_key():
     assert {"price", "log_price", "seller_group_id"}.issubset(INTERIM_SCHEMA.names)
 
 
+def test_interim_nullability_is_structural_not_a_fill_rate():
+    # `body_type` and `make` are filled in every row of the published
+    # snapshot, but that is an expectation for the Great Expectations suite to
+    # assert with a tolerance, not a promise this contract makes. A bool column
+    # is non-null because the dtype cannot hold a missing value at all.
+    assert INTERIM_SCHEMA.column("body_type").nullable
+    assert INTERIM_SCHEMA.column("make").nullable
+    assert INTERIM_SCHEMA.column("equipment_comfort").nullable
+    assert not INTERIM_SCHEMA.column("has_full_service_history").nullable
+
+    # What preprocess constructs, it guarantees.
+    for name in ("price", "log_price", "seller_group_id"):
+        assert not INTERIM_SCHEMA.column(name).nullable, name
+
+
+def test_extend_rejects_a_column_name_twice_in_its_own_argument():
+    # The seam issue #36 uses for the equipment multi-hot columns. Two items
+    # that normalise to the same name must fail here, naming the column, not
+    # later inside conform with a TypeError.
+    duplicated = (
+        Column("eq_abs", "bool", False, ""),
+        Column("eq_abs", "bool", False, ""),
+    )
+    with pytest.raises(SchemaError, match="would repeat column"):
+        TOY.extend(duplicated)
+
+
+def test_drop_and_with_dtype_keep_a_stage_out_of_this_module():
+    # What build_features needs: replace the equipment strings with what it
+    # built, and change a parsed column's type, without editing schema.py.
+    reshaped = TOY.drop(["flag"]).with_dtype("score", "Int64", name="reshaped")
+
+    assert "flag" not in reshaped.names
+    assert reshaped.column("score").dtype == "Int64"
+    with pytest.raises(SchemaError, match="no column"):
+        TOY.with_dtype("nope", "float64")
+
+
 def test_the_split_preserves_the_interim_columns():
     assert PROCESSED_SCHEMA.names == INTERIM_SCHEMA.names
     assert PROCESSED_SCHEMA.name == "processed"

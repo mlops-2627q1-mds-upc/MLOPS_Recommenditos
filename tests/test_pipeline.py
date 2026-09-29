@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from tests.test_data import PII_COLUMNS
+from tests.conftest import PII_COLUMNS
 import yaml
 
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
@@ -56,7 +56,7 @@ def dvc_stages() -> dict:
 
 
 @pytest.fixture(scope="session")
-def pipeline(tmp_path_factory, raw_frame, params) -> dict:
+def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     """Every stage after `download`, run in order on the fixture.
 
     Session-scoped, because it is the expensive fixture and every assertion
@@ -65,7 +65,7 @@ def pipeline(tmp_path_factory, raw_frame, params) -> dict:
     root = tmp_path_factory.mktemp("pipeline")
     raw_path = root / "raw" / "listings.parquet"
     raw_path.parent.mkdir(parents=True)
-    raw_frame.to_parquet(raw_path, index=False)
+    _generated_frame.to_parquet(raw_path, index=False)
 
     interim_path = root / "interim" / "listings.parquet"
     processed = root / "processed"
@@ -187,6 +187,32 @@ def test_a_model_that_misses_the_criteria_does_not_pass_the_gate(pipeline):
     summary = json.loads(pipeline["summary"].read_text())
     assert summary["gate_passed"] is False
     assert summary["n_variants_passing"] == 0
+    # Nothing is put forward for deployment while nothing passes.
+    assert summary["deployable_variant"] is None
+
+
+@pytest.mark.req("NFR-01")
+def test_the_gate_discriminates_rather_than_rejecting_everything(params):
+    # The test above cannot tell a working gate from one that says no to
+    # everything, because SC-04 to SC-06 are null until issue #39 lands. This
+    # one checks the criteria that are implemented actually distinguish.
+    criteria = params["evaluate"]["success_criteria"]
+    good = {"mdape": 0.067, "within_20pct": 0.906}
+    bad = {"mdape": 0.547, "within_20pct": 0.161}
+
+    passed = evaluate.evaluate_gate(good, baseline_mdape=0.119, criteria=criteria)
+    failed = evaluate.evaluate_gate(bad, baseline_mdape=0.119, criteria=criteria)
+
+    assert (passed["sc01_passed"], passed["sc02_passed"], passed["sc03_passed"]) == (
+        True,
+        True,
+        True,
+    )
+    assert (failed["sc01_passed"], failed["sc02_passed"], failed["sc03_passed"]) == (
+        False,
+        False,
+        False,
+    )
 
 
 def test_an_unmeasured_criterion_is_null_rather_than_a_pass(pipeline):
@@ -211,14 +237,14 @@ def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
 # --------------------------------------------------------------------------
 
 
-def _params_override(tmp_path: Path, params: dict, **download) -> Path:
-    """A copy of params.yaml with some `download` keys changed.
+def _params_override(tmp_path: Path, params: dict, **blocks) -> Path:
+    """A copy of params.yaml with some keys of some blocks changed.
 
     Every stage takes its params file as an argument for exactly this reason:
     a test can vary a parameter without monkeypatching anything, which is what
     the stage tickets need to test their rules against the fixture.
     """
-    changed = {**params, "download": {**params["download"], **download}}
+    changed = {**params, **{key: {**params[key], **value} for key, value in blocks.items()}}
     path = tmp_path / "params.yaml"
     path.write_text(yaml.safe_dump(changed), encoding="utf-8")
     return path
@@ -227,7 +253,7 @@ def _params_override(tmp_path: Path, params: dict, **download) -> Path:
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
 
     output = tmp_path / "listings.parquet"
-    download_raw_dataset.main(output, _params_override(tmp_path, params, rows=60))
+    download_raw_dataset.main(output, _params_override(tmp_path, params, download={"rows": 60}))
 
     RAW_SCHEMA.validate(pd.read_parquet(output))
 
@@ -238,14 +264,18 @@ def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
     with pytest.raises(NotImplementedError, match="zenodo"):
         download_raw_dataset.main(
             tmp_path / "listings.parquet",
-            _params_override(tmp_path, params, source="zenodo"),
+            _params_override(tmp_path, params, download={"source": "zenodo"}),
         )
 
 
-def test_the_pipeline_still_runs_on_synthetic_data(params):
-    # A reminder in test form: once #33 lands, this parameter flips and the
-    # assertion below is what says so.
-    assert params["download"]["source"] == "synthetic"
+def test_the_download_source_is_one_the_stage_implements(params):
+    # Not pinned to `synthetic`: issue #33 flips this to `zenodo`, and a
+    # tripwire that turns the suite red would just teach its author to edit a
+    # test. What must hold is that the value names a source the stage knows.
+    assert params["download"]["source"] in {
+        download_raw_dataset.SYNTHETIC,
+        download_raw_dataset.ZENODO,
+    }
 
 
 def test_configure_gx_is_runnable():
@@ -281,7 +311,11 @@ def test_every_declared_parameter_exists(dvc_stages, params):
         body = definition.get("do", definition)
         for declared in body.get("params", []):
             for key in _resolve(declared, definition, params):
-                assert _lookup(params, key) is not None, f"{stage} reads a missing param: {key}"
+                # A sentinel, not `is not None`: a parameter whose value is
+                # legitimately 0, false or null is still declared.
+                assert _lookup(params, key) is not _MISSING, (
+                    f"{stage} reads a missing param: {key}"
+                )
 
 
 def test_every_foreach_iterates_a_real_parameter(dvc_stages, params):
@@ -293,6 +327,62 @@ def test_every_foreach_iterates_a_real_parameter(dvc_stages, params):
             f"{stage} iterates {key}, which must be a mapping so its stages are named "
             f"after the item rather than its position"
         )
+
+
+def test_no_parameter_is_dead(dvc_stages, params):
+    """Every key in params.yaml is declared by some stage.
+
+    The reverse direction is checked above. This one catches the failure that
+    actually happens: a key is added for a stage ticket, nobody declares it,
+    and changing it reruns nothing - which quietly breaks the property EDN-30
+    exists for.
+    """
+    declared: set[str] = set()
+    for definition in dvc_stages.values():
+        body = definition.get("do", definition)
+        for entry in body.get("params", []):
+            for key in _resolve(entry, definition, params):
+                # Declaring `split` covers `split.ratios.train`, and declaring
+                # `features.sets.basic` covers nothing above it.
+                declared.add(key)
+
+    undeclared = sorted(
+        key
+        for key in _leaf_groups(params)
+        if not any(key == each or key.startswith(each + ".") for each in declared)
+    )
+    assert not undeclared, f"no stage declares: {', '.join(undeclared)}"
+
+
+def _leaf_groups(params: dict, prefix: str = "") -> list[str]:
+    """Every top-level key, and every second-level key under it."""
+    keys = []
+    for key, value in params.items():
+        dotted = f"{prefix}{key}"
+        if isinstance(value, dict) and not prefix:
+            keys.extend(_leaf_groups(value, f"{dotted}."))
+        else:
+            keys.append(dotted)
+    return keys
+
+
+def test_the_supported_make_list_has_the_shape_the_api_reads(pipeline):
+    # FR-04 rejects a make outside this list and echoes it back, so the API
+    # and the split stage have to agree on its shape. Fixing it here means
+    # neither invents one.
+    written = json.loads((pipeline["processed"] / "supported_makes.json").read_text())
+
+    assert set(written) == {"supported_makes"}
+    assert isinstance(written["supported_makes"], list)
+
+
+def test_the_gate_is_in_the_graph_not_beside_it(dvc_stages):
+    # The course demo's validate-data declares no outs, so nothing depends on
+    # it and `dvc repro split` walks past the gate. Ours must not.
+    summary = "reports/data-validation/summary.json"
+    declared = [entry for entry in dvc_stages["validate-data"]["outs"]]
+    assert any(summary in str(entry) for entry in declared)
+    assert summary in dvc_stages["split"]["deps"]
 
 
 def test_the_metrics_artefact_is_declared_so_dvc_metrics_diff_works(dvc_stages):
@@ -317,11 +407,14 @@ def _resolve(declared: str, definition: dict, params: dict) -> list[str]:
     return resolved
 
 
+_MISSING = object()
+
+
 def _lookup(params: dict, dotted: str):
     current = params
     for part in dotted.split("."):
         if not isinstance(current, dict) or part not in current:
-            return None
+            return _MISSING
         current = current[part]
     return current
 

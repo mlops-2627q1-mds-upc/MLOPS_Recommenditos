@@ -27,6 +27,7 @@ stages:
     deps:
       - recommenditos/data/download_raw_dataset.py
       - recommenditos/data/synthetic.py
+      - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
     params:
@@ -42,6 +43,7 @@ stages:
     cmd: python3 -m recommenditos.data.preprocess
     deps:
       - recommenditos/data/preprocess.py
+      - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
       - data/raw/listings.parquet
@@ -63,21 +65,35 @@ stages:
     cmd: python3 -m recommenditos.data.gx_context_configuration
     deps:
       - recommenditos/data/gx_context_configuration.py
+      - recommenditos/config.py
       - recommenditos/schema.py
 
   # ----------------------------------------------------------------------
-  # validate-data: the data gate. A violation fails the stage, unlike in the
-  # course demo, where a failing expectation is only logged (#25).
+  # validate-data: the data gate (#25).
+  #
+  # Two things the course demo's equivalent does not do: a violation fails the
+  # stage rather than only being logged, and the stage writes a summary that
+  # `split` depends on, so the gate sits in the graph. The demo's stage has no
+  # `outs`, which makes it a leaf nothing depends on, so `dvc repro split`
+  # would walk straight past it.
   # ----------------------------------------------------------------------
   validate-data:
     cmd: python3 -m recommenditos.data.validate_data
     deps:
       - recommenditos/data/validate_data.py
       - recommenditos/data/gx_context_configuration.py
+      - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
       - data/raw/listings.parquet
       - data/interim/listings.parquet
+    params:
+      - validate
+    outs:
+      # Not cached, so the validation result is git-tracked and shows up in the
+      # diff of any pull request that changes the data.
+      - reports/data-validation/summary.json:
+          cache: false
 
   # ----------------------------------------------------------------------
   # split: hold Spain out (EDN-03), then split grouped by seller (EDN-14).
@@ -86,9 +102,11 @@ stages:
     cmd: python3 -m recommenditos.data.split_data
     deps:
       - recommenditos/data/split_data.py
+      - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
       - data/interim/listings.parquet
+      - reports/data-validation/summary.json
     params:
       - seed
       - split
@@ -115,6 +133,7 @@ stages:
       deps:
         - recommenditos/data/build_features.py
         - recommenditos/data/split_data.py
+        - recommenditos/config.py
         - recommenditos/schema.py
         - recommenditos/pipeline.py
         - data/processed/train.parquet
@@ -125,6 +144,8 @@ stages:
       params:
         - reference_date
         - features.sets.${key}
+        - features.equipment_columns
+        - features.equipment_min_frequency
       outs:
         - data/processed/features/${key}
 
@@ -141,11 +162,13 @@ stages:
       cmd: python3 -m recommenditos.modeling.train ${key}
       deps:
         - recommenditos/modeling/train.py
+        - recommenditos/config.py
         - recommenditos/schema.py
         - recommenditos/pipeline.py
         - data/processed/features/${item.feature_set}
       params:
         - seed
+        - train.mlflow_experiment
         - train.variants.${key}
         - features.sets.${item.feature_set}
       outs:
@@ -158,6 +181,7 @@ stages:
     cmd: python3 -m recommenditos.modeling.evaluate
     deps:
       - recommenditos/modeling/evaluate.py
+      - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
       - data/processed/features

@@ -37,6 +37,17 @@ def hash_seller_group(frame: pd.DataFrame) -> pd.Series:
     groups by location instead, which is what problem-spec section 5 means by
     "location for private sellers". The hash is one-way: the interim frame
     carries no way back to the name (NFR-08).
+
+    Two deliberate over-groupings, both in the safe direction: listings that
+    end up in one group cannot be split across two sets, which is the leak the
+    grouping exists to prevent.
+
+    - A private seller with no location at all (15 such rows in the raw file)
+      falls into one shared group.
+    - A dealer groups by its company name alone, so two unrelated dealers of
+      the same name in different countries merge. The location is available
+      and deliberately not used, because a dealer with branches in two cities
+      is one seller and splitting it would leak.
     """
     private = frame["seller_company_name"].isna()
     location = (

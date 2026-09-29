@@ -55,8 +55,19 @@ app = typer.Typer()
 
 
 def point_metrics(actual: pd.Series, predicted: pd.Series) -> dict[str, float]:
-    """MdAPE, the +/-10 % and +/-20 % shares, MAE and MAPE (problem-spec 6)."""
-    relative = (predicted - actual).abs() / actual
+    """MdAPE, the +/-10 % and +/-20 % shares, MAE and MAPE (problem-spec 6).
+
+    The denominator is the absolute actual price: with a signed one a negative
+    price would make a 10 % error read as a perfect prediction. Prices cannot
+    be negative once the range filter runs, but this function is also what the
+    API and the drift job will use, on data no filter has seen.
+    """
+    if actual.empty:
+        raise ValueError("cannot compute metrics on an empty set")
+    if (actual == 0).any():
+        raise ValueError("cannot compute a percentage error against a price of 0")
+
+    relative = (predicted - actual).abs() / actual.abs()
     return {
         "mdape": float(relative.median()),
         **{name: float((relative <= band).mean()) for name, band in _CLOSE_ENOUGH_BANDS.items()},
@@ -69,7 +80,12 @@ def evaluate_gate(metrics: dict[str, float], baseline_mdape: float | None, crite
     """Each success criterion as flat `<id>_measured` / `<id>_passed` keys."""
     mdape = metrics["mdape"]
     within = metrics["within_20pct"]
-    improvement = None if not baseline_mdape else (baseline_mdape - mdape) / baseline_mdape
+    # `not baseline_mdape` would read a perfect baseline as a missing one.
+    improvement = (
+        None
+        if baseline_mdape is None or baseline_mdape == 0
+        else (baseline_mdape - mdape) / baseline_mdape
+    )
     return {
         "sc01_measured": mdape,
         "sc01_passed": mdape <= criteria["sc01_mdape_max"],
@@ -151,10 +167,18 @@ def main(
 
     passing = [name for name, entry in headline.items() if entry["gate_passed"]]
     best = min(measured.values(), key=lambda record: record["mdape"])
+    # NFR-01 gates the deployment of *a model*, so the variant this artefact
+    # puts forward has to be one that met all six criteria. The lowest MdAPE
+    # overall is reported separately, because it is what a reader looks for
+    # first and it would be confusing to omit it.
+    deployable = min(
+        (measured[name] for name in passing), key=lambda record: record["mdape"], default=None
+    )
     summary = {
         "gate_passed": bool(passing),
         "n_variants": len(measured),
         "n_variants_passing": len(passing),
+        "deployable_variant": None if deployable is None else deployable["variant"],
         "best_variant": best["variant"],
         "best_mdape": best["mdape"],
         "variants": headline,

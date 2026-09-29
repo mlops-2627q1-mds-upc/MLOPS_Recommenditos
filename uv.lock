@@ -2372,7 +2372,7 @@ requires-dist = [
     { name = "nbstripout" },
     { name = "notebook" },
     { name = "numpy" },
-    { name = "pandas" },
+    { name = "pandas", specifier = ">=3" },
     { name = "pip" },
     { name = "pre-commit" },
     { name = "pyarrow" },

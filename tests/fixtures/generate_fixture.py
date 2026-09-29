@@ -10,7 +10,8 @@ asset points at a path, and a notebook is easier to poke at with one.
 
 The output lands under `data/`, which `.gitignore` excludes, so it is never
 committed: the generator is the artefact, the Parquet is a convenience. Both
-come from the same seeded function, so they cannot disagree.
+come from the same seeded function and the same seed in `params.yaml`, so
+they cannot disagree.
 """
 
 from pathlib import Path
@@ -18,8 +19,9 @@ from pathlib import Path
 from loguru import logger
 import typer
 
-from recommenditos.config import DATA_DIR
+from recommenditos.config import DATA_DIR, PARAMS_FILE
 from recommenditos.data.synthetic import generate_raw_listings
+from recommenditos.pipeline import load_params
 
 DEFAULT_OUTPUT = DATA_DIR / "fixture" / "listings_fixture.parquet"
 
@@ -30,9 +32,11 @@ app = typer.Typer()
 def main(
     output_path: Path = DEFAULT_OUTPUT,
     rows: int = 2000,
-    seed: int = 20251108,
+    params_path: Path = PARAMS_FILE,
 ):
-    frame = generate_raw_listings(rows, seed=seed)
+    # The seed comes from params.yaml rather than a default here, so this file
+    # cannot drift from what the `download` stage produces.
+    frame = generate_raw_listings(rows, seed=load_params(params_path)["seed"])
     output_path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(output_path, index=False)
     logger.success(f"Wrote {len(frame):,} synthetic listings to {output_path}.")
