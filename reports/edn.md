@@ -247,6 +247,8 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found that the privacy premise of the raw-data decision was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
 - **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: after the finding was presented with the two options ("either mark switches it to private ... or you keep it public and write that honestly into the raw-data entry"), Lukas answered "we keep it public".
 - **Other evidence:** EDN-19, EDN-25, [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27).
+- **In LaTeX:** no
+
 ### EDN-21: Report the upstream licence contradiction instead of resolving it
 
 - **Date:** 2026-09-29
@@ -354,6 +356,8 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the contradiction between its own change in PR #24 and EDN-04 while checking whether issue #25 was still current, and reported that the scope filter itself, not only the feature set, is affected by the unreliable flag. It laid out the three options and recommended keeping EDN-04. Lukas accepted it, because reopening a settled scope decision for an effect EDN-04 had already measured as negligible is not worth it.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI reported the contradiction unprompted and presented the options as a decision question; Lukas chose to keep EDN-04.
 - **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), EDN-04, [problem specification](../docs/docs/problem-spec.md) section 2.
+- **In LaTeX:** no
+
 ### EDN-25: Raw data acquisition: track with `dvc add` and push to our DagsHub remote
 
 - **Date:** 2026-09-26
