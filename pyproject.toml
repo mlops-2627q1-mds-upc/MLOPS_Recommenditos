@@ -16,6 +16,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License"
 ]
 dependencies = [
+    "coverage",
     "ipython",
     "jupyterlab",
     "loguru",
@@ -28,6 +29,7 @@ dependencies = [
     "pip",
     "pre-commit",
     "pytest",
+    "pytest-cov",
     "python-dotenv",
     "ruff",
     "scikit-learn",
@@ -38,13 +40,47 @@ dependencies = [
 requires-python = "~=3.11.0"
 
 
+[tool.pytest.ini_options]
+# Every `pytest` run reports the coverage of the package, so the number NFR-07
+# asks for is always in front of us. There is no `--cov-fail-under`: NFR-07
+# checks the 80 % on the delivery commit, and a per-PR gate would block merges
+# while the test suite is still being built. Bare `--cov` measures whatever
+# `[tool.coverage.run]` below says, so the scope lives in one place only.
+addopts = "--cov --cov-report=term"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["recommenditos"]
+# Branch coverage, so a half-tested `if` does not count as fully covered.
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    # CLI entry points: `app()` runs only when the module is executed as a
+    # script, which pytest never does.
+    'if __name__ == .__main__.:',
+]
+
 [tool.ruff]
 line-length = 99
 src = ["recommenditos"]
-include = ["pyproject.toml", "recommenditos/**/*.py"]
+# No `include`: pre-commit passes changed files to ruff explicitly and ruff does
+# not apply `include` to explicit paths, so an `include` would only make a local
+# `ruff check` blind to files CI still lints. Default discovery keeps the two in
+# step, and new top-level Python is linted without touching this file.
 
 [tool.ruff.lint]
-extend-select = ["I"]  # Add import sorting
+# The course demo's set: pycodestyle errors, Pyflakes, pyupgrade, bugbear,
+# simplify, import sorting and Pylint. NFR-07 requires the Pylint rules in
+# particular.
+extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL"]
+
+[tool.ruff.lint.per-file-ignores]
+# A test asserts against literal expected values - that is what an assertion is.
+# PLR2004 earns its place in `recommenditos/`, where a bare threshold should get
+# a name, but not on `assert response.status_code == 422`.
+"tests/**/*.py" = ["PLR2004"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["recommenditos"]
