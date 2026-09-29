@@ -163,87 +163,90 @@ How to add an entry:
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md), sections 6 to 8; [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
 - **In LaTeX:** no
 
-### EDN-20: Which DagsHub repository the team uses as DVC remote and MLflow server
+### EDN-19: Which DagsHub repository the team uses as DVC remote and MLflow server
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Experiment Tracking
-- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Open, to be settled at the next sprint review.
+- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Pending confirmation by the full team at the next sprint review.
 - **Decision:** A DagsHub **organisation** owned by the team hosts the connected repository, and every team member joins it with push rights (option A).
+  The repository is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>, owned by the `recommenditos` DagsHub organisation and connected through DagsHub's GitHub integration.
   A first decision for `pauadal03/MLOPS_Recommenditos` was taken and withdrawn on the same day, once it turned out that pauadal03 is not a member of this team: they hold read-only access to our GitHub repository, have never contributed to it, and are not on the roster.
   Their DagsHub repository is a mirror of our public repository made from outside the team, so it is not a candidate.
   Later the same day `mark.welf.atzberger/MLOPS_Recommenditos` was deleted, so that candidate no longer exists either and the raw object it held is gone with it.
   The practical choice is therefore between a DagsHub organisation owned by the team and a fresh repository under one team member's account.
-  Whether the repository stays public was decided separately, see EDN-22.
+  Whether the repository stays public was decided separately, see EDN-20.
 - **Alternatives considered:**
   - **Option A (chosen): a DagsHub organisation owns the connected repository, every team member is a member with push rights.**
     Pros: nothing the project depends on hangs off one person's private account; push rights follow membership instead of manual collaborator entries, and the team is five people, so inviting everyone is trivial; visibility is set in one place; data and experiment history survive if a member leaves or cleans up their account.
     Cons: one-time setup (create the organisation, connect the GitHub repository, invite four people); under a `dvc add` mechanism the 548.6 MB raw object has to be pushed once more, though under `import-url` there is nothing to move.
-  - **Option C: use `mark.welf.atzberger/MLOPS_Recommenditos`, reconnected properly.** No longer available: the repository was deleted on 2026-09-29.
+  - **Option B: use `mark.welf.atzberger/MLOPS_Recommenditos`, reconnected properly.** No longer available: the repository was deleted on 2026-09-29.
     Pros (while it existed): it belonged to a teammate and already held the raw object; no organisation to create.
     Cons: its mirror was demonstrably not in sync (see the evidence below), and the likely fix was to delete and re-import it through the GitHub integration, which would have lost the pushed object anyway; the project would still have hung off one teammate's private account, with a manual collaborator entry needed per member.
-  - **Option C': a fresh repository under one team member's account, connected through the GitHub integration.**
+  - **Option C: a fresh repository under one team member's account, connected through the GitHub integration.**
     Pros: one form less than an organisation; whoever creates it is admin and can add the other four without waiting on anyone.
-    Cons: identical to option C's structural drawbacks - the project hangs off one private account and rights are granted per person by hand. The saving over option A is a single setup form.
-  - **Option B: use `pauadal03/MLOPS_Recommenditos`.** Chosen on 2026-09-29 and withdrawn the same day.
+    Cons: identical to option B's structural drawbacks - the project hangs off one private account and rights are granted per person by hand. The saving over option A is a single setup form.
+  - **Option D: use `pauadal03/MLOPS_Recommenditos`.** Chosen on 2026-09-29 and withdrawn the same day.
     Pros: it is the only mirror verifiably connected through the GitHub integration, and adopting it would have cost nothing.
     Cons: ruled out on ownership, not on measurements - pauadal03 is not on the team, has `read` permission on our GitHub repository and has never contributed to it, so the project's data and experiment history would sit on the account of someone who cannot even push to the repository they mirrored.
     For the record, no project data was ever on that mirror: the raw object returns 404 there, so it holds our public git history and nothing else.
-  - **Option D: keep several mirrors and let everyone push to their own.**
+  - **Option E: keep several mirrors and let everyone push to their own.**
     Pros: no coordination needed.
     Cons: not viable - the remote URL is committed in `.dvc/config`, so the team would overwrite each other's setting, and data and experiment history would be split across accounts.
-- **Rationale:** By the time the decision was taken the alternatives had collapsed: option B was disqualified on ownership and option C ceased to exist when that repository was deleted, so every remaining candidate required a fresh connect through the GitHub integration anyway.
+- **Rationale:** By the time the decision was taken the alternatives had collapsed: option D was disqualified on ownership and option B ceased to exist when that repository was deleted, so every remaining candidate required a fresh connect through the GitHub integration anyway.
   That removed the only real argument against option A, which had been that a correctly connected repository already existed elsewhere at zero cost.
-  What was left is a one-form difference - an organisation versus a repository under one member's account, for the same connect and the same invitations - against the fact that fifteen cohort members outside the team hold read access to the GitHub repository and can mirror it at any time, as two of them already had.
-  The team's standing rule was to take the better-engineered option unless it is overkill for a one-semester course project; with four people to invite rather than the twenty-one an earlier miscount assumed, option A is not overkill.
+  What was left is a one-form difference - an organisation versus a repository under one member's account, for the same connect and the same invitations - against the fact that fifteen cohort members outside the team hold read access to the GitHub repository and can mirror it at any time, as one of them already had.
+  The team's standing rule was to take the better-engineered option unless it is overkill for a one-semester course project; with four teammates to invite rather than the whole twenty-one-person collaborator list an earlier miscount had assumed, option A is not overkill.
   Evidence gathered on 2026-09-29 against the DagsHub and GitHub APIs.
   Ownership: write access to the GitHub repository is held by @lukas2510, @kadameit, @ulasawczuk, @W11W11W11 and @michudud04, plus @martinezmatias and @santidrj, the two lecturers who own the course organisation; @pauadal03 has `read`, zero pull requests and zero commits, and does not appear on the roster in `docs/docs/scrum/index.md`.
   Sync: `pauadal03/MLOPS_Recommenditos` is at `2e902e2143`, identical to GitHub `main`, carries all 7 branches and mirrors all 7 open issues, while `mark.welf.atzberger/MLOPS_Recommenditos` is at `8b1d64fc`, is missing the `docs/data-facts-corrections` and `model-card` branches, still carries `feature/ruff-pl-and-coverage` which GitHub deleted after the merge, and mirrors 0 issues.
   DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two were connected in different ways and that mark's is a plain git mirror.
-  Visibility: both report `private: false`; EDN-07 as originally written assumed the remote was private, a premise found false and recorded in EDN-22.
+  Visibility: both report `private: false`; EDN-07 as first written on the issue #3 branch assumed the remote was private, a premise found false and recorded in EDN-20.
   The reason that original check misled us: anonymous access is not evidence either way, because DagsHub refuses every anonymous request, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`) and for a repository that does not exist.
   Access: `lukas2510` was granted `push` on mark's repository on 2026-09-29, shortly before it was deleted, and has `pull` only on pauadal03's; the rest of the team had push on neither.
   State at the end of 2026-09-29: `mark.welf.atzberger/MLOPS_Recommenditos` returns 404 and so does the raw object it held; `pauadal03/MLOPS_Recommenditos` still exists and still holds no data; a repository search returns that mirror as the only one left.
   Structural point behind all of this: fifteen cohort members outside the team hold `read` on our GitHub repository, so anyone of them can create a mirror at any time without doing anything wrong. The rule the team needs is therefore not "check who owns a mirror" but "the project's infrastructure lives somewhere the team owns", which is an argument for option A independent of the measurements.
-  Follow-up the decision will require: the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to match the outcome before that PR merges, the owner has to grant push rights to everyone, and the 548.6 MB raw object already pushed to mark's repository has to be disposed of or migrated depending on the outcome and on the acquisition mechanism (EDN-07).
+  Follow-up: [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) now commits the organisation's URL in `.dvc/config`, and the owner still has to grant push rights to everyone.
+  Nothing has to be migrated: the 548.6 MB raw object that had been pushed to mark's repository is gone with that repository, so under the `dvc add` mechanism settled in EDN-25 ([PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27)) it is re-downloaded from Zenodo and pushed once to the organisation's remote.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI found the two mirrors, measured them against GitHub and recommended `pauadal03`'s on those measurements. The measurements were correct and the recommendation was wrong, because AI never checked whether that repository belonged to anyone on the team - it ranked the candidates it had found without asking where they came from. Lukas caught it by asking who pauadal03 is, which invalidated the recommendation and the decision taken on it. Recorded here rather than silently corrected, because the failure is the instructive part: a candidate that scores best on every technical measurement can still be disqualified by a question nobody asked. AI's useful contributions were the measurements, the finding that mark's mirror is not properly connected, and the control-repository method behind EDN-22; its first recommendation was not one of them. Its second recommendation, option A, was the one the team accepted, and only after Lukas had rejected the first and asked who the account behind it belonged to.
-  This is the second decision in the same week reached on a premise nobody had checked, after "the DagsHub repository is private" in EDN-07, and in both cases the check that settled it took one API call and was available before the decision rather than after it. The pattern, not either individual fix, is the thing worth carrying into the working agreements: state the premise a decision rests on, and verify it, before recording the decision.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: the comparison and the recommendation for pauadal03 followed the prompts "ist nicht das unser dagshub repo was zu unserem github repo passt?" and "warum hat das repo am schlchtesten abgeschnitten"; the retraction followed "paudal ist glaibe unsere lecturer. ist das blöd das jetzt alles immer über ihn laufen muss".
-- **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-07, EDN-22, roster in `docs/docs/scrum/index.md`.
+- **Assessment of the AI contribution:** AI found the two mirrors, measured them against GitHub and recommended `pauadal03`'s on those measurements. The measurements were correct and the recommendation was wrong, because AI never checked whether that repository belonged to anyone on the team - it ranked the candidates it had found without asking where they came from. Lukas caught it by asking who pauadal03 is, which invalidated the recommendation and the decision taken on it. Recorded here rather than silently corrected, because the failure is the instructive part: a candidate that scores best on every technical measurement can still be disqualified by a question nobody asked. AI's useful contributions were the measurements, the finding that mark's mirror is not properly connected, and the control-repository method behind EDN-20; its first recommendation was not one of them. Its second recommendation, option A, was the one the team accepted, and only after Lukas had rejected the first and asked who the account behind it belonged to.
+  This is the second decision in the same week reached on a premise nobody had checked, after "the DagsHub repository is private" in the first version of EDN-07 on the issue #3 branch, and in both cases the check that settled it took one API call and was available before the decision rather than after it. The pattern, not either individual fix, is the thing worth carrying into the working agreements: state the premise a decision rests on, and verify it, before recording the decision.
+- **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: the comparison and the recommendation for pauadal03 followed "isn't this our DagsHub repo, the one that matches our GitHub repo?" and "why did that repo score worst?"; the retraction followed "I think pauadal03 is one of our lecturers - is it bad that everything now has to go through them?".
+- **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-20, EDN-25, roster in `docs/docs/scrum/index.md`.
 - **In LaTeX:** no
 
-### EDN-22: The DagsHub remote stays public
+### EDN-20: The DagsHub remote stays public
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Privacy
 - **Participants:** @lukas2510 (Scrum Master). Pending confirmation by the full team at the next sprint review.
 - **Decision:** The DagsHub repository that serves as our DVC remote and MLflow tracking server stays public.
-  We accept that the raw file's PII columns are readable by anyone with a DagsHub account.
+  We accept that the raw file's PII columns are readable by anyone with a DagsHub account, which follows from EDN-25 tracking the raw file with `dvc add` and pushing it to that remote.
   The additional exposure this creates is small, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the MIT license.
   It is not nothing: hosting our own copy makes the team a publisher of that personal data in its own right and under its own name, which the earlier publication mitigates but does not undo.
 - **Alternatives considered:**
   - **Option A (chosen): keep the repository public and say so.**
-    Pros: graders and supervisors can inspect code, data and experiments without being added as collaborators, which is the reason the course puts the project on DagsHub in the first place; it matches how the source dataset is already published; no action needed on an account we do not administer.
+    Pros: graders and supervisors can inspect code, data and experiments without being added as collaborators, which is the reason the course puts the project on DagsHub in the first place; it matches how the source dataset is already published.
     Cons: the raw file, which still carries `vin`, `street`, `seller_company_name` and coordinates, can be pulled by every logged-in DagsHub user; re-hosting it is a publishing act of our own, so "the author already published it" reduces the marginal risk but does not transfer the responsibility; the decision has to be revisited the moment we host data that is not already public elsewhere.
   - **Option B: make the repository private.**
-    Pros: the original rationale of EDN-07 would hold as written; the PII sits behind an access wall.
-    Cons: only the repository owner can flip it, and that is not us; every grader, supervisor and teammate then needs a manual collaborator entry; it buys little real protection, because the identical file stays publicly downloadable from Zenodo either way.
-- **Rationale:** The question only came up because the premise of EDN-07 turned out to be false.
-  That entry justified pushing the raw file with "the DagsHub repo is private (anonymous access is redirected to the login page and an anonymous data download returns 401)".
+    Pros: the rationale first given for pushing the raw file would hold as written; the PII sits behind an access wall.
+    Cons: every grader, supervisor and teammate then needs a manual collaborator entry; it buys little real protection, because the identical file stays publicly downloadable from Zenodo either way.
+- **Rationale:** The question only came up because the premise of the raw-data decision turned out to be false.
+  The first version of EDN-07, on the issue #3 branch, justified pushing the raw file with "the DagsHub repo is private (anonymous access is redirected to the login page and an anonymous data download returns 401)".
   Checked on 2026-09-29: DagsHub refuses anonymous access to everything, public repositories included.
   A known-public control repository (`DAGsHub-Official/dagshub-docs`, `private: false`) answers anonymous requests exactly like ours, and so does a repository that does not exist, so the observation has no discriminating power.
-  The authenticated API reports `private: false` for both of our mirrors.
+  The authenticated API reports `private: false` for both mirrors that existed at the time.
   Given a real choice between hiding a file that is already public and saying openly that it is public, Lukas chose the second: the protection gained would be nominal, while the access cost for graders and supervisors would be real.
+  Under EDN-19 the organisation is the team's own, so the visibility is ours to change and this decision can be revisited at any time without asking anyone outside the team.
   Recorded deliberately as an accepted risk rather than a solved problem, because the two are not the same thing: the marginal exposure is small, but we are still the ones publishing personal data, and an entry that claimed the concern was spent would not survive a reviewer who cares about privacy.
-  State after the decision: `mark.welf.atzberger/MLOPS_Recommenditos`, the repository that held the raw copy, was deleted on 2026-09-29, and the object returns 404. The team therefore publishes no personal data on any DagsHub remote at present, and this decision governs whatever remote EDN-20 settles on rather than an exposure that exists today.
+  State after the decision: `mark.welf.atzberger/MLOPS_Recommenditos`, the repository that held the raw copy, was deleted on 2026-09-29, and the object returns 404. The team therefore publishes no personal data on any DagsHub remote at present, and this decision governs whatever remote EDN-19 settles on rather than an exposure that exists today.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment
 - **Response to AI:** Used as input for further analysis
-- **Assessment of the AI contribution:** AI found that the privacy premise of EDN-07 was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: after the finding was presented with the two options ("entweder mark stellt es auf private ... oder ihr lasst es public und schreibt in EDN-07 ehrlich rein"), Lukas answered "wir lassen es public".
-- **Other evidence:** EDN-07 and its revision on the issue #3 branch, EDN-20, [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27), [PR #28](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/28).
+- **Assessment of the AI contribution:** AI found that the privacy premise of the raw-data decision was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
+- **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: after the finding was presented with the two options ("either mark switches it to private ... or you keep it public and write that honestly into the raw-data entry"), Lukas answered "we keep it public".
+- **Other evidence:** EDN-19, EDN-25, [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27).
 - **In LaTeX:** no
 
 ## Template
