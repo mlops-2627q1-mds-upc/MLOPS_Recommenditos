@@ -10,8 +10,9 @@ This page only documents the conventions we've settled on for this project, on t
 ## Remote
 
 We use DagsHub Storage as the DVC remote, configured over **HTTP** (not S3), as the demo prescribes.
-The DagsHub repo is <https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos>.
-It mirrors our GitHub repo by its public URL, because we cannot grant DagsHub access to the course organisation on GitHub.
+The DagsHub repo is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>.
+It belongs to the `recommenditos` DagsHub organisation, which the team owns, so the remote does not depend on any one person's private account.
+It is connected through DagsHub's GitHub integration, not as a plain git mirror, which is why issues and pull requests show up on DagsHub and why it syncs by webhook instead of polling.
 
 The shared part of the configuration is committed in `.dvc/config`:
 
@@ -19,15 +20,15 @@ The shared part of the configuration is committed in `.dvc/config`:
 [core]
     remote = origin
 ['remote "origin"']
-    url = https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos.dvc
+    url = https://dagshub.com/recommenditos/MLOPS_Recommenditos.dvc
     auth = basic
 ```
 
 ### First-time setup
 
-1. Create a [DagsHub](https://dagshub.com) account and ask the repo owner to add you as a collaborator with write access
-   (repo **Settings → Collaborators**).
-   The DagsHub repo is private because the raw data contains PII (EDN-07), so without access both `dvc pull` and `dvc push` are rejected.
+1. Create a [DagsHub](https://dagshub.com) account and ask @lukas2510 to add you to the `recommenditos`
+   organisation with write access, otherwise `dvc push` is rejected.
+   The repository is public (EDN-20), so `dvc pull` works for any signed-in DagsHub user; only pushing needs membership.
 2. Install the project environment, which includes DVC:
 
     ```bash
@@ -66,7 +67,7 @@ Never run them without `--local`: that would write the token into the committed 
 
 | File | Source | MD5 | Tracked by |
 |------|--------|-----|------------|
-| `data/raw/autoscout24_dataset_20251108.csv` (548.6 MB) | [Zenodo record 17643343](https://zenodo.org/records/17643343), DOI `10.5281/zenodo.17643343`, v1.0.0, MIT | `b23a122cc51baf7de39f449193ff0d28` | `dvc add` (EDN-07) |
+| `data/raw/autoscout24_dataset_20251108.csv` (548.6 MB) | [Zenodo record 17643343](https://zenodo.org/records/17643343), DOI `10.5281/zenodo.17643343`, v1.0.0, MIT in the structured field, though the record's own prose reads narrower | `b23a122cc51baf7de39f449193ff0d28` | `dvc add` (EDN-25) |
 
 The MD5 of the raw file equals the checksum Zenodo publishes, so anyone can verify that our copy is the original.
 
@@ -79,7 +80,7 @@ it truly is one indivisible dataset.
 
 ```bash
 # Good
-dvc add data/raw/cars.csv
+dvc add data/raw/autoscout24_dataset_20251108.csv
 
 # Avoid
 dvc add data
@@ -110,8 +111,23 @@ In practice that means:
 
 ## `.gitignore`
 
-Don't add blanket rules like `/data/` to `.gitignore`. DVC generates its own `.gitignore` entries next
-to each tracked path, and Git still needs to see the `.dvc` pointer files themselves.
+Keep `data/` ignored, but let the pointers through. The root `.gitignore` does this:
+
+```gitignore
+/data/**
+!/data/**/
+!/data/**/*.dvc
+!/data/**/.gitignore
+```
+
+A bare `/data/` rule is not enough, because it would also hide the `.dvc` pointer files Git has to see,
+and Git cannot re-include a file inside an ignored directory - hence the `**` form plus the directory
+negation. The last line keeps the `.gitignore` files DVC generates next to each tracked path
+committable; without it DVC's own entries would be ignored and could never reach a commit.
+
+The rule matters most before `dvc add` runs. A raw file dropped into `data/raw/` to look at it is
+covered from the moment it lands, so a stray `git add .` cannot put it - or its personal data - into a
+repository the whole cohort can read.
 
 ## Day to day
 

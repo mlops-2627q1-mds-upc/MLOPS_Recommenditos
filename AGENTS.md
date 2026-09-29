@@ -1,5 +1,11 @@
 # Agent Instructions
 
+## Language
+
+The course language is English, so everything we produce is in English, always.
+That covers commit messages, branch names, PR titles, descriptions and comments, issues and issue comments, code, identifiers, code comments, docstrings, documentation, the report and the EDN.
+Chat with the team may happen in any language, but nothing written into the repo or onto GitHub does.
+
 ## Git workflow
 
 Full workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md) - read it before opening a PR.

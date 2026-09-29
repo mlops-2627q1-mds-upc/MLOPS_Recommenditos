@@ -5,7 +5,7 @@ This applies to every contributor to this repo, human or AI agent.
 ## Process
 
 We work in Scrum, tracked as GitHub Issues on the [project board](https://github.com/orgs/mlops-2627q1-mds-upc/projects/1) (Backlog → To Do → In Progress → In Review → Done).
-Team communication happens on [Discord](https://discord.gg/uG2eACGng).
+Team communication happens on Discord.
 Full process details (roles, ceremonies, Definition of Done, working agreements) live in [docs/docs/scrum/](docs/docs/scrum/) - read that before picking up work.
 
 ## Data versioning
@@ -36,6 +36,12 @@ pre-commit install
 
 ```bash
 make format   # ruff format + fix
-make lint     # ruff check
-make test     # pytest
+make lint     # ruff format --check + ruff check
+make test     # pytest, which also reports the coverage of recommenditos/
 ```
+
+`make lint` runs the same ruff rules as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+
+`make test` prints a coverage table; CI puts the same table in the summary of its test job.
+There is no coverage gate on a PR, so a number below 80 % does not fail anything.
+NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
