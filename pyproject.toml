@@ -28,6 +28,7 @@ dependencies = [
     "pip",
     "pre-commit",
     "pytest",
+    "pytest-cov",
     "python-dotenv",
     "ruff",
     "scikit-learn",
@@ -37,13 +38,34 @@ dependencies = [
 requires-python = "~=3.11.0"
 
 
+[tool.pytest.ini_options]
+# Every `pytest` run reports the coverage of the package, so the number NFR-07
+# asks for is always in front of us. There is no `--cov-fail-under`: NFR-07
+# checks the 80 % on the delivery commit, and a per-PR gate would block merges
+# while the test suite is still being built.
+addopts = "--cov=recommenditos --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+# Branch coverage, so a half-tested `if` does not count as fully covered.
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    # CLI entry points: `app()` only runs when the module is executed as a
+    # script, which is a Typer concern, not ours to test.
+    'if __name__ == "__main__":',
+]
+
 [tool.ruff]
 line-length = 99
 src = ["recommenditos"]
 include = ["pyproject.toml", "recommenditos/**/*.py"]
 
 [tool.ruff.lint]
-extend-select = ["I"]  # Add import sorting
+# The course demo's set: pycodestyle, Pyflakes, pyupgrade, bugbear, simplify,
+# import sorting and Pylint. NFR-07 requires the Pylint rules in particular.
+extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["recommenditos"]
