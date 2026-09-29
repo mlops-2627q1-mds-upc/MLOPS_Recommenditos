@@ -83,7 +83,7 @@ def main():
     print(f"{'feature':24}{'train %':>9}{'ES %':>9}  role in FR-01")
     for group, role in ((REQUIRED, "required"), (OPTIONAL, "optional")):
         for name in group:
-            print(f"{name:24}{filled_pct(train[name]):9.1f}{filled_pct(es[name]):9.1f}  {role}")
+            print(f"{name:24}{filled_pct(train[name]):9.3f}{filled_pct(es[name]):9.3f}  {role}")
         print()
 
     missing = train[OPTIONAL].isna().sum(axis=1)

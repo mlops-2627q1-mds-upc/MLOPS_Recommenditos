@@ -163,6 +163,9 @@ How to add an entry:
 
 ### EDN-07: Raw data hosting: import from Zenodo, never push to our own remote
 
+> **Amended by EDN-25** (2026-09-26, PR #27): the raw file is tracked with `dvc add` and pushed to our DagsHub remote instead.
+> This entry is kept as the record of what was decided on 2026-09-22 and of the reasoning EDN-25 revised.
+
 - **Date:** 2026-09-22
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Privacy
@@ -179,7 +182,7 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** While reviewing PR #19 for SOTA fit and course requirements, AI noticed that `NFR-08`'s "never re-hosted" wording silently settled the brief's open `dvc import-url` question without going through the EDN process, and that the project's own `data-versioning.md` example contradicted it. Asked for a recommendation, AI laid out options A and B with pros and cons, recommended A on privacy and data-minimization grounds, and flagged that `dvc import-url` alone does not prevent a re-push and needs a CI check to be enforceable. Lukas reviewed the reasoning and confirmed option A. On 2026-09-23, asked whether NFR-08 was overkill, AI proposed `push: false` on the output instead of that CI check against the DagsHub remote, and verified it in a scratch repository with DVC 3.67.1: without the field `dvc push` uploads the imported file, with it the remote stays empty, also after a `dvc update` from a changed source. The same test showed that in a fresh clone `dvc repro` does not re-fetch an imported file and a plain `dvc pull` exits with an error, while `dvc update` does fetch it, which corrected the instructions in `data-versioning.md`. Lukas accepted the change of mechanism; the decision itself stayed the same.
-- **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI flagged the NFR-08/brief contradiction, explained it in detail on request, then gave a recommendation and cited data-minimization and Zenodo DOI immutability as the SOTA rationale for option A; Lukas replied "yes please do so". Claude Code session on 2026-09-23: Lukas asked "NFR-08 Privacy muss das noch angepasst werden? wie würdest du es anpassen das es nicht mehr überzogen ist", AI proposed `push: false` with the scratch-repository evidence; Lukas replied "ja mache das bitte".
+- **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI flagged the NFR-08/brief contradiction, explained it in detail on request, then gave a recommendation and cited data-minimization and Zenodo DOI immutability as the SOTA rationale for option A; Lukas replied "yes please do so". Claude Code session on 2026-09-23: Lukas asked (translated from German) "NFR-08 privacy, does that still need adjusting? how would you adjust it so it is no longer excessive", AI proposed `push: false` with the scratch-repository evidence; Lukas replied "yes please do that".
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-08; [specification](../docs/docs/specification.md) NFR-08 and "Decisions pending confirmation"; [Data versioning](../docs/docs/data-versioning.md); [project brief](../docs/docs/project-brief.md) section 3.3; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
@@ -214,7 +217,7 @@ How to add an entry:
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Tooling, Explainability
 - **Participants:** @lukas2510
-- **Decision:** `requires-python` is `~=3.12.0` (was `~=3.11.0`). `pyproject.toml`, `uv.lock`, and the Python version in `.github/workflows/ci.yml` are updated. FR-08's explanation endpoint uses `shap.TreeExplainer` directly.
+- **Decision:** `requires-python` is `~=3.12.0` (was `~=3.11.0`). `pyproject.toml`, `uv.lock`, and the Python version in `.github/workflows/ci.yml` are updated, and `shap` becomes a usable dependency for offline analysis. Which SHAP implementation FR-08's explanation endpoint uses is decided separately in EDN-11, which amends this entry: the API computes contributions from the booster's own export, and `shap` stays out of the API image.
 - **Alternatives considered:**
   - **Option A: use LightGBM's native `predict(pred_contrib=True)` instead of the `shap` package.** Gives the same exact TreeSHAP values without touching `shap` or its Python 3.12 requirement, and avoids `numba`/`llvmlite` in the API image.
     Pros: no project-wide version bump needed this early in the semester; smaller API image.
@@ -348,11 +351,14 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** While reviewing PR #19, AI flagged NFR-11 as the one requirement that makes an unverified claim about the data rather than about the system. Asked for an in-depth feasibility check, AI downloaded the raw dataset from the Zenodo DOI, reproduced the scope, deduplication and split protocol, emulated alibi-detect's `TabularDrift` with scipy after confirming its tests, defaults and Bonferroni rule against the v0.13 source (including that it does no NaN handling, so missing indicators had to be added), and ran 200 trials per window size. It reported that the first half of the requirement passes with margin and the second half fails, ran two controlled cross-checks to separate a detector fault from a data property (i.i.d. split, reference size), and tested and then rejected its own effect-size remedy on the measurements. Lukas reviewed the evidence and chose option D.
-- **AI interaction evidence:** Claude Code session on 2026-09-23 while reviewing PR #19: Lukas asked "NFR-11 please make an in depth analysis if this is feasible [...] we need to be really sure about this"; AI ran the measurement described above, reported the pass, the failure and the limits of the study, proposed options A to D and recommended D; Lukas replied "ja bitte".
+- **AI interaction evidence:** Claude Code session on 2026-09-23 while reviewing PR #19: Lukas asked "NFR-11 please make an in depth analysis if this is feasible [...] we need to be really sure about this"; AI ran the measurement described above, reported the pass, the failure and the limits of the study, proposed options A to D and recommended D; Lukas replied "yes please".
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-11; [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_check.py`, `nfr11_diag.py`, `nfr11_results.json`, run of 2026-09-23); [project brief](../docs/docs/project-brief.md) section 3.2; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
 ### EDN-15: UC1 required fields after measuring the fill rates, plus SC-06 for absent optional fields
+
+> **Evidence corrected on 2026-09-29.** The first run of `fillrates.py` printed fill rates with one decimal, so `seller_type`'s 99.986 % appeared as 100.0.
+> The script now prints three decimals and `fillrates_results.txt` was regenerated. The decision is unchanged: 14 missing rows in 97,913 leave it effectively never absent.
 
 - **Date:** 2026-09-29
 - **Milestone:** M1: Project Inception (requirements and success criteria; shapes M3: Quality Assurance)
@@ -362,7 +368,7 @@ How to add an entry:
 - **Alternatives considered:**
   - **Option A: keep all eight basic-set fields optional and rely on LightGBM's native missing-value handling.**
     Pros: the smallest required set, so UC1 stays easy to call and clearly different from UC2; no training-time work at all.
-    Cons: measured to be unsupported for two fields. `body_type` and `seller_type` are filled in 100 % of the training listings, so the model never sees them absent and a request that omits them is sent to the default side of every split on that feature with no training example backing that direction. The contract would promise behaviour the training data cannot show.
+    Cons: measured to be unsupported for two fields. `body_type` is filled in 100.000 % of the training listings and `seller_type` in 99.986 % (14 of 97,913 rows), so the model effectively never sees them absent and a request that omits them is sent to the default side of every split on that feature with no training example backing that direction. The contract would promise behaviour the training data cannot show.
   - **Option B: keep all eight optional and train the point model with the same random masking as the UC2 interval models.**
     Pros: friendliest contract; one masking scheme for both model families, which also keeps the point estimate and the interval bounds from drifting apart on partial inputs (FR-07 widens the bounds when they do).
     Cons: makes an API requirement depend on a pipeline that does not exist yet (no `dvc.yaml`, issue #10 still open), so PR #19 would stay blocked on a modelling decision that cannot be measured before the first report. Masking also costs some accuracy on full inputs, which are the common case for UC1.
@@ -379,7 +385,7 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** Asked which decisions had to be settled before PR #19 could be merged, AI named FR-01's open item first and called it a merge blocker. Asked to re-examine that, it downloaded the raw dataset from the Zenodo DOI, reproduced the scope, deduplication and make filter (which matched the brief's 11 makes as a cross-check), measured the per-field fill rates, and then corrected two of its own claims: the item does not block code that exists, because there is no pipeline yet, and FR-01 already promised a masked-input check, so the real gap was that the check had no threshold and no link to NFR-01's gate. It also reframed the requirement as mixing contract and mechanism, which is what made a clean split possible. Lukas accepted the recommendation and the field list; the modification is that the mechanism question stays open on purpose instead of being decided together with the contract.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked "welche sachen müssen dringend noch entschieden werden in requirements.md bevor wir mergen können und warum?", then "analysiere das nochmal. dann erkläre es mir und mach mir eine begründete recommendation was der beste weg ist"; AI measured the fill rates, revised its own analysis, proposed options A to E and recommended D with SC-06 in the gate; Lukas replied "ich mag deine empfehlung bitte passe das so im PR an".
+- **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked (translated from German) "which things urgently still need deciding in requirements.md before we can merge, and why?", then "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is"; AI measured the fill rates, revised its own analysis, proposed options A to E and recommended D with SC-06 in the gate; Lukas replied "I like your recommendation, please change it that way in the PR".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-01; [problem specification](../docs/docs/problem-spec.md) SC-06; [reports/analysis/](analysis/) (`fillrates.py`, run of 2026-09-29); [project brief](../docs/docs/project-brief.md) section 4; [EDN-06](#edn-06-success-criteria-for-the-price-model); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
@@ -401,7 +407,7 @@ How to add an entry:
 - **AI involvement:** Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** Asked to re-examine the split before merging PR #19, AI first called it a merge blocker and then withdrew that: no test or report cites FR-06 or FR-07 yet, so the practical cost of deciding later starts with the M4 API tests, not with the merge. It found that the two endpoints do not differ in their output, since FR-07 already returns the point estimate, and contributed the monitoring argument above, which had not been written down anywhere. Lukas kept the scope deliberately small and dropped AI's further suggestions (a shared base schema stated in the requirement, a combined convenience endpoint) as implementation detail or as unnecessary for a course project.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked "analysiere das nochmal. dann erkläre es mir und mach mir eine begründete recommendation was der beste weg ist" about the endpoint split, and after the recommendation replied "ich will keinen overkill. es soll simple bleiben es ist nur ein universitätskurs".
+- **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked (translated from German) "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is" about the endpoint split, and after the recommendation replied "I do not want overkill, it should stay simple, it is only a university course".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-06, FR-07, FR-09; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
@@ -423,7 +429,7 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** While reviewing PR #19, AI reported the brief and the requirements as contradicting each other on the deployment target. Asked to look again, it corrected its own framing: the `[proposed]` marker in the requirements refers to the performance numbers, not to the machine, and the requirements treat the VM as settled throughout, so the real issue was an implicit decision rather than a disagreement between two pages. It also pointed out that the brief's stated reason for leaving the point open is already covered by NFR-04. Lukas kept the change small and deliberately left the performance targets `[proposed]` until the first M4 load test.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: after Lukas asked "analysiere das nochmal. dann erkläre es mir und mach mir eine begründete recommendation was der beste weg ist" about the deployment target, AI recommended fixing the VM as the target with a dated trigger for the missing access, and Lukas replied "ja mache das".
+- **AI interaction evidence:** Claude Code session on 2026-09-29: after Lukas asked (translated from German) "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is" about the deployment target, AI recommended fixing the VM as the target with a dated trigger for the missing access, and Lukas replied "yes do that".
 - **Other evidence:** [Specification](../docs/docs/specification.md) section 2 and NFR-04; [project brief](../docs/docs/project-brief.md) section 5; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
@@ -445,7 +451,7 @@ How to add an entry:
 - **AI involvement:** Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI pointed out that this item was already prejudiced by EDN-03 and cost nothing to confirm, which is why it stayed unmarked longer than necessary. No further analysis was needed.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: AI noted that FR-05 "ist faktisch schon durch EDN-03 präjudiziert" and recommended lifting it to `[decided]`; Lukas replied "mache das".
+- **AI interaction evidence:** Claude Code session on 2026-09-29: AI noted that FR-05 was (translated from German) "in fact already prejudged by EDN-03" and recommended lifting it to `[decided]`; Lukas replied "do that".
 - **Other evidence:** [requirements](../docs/docs/requirements.md) FR-05 and FR-04; [specification](../docs/docs/specification.md) FR-05; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 

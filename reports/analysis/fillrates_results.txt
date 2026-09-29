@@ -4,23 +4,23 @@ training scope (non-ES, 11 supported makes): 97,913
 ES holdout, as the API would accept it: 5,981
 
 feature                   train %     ES %  role in FR-01
-make                        100.0    100.0  required
-model                        99.3     99.6  required
-registration_date           100.0    100.0  required
-mileage_km_raw              100.0    100.0  required
-power_kw                     98.9     97.8  required
-fuel_category               100.0     99.6  required
-transmission                 99.3     99.6  required
-country_code                100.0    100.0  required
-body_type                   100.0    100.0  required
-seller_type                 100.0    100.0  required
+make                      100.000  100.000  required
+model                      99.289   99.582  required
+registration_date          99.999  100.000  required
+mileage_km_raw             99.994  100.000  required
+power_kw                   98.916   97.810  required
+fuel_category              99.964   99.615  required
+transmission               99.251   99.632  required
+country_code               99.986  100.000  required
+body_type                 100.000  100.000  required
+seller_type                99.986  100.000  required
 
-nr_prev_owners               61.0      4.5  optional
-drive_train                  76.4     67.4  optional
-gears                        62.5     75.2  optional
-cylinders_volume_cc          91.1     85.1  optional
-nr_seats                     97.0     89.1  optional
-nr_doors                     98.8     99.7  optional
+nr_prev_owners             61.036    4.514  optional
+drive_train                76.377   67.363  optional
+gears                      62.476   75.155  optional
+cylinders_volume_cc        91.087   85.120  optional
+nr_seats                   96.984   89.065  optional
+nr_doors                   98.765   99.749  optional
 
 missing optional fields per training row (of 6):
   0:   30,051  ( 30.7 %)

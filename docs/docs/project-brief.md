@@ -96,7 +96,7 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII, so we pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote, **[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), see [Requirements](requirements.md) NFR-08 and [Data versioning](data-versioning.md).
+  The raw file itself contains this PII. It is tracked with `dvc add` and pushed to our DagsHub remote, **[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md) as amended by EDN-25, so the PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08 and [Data versioning](data-versioning.md).
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** 36 % of descriptions contain a currency amount and about 7 % contain the exact listing price.
@@ -135,7 +135,7 @@ The calibration set must use the same masking, and the coverage guarantee is mar
 
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
 
-- `body_type` and `seller_type` are filled in **100 %** of the training listings, so a model trained on them never learns a direction for their absence.
+- `body_type` is filled in **100.000 %** of the training listings and `seller_type` in **99.986 %** (14 of 97,913 rows), so a model trained on them effectively never learns a direction for their absence.
   Both are now required fields of `/predict` ([specification](specification.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
 - `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %) are missing rarely, so the signal for their absence is thin but real.
 - `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.

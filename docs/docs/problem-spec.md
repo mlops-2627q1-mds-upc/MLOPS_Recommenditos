@@ -154,7 +154,7 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   This is a known risk for the basic feature set; the extended features or a scope change for classic cars must close it.
 - SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
-  The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` and `seller_type` are filled in 100 % of the listings, `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
+  The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,913 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
 
 ## Decision records
 
