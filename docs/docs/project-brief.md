@@ -93,7 +93,7 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII, so **[open]**: pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote (see [Data versioning](data-versioning.md)).
+  The raw file itself contains this PII. **[decided]** It is tracked with `dvc add` and pushed to our DagsHub remote, which is public (EDN-20), so we accept that the PII columns are re-published there; the identical file is already public on Zenodo (EDN-25, [Data versioning](data-versioning.md)).
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** about 7 % of descriptions contain the exact listing price (6.85 % measured on 2026-09-29).
@@ -209,10 +209,13 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
+- EDN-19: the DagsHub repository the team uses as DVC remote and MLflow server.
+- EDN-20: the DagsHub remote stays public.
 - EDN-21: record both licence readings of the Zenodo record.
 - EDN-22: drop listings registered after the reference date.
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion despite the unreliable flag.
+- EDN-25: raw data acquisition (`dvc add` and push to our DagsHub remote).
 
 Made in M1, still to be written up:
 

@@ -28,6 +28,7 @@ The shared part of the configuration is committed in `.dvc/config`:
 
 1. Create a [DagsHub](https://dagshub.com) account and ask @lukas2510 to add you to the `recommenditos`
    organisation with write access, otherwise `dvc push` is rejected.
+   The repository is public (EDN-20), so `dvc pull` works for any signed-in DagsHub user; only pushing needs membership.
 2. Install the project environment, which includes DVC:
 
     ```bash
@@ -47,12 +48,28 @@ The shared part of the configuration is committed in `.dvc/config`:
     uv run dvc pull
     ```
 
-    Before any data is tracked, this prints "Everything is up to date".
+    This downloads the tracked data (see [Tracked data](#tracked-data)) into `data/`.
     A 401 or 403 error means the username, the token or the collaborator access is wrong.
+
+5. If you will push large files, raise the HTTP timeouts, otherwise the upload fails with
+   "Timeout on reading data from socket":
+
+    ```bash
+    uv run dvc remote modify origin --local read_timeout 1800
+    uv run dvc remote modify origin --local connect_timeout 120
+    ```
 
 Credentials never go into a commit.
 The commands in step 3 write to `.dvc/config.local`, which DVC's own `.dvc/.gitignore` keeps out of Git.
 Never run them without `--local`: that would write the token into the committed `.dvc/config`.
+
+## Tracked data
+
+| File | Source | MD5 | Tracked by |
+|------|--------|-----|------------|
+| `data/raw/autoscout24_dataset_20251108.csv` (548.6 MB) | [Zenodo record 17643343](https://zenodo.org/records/17643343), DOI `10.5281/zenodo.17643343`, v1.0.0, MIT in the structured field, though the record's own prose reads narrower | `b23a122cc51baf7de39f449193ff0d28` | `dvc add` (EDN-25) |
+
+The MD5 of the raw file equals the checksum Zenodo publishes, so anyone can verify that our copy is the original.
 
 ## Tracking granularity
 
