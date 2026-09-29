@@ -211,11 +211,13 @@ How to add an entry:
 - **Activity / Topic:** Data Versioning, Privacy
 - **Participants:** @lukas2510 (Scrum Master). Pending confirmation by the full team at the next sprint review.
 - **Decision:** The DagsHub repository that serves as our DVC remote and MLflow tracking server stays public.
-  We accept that the raw file's PII columns are readable by anyone with a DagsHub account, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the MIT license.
+  We accept that the raw file's PII columns are readable by anyone with a DagsHub account.
+  The additional exposure this creates is small, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the MIT license.
+  It is not nothing: hosting our own copy makes the team a publisher of that personal data in its own right and under its own name, which the earlier publication mitigates but does not undo.
 - **Alternatives considered:**
   - **Option A (chosen): keep the repository public and say so.**
     Pros: graders and supervisors can inspect code, data and experiments without being added as collaborators, which is the reason the course puts the project on DagsHub in the first place; it matches how the source dataset is already published; no action needed on an account we do not administer.
-    Cons: the raw file, which still carries `vin`, `street`, `seller_company_name` and coordinates, can be pulled by every logged-in DagsHub user; the decision has to be revisited the moment we host data that is not already public elsewhere.
+    Cons: the raw file, which still carries `vin`, `street`, `seller_company_name` and coordinates, can be pulled by every logged-in DagsHub user; re-hosting it is a publishing act of our own, so "the author already published it" reduces the marginal risk but does not transfer the responsibility; the decision has to be revisited the moment we host data that is not already public elsewhere.
   - **Option B: make the repository private.**
     Pros: the original rationale of EDN-07 would hold as written; the PII sits behind an access wall.
     Cons: only the repository owner can flip it, and that is not us; every grader, supervisor and teammate then needs a manual collaborator entry; it buys little real protection, because the identical file stays publicly downloadable from Zenodo either way.
@@ -225,6 +227,7 @@ How to add an entry:
   A known-public control repository (`DAGsHub-Official/dagshub-docs`, `private: false`) answers anonymous requests exactly like ours, and so does a repository that does not exist, so the observation has no discriminating power.
   The authenticated API reports `private: false` for both of our mirrors.
   Given a real choice between hiding a file that is already public and saying openly that it is public, Lukas chose the second: the protection gained would be nominal, while the access cost for graders and supervisors would be real.
+  Recorded deliberately as an accepted risk rather than a solved problem, because the two are not the same thing: the marginal exposure is small, but we are still the ones publishing personal data, and an entry that claimed the concern was spent would not survive a reviewer who cares about privacy.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment
 - **Response to AI:** Used as input for further analysis
 - **Assessment of the AI contribution:** AI found that the privacy premise of EDN-07 was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
