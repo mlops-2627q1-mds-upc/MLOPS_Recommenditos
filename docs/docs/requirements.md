@@ -1,97 +1,103 @@
 Requirements
 ============
 
-What the used-car price component does and under which constraints.
+What the used-car price component must do and which qualities it must have, stated independently of how it is built.
 The requirements are derived from the use cases UC1 (car valuation) and UC2 (purchase guidance) in the [project brief](project-brief.md).
-What the model learns, its features and its quality targets live in the [problem specification](problem-spec.md); this page links to it instead of repeating it.
 
-Every requirement has an ID (`FR-xx` for functional, `NFR-xx` for non-functional).
-Tests mark the IDs they verify with `@pytest.mark.req("FR-04")` (supports multiple IDs per test, e.g. a test that covers both FR-15 and NFR-01).
-CI turns those markers into a requirement-to-test matrix (NFR-07), which is what the report cites as the traceability evidence.
+This page deliberately fixes no design: no endpoints, no data formats, no libraries, no deployment mechanics.
+How each requirement is realised, in the detail a developer builds and tests against, is the [specification](specification.md), which uses the same IDs.
+What the model learns and how good it has to be is the [problem specification](problem-spec.md).
 
-The "Verified by" column says how each requirement is checked:
+Every requirement has an ID (`FR-xx` for functional, `NFR-xx` for non-functional), a priority and an acceptance criterion.
+The IDs are the unit of traceability: tests carry them, and CI turns them into a requirement-to-test matrix (NFR-07) that the report cites as evidence.
 
-- **[automated]** at least one Pytest test carries the requirement's `req` marker, so the matrix picks it up on its own.
-- **[manual]** the requirement cannot be checked from Pytest (a load test, a chaos test, a deployment run, a `dvc repro` on a clean clone, a human drill).
-  The cell then names the evidence, and the matrix shows the requirement as manually verified rather than as missing.
+Priorities follow MoSCoW.
+**Must** means the component is not worth delivering without it.
+**Should** means it is part of the plan and is dropped only if a milestone is at risk.
 
 Status markers as in the project brief:
 
 - **[decided]** agreed by the team.
-- **[proposed]** proposed and pending team confirmation (see [Decisions pending confirmation](#decisions-pending-confirmation)).
+- **[proposed]** proposed and pending team confirmation; the alternatives are in the [specification](specification.md#decisions-pending-confirmation).
 - **[open]** depends on a decision that is not made yet.
+
+## Who the component is for
+
+- **The seller** owns a car and wants to offer it at a realistic price without comparing listings by hand (UC1).
+  They know their own car, but not the market.
+- **The buyer** is looking at a car, or at a kind of car, and wants to know whether the asking price is normal (UC2).
+  They can describe what they want only roughly.
+- **The team** builds, releases and operates the component, and has to be able to tell at any time whether it is still right.
+  Several requirements exist for this role alone; they are marked as such.
+- **Listed people**, whose listings the model was trained on, are not users but are affected by the component, which is what NFR-08 protects.
 
 ## 1. Functional requirements
 
-### Inputs
+Which properties of a car can be described at all is the feature set of the [problem specification](problem-spec.md#4-features).
+The requirements below say which of them a user must supply, what they get back, and what has to be true about the answer.
 
-Input fields are the features of the [problem specification](problem-spec.md#4-features) and use its names.
-The API schema only adds the validation rules below; it does not define features of its own.
-The allowed categorical values and the supported makes are not fixed in the schema: they are read from the metadata of the loaded model version and checked at runtime, so a new model version needs no schema change (FR-12).
+### What the component accepts
 
-| ID | Requirement | Verified by |
-|----|-------------|-------------|
-| FR-01 | **UC1 required fields [decided, EDN-15]:** `/predict` requires `make`, `model`, `registration_date` (year and month), `mileage_km_raw`, `power_kw`, `fuel_category`, `transmission`, `country_code`, `body_type` and `seller_type`. All other features of the basic and extended set are optional; a missing optional field is passed to the model as missing, and the point estimate then degrades no more than SC-06 of the [problem specification](problem-spec.md#8-success-criteria) allows. `body_type` and `seller_type` are required because both are filled in 100 % of the training listings (EDN-15), so a model trained on that data never sees them absent and accepting them as absent would be a promise the training data cannot back; whoever owns the car knows both. How the model keeps SC-06 for the remaining optional fields, native missing handling or the random masking planned for the UC2 interval models, is a modelling decision and not part of this contract (project brief section 4). | **[automated]** API test per required field, e.g. `test_fr01_rejects_missing_power_kw`; the model test for SC-06 |
-| FR-02 | **UC2 required fields:** `/price-range` requires only `make`; any subset of the other features is accepted. | **[automated]** API test with `make` only and with the partial-input scenario P1 of SC-05 |
-| FR-03 | **Validation:** fields are type-checked; `registration_date` lies between 1900-01 and the request month; `mileage_km_raw` is between 0 and 1,000,000; `power_kw` is between 1 and 1,200; low-cardinality categoricals (`fuel_category`, `transmission`, `body_type`, `drive_train`, `seller_type`) must be one of the values in the training data of the loaded model; `country_code` is one of the 8 countries of the data (problem specification section 2), so any other country is rejected as out of scope. An invalid request gets HTTP 422 with one error per invalid field. | **[automated]** Parametrised API tests, including a country outside the 8 (e.g. `US`) |
-| FR-04 | **Scope check:** a `make` outside the supported makes (computed by the pipeline, [EDN-05](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) is rejected with HTTP 422, and the response lists the supported makes. | **[automated]** API test |
-| FR-05 | **Unseen values [decided, EDN-18]:** a `country_code` among the 8 countries or a `model` that is missing from the training data (currently the country `ES`, see project brief section 3.2) is accepted, passed to the model as unknown, and reported in a `warnings` field of the response. | **[automated]** API test for `ES` and for an unseen model |
+| ID | Priority | Requirement | Acceptance criterion |
+|----|----------|-------------|----------------------|
+| FR-01 | Must | **Description needed for a valuation (UC1) [decided, EDN-15].** A valuation requires a small, fixed set of facts that the owner of a car knows without research: which car it is, how old it is, how far it has run, how it is powered and driven, where it is offered and what kind of seller offers it. Every further property is optional. Leaving an optional property out is allowed and must not cost more accuracy than SC-06 of the [problem specification](problem-spec.md#8-success-criteria) permits. | A valuation that omits a required fact is refused and says which one; a valuation that omits only optional facts is answered and stays within SC-06. |
+| FR-02 | Must | **Description needed for a price range (UC2).** A price range is produced from any partial description, down to the make alone. | A request naming only the make is answered; adding further properties narrows the range. |
+| FR-03 | Must | **Plausibility of the input.** Every submitted fact is checked before it reaches the model: values must be of the right kind, dates and quantities must lie in ranges a real car can have, and categories must be ones the deployed model actually knows. Implausible input is refused, with all problems reported at once, each naming the fact it concerns. | Each rule is checked by its own test; one refusal reports several faults together. |
+| FR-04 | Must | **Scope check.** A car whose make lies outside the supported scope of the [problem specification](problem-spec.md#2-scope) is refused rather than estimated, and the refusal states what is supported. | A request for an unsupported make is refused and the answer names the supported makes. |
+| FR-05 | Must | **Unfamiliar detail in an in-scope car [decided, EDN-18].** A car that is in scope as a whole but carries a detail the deployed model has not seen, such as a market or a model name absent from its training data, is still answered, and the answer names the unfamiliar detail. | A request from the held-out market and a request with an unseen model name are both answered and both carry the warning. |
 
-### Outputs and endpoints
+### What the component answers
 
-All endpoint paths are served under `/v1` (omitted from the table below for brevity).
+| ID | Priority | Requirement | Acceptance criterion |
+|----|----------|-------------|----------------------|
+| FR-06 | Must | **Valuation (UC1) [decided, EDN-16].** For a described car, the component returns one price estimate in euros, which model version produced it, and a reference that identifies this individual answer later. | The answer carries an amount, a model version and a reference. |
+| FR-07 | Must | **Price range (UC2) [decided, EDN-16].** For a partially described car, the component returns a typical price together with a lower and an upper bound at a stated confidence level. The typical price always lies inside the bounds. | Lower bound ≤ typical price ≤ upper bound in every answer; the coverage of the bounds is part of NFR-01. |
+| FR-08 | Should | **Explanation of a valuation [decided, EDN-11].** A valuation is accompanied by the few properties that influenced this particular car's price most, each with the direction and the size of its effect, plus the combined effect of everything else. The effects are complete: together they account for the whole difference between the typical price and the estimate, so the estimate can be checked rather than only believed. | Recomputing the estimate from the reported effects reproduces it. |
+| FR-09 | Should | **Comparable listings.** Alongside a price range, the component returns real listings of comparable cars with their prices, so that the range can be checked against the market. Comparability is defined by stated limits on age and mileage, and those limits are never relaxed to fill the list: when nothing is comparable, nothing is returned. The listings carry nothing personal (NFR-08). | Every returned listing satisfies the stated limits; a request with no comparable car returns an empty list. |
 
-| ID | Requirement | Verified by |
-|----|-------------|-------------|
-| FR-06 | **Valuation (UC1) [decided, EDN-16]:** `POST /predict` returns the point estimate of the asking price in EUR, the model version and a request ID. | **[automated]** API test |
-| FR-07 | **Price range (UC2) [decided, EDN-16]:** `POST /price-range` returns the point estimate and the lower and upper bound of the nominal 90 % interval in EUR, the model version and a request ID. The point estimate and the bounds come from different models, so the bounds are widened where needed to contain the estimate; widening only raises coverage, so the conformal guarantee still holds. | **[automated]** API test (lower ≤ estimate ≤ upper) |
-| FR-08 | **Explanation [decided, EDN-11]:** `/predict` returns the base price and the five features with the largest absolute SHAP contribution, plus the combined contribution of all other features, computed from the trained booster's own SHAP export (LightGBM `predict(pred_contrib=True)` or CatBoost `get_feature_importance(type="ShapValues")`), not the `shap` package, which stays a training/notebook-only dependency for offline global analysis. The model predicts `log(price)`, so a contribution φ is reported as its multiplicative effect on the price, `exp(φ) - 1` in percent, and the effects multiply rather than add. | **[automated]** API test: the base price times the product of `1 + effect` over all six reported effects reproduces the estimate; a training-time test asserts the booster's export matches `shap.TreeExplainer` |
-| FR-09 | **Comparables:** `POST /comparables` takes the same input as `/price-range` and returns up to k processed listings (default 5, at most 20) with their price and key features, without PII. A listing is comparable when it matches the request in `make` and `model` and its age differs by at most 2 years and its mileage by at most 25 %; the results are sorted by mileage distance, then age distance. Fields the request omits are ignored rather than folded into a distance, and no filter is relaxed: when nothing matches, the list is empty. The index holds the training and validation listings only, never `ES` (EDN-03) or test rows. | **[automated]** API test: every returned listing satisfies the filter, a request outside any window returns an empty list, the order is as specified; PII test (NFR-08) |
-| FR-10 | **Feedback [decided, EDN-13]:** `POST /feedback` takes a request ID and an observed price and stores it as a delayed label, which FR-14 joins to the prediction log to report the real error and interval coverage. It is fed with simulated prices from the `ES` holdout; there are no real users. The endpoint is not publicly reachable: the reverse proxy in front of the API rejects `/feedback` from outside, so only the replay job inside the Compose network reaches it. It additionally requires an API key in the `X-API-Key` header as a second layer, in case that proxy rule is ever wrong; a missing or wrong key gets HTTP 401. The key therefore never travels over the public internet (NFR-09). | **[automated]** API test, including `test_fr10_rejects_missing_api_key`; deployment smoke test asserting `/feedback` is refused from outside the VM |
-| FR-11 | **Operations:** `GET /health` returns the status and the loaded model version; `GET /metrics` exposes request count, latency and error metrics in Prometheus format. | **[automated]** API test |
-| FR-12 | **Model loading [decided, EDN-08]:** the model and FR-09's comparables index are baked into the API image at CI build time via `dvc pull`, pinned to whatever version `dvc.lock` on `main` points to; promoting a model means merging that pointer to `main`. The API never calls the MLflow registry at build or run time; MLflow stays the experiment-tracking and audit record of which run was chosen. A new model version needs no change to the API schema. | **[automated]** CI check on the built image: the model version `GET /health` reports equals the version `dvc.lock` points to; an API test that the categorical values and supported makes come from the loaded model's metadata, not from the schema |
-| FR-13 | **Prediction log:** every request is logged with its validated inputs, outputs, warnings, model version, timestamp and latency, without PII. | **[automated]** Integration test |
-| FR-14 | **Drift monitoring:** a separate job compares the logged inputs of each time window with the training reference and reports input drift. Joining FR-10's delayed labels to the prediction log by request ID, it also reports the error (MdAPE) and the empirical interval coverage per window, so a degradation is visible as a number, not only as a changed input distribution. | **[automated]** Test with the `ES` replay (NFR-11), asserting all three (drift, error, coverage) are reported |
-| FR-15 | **Retraining and promotion [decided, EDN-12]:** when FR-14's drift job flags input drift on the `ES` replay (per NFR-11), a team member retrains the pipeline with `ES` included (`dvc repro`) and opens a PR updating the model pointer. The candidate must pass NFR-01's gate before that PR is merged; merging is the promotion (EDN-08). Retraining and promotion are human-triggered, not automated: no PR is opened or merged without a person reviewing the gate result. If a promoted model regresses after deployment, rollback is redeploying the previous image tag (EDN-08). | **[manual]** `ES` replay integration test: drift flagged → retrain → gate → promotion PR opened; a rollback drill redeploying a previous image tag |
-| FR-16 | **API documentation and errors:** the OpenAPI schema (`/docs`, `/redoc`) includes a request and response example for every endpoint. All error responses share one envelope, including validation errors (FR-03), the scope check (FR-04), a missing or invalid API key (FR-10), and the body-size limit (NFR-09); none differ in shape. | **[automated]** OpenAPI schema test: every endpoint has a request and response example; API tests confirm every error path returns the same envelope shape |
+### What the component has to support over time
+
+These requirements exist for the team as operator, not for the seller or the buyer.
+
+| ID | Priority | Requirement | Acceptance criterion |
+|----|----------|-------------|----------------------|
+| FR-10 | Must | **Observed prices [decided, EDN-13].** The component accepts a later report of what a car was really priced at, linked to the answer it belongs to, so that the real error and the actual coverage of the price ranges can be measured instead of inferred from input statistics. Only the operators can report prices back; nothing that writes data is reachable by the public (NFR-09). | A reported price is joined to its answer; an unauthorised report is refused. |
+| FR-11 | Must | **Operational visibility.** The running component reports whether it is healthy, which model version it serves, and how much traffic, latency and how many errors it sees. | The health and the traffic figures can be read from outside the component. |
+| FR-12 | Must | **The model version in service [decided, EDN-08].** At any time it is unambiguous and verifiable which model version is serving, a released version is fixed and reproducible, and putting a different version into service changes nothing about what the component accepts and answers. | The version the running component reports equals the version the repository declares as released. |
+| FR-13 | Must | **Record of every answer.** Every answer is recorded with what was asked, what was answered, which warnings it carried, which model version produced it and when, free of personal data (NFR-08), so that any answer can be reconstructed and analysed afterwards. | Each answer produces exactly one record containing those parts and nothing personal. |
+| FR-14 | Must | **Monitoring of drift and of error.** Incoming traffic is compared with the data the model was trained on, window by window, and reported: which properties changed, how large the real error is, and whether the price ranges still hold their stated confidence level. | A monitoring run reports all three: changed properties, error and coverage. |
+| FR-15 | Must | **Retraining and release [decided, EDN-12].** Retraining is started by a person reacting to a monitoring finding, never automatically. A retrained model reaches users only after it has demonstrably met every success criterion and a person has approved it. A release can be undone. | The full chain runs once end to end: finding, retraining, quality gate, approval, release, and a rehearsed rollback. |
+| FR-16 | Should | **Documented contract and uniform failures.** Every operation is documented with an example of what it is asked and what it answers, and every failure is reported in one uniform shape, whatever caused it. | The documentation contains an example per operation; every failure path produces the same shape. |
 
 ### Out of scope
 
-- Batch prediction: the `ES` replay sends single requests, like real clients.
-- Free-text input or parsing via an LLM (problem specification section 2).
-- User accounts and per-user authentication: the prediction endpoints are public and read-only; `/feedback`, the only endpoint that writes data, is not exposed publicly at all and is protected by a single shared API key behind that (FR-10).
+- **Pricing many cars at once.** The component answers one car at a time, the way a person asks about their car.
+- **Describing a car in free text.** The user supplies the properties; interpreting "well kept BMW 3 series from 2018" with a language model stays an optional add-on the component never depends on ([problem specification](problem-spec.md#2-scope)).
+- **Accounts and personal history.** Nobody signs in and nothing is kept per person; the same question always gets the same answer.
+- **Cars outside the scope.** New cars, transporters, unsupported makes and markets outside the data are refused rather than estimated (FR-04).
+- **A guaranteed sale price.** The component estimates what a car is offered for, not what it finally sells for ([problem specification](problem-spec.md#1-problem-statement)).
 
 ## 2. Non-functional requirements
 
-The deployment target is the FIB Virtech VM, 4 GB RAM and 20 GB disk, CPU-only (**[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-The targets for latency, throughput and resources (NFR-02 to NFR-04) are estimates for that machine and are themselves **[proposed]**: they are checked with the first load test in M4 and adjusted there if needed.
+The component runs on the single small machine the course provides (4 GB RAM, 20 GB disk, CPU only, **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+That machine is a given constraint, not a design choice, and NFR-02 to NFR-04 are written for it.
+Those three targets are themselves **[proposed]**: they are estimates, checked against the first load test in M4 and adjusted there if needed.
 
-> **Unverified: what the VM's network allows.**
-> Nobody on the team has access to the FIB Virtech VM yet, so anything below that depends on how the VM can be reached from the internet is an assumption, not a decision.
-> The assumption on record is that the VM sits behind NAT, reachable through a forwarded port on a shared host name, which is how FIB Virtech is usually described, and nobody has checked it.
->
-> Affected are NFR-05 (Better Uptime has to ping the VM from outside), NFR-09 (no TLS, because a Let's Encrypt HTTP-01 challenge needs port 80 on a host name we control) and NFR-13 (SSH from a GitHub-hosted runner, with a self-hosted runner on the VM as the fallback).
-> Each of them names its fallback, so none of them blocks work before M4.
->
-> Once we have access, one person checks three things, and we settle all three requirements together (decision 2 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
-> Until then, do not build anything that silently assumes one of the answers, and do not write these assumptions into the report as facts.
-> Nothing else on this page changes with the answer: FR-10's `/feedback` stays internal either way, and no target moves.
-
-| ID | Quality | Requirement and target | Verified by |
-|----|---------|------------------------|-------------|
-| NFR-01 | Model quality | A model is only deployed if it meets all success criteria SC-01 to SC-06 of the [problem specification](problem-spec.md#8-success-criteria). This requirement sets no thresholds of its own. | **[automated]** Model tests (M3) and the gate before a model version is promoted (FR-15) |
-| NFR-02 | Latency | On the target VM, p95 latency is at most 200 ms for `/predict` (including SHAP) and at most 300 ms for `/price-range` and `/comparables`. | **[manual]** Load test and the Prometheus latency histogram |
-| NFR-03 | Throughput and scalability | The API sustains 20 requests/s for 5 minutes with less than 1 % errors, while still meeting NFR-02's latency targets. Correctness does not depend on how many worker processes or replicas run: the API keeps no per-request or per-session state, and the model and the comparables index are read-only, so they can be shared. Whatever the worker count, every request appears exactly once in FR-13's prediction log, and every FR-10 feedback record is visible to the drift job (FR-14). How the prediction log and the feedback store achieve this is a design decision, still open (project brief section 5). | **[manual]** Load test (throughput, error rate, NFR-02's latency targets); the same load test with 2 worker processes, asserting the prediction log holds exactly one entry per request |
-| NFR-04 | Resources | **RAM:** the full stack runs in the VM's 4 GB; the API container stays below 1 GB RSS under the NFR-03 load. **Image:** the API image is at most 1 GB and contains no GPU or deep-learning libraries. **Drift job:** it runs in its own container (project brief section 6) and only while it works, started on a schedule instead of kept running, so its numpy<2 / pandas<3 stack with transformers, opencv and scikit-image never competes with the API for memory. **Disk:** the stack fits the VM's 20 GB with at least 4 GB free at all times: container images together at most 6 GB, Prometheus capped at 2 GB by a retention size, and the prediction log and feedback (FR-13, FR-10) capped at 2 GB by rotation, oldest first. The VM needs no DVC cache, because the model ships inside the image (FR-12). | **[manual]** `docker stats` during the load test; image size check in CI; the disk metric in Grafana with an alert on the 4 GB floor; a deployment check that the retention and rotation caps are configured, not just intended |
-| NFR-05 | Availability | **[decided, EDN-10]** All services use `restart: unless-stopped` and the API reaches `/health` = 200 within 30 s of a crash or VM reboot. The API has zero unplanned downtime during the M4-M6 presentation (Dec. 9) and its warm-up, checked immediately beforehand; the API does not exist yet for the M1-M3 presentation (Oct. 14). Outside the presentation window the stack runs unattended on a single VM with no redundancy or SLA, so uptime is monitored and reported, not contractually targeted. | **[manual]** Chaos test (kill the API container, measure recovery); manual health check before the December presentation; Better Uptime external ping (**[proposed]**, needs the VM to be reachable from outside, see the warning at the top of this section) and Grafana dashboard for the monitored period |
-| NFR-06 | Reproducibility | On a clean clone, fetching the raw data (`dvc update data/raw/cars.csv.dvc`, see [Data versioning](data-versioning.md)) and running `dvc repro` produces the same splits and metrics within ±0.1 percentage points. Every MLflow run records the git commit, the DVC data version and all parameters. | **[manual]** Re-run before each delivery; MLflow run check |
-| NFR-07 | Maintainability | ruff (including the Pylint rules) reports no findings; test coverage of `recommenditos/` is at least 80 %, and the only code left out of it is what `[tool.coverage]` in `pyproject.toml` excludes, each exclusion with a comment giving its reason; Pynblint reports no findings on the notebooks beyond the ones we accept, each of which is documented with its reason; CI passes before every merge. From M3 onward, CI also builds the requirement-to-test matrix from the `req` markers and the tables on this page, writes it to the job summary of the CI run, and fails when a marker names an ID that does not exist here. It does not enforce completeness: that is what the **[automated]** and **[manual]** tags are for, and the matrix is read by a person before each delivery. | **[manual]** CI run on the delivery commit, with the matrix in its job summary reviewed before each delivery |
-| NFR-08 | Privacy | No PII column of the problem specification (section 4, excluded columns) appears in the processed data, the prediction log, the comparables or the model artefacts, and the prediction log has no field for the caller's IP address. The operational logs of the reverse proxy and uvicorn stay on the VM and are not covered here. **[decided]** The raw data is never pushed to our own remote: it is imported from its Zenodo DOI, and `push: false` on its output in `data/raw/cars.csv.dvc` makes `dvc push` skip it ([EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [Data versioning](data-versioning.md)). | **[automated]** Great Expectations suite on the processed data; tests on the response and log schemas and on the model's feature list; a test that `data/raw/cars.csv.dvc` keeps `push: false` |
-| NFR-09 | Security | Request bodies are limited to 10 KB, enforced by middleware that checks `Content-Length` before the body is read, not left to the reverse proxy alone. There is no per-client rate limit: the load test (NFR-03) and the `ES` replay (NFR-11) are our own traffic from a single address, and behind the VM's NAT external clients can share one address too, so a per-IP limit would throttle our own traffic before it stopped anyone else. **[decided, EDN-13]** No TLS, and no requirement on the VM having a certificate: every publicly reachable endpoint is read-only and carries no secret, because `/feedback`, the only endpoint with a key, is reachable only from inside the Compose network (FR-10). The public endpoints are therefore served over plain HTTP, and the FIB Virtech VM needs neither a domain nor a certificate. No secrets are committed; the API key is passed as an environment variable; containers run as a non-root user. Dependencies are locked in `uv.lock` and watched by Dependabot alerts; the built image is scanned with `trivy` before deploy, failing the build on HIGH or CRITICAL findings that have a fix available, so an unfixable base-image CVE does not block every deploy. | **[automated]** API test (body limit); secret scan and `trivy` in CI; Dockerfile review; deployment smoke test asserting `/feedback` is refused from outside the VM (FR-10) |
-| NFR-10 | Energy efficiency | CodeCarbon measures the emissions of every training run and logs them to MLflow; training the final chosen configuration (no hyperparameter search) takes at most 15 minutes on a laptop CPU. CodeCarbon also measures the API's energy during the NFR-03 load test, reported as average energy per request, not tracked per individual request: CodeCarbon's measurement granularity does not match single-digit-millisecond events, and a per-request tracker would risk NFR-02's latency budget. | **[manual]** MLflow; energy-per-request figure from the NFR-03 load test |
-| NFR-11 | Observability | **[decided, EDN-14]** The drift job compares each window against a reference of 10,000 listings sampled from the training data. It flags the `ES` replay within its first **100** requests, and names at least three drifted features other than `country_code`, expected among the missingness of `nr_prev_owners`, `nr_seats` and `cylinders_volume_cc`, `body_type`, `transmission` and `fuel_category`. The control is **an i.i.d. sample of held-out listings, not a seller-grouped one**: of 20 control windows of the same size, at most 1 is flagged. A seller-grouped window is not a valid control, because held-out dealers differ from the training distribution as much as Spain does on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` (EDN-14). | **[manual]** M6 replay (`ES`), asserting the flag and the named features; M6 control run of 20 i.i.d. windows, at most 1 flagged |
-| NFR-12 | Portability | `docker compose up` starts the whole stack on a fresh VM; no LLM or paid external service is needed at runtime. | **[manual]** Deployment smoke test |
-| NFR-13 | CI/CD | Every merge to `main` deploys, unless it touches nothing but `docs/`, `reports/` and the Markdown files at the top level. The trigger is stated as that exclusion, not as a list of paths that deploy: a forgotten path then costs one needless build instead of silently leaving the VM on an older version. This is what connects a model promotion to the running system, since promoting a model is a merge that changes `dvc.lock` and nothing else (FR-12, EDN-08). CD builds the API image (baking in the `dvc pull`-pinned model and comparables index), tags it with the commit SHA and `latest`, pushes both to GHCR, and deploys the SHA tag to the FIB Virtech VM (`docker compose pull && up -d`, with the tag read from a variable in the VM's environment file). A deployment counts as successful only once NFR-12's smoke test passes against it; if it fails, the previous SHA tag is put back, which is the rollback EDN-08 refers to. **[proposed]** The runner reaches the VM over SSH; if the VM turns out not to be reachable from GitHub-hosted runners, the fallback is a self-hosted runner on the VM itself, which needs no inbound connection. Because the repository is public, such a runner may only ever run on `push` to `main`, never on `pull_request`. | **[manual]** CD pipeline run on a merge to `main`; smoke test result; a rollback drill putting the previous SHA tag back (FR-15) |
+| ID | Priority | Quality | Requirement | Acceptance criterion |
+|----|----------|---------|-------------|----------------------|
+| NFR-01 | Must | Model quality | Only a model that meets every success criterion SC-01 to SC-06 of the [problem specification](problem-spec.md#8-success-criteria) is released. This requirement sets no thresholds of its own. | The quality gate in front of a release evaluates all six criteria and blocks on any miss. |
+| NFR-02 | Must | Latency | An answer arrives while the user is still looking at the screen, so that trying a variant of the same car costs nothing: 95 % of valuations within 200 ms and 95 % of price ranges and comparable listings within 300 ms. **[proposed]** | Measured under the load of NFR-03 on the target machine. |
+| NFR-03 | Must | Throughput and scalability | The component serves 20 requests per second for five minutes with fewer than 1 % errors while still meeting NFR-02. Its correctness must not depend on how many copies of it are running: whatever the number, every answer appears exactly once in the record of FR-13, and every reported price of FR-10 is visible to the monitoring of FR-14. **[proposed]** | A load test at that rate, repeated with more than one copy running, with the record checked for duplicates and gaps. |
+| NFR-04 | Must | Resources | The entire system fits the provided machine with headroom left at all times, and nothing in the serving path needs hardware beyond it, in particular no GPU. Storage that grows (records, metrics) is bounded, so that it cannot fill the disk. **[proposed]** | Memory and disk stay within the machine's limits during the NFR-03 load test, with the stated headroom free. |
+| NFR-05 | Must | Availability | **[decided, EDN-10]** The component recovers by itself within 30 seconds of a crash or a restart of the machine, without anyone logging in. It has zero unplanned downtime during the graded presentation and its warm-up. Outside that window it runs unattended on a single machine without redundancy, so uptime is monitored and reported, not contractually promised. | A rehearsed crash and a rehearsed reboot, each followed by automatic recovery within 30 seconds; a health check immediately before the presentation. |
+| NFR-06 | Must | Reproducibility | From a clean clone of the repository, the documented steps reproduce the same splits and the same metrics within ±0.1 percentage points, and every training run records which code, which data version and which parameters produced it. | A rerun from a clean clone before each delivery. |
+| NFR-07 | Must | Maintainability | The repository stays reviewable for a semester with four part-time people: code and notebooks pass the agreed quality checks without findings, the test coverage of the project code is at least 80 % with every exclusion justified, and the checks run before a change is merged rather than after. Every requirement is traceable to the test that verifies it, or is explicitly marked as verified by hand. | The checks and the requirement-to-test matrix run in CI and are reviewed before each delivery. |
+| NFR-08 | Must | Privacy | Nothing that identifies a listed person leaves the raw data: no such property reaches the processed data, the model, the answers, the comparable listings or the records, and the records do not identify the caller either. The raw data is not re-hosted by us. **[decided, EDN-07]** | Automated checks on the processed data, on the answers and records, and on the model's inputs. |
+| NFR-09 | Must | Security | Everything reachable from the internet is read-only and carries no secret, and anything that writes data is not reachable from the internet at all. Requests are bounded in size. No secret is committed to the repository. A dependency with a known and fixable vulnerability does not reach the running system. **[decided, EDN-13]** | A check from outside the machine that the writing operation is refused; size limit test; secret and vulnerability scans in CI. |
+| NFR-10 | Should | Energy efficiency | The energy cost of the component is known and small: every training run records its emissions, training the chosen configuration takes at most 15 minutes on a laptop CPU, and serving is reported as an average energy cost per answer. | Emissions recorded per training run; an energy-per-answer figure from the NFR-03 load test. |
+| NFR-11 | Must | Observability | **[decided, EDN-14]** The monitoring detects the new-market scenario of the [project brief](project-brief.md) within the first 100 answers and names at least three changed properties besides the market itself, while raising at most 1 false alarm in 20 comparable windows of normal traffic. | The replay of the held-out market, plus a control run of 20 normal windows. |
+| NFR-12 | Must | Portability | The whole system starts on a fresh machine with a single documented command and needs no paid or external service at runtime. | A deployment from scratch on a clean machine. |
+| NFR-13 | Must | Delivery | A change merged into the main line reaches the running system by itself, is verified there, and is put back to the previous version automatically if that verification fails. Changes that affect only documentation need not be deployed. | A merge that deploys and verifies itself, and a rehearsed rollback. |
 
 ### Quality model
 
@@ -110,45 +116,10 @@ Three rows have no equivalent in either standard; they are here because the cour
 | Energy efficiency (NFR-10) | Not in 25010/25059; graded as its own M3 practice |
 | Observability (NFR-11) | Maintainability (Analysability), extended for MLOps monitoring |
 | Portability (NFR-12) | Portability |
-| CI/CD (NFR-13) | Not in 25010/25059; graded as its own M5 practice |
+| Delivery (NFR-13) | Not in 25010/25059; graded as its own M5 practice |
 
-## Decisions pending confirmation
+## Open points
 
-The items marked **[proposed]** are proposals that could reasonably go differently.
-Once the team confirms them, they become **[decided]** and are recorded in the [EDN](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-
-1. **Performance and resource targets (NFR-02 to NFR-04).**
-   - **A (proposed):** commit to the estimated targets now and revisit them after the first M4 load test.
-     Gives the load tests and the report a target from the start.
-   - **B:** leave the targets open until they are measured.
-     Avoids guessing, but leaves M4 without acceptance criteria.
-2. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
-   Deliberately left open: nobody has access to the VM yet, so this is decided once someone has tried it, and not before (see the warning at the top of section 2).
-   Three questions, to be answered in one go by whoever gets access first:
-   - **Reachable from outside at all, on which ports?**
-     If yes, Better Uptime can ping `/health` as NFR-05 assumes.
-     If no, NFR-05's external check has to come from inside the UPC network or be dropped, and the monitored-uptime part of EDN-10 shrinks to what Grafana sees from inside.
-   - **A host name we control enough for a certificate?**
-     If yes, TLS becomes cheap and we can add it to NFR-09 even though nothing depends on it any more.
-     If no, NFR-09 stays as it is; this is why FR-10 keeps the key inside the Compose network (EDN-13) instead of relying on TLS.
-   - **How does CD reach the VM (NFR-13)?**
-     **A (proposed):** SSH from the GitHub-hosted runner, which keeps everything in GitHub Actions and needs nothing running on the VM, but only works if the SSH port is reachable from outside the UPC network.
-     **B:** a self-hosted runner on the VM that polls GitHub and needs no inbound connection, which works behind NAT and still leaves the deployment record in Actions, but costs RAM on the 4 GB VM and, since the repository is public, may only run on `push` to `main`, never on `pull_request`.
-
-**Decided:** unseen countries and models are accepted with a warning (FR-05), recorded as [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-Rejecting them would make the `ES` replay impossible, which is the drift scenario the whole of M6 is built on (EDN-03).
-
-**Decided:** separate `/predict` and `/price-range` (FR-06, FR-07), recorded as [EDN-16](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-The two use cases have different input contracts, ten required fields against one, which one schema could only express as a conditional rule.
-Separate endpoints also keep the two traffic shapes apart in the prediction log, so FR-14's drift job does not read a change in the UC1/UC2 mix as input drift.
-
-**Decided:** the UC1 required fields (FR-01), recorded as [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-A small required core stays, but `body_type` and `seller_type` join it, because both are filled in 100 % of the training listings and the car's owner knows both anyway.
-The same entry adds SC-06 to the [problem specification](problem-spec.md#8-success-criteria), so NFR-01's gate covers what happens when an optional field is absent.
-
-**Decided:** the feedback endpoint and its exposure (FR-10, NFR-09), recorded as [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-`/feedback` stays, because the delayed labels are what let FR-14 report a real error and coverage drop instead of input drift alone, and because the `ES` holdout was chosen for exactly that (EDN-03).
-It is not exposed publicly, which removes the need for TLS on a VM that probably cannot get a certificate.
-
-**Decided:** raw data hosting (NFR-08), recorded as [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-The raw file contains PII (street, zip, coordinates, seller company name for private sellers) and comes from an immutable, versioned Zenodo DOI, so it is pulled with `dvc import-url` and never pushed to our own DagsHub remote, instead of being tracked like a normal pipeline input (see [Data versioning](data-versioning.md)).
+The requirements above are agreed, except where a **[proposed]** marker says otherwise.
+Open is how some of them are realised: the performance and resource targets of NFR-02 to NFR-04, and everything that depends on how the course machine can be reached from outside, which affects NFR-05, NFR-09 and NFR-13.
+Both are listed with their alternatives under [Decisions pending confirmation](specification.md#decisions-pending-confirmation) in the specification.

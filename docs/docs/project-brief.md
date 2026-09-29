@@ -32,7 +32,8 @@ Out of scope for the core: free-text parsing via an external LLM (optional add-o
 
 Scope **[decided]**: used passenger cars of the makes with enough listings (currently 11, mostly premium brands) in 8 European countries.
 The exact scope, target, features and success criteria live in the [problem specification](problem-spec.md).
-What the component must do and under which constraints (endpoints, input validation, latency, resources, privacy) is defined in the [requirements](requirements.md).
+What the component must do and which qualities it must have is defined in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
+How each of them is realised (endpoints, input validation, latency, resources, privacy) is defined in the [specification](specification.md), under the same IDs.
 
 ## 3. Data
 
@@ -135,7 +136,7 @@ The calibration set must use the same masking, and the coverage guarantee is mar
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
 
 - `body_type` and `seller_type` are filled in **100 %** of the training listings, so a model trained on them never learns a direction for their absence.
-  Both are now required fields of `/predict` ([requirements](requirements.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
+  Both are now required fields of `/predict` ([specification](specification.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
 - `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %) are missing rarely, so the signal for their absence is thin but real.
 - `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.
   Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data too.
@@ -145,7 +146,7 @@ This is a modelling decision, not an API one, and it is taken in M2/M3 once the 
 Either way the outcome is bounded: SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
-The exact window is defined in the [requirements](requirements.md) FR-09.
+The exact window is defined in the [specification](specification.md) FR-09.
 
 Explainability: SHAP (TreeExplainer) per prediction and globally.
 
@@ -173,10 +174,10 @@ client --> reverse proxy --> FastAPI (model + SHAP + intervals)
 
 Everything runs via Docker Compose.
 The API contract (Pydantic schemas) is the boundary: models can be swapped without changing clients.
-Endpoints, inputs and outputs are specified in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
+Endpoints, inputs and outputs are specified in the [specification](specification.md) (`FR-xx`, `NFR-xx`).
 Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the model is a DVC-tracked pipeline artifact baked into the API image at CI build time (`dvc pull`, pinned to the version `main` points to), not fetched from the MLflow registry at build or run time.
-Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [requirements](requirements.md) FR-12).
-Deployment target **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, one semester), which is what every target in the [requirements](requirements.md) is written for.
+Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [specification](specification.md) FR-12).
+Deployment target **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, one semester), which is what every target in the [specification](specification.md) is written for.
 It is tight on 4 GB, and that is planned for rather than left open: NFR-04 gives the drift job its own scheduled container, caps Prometheus by retention size and the logs by rotation, and keeps 4 GB of disk free.
 Nobody has access yet; if that is still true at the M4a lab on 2026-10-21, we raise it with the teachers instead of planning on further.
 
@@ -197,7 +198,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Run it isolated with `uvx pynblint`, not as a project dependency.
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
-  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [requirements](requirements.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
+  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8".
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 

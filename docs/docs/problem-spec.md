@@ -2,7 +2,7 @@ Problem specification
 =====================
 
 What the model learns, on which data, and when it is good enough.
-This page owns the ML framing: the [requirements](requirements.md), the dataset card, the model card and the report link here instead of repeating it.
+This page owns the ML framing: the [requirements](requirements.md), the [specification](specification.md), the dataset card, the model card and the report link here instead of repeating it.
 For the overall plan see the [project brief](project-brief.md); for facts about the data see the dataset card.
 
 ## 1. Problem statement
@@ -50,7 +50,7 @@ It does not forecast future prices.
 ## 4. Features
 
 The features describe the car the way a user can describe it.
-`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [requirements](requirements.md).
+`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [specification](specification.md).
 
 ### Basic feature set (experiment ladder step 3)
 
@@ -131,7 +131,7 @@ A model is good enough to deploy when it meets all of the following on the test 
 | SC-05 | Nominal 90 % intervals reach an empirical coverage between 88 % and 92 %, both for full inputs and for the partial-input scenario P1 (only make, model, registration date and mileage given). |
 | SC-06 | With each optional input field masked on its own, and with all of them masked at once, the point model's MdAPE stays at or below 1.5 times its full-input MdAPE. |
 
-SC-06 covers what SC-04 and SC-05 do not: the point estimate for a request that leaves an optional field out, which the API explicitly allows ([requirements](requirements.md) FR-01).
+SC-06 covers what SC-04 and SC-05 do not: the point estimate for a request that leaves an optional field out, which the API explicitly allows ([specification](specification.md) FR-01).
 The optional fields are the ones FR-01 does not require, and "masked" means the field is passed to the model as missing, exactly as the API passes it.
 The criterion is relative to the model's own full-input MdAPE, like SC-03 is relative to the baseline, because there is no reference value for it yet and inventing an absolute threshold would be guesswork.
 Which mechanism keeps it (native missing handling or random masking during training, as planned for the interval models) is left to the modelling plan; SC-06 only fixes the observable outcome.
