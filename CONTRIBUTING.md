@@ -36,6 +36,12 @@ pre-commit install
 
 ```bash
 make format   # ruff format + fix
-make lint     # ruff check
-make test     # pytest
+make lint     # ruff format --check + ruff check
+make test     # pytest, which also reports the coverage of recommenditos/
 ```
+
+`make lint` runs the same ruff rules as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+
+`make test` prints a coverage table; CI puts the same table in the summary of its test job.
+There is no coverage gate on a PR, so a number below 80 % does not fail anything.
+NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
