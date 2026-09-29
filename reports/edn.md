@@ -171,7 +171,8 @@ How to add an entry:
 - **Participants:** open, to be decided by the whole team
 - **Decision:** Open.
   Two DagsHub mirrors of the GitHub repository exist in parallel, only one of them stays in sync, and nobody except the respective owner has push rights.
-  The team has to name one repository as the single DVC remote and MLflow tracking server, and decide whether it stays public.
+  The team has to name one repository as the single DVC remote and MLflow tracking server.
+  The related question of whether that repository stays public was decided separately, see EDN-22.
 - **Alternatives considered:**
   - **Option A: a DagsHub organisation owns the connected repository, every team member is a member with push rights.**
     Pros: mirrors the GitHub organisation, so "our repository" does not depend on one person's private account; push rights follow org membership instead of manual collaborator entries; data and experiment history survive if a member leaves or cleans up their account; visibility is set in one place.
@@ -191,15 +192,44 @@ How to add an entry:
   `mark.welf.atzberger/MLOPS_Recommenditos` is at `8b1d64fc`, one merge behind, is missing the `docs/data-facts-corrections` and `model-card` branches, still carries `feature/ruff-pl-and-coverage` which GitHub deleted after the merge, and mirrors 0 issues.
   DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two repositories were connected in different ways and that mark's is a plain git mirror.
   Visibility: both repositories report `private: false`, so every logged-in DagsHub user can read them and pull the raw data, which still carries `vin`, `street`, `seller_company_name` and coordinates.
-  Note for EDN-07, which assumes the remote is private: anonymous access is not evidence either way, because DagsHub redirects every anonymous request to the login page and answers every anonymous API and data request with 401, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`).
+  EDN-07 as originally written assumed the remote was private; that premise was found false and is being revised on the issue #3 branch, and the outcome is recorded in EDN-22.
+  The reason the original check misled us: anonymous access is not evidence either way, because DagsHub refuses every anonymous request, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`) and for a repository that does not exist.
   Access: `lukas2510` has `push` on mark's repository since 2026-09-29 and `pull` only on pauadal03's; the rest of the team is most likely still without push rights on either.
-  Whichever option wins, the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to match it before that PR merges, the owner has to grant push rights to everyone, and the visibility question has to be answered explicitly.
+  Whichever option wins, the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to match it before that PR merges, and the owner has to grant push rights to everyone.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Open
 - **Assessment of the AI contribution:** To be filled in once the team decides.
   AI queried the DagsHub API, found that two mirrors of the GitHub repository exist, compared their commits, branches and mirrored issues against GitHub, checked the team's access rights, verified the repositories' visibility against a public control repository, and laid out the four options above with a recommendation for option A.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: prompts "see if you can connect to dagshub i gave you token and usernme", "ist nicht das unser dagshub repo was zu unserem github repo passt?" and "warum hat das repo am schlchtesten abgeschnitten"; the session verified the credentials against the DagsHub API, found the two competing mirrors and produced this comparison.
 - **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-07.
+- **In LaTeX:** no
+
+### EDN-22: The DagsHub remote stays public
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Privacy
+- **Participants:** @lukas2510 (Scrum Master). Pending confirmation by the full team at the next sprint review.
+- **Decision:** The DagsHub repository that serves as our DVC remote and MLflow tracking server stays public.
+  We accept that the raw file's PII columns are readable by anyone with a DagsHub account, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the MIT license.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the repository public and say so.**
+    Pros: graders and supervisors can inspect code, data and experiments without being added as collaborators, which is the reason the course puts the project on DagsHub in the first place; it matches how the source dataset is already published; no action needed on an account we do not administer.
+    Cons: the raw file, which still carries `vin`, `street`, `seller_company_name` and coordinates, can be pulled by every logged-in DagsHub user; the decision has to be revisited the moment we host data that is not already public elsewhere.
+  - **Option B: make the repository private.**
+    Pros: the original rationale of EDN-07 would hold as written; the PII sits behind an access wall.
+    Cons: only the repository owner can flip it, and that is not us; every grader, supervisor and teammate then needs a manual collaborator entry; it buys little real protection, because the identical file stays publicly downloadable from Zenodo either way.
+- **Rationale:** The question only came up because the premise of EDN-07 turned out to be false.
+  That entry justified pushing the raw file with "the DagsHub repo is private (anonymous access is redirected to the login page and an anonymous data download returns 401)".
+  Checked on 2026-09-29: DagsHub refuses anonymous access to everything, public repositories included.
+  A known-public control repository (`DAGsHub-Official/dagshub-docs`, `private: false`) answers anonymous requests exactly like ours, and so does a repository that does not exist, so the observation has no discriminating power.
+  The authenticated API reports `private: false` for both of our mirrors.
+  Given a real choice between hiding a file that is already public and saying openly that it is public, Lukas chose the second: the protection gained would be nominal, while the access cost for graders and supervisors would be real.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment
+- **Response to AI:** Used as input for further analysis
+- **Assessment of the AI contribution:** AI found that the privacy premise of EDN-07 was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: after the finding was presented with the two options ("entweder mark stellt es auf private ... oder ihr lasst es public und schreibt in EDN-07 ehrlich rein"), Lukas answered "wir lassen es public".
+- **Other evidence:** EDN-07 and its revision on the issue #3 branch, EDN-20, [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27), [PR #28](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/28).
 - **In LaTeX:** no
 
 ## Template
