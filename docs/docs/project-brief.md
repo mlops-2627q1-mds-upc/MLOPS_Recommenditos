@@ -41,7 +41,7 @@ The exact scope, target, features and success criteria live in the [problem spec
 
 - Zenodo (DVC source): <https://zenodo.org/records/17643343>, file `autoscout24_dataset_20251108.csv`, 548.6 MB, DOI `10.5281/zenodo.17643343`, version 1.0.0 (2025-11-18).
 - Kaggle mirror: <https://www.kaggle.com/datasets/clkmuhammed/autoscout24-car-listings-dataset> (not verified).
-- License: the upstream record contradicts itself. The Zenodo metadata field says MIT, while the author's own description on the same record restricts use to "research, educational, or analytical purposes".
+- License: the upstream record contradicts itself. The Zenodo metadata field says MIT, while the author's own description on the same record says "You are welcome to use this dataset for research, educational, or analytical purposes", which reads as narrower than MIT.
   Both readings permit this project, so we document both in the dataset card instead of asking the author to resolve it.
   The author asks for a citation when publishing analyses, so we cite it in the dataset card and the report.
 
@@ -97,7 +97,7 @@ The report describes this check as part of the data decisions.
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** about 7 % of descriptions contain the exact listing price (6.85 % measured on 2026-09-29).
-  How many contain any currency amount depends entirely on the pattern used (29 % for a currency token next to digits, 44 % for any euro token), so we do not quote a single figure for it.
+  How many contain any currency amount depends entirely on the pattern used (29 % for a currency token next to digits, 39 to 44 % for separator-formatted numbers depending on how the number is bounded), so we do not quote a single figure for it.
   Strip currency and number patterns before any text feature.
 - **Duplicates:** `vin` is only 34 % filled, so VIN-based deduplication is not enough.
   A key on make, model, version, mileage, registration date, price and power finds 6,347 duplicate rows.
@@ -107,11 +107,11 @@ The report describes this check as part of the data decisions.
   No listing date exists, so a temporal split is not possible.
 - **Useless or empty fields:** `warranty` and `has_warranty` are 100 % empty; `had_accident` is True for 3 rows; `fuel_cons_city_l100_km` and `fuel_cons_highway_l100_km` are empty.
   There is no condition field.
-- **Condition flags are one-sided:** 14,744 rows in the raw data are flagged as neither used, new nor pre-registered, and 18,446 of the 113,708 rows scoped by `offer_type` and `vehicle_type` have `is_used = False` while `offer_type = U`.
-  A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-18).
-  This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around (EDN-19).
+- **Condition flags are one-sided:** 14,744 rows in the raw data are flagged as neither used, new nor pre-registered, and 18,108 of the 113,708 rows scoped by `offer_type` and `vehicle_type` have `is_used = False` while `offer_type = U`.
+  A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-23).
+  This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around (EDN-24).
 - **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
-  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them and the Great Expectations suite bounds the date at the reference date (EDN-17).
+  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them and the Great Expectations suite bounds the date at the reference date (EDN-22).
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   Great Expectations checks must cover these ranges.
@@ -209,10 +209,10 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
-- EDN-16: record both licence readings of the Zenodo record.
-- EDN-17: drop listings registered after the reference date.
-- EDN-18: read the condition flags as one-sided assertions.
-- EDN-19: keep the pre-registered exclusion despite the unreliable flag.
+- EDN-21: record both licence readings of the Zenodo record.
+- EDN-22: drop listings registered after the reference date.
+- EDN-23: read the condition flags as one-sided assertions.
+- EDN-24: keep the pre-registered exclusion despite the unreliable flag.
 
 Made in M1, still to be written up:
 

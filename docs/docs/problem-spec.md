@@ -23,7 +23,7 @@ It does not forecast future prices.
 ### In scope
 
 - **Used passenger cars only:** `offer_type = U`, not pre-registered, `vehicle_type = Car` ([EDN-04](#decision-records)).
-  The pre-registered filter can only read `is_preregistered`, whose `False` also covers "not stated", so a residual number of unmarked pre-registered listings stays in the training data ([EDN-19](#decision-records)).
+  The pre-registered filter can only read `is_preregistered`, whose `False` also covers "not stated", so a residual number of unmarked pre-registered listings stays in the training data ([EDN-24](#decision-records)).
 - **Supported makes:** makes with at least **300 listings** in the cleaned used-car data, counted after removing the `ES` holdout and before the split ([EDN-05](#decision-records)).
   The pipeline computes this list; it is not hard-coded.
   With the current data these are 11 makes covering 98.6 % of the used listings: BMW, Porsche, Mercedes-Benz, Audi, Alfa Romeo, Suzuki, Volvo, Honda, Hyundai, Aston Martin and Volkswagen.
@@ -31,8 +31,8 @@ It does not forecast future prices.
   All `ES` listings are held out as the new-market drift scenario ([EDN-03](#decision-records), project brief section 3.2); they join the training data only after the drift is confirmed and the model is retrained.
   The component accepts `ES` and treats it as an unknown country until then.
 - **Price range used for training:** 500 EUR to 2M EUR; listings outside it are treated as data errors or collector outliers.
-- **Registration date up to the reference date:** 164 listings are registered after the 2025-11-08 snapshot, which would give them a negative age.
-  They are treated as data errors and dropped ([EDN-17](#decision-records)).
+- **Registration date up to the reference date:** 164 listings in the raw file are registered after the 2025-11-08 snapshot, which would give them a negative age.
+  114 of them are new cars and fall outside the used-car scope anyway; the 26 that survive the scope filters are treated as data errors and dropped ([EDN-22](#decision-records)).
 
 ### Out of scope
 
@@ -74,7 +74,7 @@ Added on top of the basic set, to measure what they are worth:
 - Equipment: the four equipment lists (`equipment_comfort`, `equipment_entertainment`, `equipment_extra`, `equipment_safety`) as multi-hot features.
 - History flags: `has_full_service_history`, `non_smoking`, `is_rental`.
   These are one-sided: a `True` is an assertion by the seller, a `False` only means the assertion is absent, not that the opposite holds.
-  They therefore enter the model as plain "asserted" indicators and are never read as a denial ([EDN-18](#decision-records)); the dataset card documents the same.
+  They therefore enter the model as plain "asserted" indicators and are never read as a denial ([EDN-23](#decision-records)); the dataset card documents the same.
 - Appearance: `body_color`, `paint_type`, `upholstery`, `upholstery_color`.
 - Further technical data: `model_version` (normalised), `weight_kg`, `cylinders`, `electric_range_km`, `envir_standard`, `original_market`.
 
@@ -91,7 +91,7 @@ Added on top of the basic set, to measure what they are worth:
 | `warranty`, `has_warranty`, `fuel_cons_city_l100_km`, `fuel_cons_highway_l100_km` | Empty. |
 | `had_accident` | True in only 3 rows. |
 | `price_currency`, `offer_type`, `is_new`, `vehicle_type` | Constant after scoping. |
-| `is_used` | Contradicts `offer_type`: False in 18,446 of the 113,708 rows scoped by `offer_type` and `vehicle_type`, so it is not a usable negative. |
+| `is_used` | Contradicts `offer_type`: False in 18,108 of the 113,708 rows scoped by `offer_type` and `vehicle_type`, so it is not a usable negative. |
 | `is_preregistered` | Defines the scope filter (EDN-04), so it cannot also be a feature. |
 | `mileage_km`, `power_hp`, `body_color_original`, `primary_fuel` | Duplicate another column (as text, other unit, free-text variant or finer fuel label). |
 | `production_year`, `electric_range_city_km`, fuel consumption and CO2 columns | Sparse (0.5-39 % filled) and rarely known by users. |
@@ -160,6 +160,6 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
-- EDN-17: drop listings registered after the reference date.
-- EDN-18: read the condition flags as one-sided assertions.
-- EDN-19: keep the pre-registered exclusion despite the unreliable flag.
+- EDN-22: drop listings registered after the reference date.
+- EDN-23: read the condition flags as one-sided assertions.
+- EDN-24: keep the pre-registered exclusion despite the unreliable flag.
