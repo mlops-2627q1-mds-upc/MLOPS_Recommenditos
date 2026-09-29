@@ -15,6 +15,12 @@ reference is, and compares the effect sizes of `ES` windows against control wind
 EDN-14 took its `ES` half from `nfr11_check.py` and its control half from `nfr11_diag.py`,
 whose settings differ; it also tests whether the control's false alarms come from `model`.
 `nfr11_model_excluded_results.json` is its output (2026-09-29).
+`nfr11_alpha_sweep.py` measures the control clause across three independent i.i.d. splits and
+several significance levels at once: p-values do not depend on the threshold, so each trial is
+computed once and evaluated at each level. It exists because the Bonferroni threshold is
+`P_VAL / n_features`, which makes the family-wise false-alarm rate 5 % by construction, exactly
+the "at most 1 of 20 windows" NFR-11 promises, leaving the requirement no margin.
+`nfr11_alpha_sweep_results.json` and `nfr11_alpha_sweep_results.txt` are its output (2026-09-29).
 
 Both emulate alibi-detect 0.13 `TabularDrift` with scipy: KS (`mode="asymp"`) for numerical
 features, chi-square contingency for categorical ones, Bonferroni at `p = 0.05 / n_features`.
@@ -38,4 +44,10 @@ python reports/analysis/nfr11_check.py cars.csv
 python reports/analysis/nfr11_diag.py    # expects cars.csv in the working directory
 python reports/analysis/fillrates.py cars.csv
 PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py cars.csv
+PYTHONPATH=reports/analysis python reports/analysis/nfr11_alpha_sweep.py cars.csv
 ```
+
+The scope of these scripts follows the pipeline: used cars only (EDN-04), listings registered
+after the age reference date dropped (EDN-22), the training price range, deduplicated before any
+split. Re-run them whenever a decision changes that scope, because their outputs are cited as
+EDN evidence.

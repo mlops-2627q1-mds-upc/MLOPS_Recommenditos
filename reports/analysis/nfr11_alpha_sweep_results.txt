@@ -1,0 +1,38 @@
+{"raw_rows": 118382, "post_snapshot_dropped": 27, "scoped_rows": 109911, "dedup_rows": 105405}
+features=23 (`model` excluded)  splits=3  trials=100
+  split 0  window= 100  alpha=0.05   ES flagged=1.000 (min 1 features, >=3 in 0.76)  control=0.150 = 3.0/20
+  split 0  window= 100  alpha=0.01   ES flagged=1.000 (min 1 features, >=3 in 0.52)  control=0.120 = 2.4/20
+  split 0  window= 100  alpha=0.005  ES flagged=1.000 (min 1 features, >=3 in 0.38)  control=0.100 = 2.0/20
+  split 0  window= 100  alpha=0.001  ES flagged=1.000 (min 1 features, >=3 in 0.27)  control=0.070 = 1.4/20
+  split 0  window=1000  alpha=0.05   ES flagged=1.000 (min 12 features, >=3 in 1.00)  control=0.100 = 2.0/20
+  split 0  window=1000  alpha=0.01   ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.050 = 1.0/20
+  split 0  window=1000  alpha=0.005  ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.030 = 0.6/20
+  split 0  window=1000  alpha=0.001  ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.030 = 0.6/20
+  split 1  window= 100  alpha=0.05   ES flagged=1.000 (min 1 features, >=3 in 0.82)  control=0.130 = 2.6/20
+  split 1  window= 100  alpha=0.01   ES flagged=1.000 (min 1 features, >=3 in 0.60)  control=0.090 = 1.8/20
+  split 1  window= 100  alpha=0.005  ES flagged=1.000 (min 1 features, >=3 in 0.55)  control=0.070 = 1.4/20
+  split 1  window= 100  alpha=0.001  ES flagged=1.000 (min 1 features, >=3 in 0.37)  control=0.070 = 1.4/20
+  split 1  window=1000  alpha=0.05   ES flagged=1.000 (min 12 features, >=3 in 1.00)  control=0.050 = 1.0/20
+  split 1  window=1000  alpha=0.01   ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.010 = 0.2/20
+  split 1  window=1000  alpha=0.005  ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.000 = 0.0/20
+  split 1  window=1000  alpha=0.001  ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.000 = 0.0/20
+  split 2  window= 100  alpha=0.05   ES flagged=1.000 (min 1 features, >=3 in 0.80)  control=0.130 = 2.6/20
+  split 2  window= 100  alpha=0.01   ES flagged=1.000 (min 1 features, >=3 in 0.57)  control=0.060 = 1.2/20
+  split 2  window= 100  alpha=0.005  ES flagged=1.000 (min 1 features, >=3 in 0.50)  control=0.030 = 0.6/20
+  split 2  window= 100  alpha=0.001  ES flagged=1.000 (min 1 features, >=3 in 0.24)  control=0.010 = 0.2/20
+  split 2  window=1000  alpha=0.05   ES flagged=1.000 (min 12 features, >=3 in 1.00)  control=0.000 = 0.0/20
+  split 2  window=1000  alpha=0.01   ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.000 = 0.0/20
+  split 2  window=1000  alpha=0.005  ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.000 = 0.0/20
+  split 2  window=1000  alpha=0.001  ES flagged=1.000 (min 11 features, >=3 in 1.00)  control=0.000 = 0.0/20
+
+Control false-alarm rate across splits, as flagged windows of 20:
+  window= 100  alpha=0.05   min=2.6  max=3.0  mean=2.7   ES clause holds in every split: no
+  window= 100  alpha=0.01   min=1.2  max=2.4  mean=1.8   ES clause holds in every split: no
+  window= 100  alpha=0.005  min=0.6  max=2.0  mean=1.3   ES clause holds in every split: no
+  window= 100  alpha=0.001  min=0.2  max=1.4  mean=1.0   ES clause holds in every split: no
+  window=1000  alpha=0.05   min=0.0  max=2.0  mean=1.0   ES clause holds in every split: yes
+  window=1000  alpha=0.01   min=0.0  max=1.0  mean=0.4   ES clause holds in every split: yes
+  window=1000  alpha=0.005  min=0.0  max=0.6  mean=0.2   ES clause holds in every split: yes
+  window=1000  alpha=0.001  min=0.0  max=0.6  mean=0.2   ES clause holds in every split: yes
+
+written: reports/analysis/nfr11_alpha_sweep_results.json
