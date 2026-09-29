@@ -329,6 +329,9 @@ How to add an entry:
 
 ### EDN-14: NFR-11's drift control is an i.i.d. sample, not a seller-grouped one
 
+> **Amended by EDN-26** (2026-09-29): the window is 1,000 requests, not 100, and `model` is excluded from the comparison.
+> The entry below stated a window and a control clause that were measured in two different runs and never together.
+
 - **Date:** 2026-09-23
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** Monitoring, Performance Criteria
@@ -478,6 +481,42 @@ How to add an entry:
 - **Assessment of the AI contribution:** Lukas relayed the feedback and asked for a more abstract version, with the explicit constraint that the existing analysis must not be lost. AI confirmed the criticism against the actual page and proposed the split into two levels, which the team accepted. Its first execution went further than asked and replaced the requirements with user stories; Lukas corrected this, because the course material, the report template and the existing IDs all speak of functional and non-functional requirements, and the stories had been meant as orientation only. AI then reworked the page to the agreed form. The abstraction of each requirement and the acceptance criteria are its proposal and were reviewed by the team.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 (prompts were in German, translated here): Lukas relayed the feedback as "we got feedback on the requirements. The lecturer said they are too technical, they are more of a specification. He would rather have them like user stories, more abstract. Can you do that, but please also write a spec so the work was not for nothing", and after AI delivered user stories corrected it with "user stories were only meant as orientation for you. We still want to call them functional and non-functional requirements. But as said they should not be so technical, rather more abstract, and should not fix architecture decisions yet".
 - **Other evidence:** [Requirements](../docs/docs/requirements.md); [Specification](../docs/docs/specification.md); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** no
+
+### EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison
+
+- **Date:** 2026-09-29
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Requirements
+- **Participants:** @lukas2510
+- **Decision:** Amends EDN-14. The drift job compares windows of **1,000** requests, not 100, against the 10,000-listing reference, and leaves **`model`** out of the comparison. The other clauses of NFR-11 are unchanged: the `ES` replay must be flagged, at least three features other than `country_code` must be named, and at most 1 of 20 i.i.d. control windows may be flagged.
+- **Alternatives considered:**
+  - **Option A (chosen): window 1,000 and `model` excluded.**
+    Pros: the only configuration measured to satisfy all three clauses as written. Both changes are independently justified: three drifted features do not reliably co-occur in a 100-row window, and a 349-level chi-square against such a window is under-powered rather than merely noisy.
+    Cons: the M6 drift demonstration needs 1,000 replayed requests instead of 100, so the monitoring section of the report shows a slower signal.
+  - **Option B: window 1,000, keep `model`, relax the control clause to at most 2 in 20.**
+    Pros: no feature is removed, so the monitoring watches everything it sees.
+    Cons: weakens a promise instead of fixing its cause, and keeps a test whose cell counts do not support the chi-square.
+  - **Option C: keep window 100 and relax both clauses (at least one changed feature, at most 3 false alarms in 20).**
+    Pros: keeps the fast 100-request demonstration.
+    Cons: two promises weakened at once; 3 false alarms in 20 windows is hard to defend for a monitoring requirement.
+  - **Option D: keep NFR-11 as EDN-14 wrote it.**
+    Cons: measured to fail. At window 100 with all features the control flags 5.4 of 20 windows, and the three-feature clause holds in only 81.5 % of trials.
+- **Rationale:** NFR-11 as written was never measured in one configuration: EDN-14 took its `ES` half from `nfr11_check.py` (window 100, full reference) and its control half from `nfr11_diag.py` (window 1,000, reference capped at 10,000), and the latter's output was never committed. Measuring both halves together (`nfr11_model_excluded.py`, 200 trials per cell, 10,000-listing reference, i.i.d. control) gives:
+
+  | Configuration | `ES` flagged | three features besides `country_code` | control windows flagged of 20 |
+  |---|---|---|---|
+  | all features, window 100 | 1.000 | 81.5 % of trials, minimum 1 | 5.4 |
+  | `model` excluded, window 100 | 1.000 | 79.5 % of trials, minimum 1 | 2.2 |
+  | all features, window 1,000 | 1.000 | 100 %, minimum 13 | 1.4 |
+  | **`model` excluded, window 1,000** | **1.000** | **100 %, minimum 12** | **0.7** |
+
+  Neither change suffices alone. Excluding `model` roughly halves the false alarms at both window sizes, because at window 100 it alone accounts for 0.190 of the 0.270 flag rate, but it does not reach 1 in 20 and does not help the three-feature clause at all. Enlarging the window fixes the three-feature clause and most of the false alarms, but with `model` kept the control still flags 1.4 of 20. Only the combination satisfies every clause, so NFR-11 now states a configuration that has been demonstrated rather than assembled from two runs.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** A reviewing agent reported that the control clause fails at window 100 and proposed stating window 1,000. A second agent argued that the window was the wrong lever, because the false alarms come from `model`, and recommended excluding it while keeping window 100; Lukas chose that option. The measurement then refuted it: the control improves from 5.4 to 2.2 flagged windows of 20 but stays above the promised 1, and the three-feature clause fails in one run in five at window 100 either way. Two claims in that recommendation were also wrong and are recorded rather than quietly dropped: `model` was described as having roughly 10,000 levels, where it has 349 in the reference (84,171 is `model_version`, a different column), and the reviewing agent's control figure at window 1,000 was 0.6 of 20 against the 1.4 measured here, a difference that decides whether the clause holds with `model` kept. The argument that a 349-level chi-square against a 100-row window is under-powered survived the measurement; its effect was simply smaller than claimed. Lukas then chose the combination, which is the only configuration that was demonstrated to work.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: a peer agent's review of PR #19 reported the control failure and proposed window 1,000; this session verified the finding by inspection, argued for excluding `model` instead, and Lukas chose that. After the measurement refuted it, this session reported the four measured configurations and recommended the combination, which Lukas chose.
+- **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-11; [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_model_excluded.py`, `nfr11_model_excluded_results.json`, run of 2026-09-29); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
 ## Template
