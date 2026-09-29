@@ -37,10 +37,13 @@ dependencies = [
     "tqdm",
     "typer",
 ]
-requires-python = "~=3.11.0"
+requires-python = "~=3.12.0"
 
 
 [tool.pytest.ini_options]
+markers = [
+    "req(*ids): requirement IDs this test verifies, e.g. req(\"FR-04\") or req(\"FR-15\", \"NFR-01\"); see docs/docs/requirements.md",
+]
 # Every `pytest` run reports the coverage of the package, so the number NFR-07
 # asks for is always in front of us. There is no `--cov-fail-under`: NFR-07
 # checks the 80 % on the delivery commit, and a per-PR gate would block merges
@@ -69,6 +72,10 @@ src = ["recommenditos"]
 # not apply `include` to explicit paths, so an `include` would only make a local
 # `ruff check` blind to files CI still lints. Default discovery keeps the two in
 # step, and new top-level Python is linted without touching this file.
+# The one-off scripts behind EDN entries are excluded: they are evidence, kept as
+# they were run (see reports/analysis/README.md), not product code. NFR-07's lint
+# requirement is about `recommenditos/`.
+extend-exclude = ["reports/analysis"]
 
 [tool.ruff.lint]
 # The course demo's set: pycodestyle errors, Pyflakes, pyupgrade, bugbear,

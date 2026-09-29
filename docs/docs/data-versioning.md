@@ -71,6 +71,18 @@ Never run them without `--local`: that would write the token into the committed 
 
 The MD5 of the raw file equals the checksum Zenodo publishes, so anyone can verify that our copy is the original.
 
+## Raw data
+
+**[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md) as amended by EDN-25.
+The raw AutoScout24 file contains PII (street, zip, exact coordinates, seller company name for private sellers, see [Requirements](requirements.md) NFR-08), which preprocessing removes before anything else is tracked.
+The file is downloaded once from its Zenodo DOI, tracked with `dvc add` and pushed to our remote, so a teammate gets it with `dvc pull` like any other input.
+
+EDN-07 had proposed `dvc import-url` with `push: false`, to keep the raw PII off our own remote.
+EDN-25 replaced that: the course demo teaches `dvc add`, and `dvc import-url` derives its change detection from an `ETag` or `Content-MD5` header that the Zenodo URL does not send, so the mechanism was never verified against this source.
+
+The exact commands are set by the work on issue #3; this page only records which mechanism applies and why.
+A job that needs only some outputs, like the CI build that bakes the model into the API image (FR-12), pulls them by target (`dvc pull <target>`) and never needs the raw file.
+
 ## Tracking granularity
 
 Track individual files, or a self-contained dataset directory made up of many small files (for example
@@ -104,8 +116,8 @@ Once a `dvc.yaml` pipeline exists (separate issue, follows once the training cod
 are tracked automatically by the pipeline, not by a manual `dvc add`.
 In practice that means:
 
-- `data/raw` (or whatever the download stage produces): tracked manually now via `dvc add`, or later
-  produced by a `download` stage, per the demo.
+- `data/raw`: the raw file is tracked manually with `dvc add` now (see [Raw data](#raw-data)), and
+  becomes the output of a `download` stage once the pipeline exists, as in the demo.
 - `data/interim`, `data/processed`, `models/`: once a stage declares them as `-o` outputs, don't
   `dvc add` them separately. Let `dvc repro` manage them.
 
@@ -136,6 +148,7 @@ git pull && dvc pull   # after pulling, get the data that matches this commit
 # ... make changes ...
 dvc push && git push   # push data before (or together with) the commit that references it
 ```
+
 
 ### Commit the pointer, push the data - always both
 

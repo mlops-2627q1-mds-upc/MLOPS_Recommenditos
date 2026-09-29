@@ -25,6 +25,12 @@ Conventions for tracking granularity, the remote, and pipeline ownership live in
 6. **Always squash merge** - it's the only merge method enabled on the repo, so `main` gets exactly one commit per PR and stays readable. Merging deletes the branch automatically.
 7. After merge, move the issue to **Done**.
 
+### Freeze window before a presentation
+
+Every merge to `main` deploys to the VM ([requirements](docs/docs/requirements.md) NFR-13), and NFR-05 commits to zero unplanned downtime during a presentation.
+So in the 48 hours before a presentation, merge only what fixes something broken, and check `/health` afterwards.
+Everything else waits until the presentation is over.
+
 ## Local setup
 
 ```bash

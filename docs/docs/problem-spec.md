@@ -2,7 +2,7 @@ Problem specification
 =====================
 
 What the model learns, on which data, and when it is good enough.
-This page owns the ML framing: the [requirements](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/14), the dataset card, the model card and the report link here instead of repeating it.
+This page owns the ML framing: the [requirements](requirements.md), the [specification](specification.md), the dataset card, the model card and the report link here instead of repeating it.
 For the overall plan see the [project brief](project-brief.md); for facts about the data see the dataset card.
 
 ## 1. Problem statement
@@ -53,7 +53,7 @@ It does not forecast future prices.
 ## 4. Features
 
 The features describe the car the way a user can describe it.
-`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [requirements](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/14).
+`make` is always required, because the scope check depends on it; which other inputs the API requires is defined in the [specification](specification.md).
 
 ### Basic feature set (experiment ladder step 3)
 
@@ -126,7 +126,7 @@ Price buckets are reported too, but they are not used in success criteria becaus
 
 ## 8. Success criteria
 
-A model is good enough to deploy when it meets all of the following on the test set ([EDN-06](#decision-records)):
+A model is good enough to deploy when it meets all of the following on the test set ([EDN-06](#decision-records), SC-06 added by [EDN-15](#decision-records)):
 
 | ID | Criterion |
 |----|-----------|
@@ -135,6 +135,15 @@ A model is good enough to deploy when it meets all of the following on the test 
 | SC-03 | MdAPE at least 30 % lower than baseline B0. |
 | SC-04 | Every segment of section 6 with at least 500 test rows (price buckets excluded) has MdAPE ≤ 15 %. |
 | SC-05 | Nominal 90 % intervals reach an empirical coverage between 88 % and 92 %, both for full inputs and for the partial-input scenario P1 (only make, model, registration date and mileage given). |
+| SC-06 | With each optional input field masked on its own, and with all of them masked at once, the point model's MdAPE stays at or below 1.5 times its full-input MdAPE. |
+
+SC-06 covers what SC-04 and SC-05 do not: the point estimate for a request that leaves an optional field out, which the API explicitly allows ([specification](specification.md) FR-01).
+The optional fields are the ones FR-01 does not require, and "masked" means the field is passed to the model as missing, exactly as the API passes it.
+The criterion is relative to the model's own full-input MdAPE, like SC-03 is relative to the baseline, because there is no reference value for it yet and inventing an absolute threshold would be guesswork.
+Which mechanism keeps it (native missing handling or random masking during training, as planned for the interval models) is left to the modelling plan; SC-06 only fixes the observable outcome.
+
+SC-04's per-segment breakdown (including country and seller type) also serves as a basic fairness check across market segments.
+Classification-oriented fairness metrics (e.g. AIF360's demographic parity) do not directly apply to this regression task; per-segment error parity is the task-appropriate equivalent.
 
 ### Reference values
 
@@ -150,7 +159,8 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-03: the exploratory LightGBM is 44 % better than B0.
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   This is a known risk for the basic feature set; the extended features or a scope change for classic cars must close it.
-- SC-05 has no reference value yet; the intervals are built in a later step.
+- SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
+  The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,913 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
 
 ## Decision records
 
@@ -160,6 +170,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
+- EDN-15: UC1 required fields and SC-06, the criterion for absent optional fields.
 - EDN-22: drop listings registered after the reference date.
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion despite the unreliable flag.
