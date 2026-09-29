@@ -235,6 +235,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
 - EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
 - EDN-15: UC1 required fields, after measuring the fill rates, plus SC-06 for absent optional fields.
+- EDN-16: separate `/predict` and `/price-range`, one endpoint per use case.
 
 Made in M1, still to be written up:
 

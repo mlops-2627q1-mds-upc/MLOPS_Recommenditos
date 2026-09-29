@@ -43,8 +43,8 @@ All endpoint paths are served under `/v1` (omitted from the table below for brev
 
 | ID | Requirement | Verified by |
 |----|-------------|-------------|
-| FR-06 | **Valuation (UC1) [proposed]:** `POST /predict` returns the point estimate of the asking price in EUR, the model version and a request ID. | **[automated]** API test |
-| FR-07 | **Price range (UC2) [proposed]:** `POST /price-range` returns the point estimate and the lower and upper bound of the nominal 90 % interval in EUR, the model version and a request ID. The point estimate and the bounds come from different models, so the bounds are widened where needed to contain the estimate; widening only raises coverage, so the conformal guarantee still holds. | **[automated]** API test (lower ≤ estimate ≤ upper) |
+| FR-06 | **Valuation (UC1) [decided, EDN-16]:** `POST /predict` returns the point estimate of the asking price in EUR, the model version and a request ID. | **[automated]** API test |
+| FR-07 | **Price range (UC2) [decided, EDN-16]:** `POST /price-range` returns the point estimate and the lower and upper bound of the nominal 90 % interval in EUR, the model version and a request ID. The point estimate and the bounds come from different models, so the bounds are widened where needed to contain the estimate; widening only raises coverage, so the conformal guarantee still holds. | **[automated]** API test (lower ≤ estimate ≤ upper) |
 | FR-08 | **Explanation [decided, EDN-11]:** `/predict` returns the base price and the five features with the largest absolute SHAP contribution, plus the combined contribution of all other features, computed from the trained booster's own SHAP export (LightGBM `predict(pred_contrib=True)` or CatBoost `get_feature_importance(type="ShapValues")`), not the `shap` package, which stays a training/notebook-only dependency for offline global analysis. The model predicts `log(price)`, so a contribution φ is reported as its multiplicative effect on the price, `exp(φ) - 1` in percent, and the effects multiply rather than add. | **[automated]** API test: the base price times the product of `1 + effect` over all six reported effects reproduces the estimate; a training-time test asserts the booster's export matches `shap.TreeExplainer` |
 | FR-09 | **Comparables:** `POST /comparables` takes the same input as `/price-range` and returns up to k processed listings (default 5, at most 20) with their price and key features, without PII. A listing is comparable when it matches the request in `make` and `model` and its age differs by at most 2 years and its mileage by at most 25 %; the results are sorted by mileage distance, then age distance. Fields the request omits are ignored rather than folded into a distance, and no filter is relaxed: when nothing matches, the list is empty. The index holds the training and validation listings only, never `ES` (EDN-03) or test rows. | **[automated]** API test: every returned listing satisfies the filter, a request outside any window returns an empty list, the order is as specified; PII test (NFR-08) |
 | FR-10 | **Feedback [decided, EDN-13]:** `POST /feedback` takes a request ID and an observed price and stores it as a delayed label, which FR-14 joins to the prediction log to report the real error and interval coverage. It is fed with simulated prices from the `ES` holdout; there are no real users. The endpoint is not publicly reachable: the reverse proxy in front of the API rejects `/feedback` from outside, so only the replay job inside the Compose network reaches it. It additionally requires an API key in the `X-API-Key` header as a second layer, in case that proxy rule is ever wrong; a missing or wrong key gets HTTP 401. The key therefore never travels over the public internet (NFR-09). | **[automated]** API test, including `test_fr10_rejects_missing_api_key`; deployment smoke test asserting `/feedback` is refused from outside the VM |
@@ -73,7 +73,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 > Affected are NFR-05 (Better Uptime has to ping the VM from outside), NFR-09 (no TLS, because a Let's Encrypt HTTP-01 challenge needs port 80 on a host name we control) and NFR-13 (SSH from a GitHub-hosted runner, with a self-hosted runner on the VM as the fallback).
 > Each of them names its fallback, so none of them blocks work before M4.
 >
-> Once we have access, one person checks three things, and we settle all three requirements together (decision 4 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
+> Once we have access, one person checks three things, and we settle all three requirements together (decision 3 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
 > Until then, do not build anything that silently assumes one of the answers, and do not write these assumptions into the report as facts.
 > Nothing else on this page changes with the answer: FR-10's `/feedback` stays internal either way, and no target moves.
 
@@ -122,17 +122,12 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
      Needed for the `ES` drift scenario and supported natively by LightGBM.
    - **B:** reject with HTTP 422.
      Stricter, but breaks the new-market scenario.
-2. **Endpoint split (FR-06, FR-07).**
-   - **A (proposed):** separate `/predict` and `/price-range`, as in the project brief.
-     The two use cases have different validation rules, so each endpoint has one clear contract.
-   - **B:** one `/valuation` endpoint that returns the estimate and the interval.
-     Fewer endpoints, but the required fields would depend on the use case inside one schema.
-3. **Performance and resource targets (NFR-02 to NFR-04).**
+2. **Performance and resource targets (NFR-02 to NFR-04).**
    - **A (proposed):** commit to the estimated targets now and revisit them after the first M4 load test.
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.
      Avoids guessing, but leaves M4 without acceptance criteria.
-4. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
+3. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
    Deliberately left open: nobody has access to the VM yet, so this is decided once someone has tried it, and not before (see the warning at the top of section 2).
    Three questions, to be answered in one go by whoever gets access first:
    - **Reachable from outside at all, on which ports?**
@@ -144,6 +139,10 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
    - **How does CD reach the VM (NFR-13)?**
      **A (proposed):** SSH from the GitHub-hosted runner, which keeps everything in GitHub Actions and needs nothing running on the VM, but only works if the SSH port is reachable from outside the UPC network.
      **B:** a self-hosted runner on the VM that polls GitHub and needs no inbound connection, which works behind NAT and still leaves the deployment record in Actions, but costs RAM on the 4 GB VM and, since the repository is public, may only run on `push` to `main`, never on `pull_request`.
+
+**Decided:** separate `/predict` and `/price-range` (FR-06, FR-07), recorded as [EDN-16](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+The two use cases have different input contracts, ten required fields against one, which one schema could only express as a conditional rule.
+Separate endpoints also keep the two traffic shapes apart in the prediction log, so FR-14's drift job does not read a change in the UC1/UC2 mix as input drift.
 
 **Decided:** the UC1 required fields (FR-01), recorded as [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 A small required core stays, but `body_type` and `seller_type` join it, because both are filled in 100 % of the training listings and the car's owner knows both anyway.
