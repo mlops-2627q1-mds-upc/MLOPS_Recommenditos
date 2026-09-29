@@ -89,6 +89,8 @@ How to add an entry:
 - **Assessment of the AI contribution:** The three options came from our own feasibility check. AI (Claude Code) explained the trade-offs against the M6 rubric and recommended Option A with `ES` as the held-out country (smaller training loss than `IT`), keeping `country` as a feature with unseen countries treated as unknown, and an optional synthetic drift scenario with a controlled cause. We accepted it because it answers the supervisor's concern with evidence, keeps the pipeline to one data source, and lets M6 show both input drift and performance degradation.
 - **AI interaction evidence:** Claude Code session, 2026-09-22: prompt "explain this to me again and give me a recommendation [...] what is feasible for our project and still in the scope of the course" on project brief §3.2; the response compared options A-C against the M6 rubric and recommended A with `ES`.
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13), project brief §3.2 (`docs/docs/project-brief.md`).
+- **In LaTeX:** no
+
 ### EDN-04: Model scope: used passenger cars only
 
 - **Date:** 2026-09-22
@@ -159,6 +161,45 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI ran the exploratory baseline and LightGBM models, proposed the criteria with concrete thresholds and recommended option A. Lukas accepted it because the thresholds are tied to measured values. After the decision, AI's per-segment check found that the proposed SC-04 is not yet met for cars older than 20 years; the criterion was kept as agreed and the gap documented.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while working on issue #2: prompt "Which kind of success criteria?" with options A to C and the exploratory results; Lukas chose option A.
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md), sections 6 to 8; [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
+- **In LaTeX:** no
+
+### EDN-20: Which DagsHub repository the team uses as DVC remote and MLflow server
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Experiment Tracking
+- **Participants:** open, to be decided by the whole team
+- **Decision:** Open.
+  Two DagsHub mirrors of the GitHub repository exist in parallel, only one of them stays in sync, and nobody except the respective owner has push rights.
+  The team has to name one repository as the single DVC remote and MLflow tracking server, and decide whether it stays public.
+- **Alternatives considered:**
+  - **Option A: a DagsHub organisation owns the connected repository, every team member is a member with push rights.**
+    Pros: mirrors the GitHub organisation, so "our repository" does not depend on one person's private account; push rights follow org membership instead of manual collaborator entries; data and experiment history survive if a member leaves or cleans up their account; visibility is set in one place.
+    Cons: one-time setup (create the org, connect the GitHub repository through the GitHub integration, invite everyone, retire the two existing mirrors) and the data has to be pushed again; the remote URL in PR #26 has to change.
+  - **Option B: use `pauadal03/MLOPS_Recommenditos`.**
+    Pros: verifiably connected through the GitHub integration, see the evidence below; only the remote URL in PR #26 changes.
+    Cons: all data and experiments hang off one member's private account; every member needs a manual collaborator entry with write access; the raw data would have to be pushed again.
+  - **Option C: use `mark.welf.atzberger/MLOPS_Recommenditos`, what PR #26 configures and where the raw data already sits.**
+    Pros: no change to PR #26; the 548.6 MB raw dataset is already pushed there, so nothing has to be re-uploaded.
+    Cons: its mirror is demonstrably not in sync, see the evidence below; same account and access drawbacks as option B.
+  - **Option D: keep both mirrors and let everyone push to their own.**
+    Pros: no coordination needed.
+    Cons: not viable - the remote URL is committed in `.dvc/config`, so the team would overwrite each other's setting, and data and experiment history would be split across accounts.
+- **Rationale:** To be filled in once the team decides.
+  Evidence gathered on 2026-09-29 against the DagsHub API.
+  Sync: `pauadal03/MLOPS_Recommenditos` is at `2e902e2143`, identical to GitHub `main`, carries all 7 branches and mirrors all 7 open issues.
+  `mark.welf.atzberger/MLOPS_Recommenditos` is at `8b1d64fc`, one merge behind, is missing the `docs/data-facts-corrections` and `model-card` branches, still carries `feature/ruff-pl-and-coverage` which GitHub deleted after the merge, and mirrors 0 issues.
+  DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two repositories were connected in different ways and that mark's is a plain git mirror.
+  Visibility: both repositories report `private: false`, so every logged-in DagsHub user can read them and pull the raw data, which still carries `vin`, `street`, `seller_company_name` and coordinates.
+  Note for EDN-07, which assumes the remote is private: anonymous access is not evidence either way, because DagsHub redirects every anonymous request to the login page and answers every anonymous API and data request with 401, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`).
+  Access: `lukas2510` has `push` on mark's repository since 2026-09-29 and `pull` only on pauadal03's; the rest of the team is most likely still without push rights on either.
+  Whichever option wins, the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to match it before that PR merges, the owner has to grant push rights to everyone, and the visibility question has to be answered explicitly.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Open
+- **Assessment of the AI contribution:** To be filled in once the team decides.
+  AI queried the DagsHub API, found that two mirrors of the GitHub repository exist, compared their commits, branches and mirrored issues against GitHub, checked the team's access rights, verified the repositories' visibility against a public control repository, and laid out the four options above with a recommendation for option A.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: prompts "see if you can connect to dagshub i gave you token and usernme", "ist nicht das unser dagshub repo was zu unserem github repo passt?" and "warum hat das repo am schlchtesten abgeschnitten"; the session verified the credentials against the DagsHub API, found the two competing mirrors and produced this comparison.
+- **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-07.
 - **In LaTeX:** no
 
 ## Template
