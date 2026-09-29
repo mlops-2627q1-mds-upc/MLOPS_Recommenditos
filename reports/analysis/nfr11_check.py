@@ -85,6 +85,10 @@ def load():
         & (~df["is_preregistered"].astype("boolean").fillna(False))
         & (df["vehicle_type"] == "Car")
     ]
+    # EDN-22: a registration date after the reference date makes age negative
+    reg_scope = pd.to_datetime(df["registration_date"], errors="coerce")
+    post_snapshot = int((reg_scope > SNAPSHOT).sum())
+    df = df[~(reg_scope > SNAPSHOT)]
     df = df[(df["price"] >= 500) & (df["price"] <= 2_000_000)]
     scoped_rows = len(df)
     # Deduplicate before any split (project brief 3.3)
@@ -115,7 +119,12 @@ def load():
         )
     for c in CAT:
         df[c] = df[c].astype("string").fillna(MISSING)
-    return df, {"raw_rows": raw_rows, "scoped_rows": scoped_rows, "dedup_rows": dedup_rows}
+    return df, {
+        "raw_rows": raw_rows,
+        "post_snapshot_dropped": post_snapshot,
+        "scoped_rows": scoped_rows,
+        "dedup_rows": dedup_rows,
+    }
 
 
 def ks_p(ref, win):

@@ -333,6 +333,9 @@ How to add an entry:
 
 > **Amended by EDN-26** (2026-09-29): the window is 1,000 requests, not 100, and `model` is excluded from the comparison.
 > The entry below stated a window and a control clause that were measured in two different runs and never together.
+> **Evidence regenerated on 2026-09-29.** The numbers below are the 2026-09-23 run and are left as they were measured.
+> `nfr11_results.json` was re-run after EDN-22 removed the listings registered after the reference date, which moves the
+> scoped, deduplicated count from 105,431 to 105,405 and the `ES` rows the API accepts from 5,981 to 5,979.
 
 - **Date:** 2026-09-23
 - **Milestone:** M6: Monitoring
@@ -363,7 +366,8 @@ How to add an entry:
 ### EDN-15: UC1 required fields after measuring the fill rates, plus SC-06 for absent optional fields
 
 > **Evidence corrected on 2026-09-29.** The first run of `fillrates.py` printed fill rates with one decimal, so `seller_type`'s 99.986 % appeared as 100.0.
-> The script now prints three decimals and `fillrates_results.txt` was regenerated. The decision is unchanged: 14 missing rows in 97,913 leave it effectively never absent.
+> The script now prints three decimals and `fillrates_results.txt` was regenerated. The decision is unchanged: 14 missing rows in 97,889 leave it effectively never absent.
+> The training-scope count moved from 97,913 to 97,889 when the script was brought in line with EDN-22, which drops the listings registered after the reference date.
 
 - **Date:** 2026-09-29
 - **Milestone:** M1: Project Inception (requirements and success criteria; shapes M3: Quality Assurance)
@@ -373,7 +377,7 @@ How to add an entry:
 - **Alternatives considered:**
   - **Option A: keep all eight basic-set fields optional and rely on LightGBM's native missing-value handling.**
     Pros: the smallest required set, so UC1 stays easy to call and clearly different from UC2; no training-time work at all.
-    Cons: measured to be unsupported for two fields. `body_type` is filled in 100.000 % of the training listings and `seller_type` in 99.986 % (14 of 97,913 rows), so the model effectively never sees them absent and a request that omits them is sent to the default side of every split on that feature with no training example backing that direction. The contract would promise behaviour the training data cannot show.
+    Cons: measured to be unsupported for two fields. `body_type` is filled in 100.000 % of the training listings and `seller_type` in 99.986 % (14 of 97,889 rows), so the model effectively never sees them absent and a request that omits them is sent to the default side of every split on that feature with no training example backing that direction. The contract would promise behaviour the training data cannot show.
   - **Option B: keep all eight optional and train the point model with the same random masking as the UC2 interval models.**
     Pros: friendliest contract; one masking scheme for both model families, which also keeps the point estimate and the interval bounds from drifting apart on partial inputs (FR-07 widens the bounds when they do).
     Cons: makes an API requirement depend on a pipeline that does not exist yet (no `dvc.yaml`, issue #10 still open), so PR #19 would stay blocked on a modelling decision that cannot be measured before the first report. Masking also costs some accuracy on full inputs, which are the common case for UC1.
@@ -386,7 +390,7 @@ How to add an entry:
   - **Option E: adopt D, but report the masked-input error only, without gating on it.**
     Pros: no amendment to EDN-06; the number is still visible in MLflow and in the report.
     Cons: leaves NFR-01's gate blind to exactly the case FR-01 allows the client to trigger, which is how the gap arose in the first place.
-- **Rationale:** FR-01 carried an `[open]` marker because it mixed two questions: which fields the client must send, which is an API contract, and how the model is trained to honour the optional ones, which is a modelling mechanism. The fill rates that the second question depended on had never been measured. Measured on the scoped, deduplicated training data (97,913 listings, `ES` held out, 11 supported makes), the risk turns out to sit in exactly two fields: `body_type` and `seller_type` at 100 %, followed by `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %), while `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) have plenty of natural missingness. Only 30.7 % of training rows have every one of the six remaining optional fields present and 469 rows (0.5 %) have none of them, so the model sees partial rows including the extreme case, just never a row without `body_type` or `seller_type`. Requiring the two is therefore the cheapest correct fix, and it costs the user nothing. The rest is left to the modelling plan on purpose: the mechanism cannot be chosen on evidence before the pipeline runs, and blocking the requirements page on it would have held up the M1 deliverable for a decision that belongs to M2/M3. SC-06 is what makes that safe, and it is relative to the model's own full-input MdAPE, like SC-03 is relative to the baseline, because no reference value exists yet and an absolute threshold would have been invented rather than derived.
+- **Rationale:** FR-01 carried an `[open]` marker because it mixed two questions: which fields the client must send, which is an API contract, and how the model is trained to honour the optional ones, which is a modelling mechanism. The fill rates that the second question depended on had never been measured. Measured on the scoped, deduplicated training data (97,889 listings, `ES` held out, 11 supported makes), the risk turns out to sit in exactly two fields: `body_type` and `seller_type` at 100 %, followed by `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %), while `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) have plenty of natural missingness. Only 30.7 % of training rows have every one of the six remaining optional fields present and 469 rows (0.5 %) have none of them, so the model sees partial rows including the extreme case, just never a row without `body_type` or `seller_type`. Requiring the two is therefore the cheapest correct fix, and it costs the user nothing. The rest is left to the modelling plan on purpose: the mechanism cannot be chosen on evidence before the pipeline runs, and blocking the requirements page on it would have held up the M1 deliverable for a decision that belongs to M2/M3. SC-06 is what makes that safe, and it is relative to the model's own full-input MdAPE, like SC-03 is relative to the baseline, because no reference value exists yet and an absolute threshold would have been invented rather than derived.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** Asked which decisions had to be settled before PR #19 could be merged, AI named FR-01's open item first and called it a merge blocker. Asked to re-examine that, it downloaded the raw dataset from the Zenodo DOI, reproduced the scope, deduplication and make filter (which matched the brief's 11 makes as a cross-check), measured the per-field fill rates, and then corrected two of its own claims: the item does not block code that exists, because there is no pipeline yet, and FR-01 already promised a masked-input check, so the real gap was that the check had no threshold and no link to NFR-01's gate. It also reframed the requirement as mixing contract and mechanism, which is what made a clean split possible. Lukas accepted the recommendation and the field list; the modification is that the mechanism question stays open on purpose instead of being decided together with the contract.
@@ -576,11 +580,15 @@ How to add an entry:
 
 ### EDN-22: Drop listings registered after the age reference date
 
+> **Evidence corrected on 2026-09-29.** The decision said preprocessing drops "the 164 listings". 164 is the raw-file count;
+> preprocessing runs after scoping, so it removes 27 of them. The alternatives below already said 26, measured after deduplication.
+> The decision itself is unchanged.
+
 - **Date:** 2026-09-29
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Data Validation and Preprocessing
 - **Participants:** @lukas2510
-- **Decision:** Preprocessing drops the 164 listings whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
+- **Decision:** Preprocessing drops every listing whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). There are 164 such listings in the raw file, of which **27** survive the EDN-04 scope and the training price range and so are the ones preprocessing actually removes; 26 remain if deduplication runs first, the difference being one duplicate row. The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
 - **Alternatives considered:**
   - **Option A (chosen): drop the rows.**
     Pros: 164 of 118,382 raw rows is 0.14 %, and only 26 of them survive the EDN-04 scope, so nothing measurable is lost; makes `age >= 0` a genuine invariant that the pipeline, the tests and the API contract can all rely on; no special case anywhere in the feature code.
@@ -688,6 +696,10 @@ How to add an entry:
 - **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3, EDN-07, EDN-19, EDN-20.
 ### EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison
 
+> **Amended by EDN-29** (2026-09-29): the drift job runs at a significance level of 0.005, not 0.05.
+> The configuration below was measured on a scope that EDN-22 has since narrowed, and on one split; re-measured, its
+> control clause does not hold at 0.05.
+
 - **Date:** 2026-09-29
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** Monitoring, Requirements
@@ -770,6 +782,42 @@ How to add an entry:
 - **Assessment of the AI contribution:** Asked whether the sprint plan matched the course demo repository, AI read the demo's file tree and its `dvc.yaml` rather than relying on the existing notes, and reported that the demo splits one module per stage while our repository still carried the flat template. It connected that to the parallelisation problem the sprint was being cut around, laid out the three options with the trade-offs above and recommended A. Lukas reviewed the comparison and chose A. The contribution was useful mainly because it checked the demo directly instead of arguing from the template's documentation.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 during sprint 2 planning: Lukas gave the demo repository's URL and asked whether the planned milestones and tickets fit it; AI fetched its tree and `dvc.yaml`, reported what to adopt and what we deliberately add, and presented the three layout options; Lukas chose the demo layout.
 - **Other evidence:** [sprint 2 planning notes](../docs/docs/scrum/sprints.md); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32); [references/course-demos.md](../references/course-demos.md); [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45).
+### EDN-29: The drift job runs at a significance level of 0.005, not 0.05
+
+- **Date:** 2026-09-29
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Requirements
+- **Participants:** @lukas2510
+- **Decision:** Amends EDN-26. The drift job tests each feature at a Bonferroni-corrected threshold of `0.005 / number of features` instead of the conventional `0.05 / number of features`. Everything else stays: windows of 1,000 requests, a 10,000-listing reference, `model` excluded, an i.i.d. control of which at most 1 of 20 windows may be flagged.
+- **Alternatives considered:**
+  - **Option A (chosen): lower the significance level to 0.005.**
+    Pros: measured to hold with margin. Across three independent i.i.d. splits the control flags between 0 and 0.6 windows of 20 against a promise of at most 1, while the `ES` replay is still flagged in every trial of every split with at least twelve features besides `country_code`. It fixes the cause rather than the symptom: the requirement and the detector's threshold were coupled, and nobody had noticed.
+    Cons: a lower threshold means less sensitivity to genuinely subtle drift, which is the monitoring's real job. We have no measurement of that sensitivity, so the cost is real but unquantified.
+  - **Option B: significance level 0.01.**
+    Pros: the more conventional step down, and it does hold: 0 to 1.0 flagged windows of 20 across the three splits.
+    Cons: the maximum sits exactly on the promise, so the requirement would again depend on which split is drawn, which is the failure mode being fixed.
+  - **Option C: keep 0.05 and relax the control clause to at most 3 of 20.**
+    Pros: no change to the detector; the measured maximum is 2.0, so 3 holds.
+    Cons: weakens a monitoring promise to fit a threshold nobody chose deliberately. Three false alarms in twenty windows is hard to defend in the report, and the underlying coupling would stay hidden.
+  - **Option D: keep the requirement as EDN-26 wrote it.**
+    Cons: measured not to hold. On the scope EDN-22 defines, the control flags 2.3 windows of 20 at window 1,000 with `model` excluded.
+- **Rationale:** EDN-26's configuration was measured once, on one i.i.d. split, before EDN-22 narrowed the scope. Re-running it after that change gave 2.3 flagged control windows of 20 instead of 0.7, which 27 removed listings cannot explain: the i.i.d. split is drawn from a permutation whose length depends on the row count, so the second run used a different control sample. The estimate was never stable, and the reason is structural. The drift job flags a window when any feature falls below `P_VAL / n_features`, so by Bonferroni's construction the family-wise false-alarm rate **is** `P_VAL`. At `P_VAL = 0.05` that is 5 %, which is exactly the "at most 1 of 20" the requirement promises, so NFR-11 was asking the test to perform at its own theoretical bound with zero tolerance for estimation error. Lowering the level decouples the two. 0.005 was chosen over 0.01 because at 0.01 the measured maximum is exactly 1.0 of 20, which would leave the requirement depending on the draw again. The `ES` side is unaffected: its p-values are in the order of 1e-300, so no threshold in this range changes whether it is detected.
+
+  Control windows flagged of 20, three splits, window 1,000, `model` excluded:
+
+  | `P_VAL` | min | max | mean | `ES` clause holds in every split |
+  |---|---|---|---|---|
+  | 0.05 | 0.0 | 2.0 | 1.0 | yes |
+  | 0.01 | 0.0 | 1.0 | 0.4 | yes |
+  | **0.005** | **0.0** | **0.6** | **0.2** | **yes** |
+  | 0.001 | 0.0 | 0.6 | 0.2 | yes |
+
+  Window 100 fails the "at least three changed properties" clause at every level tested, so EDN-26's window decision stands on its own.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI re-ran the committed evidence after EDN-22 landed, found that EDN-26's configuration no longer held, and did not simply restate the number. It identified that the Bonferroni construction makes the family-wise false-alarm rate equal to the significance level, which is what the control clause promises, and wrote a measurement that separates split-to-split variability from the threshold by computing each trial's p-values once and evaluating them at several levels. It recommended 0.005 over 0.01 on the grounds that 0.01's maximum sits exactly on the promise. Lukas delegated the choice and accepted the recommendation. This is the third time a measurement has refuted a written form of NFR-11, which is itself the argument for measuring a requirement before committing to it rather than after.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: after the scope correction AI reported that EDN-26's configuration measured 2.3 flagged control windows of 20 instead of 0.7, explained the Bonferroni coupling, ran `nfr11_alpha_sweep.py` over three splits and four significance levels, and recommended 0.005; Lukas replied "ohne team mache das was du recommendest".
+- **Other evidence:** [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_alpha_sweep.py`, `nfr11_alpha_sweep_results.json`, `nfr11_alpha_sweep_results.txt`, run of 2026-09-29); [EDN-26](#edn-26-nfr-11s-window-is-1000-requests-and-model-is-excluded-from-the-drift-comparison); [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date); [PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47).
 - **In LaTeX:** no
 
 ## Template
