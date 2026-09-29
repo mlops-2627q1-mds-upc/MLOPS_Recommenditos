@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - uses: pre-commit/action@v3.0.1
 
   test:
@@ -61,12 +61,21 @@ jobs:
       - uses: astral-sh/setup-uv@v10.1.0
         if: needs.changes.outputs.code == 'true'
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
         if: needs.changes.outputs.code == 'true'
       - run: uv run pytest
         if: needs.changes.outputs.code == 'true'
+      # NFR-07's 80 % is reviewed on the delivery commit, so put the coverage
+      # of every run in the job summary instead of digging it out of the log.
+      - name: Publish coverage to the job summary
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          {
+            echo '## Test coverage'
+            uv run coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     name: Build docs
@@ -78,7 +87,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.1.0
         if: needs.changes.outputs.docs == 'true'
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
         if: needs.changes.outputs.docs == 'true'

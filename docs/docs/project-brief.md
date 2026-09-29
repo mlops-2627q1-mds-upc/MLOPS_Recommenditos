@@ -32,6 +32,8 @@ Out of scope for the core: free-text parsing via an external LLM (optional add-o
 
 Scope **[decided]**: used passenger cars of the makes with enough listings (currently 11, mostly premium brands) in 8 European countries.
 The exact scope, target, features and success criteria live in the [problem specification](problem-spec.md).
+What the component must do and which qualities it must have is defined in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
+How each of them is realised (endpoints, input validation, latency, resources, privacy) is defined in the [specification](specification.md), under the same IDs.
 
 ## 3. Data
 
@@ -41,15 +43,19 @@ The exact scope, target, features and success criteria live in the [problem spec
 
 - Zenodo (DVC source): <https://zenodo.org/records/17643343>, file `autoscout24_dataset_20251108.csv`, 548.6 MB, DOI `10.5281/zenodo.17643343`, version 1.0.0 (2025-11-18).
 - Kaggle mirror: <https://www.kaggle.com/datasets/clkmuhammed/autoscout24-car-listings-dataset> (not verified).
-- License: MIT. The author asks for a citation when publishing analyses, so we cite it in the dataset card and the report.
+- License: the upstream record contradicts itself. The Zenodo metadata field says MIT, while the author's own description on the same record says "You are welcome to use this dataset for research, educational, or analytical purposes", which reads as narrower than MIT.
+  Both readings permit this project, so we document both in the dataset card instead of asking the author to resolve it.
+  The author asks for a citation when publishing analyses, so we cite it in the dataset card and the report.
 
-Verified facts (profiled on 2026-09-22):
+Verified facts (profiled on 2026-09-22, re-verified on 2026-09-29 against the Zenodo file with md5 `b23a122cc51baf7de39f449193ff0d28`):
 
 - 118,382 listings, 75 columns, currency EUR, single scrape, no listing date column.
 - 8 countries: DE 45,611, IT 23,957, NL 17,059, BE 9,582, **ES 8,015**, AT 7,213, FR 6,141, LU 789.
+  15 rows have no `country_code` at all, and are also missing `seller_type`, `city`, `zip` and `street`.
 - 25 makes, heavily skewed: BMW 37,745, Porsche 25,511, Mercedes-Benz 19,400, Audi 15,469 (together 83 %).
   Mass-market brands are nearly absent (VW 352, Renault 60, Opel 60) or missing (Toyota, SEAT, Peugeot, Fiat, Skoda).
 - Not only used cars: 4,252 new (`offer_type = N`), 3,702 pre-registered, 32,199 registered in 2025.
+  `offer_type` has a third value `A` in 3 rows.
 - 456 rows are `vehicle_type = Transporter`.
 - Categorical labels are English, but `description` and `model_version` are free text in local languages (84,171 unique versions).
 - Price ranges from 1 to 13.5M EUR (median 39,980); mileage from 0 to 2.57M km.
@@ -65,11 +71,16 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   No `ES` row reaches training, validation or conformal calibration.
 - In M6 we replay the `ES` listings against the API as simulated traffic.
   Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
-  The same prices can serve as the delayed labels for `/feedback` (see 5).
+  The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
-- **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
+  **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
+- **[decided]**, [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown, with a warning in the response ([requirements](requirements.md) FR-05).
   An API test covers this case.
 - **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
+- Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded. NFR-11 nevertheless states a window of 1,000, because the control clause and the "at least three changed properties" clause do not hold at 100 ([EDN-26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
+  The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
+  That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
 It was the original drift set, and the supervisor (S. del Rey) asked us to check whether it is feasible given the feature mismatch.
@@ -89,10 +100,11 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII, so **[open]**: pull it from Zenodo with `dvc import-url` instead of pushing a copy to our DagsHub remote (see [Data versioning](data-versioning.md)).
+  The raw file itself contains this PII. **[decided]** It is tracked with `dvc add` and pushed to our DagsHub remote, which is public (EDN-20), so we accept that the PII columns are re-published there; the identical file is already public on Zenodo (EDN-25, [Data versioning](data-versioning.md)). The PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08.
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
-- **Price in the description:** 36 % of descriptions contain a currency amount and about 7 % contain the exact listing price.
+- **Price in the description:** about 7 % of descriptions contain the exact listing price (6.85 % measured on 2026-09-29).
+  How many contain any currency amount depends entirely on the pattern used (29 % for a currency token next to digits, 39 to 44 % for separator-formatted numbers depending on how the number is bounded), so we do not quote a single figure for it.
   Strip currency and number patterns before any text feature.
 - **Duplicates:** `vin` is only 34 % filled, so VIN-based deduplication is not enough.
   A key on make, model, version, mileage, registration date, price and power finds 6,347 duplicate rows.
@@ -101,7 +113,12 @@ The report describes this check as part of the data decisions.
   The dealer key comes from `seller_company_name`, which is PII, so hash it into a group id **before** the PII-removal stage.
   No listing date exists, so a temporal split is not possible.
 - **Useless or empty fields:** `warranty` and `has_warranty` are 100 % empty; `had_accident` is True for 3 rows; `fuel_cons_city_l100_km` and `fuel_cons_highway_l100_km` are empty.
-  The boolean flags likely encode "unknown" as False; there is no condition field.
+  There is no condition field.
+- **Condition flags are one-sided:** 14,744 rows in the raw data are flagged as neither used, new nor pre-registered, and 18,108 of the 113,708 rows scoped by `offer_type` and `vehicle_type` have `is_used = False` while `offer_type = U`.
+  A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-23).
+  This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around (EDN-24).
+- **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
+  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them and the Great Expectations suite bounds the date at the reference date (EDN-22).
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   Great Expectations checks must cover these ranges.
@@ -126,7 +143,20 @@ Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) o
 Train with random masking of optional fields so the model produces wider intervals for partial inputs.
 The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
 
-Comparable listings: k-nearest-neighbour search over the processed listings, returned next to the prediction.
+Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
+
+- `body_type` is filled in **100.000 %** of the training listings and `seller_type` in **99.986 %** (14 of 97,913 rows), so a model trained on them effectively never learns a direction for their absence.
+  Both are now required fields of `/predict` ([specification](specification.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
+- `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %) are missing rarely, so the signal for their absence is thin but real.
+- `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.
+  Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data too.
+
+**[open]:** whether the three rarely-missing fields need the same random masking as the UC2 interval models, or whether native missing-value handling is enough.
+This is a modelling decision, not an API one, and it is taken in M2/M3 once the pipeline exists and the effect can be measured.
+Either way the outcome is bounded: SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
+
+Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
+The exact window is defined in the [specification](specification.md) FR-09.
 
 Explainability: SHAP (TreeExplainer) per prediction and globally.
 
@@ -136,29 +166,36 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 ## 5. Target architecture **[planned]**
 
 ```
-client --> FastAPI (model + SHAP + intervals)
-             |-- /predict       (UC1)
-             |-- /price-range   (UC2)
-             |-- /comparables
-             |-- /feedback      (reported sale prices; no real users, so simulated)
-             '-- /health, /metrics (Prometheus)
+client --> reverse proxy --> FastAPI (model + SHAP + intervals)
+                               |-- /predict       (UC1)
+                               |-- /price-range   (UC2)
+                               |-- /comparables
+                               |-- /health, /metrics (Prometheus)
+                               '-- /feedback      (internal only: the proxy refuses it
+                                                   from outside; reported prices, no real
+                                                   users, so replayed from the ES holdout)
 
          Storage for listings (processed, no PII), prediction log, feedback
-         MLflow tracking + model registry
+         MLflow experiment tracking (DagsHub), not called by the API
          Prometheus + Grafana (resources, latency, errors)
+         Better Uptime (external availability check, presentation windows)
          Alibi Detect job (input drift on logged requests, interval coverage)
 ```
 
 Everything runs via Docker Compose.
 The API contract (Pydantic schemas) is the boundary: models can be swapped without changing clients.
+Endpoints, inputs and outputs are specified in the [specification](specification.md) (`FR-xx`, `NFR-xx`).
+Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the model is a DVC-tracked pipeline artifact baked into the API image at CI build time (`dvc pull`, pinned to the version `main` points to), not fetched from the MLflow registry at build or run time.
+Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [specification](specification.md) FR-12).
+Deployment target **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, one semester), which is what every target in the [specification](specification.md) is written for.
+It is tight on 4 GB, and that is planned for rather than left open: NFR-04 gives the drift job its own scheduled container, caps Prometheus by retention size and the logs by rotation, and keeps 4 GB of disk free.
+Nobody has access yet; if that is still true at the M4a lab on 2026-10-21, we raise it with the teachers instead of planning on further.
 
 Open points:
 
-- Deployment target: FIB Virtech VM (free, 4 GB RAM, 20 GB disk, one semester) or another cloud.
-  The full stack is tight on 4 GB.
 - Storage: PostgreSQL only pays off if monitoring reads the prediction log; a lighter store may be enough.
+  Monitoring does read it: FR-14 joins the prediction log and the feedback labels, so the store has to support that join.
 - MLflow hosting: DagsHub (as in the course demo) or self-hosted.
-- Feedback loop: simulate delayed labels from the held-out `ES` listings (see 3.2), or drop `/feedback`.
 
 ## 6. Tooling constraints
 
@@ -169,7 +206,9 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Its license is Business Source License 1.1 (free for non-production use); mention this in the report.
 - **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9.
   Run it isolated with `uvx pynblint`, not as a project dependency.
-- **SHAP 0.52** requires Python 3.12+; we pin 3.11, so uv resolves an older SHAP unless we bump Python.
+- **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
+  **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
+  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8".
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 
@@ -182,7 +221,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 | M3 | Quality assurance: energy, static analysis, data and model tests (optional: SHAP, AIF360, TrustML) | CodeCarbon, ruff/Pylint, Pynblint, Pytest, Great Expectations | 15 |
 | M4 | Deployment: system design, API, API tests | FastAPI, Pytest, FIB VM / cloud | 25 |
 | M5 | Packaging: containers, CI/CD | Docker, Docker Compose, GitHub Actions | 15 |
-| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Alibi Detect | 10 |
+| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Better Uptime, Alibi Detect | 10 |
 
 Deliveries (via Atenea, 23:55):
 
@@ -199,6 +238,27 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
+- EDN-07: raw data hosting (import from Zenodo, never push to our own remote), amended by EDN-25.
+- EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
+- EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
+- EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
+- EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
+- EDN-12: retraining and promotion are human-triggered, not automated.
+- EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
+- EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
+- EDN-15: UC1 required fields, after measuring the fill rates, plus SC-06 for absent optional fields.
+- EDN-16: separate `/predict` and `/price-range`, one endpoint per use case.
+- EDN-17: deployment target is the FIB Virtech VM.
+- EDN-18: unseen countries and models are accepted with a warning.
+- EDN-19: the DagsHub repository the team uses as DVC remote and MLflow server.
+- EDN-20: the DagsHub remote stays public.
+- EDN-21: record both licence readings of the Zenodo record.
+- EDN-22: drop listings registered after the reference date.
+- EDN-23: read the condition flags as one-sided assertions.
+- EDN-24: keep the pre-registered exclusion despite the unreliable flag.
+- EDN-25: raw data acquisition (`dvc add` and push to our DagsHub remote).
+- EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison.
+- EDN-27: the requirements and their specification are separate pages, sharing one set of `FR-xx`/`NFR-xx` IDs.
 
 Made in M1, still to be written up:
 
@@ -207,7 +267,7 @@ Made in M1, still to be written up:
 **[open]**, to decide with the team:
 
 - Deduplication key and split strategy.
-- Feedback loop: simulated labels or no `/feedback` endpoint.
+- Whether the point model needs random masking for the optional fields that are rarely missing in training, or whether native missing-value handling is enough (section 4); the field list itself is settled in EDN-15.
 
 ## 9. Reference links
 
@@ -220,4 +280,4 @@ Made in M1, still to be written up:
 - LightGBM: <https://lightgbm.readthedocs.io/>, CatBoost: <https://catboost.ai/docs/>, MAPIE: <https://mapie.readthedocs.io/>
 - SHAP: <https://shap.readthedocs.io/>, AIF360: <https://aif360.readthedocs.io/>
 - FastAPI: <https://fastapi.tiangolo.com/>, Docker Compose: <https://docs.docker.com/compose/>, GitHub Actions: <https://docs.github.com/actions>
-- Prometheus: <https://prometheus.io/docs/>, Grafana: <https://grafana.com/docs/>, Alibi Detect: <https://docs.seldon.io/projects/alibi-detect/>
+- Prometheus: <https://prometheus.io/docs/>, Grafana: <https://grafana.com/docs/>, Better Uptime: <https://betterstack.com/docs/uptime/start.html>, Alibi Detect: <https://docs.seldon.io/projects/alibi-detect/>

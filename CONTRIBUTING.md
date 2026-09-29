@@ -25,6 +25,12 @@ Conventions for tracking granularity, the remote, and pipeline ownership live in
 6. **Always squash merge** - it's the only merge method enabled on the repo, so `main` gets exactly one commit per PR and stays readable. Merging deletes the branch automatically.
 7. After merge, move the issue to **Done**.
 
+### Freeze window before a presentation
+
+Every merge to `main` deploys to the VM ([requirements](docs/docs/requirements.md) NFR-13), and NFR-05 commits to zero unplanned downtime during a presentation.
+So in the 48 hours before a presentation, merge only what fixes something broken, and check `/health` afterwards.
+Everything else waits until the presentation is over.
+
 ## Local setup
 
 ```bash
@@ -36,6 +42,12 @@ pre-commit install
 
 ```bash
 make format   # ruff format + fix
-make lint     # ruff check
-make test     # pytest
+make lint     # ruff format --check + ruff check
+make test     # pytest, which also reports the coverage of recommenditos/
 ```
+
+`make lint` runs the same ruff rules as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+
+`make test` prints a coverage table; CI puts the same table in the summary of its test job.
+There is no coverage gate on a PR, so a number below 80 % does not fail anything.
+NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
