@@ -4,9 +4,9 @@ Question: which of the fields FR-01 leaves optional are so often filled in the t
 that the model would never see them missing, and would therefore have no learned behaviour for
 a request that omits them?
 
-Scope matches the evaluation protocol: used cars only (EDN-04), the training price range,
-deduplicated before any split, `ES` held out (EDN-03), and only makes with at least 300
-listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-07), see the README.
+Scope matches the evaluation protocol: used cars only (EDN-04), listings registered after the age
+reference date dropped (EDN-22), the training price range, deduplicated before any split, `ES` held
+out (EDN-03), and only makes with at least 300 listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-07), see the README.
 """
 
 import sys
@@ -37,6 +37,7 @@ OPTIONAL = [
     "nr_doors",
 ]
 SCOPE_COLS = ["model_version", "price", "offer_type", "is_preregistered", "vehicle_type"]
+SNAPSHOT = pd.Timestamp("2025-11-08")  # age reference date, problem specification section 4
 
 
 def load(path):
@@ -47,6 +48,10 @@ def load(path):
         & (~df["is_preregistered"].astype("boolean").fillna(False))
         & (df["vehicle_type"] == "Car")
     ]
+    # EDN-22: a registration date after the reference date makes age negative
+    reg = pd.to_datetime(df["registration_date"], errors="coerce")
+    post_snapshot = int((reg > SNAPSHOT).sum())
+    df = df[~(reg > SNAPSHOT)]
     df = df[(df["price"] >= 500) & (df["price"] <= 2_000_000)]
     df = df.drop_duplicates(
         subset=[
@@ -59,7 +64,7 @@ def load(path):
             "power_kw",
         ]
     )
-    return df, raw_rows
+    return df, raw_rows, post_snapshot
 
 
 def filled_pct(col):
@@ -68,8 +73,9 @@ def filled_pct(col):
 
 
 def main():
-    df, raw_rows = load(CSV)
+    df, raw_rows, post_snapshot = load(CSV)
     print(f"raw rows: {raw_rows:,}")
+    print(f"dropped, registered after the reference date (EDN-22): {post_snapshot:,}")
     print(f"scoped and deduplicated: {len(df):,}")
 
     train = df[df["country_code"] != "ES"]
