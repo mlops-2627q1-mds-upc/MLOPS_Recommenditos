@@ -10,8 +10,9 @@ This page only documents the conventions we've settled on for this project, on t
 ## Remote
 
 We use DagsHub Storage as the DVC remote, configured over **HTTP** (not S3), as the demo prescribes.
-The DagsHub repo is <https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos>.
-It mirrors our GitHub repo by its public URL, because we cannot grant DagsHub access to the course organisation on GitHub.
+The DagsHub repo is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>.
+It belongs to the `recommenditos` DagsHub organisation, which the team owns, so the remote does not depend on any one person's private account.
+It is connected through DagsHub's GitHub integration, not as a plain git mirror, which is why issues and pull requests show up on DagsHub and why it syncs by webhook instead of polling.
 
 The shared part of the configuration is committed in `.dvc/config`:
 
@@ -19,14 +20,14 @@ The shared part of the configuration is committed in `.dvc/config`:
 [core]
     remote = origin
 ['remote "origin"']
-    url = https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos.dvc
+    url = https://dagshub.com/recommenditos/MLOPS_Recommenditos.dvc
     auth = basic
 ```
 
 ### First-time setup
 
-1. Create a [DagsHub](https://dagshub.com) account and ask the repo owner to add you as a collaborator with write access
-   (repo **Settings → Collaborators**), otherwise `dvc push` is rejected.
+1. Create a [DagsHub](https://dagshub.com) account and ask @lukas2510 to add you to the `recommenditos`
+   organisation with write access, otherwise `dvc push` is rejected.
 2. Install the project environment, which includes DVC:
 
     ```bash

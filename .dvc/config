@@ -1,5 +1,5 @@
 [core]
     remote = origin
 ['remote "origin"']
-    url = https://dagshub.com/mark.welf.atzberger/MLOPS_Recommenditos.dvc
+    url = https://dagshub.com/recommenditos/MLOPS_Recommenditos.dvc
     auth = basic
