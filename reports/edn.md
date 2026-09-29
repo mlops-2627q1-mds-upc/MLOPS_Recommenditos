@@ -168,44 +168,40 @@ How to add an entry:
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Experiment Tracking
-- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Pending confirmation at the next sprint review.
-- **Decision:** `pauadal03/MLOPS_Recommenditos` is the single DVC remote and MLflow tracking server for the project (option B).
-  `mark.welf.atzberger/MLOPS_Recommenditos` is retired.
-  The related question of whether that repository stays public was decided separately, see EDN-22.
+- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Open, to be settled at the next sprint review.
+- **Decision:** Open.
+  A first decision for `pauadal03/MLOPS_Recommenditos` was taken and withdrawn on the same day, once it turned out that pauadal03 is not a member of this team: they hold read-only access to our GitHub repository, have never contributed to it, and are not on the roster.
+  Their DagsHub repository is a mirror of our public repository made from outside the team, so it is not a candidate.
+  The remaining candidates are a DagsHub organisation owned by the team, or `mark.welf.atzberger/MLOPS_Recommenditos` reconnected through the GitHub integration.
+  Whether the repository stays public was decided separately, see EDN-22.
 - **Alternatives considered:**
   - **Option A: a DagsHub organisation owns the connected repository, every team member is a member with push rights.**
-    Pros: mirrors the GitHub organisation, so "our repository" does not depend on one person's private account; push rights follow org membership instead of manual collaborator entries; data and experiment history survive if a member leaves or cleans up their account; visibility is set in one place.
-    Cons: one-time setup (create the org, connect the GitHub repository through the GitHub integration, invite everyone, retire the two existing mirrors) and the data has to be pushed again; the remote URL in PR #26 has to change.
-  - **Option B (chosen): use `pauadal03/MLOPS_Recommenditos`.**
-    Pros: verifiably connected through the GitHub integration, see the evidence below; only the remote URL in PR #26 changes.
-    Cons: all data and experiments hang off one member's private account; every member needs a manual collaborator entry with write access; the raw data would have to be pushed again.
-  - **Option C: use `mark.welf.atzberger/MLOPS_Recommenditos`, what PR #26 configures and where the raw data already sits.**
-    Pros: no change to PR #26; the 548.6 MB raw dataset is already pushed there, so nothing has to be re-uploaded.
-    Cons: its mirror is demonstrably not in sync, see the evidence below; same account and access drawbacks as option B.
-  - **Option D: keep both mirrors and let everyone push to their own.**
+    Pros: nothing the project depends on hangs off one person's private account; push rights follow membership instead of manual collaborator entries, and the team is five people, so inviting everyone is trivial; visibility is set in one place; data and experiment history survive if a member leaves or cleans up their account.
+    Cons: one-time setup (create the organisation, connect the GitHub repository, invite four people); under a `dvc add` mechanism the 548.6 MB raw object has to be pushed once more, though under `import-url` there is nothing to move.
+  - **Option C: use `mark.welf.atzberger/MLOPS_Recommenditos`, reconnected properly.**
+    Pros: it exists, it belongs to a teammate, and it already holds the raw object; no organisation to create.
+    Cons: its mirror is demonstrably not in sync (see the evidence below), and the likely fix is to delete and re-import it through the GitHub integration, which loses the pushed object anyway and so removes most of its advantage; the project still hangs off one teammate's private account, and every member needs a manual collaborator entry with write access.
+  - **Option B: use `pauadal03/MLOPS_Recommenditos`.** Chosen on 2026-09-29 and withdrawn the same day.
+    Pros: it is the only mirror verifiably connected through the GitHub integration, and adopting it would have cost nothing.
+    Cons: ruled out on ownership, not on measurements - pauadal03 is not on the team, has `read` permission on our GitHub repository and has never contributed to it, so the project's data and experiment history would sit on the account of someone who cannot even push to the repository they mirrored.
+  - **Option D: keep several mirrors and let everyone push to their own.**
     Pros: no coordination needed.
     Cons: not viable - the remote URL is committed in `.dvc/config`, so the team would overwrite each other's setting, and data and experiment history would be split across accounts.
-- **Rationale:** Option B is the only one of the two workable candidates that is verifiably connected the right way, and it costs nothing to adopt.
-  Option A is the better long-term structure and the team agrees with that in principle, but for a one-semester course project it buys little: creating an organisation, reconnecting the GitHub repository and re-inviting 21 people is setup whose payoff (surviving account churn, rights by membership rather than by hand) lands after the course has ended.
-  The rule the team applied here was to take the better-engineered option unless it is overkill for the scope, and on that test A is overkill while B is not.
-  Option C was ruled out on the measurements below, not on preference.
-  The residual risk of B is stated rather than hidden: the remote hangs off one member's private account, and every teammate needs a manual collaborator entry with write access.
-  Evidence gathered on 2026-09-29 against the DagsHub API.
-  Sync: `pauadal03/MLOPS_Recommenditos` is at `2e902e2143`, identical to GitHub `main`, carries all 7 branches and mirrors all 7 open issues.
-  `mark.welf.atzberger/MLOPS_Recommenditos` is at `8b1d64fc`, one merge behind, is missing the `docs/data-facts-corrections` and `model-card` branches, still carries `feature/ruff-pl-and-coverage` which GitHub deleted after the merge, and mirrors 0 issues.
-  DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two repositories were connected in different ways and that mark's is a plain git mirror.
-  Visibility: both repositories report `private: false`, so every logged-in DagsHub user can read them and pull the raw data, which still carries `vin`, `street`, `seller_company_name` and coordinates.
-  EDN-07 as originally written assumed the remote was private; that premise was found false and is being revised on the issue #3 branch, and the outcome is recorded in EDN-22.
-  The reason the original check misled us: anonymous access is not evidence either way, because DagsHub refuses every anonymous request, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`) and for a repository that does not exist.
-  Access: `lukas2510` has `push` on mark's repository since 2026-09-29 and `pull` only on pauadal03's; the rest of the team is most likely still without push rights on either.
-  Follow-up the decision requires: the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to be changed to `https://dagshub.com/pauadal03/MLOPS_Recommenditos.dvc` before that PR merges, pauadal03 has to add every teammate as a collaborator with write access, and mark's retired mirror has to be dealt with, including the 548.6 MB raw object already pushed to it.
+- **Rationale:** To be filled in once the team decides.
+  Evidence gathered on 2026-09-29 against the DagsHub and GitHub APIs.
+  Ownership: write access to the GitHub repository is held by @lukas2510, @kadameit, @ulasawczuk, @W11W11W11 and @michudud04, plus @martinezmatias and @santidrj, the two lecturers who own the course organisation; @pauadal03 has `read`, zero pull requests and zero commits, and does not appear on the roster in `docs/docs/scrum/index.md`.
+  Sync: `pauadal03/MLOPS_Recommenditos` is at `2e902e2143`, identical to GitHub `main`, carries all 7 branches and mirrors all 7 open issues, while `mark.welf.atzberger/MLOPS_Recommenditos` is at `8b1d64fc`, is missing the `docs/data-facts-corrections` and `model-card` branches, still carries `feature/ruff-pl-and-coverage` which GitHub deleted after the merge, and mirrors 0 issues.
+  DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two were connected in different ways and that mark's is a plain git mirror.
+  Visibility: both report `private: false`; EDN-07 as originally written assumed the remote was private, a premise found false and recorded in EDN-22.
+  The reason that original check misled us: anonymous access is not evidence either way, because DagsHub refuses every anonymous request, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`) and for a repository that does not exist.
+  Access: `lukas2510` has `push` on mark's repository since 2026-09-29 and `pull` only on pauadal03's; the rest of the team has push on neither.
+  Follow-up the decision will require: the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to match the outcome before that PR merges, the owner has to grant push rights to everyone, and the 548.6 MB raw object already pushed to mark's repository has to be disposed of or migrated depending on the outcome and on the acquisition mechanism (EDN-07).
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
-- **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI recommended option A; the team took option B instead, accepting AI's finding that mark's mirror is unreliable but judging the organisation setup disproportionate for a course project.
-  The part of the contribution that decided the outcome was the measurement, not the recommendation: without the issue-mirroring comparison the team would have kept option C, which is what the open PR configured.
-  AI queried the DagsHub API, found that two mirrors of the GitHub repository exist, compared their commits, branches and mirrored issues against GitHub, checked the team's access rights, verified the repositories' visibility against a public control repository, and laid out the four options above with a recommendation for option A.
-- **AI interaction evidence:** Claude Code session on 2026-09-29: prompts "see if you can connect to dagshub i gave you token and usernme", "ist nicht das unser dagshub repo was zu unserem github repo passt?" and "warum hat das repo am schlchtesten abgeschnitten"; the session verified the credentials against the DagsHub API, found the two competing mirrors and produced this comparison.
-- **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-07.
+- **Response to AI:** Rejected
+- **Assessment of the AI contribution:** AI found the two mirrors, measured them against GitHub and recommended `pauadal03`'s on those measurements. The measurements were correct and the recommendation was wrong, because AI never checked whether that repository belonged to anyone on the team - it ranked the candidates it had found without asking where they came from. Lukas caught it by asking who pauadal03 is, which invalidated the recommendation and the decision taken on it. Recorded here rather than silently corrected, because the failure is the instructive part: a candidate that scores best on every technical measurement can still be disqualified by a question nobody asked. AI's useful contributions were the measurements, the finding that mark's mirror is not properly connected, and the control-repository method behind EDN-22; its recommendation was not one of them.
+  This is the second decision in the same week reached on a premise nobody had checked, after "the DagsHub repository is private" in EDN-07, and in both cases the check that settled it took one API call and was available before the decision rather than after it. The pattern, not either individual fix, is the thing worth carrying into the working agreements: state the premise a decision rests on, and verify it, before recording the decision.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: the comparison and the recommendation for pauadal03 followed the prompts "ist nicht das unser dagshub repo was zu unserem github repo passt?" and "warum hat das repo am schlchtesten abgeschnitten"; the retraction followed "paudal ist glaibe unsere lecturer. ist das blöd das jetzt alles immer über ihn laufen muss".
+- **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-07, EDN-22, roster in `docs/docs/scrum/index.md`.
 - **In LaTeX:** no
 
 ### EDN-22: The DagsHub remote stays public
