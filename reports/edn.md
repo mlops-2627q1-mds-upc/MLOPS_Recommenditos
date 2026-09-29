@@ -172,18 +172,23 @@ How to add an entry:
 - **Decision:** Open.
   A first decision for `pauadal03/MLOPS_Recommenditos` was taken and withdrawn on the same day, once it turned out that pauadal03 is not a member of this team: they hold read-only access to our GitHub repository, have never contributed to it, and are not on the roster.
   Their DagsHub repository is a mirror of our public repository made from outside the team, so it is not a candidate.
-  The remaining candidates are a DagsHub organisation owned by the team, or `mark.welf.atzberger/MLOPS_Recommenditos` reconnected through the GitHub integration.
+  Later the same day `mark.welf.atzberger/MLOPS_Recommenditos` was deleted, so that candidate no longer exists either and the raw object it held is gone with it.
+  The practical choice is therefore between a DagsHub organisation owned by the team and a fresh repository under one team member's account.
   Whether the repository stays public was decided separately, see EDN-22.
 - **Alternatives considered:**
   - **Option A: a DagsHub organisation owns the connected repository, every team member is a member with push rights.**
     Pros: nothing the project depends on hangs off one person's private account; push rights follow membership instead of manual collaborator entries, and the team is five people, so inviting everyone is trivial; visibility is set in one place; data and experiment history survive if a member leaves or cleans up their account.
     Cons: one-time setup (create the organisation, connect the GitHub repository, invite four people); under a `dvc add` mechanism the 548.6 MB raw object has to be pushed once more, though under `import-url` there is nothing to move.
-  - **Option C: use `mark.welf.atzberger/MLOPS_Recommenditos`, reconnected properly.**
-    Pros: it exists, it belongs to a teammate, and it already holds the raw object; no organisation to create.
-    Cons: its mirror is demonstrably not in sync (see the evidence below), and the likely fix is to delete and re-import it through the GitHub integration, which loses the pushed object anyway and so removes most of its advantage; the project still hangs off one teammate's private account, and every member needs a manual collaborator entry with write access.
+  - **Option C: use `mark.welf.atzberger/MLOPS_Recommenditos`, reconnected properly.** No longer available: the repository was deleted on 2026-09-29.
+    Pros (while it existed): it belonged to a teammate and already held the raw object; no organisation to create.
+    Cons: its mirror was demonstrably not in sync (see the evidence below), and the likely fix was to delete and re-import it through the GitHub integration, which would have lost the pushed object anyway; the project would still have hung off one teammate's private account, with a manual collaborator entry needed per member.
+  - **Option C': a fresh repository under one team member's account, connected through the GitHub integration.**
+    Pros: one form less than an organisation; whoever creates it is admin and can add the other four without waiting on anyone.
+    Cons: identical to option C's structural drawbacks - the project hangs off one private account and rights are granted per person by hand. The saving over option A is a single setup form.
   - **Option B: use `pauadal03/MLOPS_Recommenditos`.** Chosen on 2026-09-29 and withdrawn the same day.
     Pros: it is the only mirror verifiably connected through the GitHub integration, and adopting it would have cost nothing.
     Cons: ruled out on ownership, not on measurements - pauadal03 is not on the team, has `read` permission on our GitHub repository and has never contributed to it, so the project's data and experiment history would sit on the account of someone who cannot even push to the repository they mirrored.
+    For the record, no project data was ever on that mirror: the raw object returns 404 there, so it holds our public git history and nothing else.
   - **Option D: keep several mirrors and let everyone push to their own.**
     Pros: no coordination needed.
     Cons: not viable - the remote URL is committed in `.dvc/config`, so the team would overwrite each other's setting, and data and experiment history would be split across accounts.
@@ -194,7 +199,9 @@ How to add an entry:
   DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two were connected in different ways and that mark's is a plain git mirror.
   Visibility: both report `private: false`; EDN-07 as originally written assumed the remote was private, a premise found false and recorded in EDN-22.
   The reason that original check misled us: anonymous access is not evidence either way, because DagsHub refuses every anonymous request, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`) and for a repository that does not exist.
-  Access: `lukas2510` has `push` on mark's repository since 2026-09-29 and `pull` only on pauadal03's; the rest of the team has push on neither.
+  Access: `lukas2510` was granted `push` on mark's repository on 2026-09-29, shortly before it was deleted, and has `pull` only on pauadal03's; the rest of the team had push on neither.
+  State at the end of 2026-09-29: `mark.welf.atzberger/MLOPS_Recommenditos` returns 404 and so does the raw object it held; `pauadal03/MLOPS_Recommenditos` still exists and still holds no data; a repository search returns that mirror as the only one left.
+  Structural point behind all of this: fifteen cohort members outside the team hold `read` on our GitHub repository, so anyone of them can create a mirror at any time without doing anything wrong. The rule the team needs is therefore not "check who owns a mirror" but "the project's infrastructure lives somewhere the team owns", which is an argument for option A independent of the measurements.
   Follow-up the decision will require: the DagsHub remote URL in [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) has to match the outcome before that PR merges, the owner has to grant push rights to everyone, and the 548.6 MB raw object already pushed to mark's repository has to be disposed of or migrated depending on the outcome and on the acquisition mechanism (EDN-07).
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Rejected
@@ -228,6 +235,7 @@ How to add an entry:
   The authenticated API reports `private: false` for both of our mirrors.
   Given a real choice between hiding a file that is already public and saying openly that it is public, Lukas chose the second: the protection gained would be nominal, while the access cost for graders and supervisors would be real.
   Recorded deliberately as an accepted risk rather than a solved problem, because the two are not the same thing: the marginal exposure is small, but we are still the ones publishing personal data, and an entry that claimed the concern was spent would not survive a reviewer who cares about privacy.
+  State after the decision: `mark.welf.atzberger/MLOPS_Recommenditos`, the repository that held the raw copy, was deleted on 2026-09-29, and the object returns 404. The team therefore publishes no personal data on any DagsHub remote at present, and this decision governs whatever remote EDN-20 settles on rather than an exposure that exists today.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment
 - **Response to AI:** Used as input for further analysis
 - **Assessment of the AI contribution:** AI found that the privacy premise of EDN-07 was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
