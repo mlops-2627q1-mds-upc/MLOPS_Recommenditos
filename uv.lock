@@ -1555,6 +1555,7 @@ name = "recommenditos"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
+    { name = "coverage" },
     { name = "ipython" },
     { name = "jupyterlab" },
     { name = "loguru" },
@@ -1577,6 +1578,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coverage" },
     { name = "ipython" },
     { name = "jupyterlab" },
     { name = "loguru" },
