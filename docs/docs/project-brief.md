@@ -106,11 +106,12 @@ The report describes this check as part of the data decisions.
   The dealer key comes from `seller_company_name`, which is PII, so hash it into a group id **before** the PII-removal stage.
   No listing date exists, so a temporal split is not possible.
 - **Useless or empty fields:** `warranty` and `has_warranty` are 100 % empty; `had_accident` is True for 3 rows; `fuel_cons_city_l100_km` and `fuel_cons_highway_l100_km` are empty.
-  The boolean flags likely encode "unknown" as False; there is no condition field.
-- **Condition flags contradict each other:** 14,744 rows are flagged as neither used, new nor pre-registered, and 18,446 rows have `is_used = False` while `offer_type = U`.
-  So `is_used` and `is_preregistered` are not constant once we scope to used passenger cars, and a False in any of these flags cannot be read as a reliable "no".
+  There is no condition field.
+- **Condition flags are one-sided:** 14,744 rows in the raw data are flagged as neither used, new nor pre-registered, and 18,446 of the 113,708 rows scoped by `offer_type` and `vehicle_type` have `is_used = False` while `offer_type = U`.
+  A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-18).
+  This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around (EDN-19).
 - **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
-  Age computed as snapshot date minus registration date is negative for these rows, so the Great Expectations suite needs a bound on it.
+  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them and the Great Expectations suite bounds the date at the reference date (EDN-17).
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   Great Expectations checks must cover these ranges.
@@ -208,6 +209,10 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
+- EDN-16: record both licence readings of the Zenodo record.
+- EDN-17: drop listings registered after the reference date.
+- EDN-18: read the condition flags as one-sided assertions.
+- EDN-19: keep the pre-registered exclusion despite the unreliable flag.
 
 Made in M1, still to be written up:
 
