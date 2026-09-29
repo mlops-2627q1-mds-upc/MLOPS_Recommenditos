@@ -696,6 +696,10 @@ How to add an entry:
 - **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3, EDN-07, EDN-19, EDN-20.
 ### EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison
 
+> **Amended by EDN-29** (2026-09-29): the drift job runs at a significance level of 0.005, not 0.05.
+> The configuration below was measured on a scope that EDN-22 has since narrowed, and on one split; re-measured, its
+> control clause does not hold at 0.05.
+
 - **Date:** 2026-09-29
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** Monitoring, Requirements
@@ -753,6 +757,44 @@ How to add an entry:
 - **Other evidence:** [Requirements](../docs/docs/requirements.md); [Specification](../docs/docs/specification.md); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
+- **In LaTeX:** no
+
+### EDN-29: The drift job runs at a significance level of 0.005, not 0.05
+
+- **Date:** 2026-09-29
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Requirements
+- **Participants:** @lukas2510
+- **Decision:** Amends EDN-26. The drift job tests each feature at a Bonferroni-corrected threshold of `0.005 / number of features` instead of the conventional `0.05 / number of features`. Everything else stays: windows of 1,000 requests, a 10,000-listing reference, `model` excluded, an i.i.d. control of which at most 1 of 20 windows may be flagged.
+- **Alternatives considered:**
+  - **Option A (chosen): lower the significance level to 0.005.**
+    Pros: measured to hold with margin. Across three independent i.i.d. splits the control flags between 0 and 0.6 windows of 20 against a promise of at most 1, while the `ES` replay is still flagged in every trial of every split with at least twelve features besides `country_code`. It fixes the cause rather than the symptom: the requirement and the detector's threshold were coupled, and nobody had noticed.
+    Cons: a lower threshold means less sensitivity to genuinely subtle drift, which is the monitoring's real job. We have no measurement of that sensitivity, so the cost is real but unquantified.
+  - **Option B: significance level 0.01.**
+    Pros: the more conventional step down, and it does hold: 0 to 1.0 flagged windows of 20 across the three splits.
+    Cons: the maximum sits exactly on the promise, so the requirement would again depend on which split is drawn, which is the failure mode being fixed.
+  - **Option C: keep 0.05 and relax the control clause to at most 3 of 20.**
+    Pros: no change to the detector; the measured maximum is 2.0, so 3 holds.
+    Cons: weakens a monitoring promise to fit a threshold nobody chose deliberately. Three false alarms in twenty windows is hard to defend in the report, and the underlying coupling would stay hidden.
+  - **Option D: keep the requirement as EDN-26 wrote it.**
+    Cons: measured not to hold. On the scope EDN-22 defines, the control flags 2.3 windows of 20 at window 1,000 with `model` excluded.
+- **Rationale:** EDN-26's configuration was measured once, on one i.i.d. split, before EDN-22 narrowed the scope. Re-running it after that change gave 2.3 flagged control windows of 20 instead of 0.7, which 27 removed listings cannot explain: the i.i.d. split is drawn from a permutation whose length depends on the row count, so the second run used a different control sample. The estimate was never stable, and the reason is structural. The drift job flags a window when any feature falls below `P_VAL / n_features`, so by Bonferroni's construction the family-wise false-alarm rate **is** `P_VAL`. At `P_VAL = 0.05` that is 5 %, which is exactly the "at most 1 of 20" the requirement promises, so NFR-11 was asking the test to perform at its own theoretical bound with zero tolerance for estimation error. Lowering the level decouples the two. 0.005 was chosen over 0.01 because at 0.01 the measured maximum is exactly 1.0 of 20, which would leave the requirement depending on the draw again. The `ES` side is unaffected: its p-values are in the order of 1e-300, so no threshold in this range changes whether it is detected.
+
+  Control windows flagged of 20, three splits, window 1,000, `model` excluded:
+
+  | `P_VAL` | min | max | mean | `ES` clause holds in every split |
+  |---|---|---|---|---|
+  | 0.05 | 0.0 | 2.0 | 1.0 | yes |
+  | 0.01 | 0.0 | 1.0 | 0.4 | yes |
+  | **0.005** | **0.0** | **0.6** | **0.2** | **yes** |
+  | 0.001 | 0.0 | 0.6 | 0.2 | yes |
+
+  Window 100 fails the "at least three changed properties" clause at every level tested, so EDN-26's window decision stands on its own.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI re-ran the committed evidence after EDN-22 landed, found that EDN-26's configuration no longer held, and did not simply restate the number. It identified that the Bonferroni construction makes the family-wise false-alarm rate equal to the significance level, which is what the control clause promises, and wrote a measurement that separates split-to-split variability from the threshold by computing each trial's p-values once and evaluating them at several levels. It recommended 0.005 over 0.01 on the grounds that 0.01's maximum sits exactly on the promise. Lukas delegated the choice and accepted the recommendation. This is the third time a measurement has refuted a written form of NFR-11, which is itself the argument for measuring a requirement before committing to it rather than after.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: after the scope correction AI reported that EDN-26's configuration measured 2.3 flagged control windows of 20 instead of 0.7, explained the Bonferroni coupling, ran `nfr11_alpha_sweep.py` over three splits and four significance levels, and recommended 0.005; Lukas replied "ohne team mache das was du recommendest".
+- **Other evidence:** [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_alpha_sweep.py`, `nfr11_alpha_sweep_results.json`, `nfr11_alpha_sweep_results.txt`, run of 2026-09-29); [EDN-26](#edn-26-nfr-11s-window-is-1000-requests-and-model-is-excluded-from-the-drift-comparison); [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date); [PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47).
 - **In LaTeX:** no
 
 ## Template

@@ -22,6 +22,11 @@ computed once and evaluated at each level. It exists because the Bonferroni thre
 the "at most 1 of 20 windows" NFR-11 promises, leaving the requirement no margin.
 `nfr11_alpha_sweep_results.json` and `nfr11_alpha_sweep_results.txt` are its output (2026-09-29).
 
+The level the drift job actually runs at is **0.005**, decided in EDN-29. `nfr11_check.py` keeps
+`P_VAL = 0.05`, because its committed output is the evidence EDN-14 cites and re-running it at a
+different level would silently change what that entry points at. Use `nfr11_alpha_sweep.py` to
+re-check the decided level.
+
 Both emulate alibi-detect 0.13 `TabularDrift` with scipy: KS (`mode="asymp"`) for numerical
 features, chi-square contingency for categorical ones, Bonferroni at `p = 0.05 / n_features`.
 alibi-detect itself is not installed, because it requires numpy<2 and pandas<3 (project brief
