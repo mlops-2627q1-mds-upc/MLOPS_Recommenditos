@@ -112,12 +112,13 @@ Why:
 
 ## Pipeline ownership
 
-Once a `dvc.yaml` pipeline exists (separate issue, follows once the training code does), stage outputs
-are tracked automatically by the pipeline, not by a manual `dvc add`.
+The `dvc.yaml` pipeline exists (see [The DVC pipeline](pipeline.md)), so stage outputs are tracked
+automatically by the pipeline, not by a manual `dvc add`.
 In practice that means:
 
-- `data/raw`: the raw file is tracked manually with `dvc add` now (see [Raw data](#raw-data)), and
-  becomes the output of a `download` stage once the pipeline exists, as in the demo.
+- `data/raw`: the `download` stage owns `data/raw/listings.parquet`. The raw CSV is still tracked
+  manually with `dvc add` (see [Raw data](#raw-data)); that pointer is replaced by the stage once
+  the stage fetches the real file rather than generating a synthetic stand-in.
 - `data/interim`, `data/processed`, `models/`: once a stage declares them as `-o` outputs, don't
   `dvc add` them separately. Let `dvc repro` manage them.
 

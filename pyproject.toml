@@ -29,9 +29,14 @@ dependencies = [
     "pandas",
     "pip",
     "pre-commit",
+    # Parquet is the interchange format between pipeline stages: it is typed, so
+    # a frame keeps its dtypes across a stage boundary instead of being re-inferred.
+    "pyarrow",
     "pytest",
     "pytest-cov",
     "python-dotenv",
+    # params.yaml, read by every stage and by the tests that check dvc.yaml.
+    "pyyaml",
     "ruff",
     "scikit-learn",
     "tqdm",

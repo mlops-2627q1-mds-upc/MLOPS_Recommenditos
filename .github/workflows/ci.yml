@@ -32,6 +32,12 @@ jobs:
               - "tests/**"
               - "pyproject.toml"
               - "uv.lock"
+              # The pipeline definition and its parameters are code: the tests
+              # read dvc.yaml and params.yaml and assert they still describe
+              # the modules that exist.
+              - "dvc.yaml"
+              - "params.yaml"
+              - "dvc.lock"
               - ".github/workflows/ci.yml"
             docs:
               - "docs/**"

@@ -14,7 +14,27 @@
   Justify any deviations from it (the course allows justified deviations).
 }
 
-\tbd{project structure and deviations from the template}
+We use the Cookiecutter Data Science template \cite{ccds} with \texttt{uv} as dependency manager, and deviate from it in three places.
+The course allows justified deviations; each of ours is recorded in the EDN.
+
+\paragraph{One module per pipeline stage (EDN-28).}
+The template generates a flat \texttt{dataset.py}, \texttt{features.py} and \texttt{modeling/train.py}.
+We replaced those with one module per DVC stage, under \texttt{recommenditos/data/} and \texttt{recommenditos/modeling/}, which is also the layout the teachers' demo repository uses.
+The technical argument is the dependency graph: a stage's \texttt{deps} should name the code that stage actually runs, so \texttt{dvc repro} reruns the minimum.
+A flat layout cannot express that, because one file backs several stages.
+The organisational argument is that the pipeline is sequential, so parallel work is only possible if each ticket owns its own files.
+
+\paragraph{A \texttt{params.yaml} instead of constants in \texttt{config.py} (EDN-30).}
+The demo keeps the seed, the split ratios and the hyperparameters as Python constants.
+We moved everything configurable into \texttt{params.yaml} and left only paths in \texttt{config.py}.
+A parameter change then reruns exactly the stages that read it, \texttt{dvc params diff} shows what changed between two commits, and \texttt{dvc exp} becomes usable.
+Paths stay in code so that nothing in the project depends on a machine-specific absolute path, which is a wart the demo's \texttt{config.py} does have.
+
+\paragraph{Two stages the demo does not have.}
+\texttt{features} exists because the demo's text model needs no feature engineering and our tabular model does.
+\texttt{evaluate} exists because the demo asserts its metric threshold inside \texttt{tests/test\_model.py}, whereas NFR-01 gates deployment on six success criteria and EDN-12 makes promotion a human decision, so someone has to be able to read the result off an artefact.
+
+We also added \texttt{recommenditos/schema.py}, the structural contract for the processed data, which the stages code against instead of against each other (EDN-31).
 
 \subsubsection{Code versioning}
 \label{sec:m2-code-versioning}
@@ -35,7 +55,10 @@
   Consider a pipeline figure.
 }
 
-\tbd{data versioning and DVC pipeline}
+\tbd{data versioning narrative and the pipeline figure (\texttt{dvc dag -{}-md})}
+
+The pipeline is \texttt{download \textrightarrow{} preprocess \textrightarrow{} \{configure\_gx, validate-data\} \textrightarrow{} split \textrightarrow{} features \textrightarrow{} train \textrightarrow{} evaluate}, with \texttt{features} and \texttt{train} iterating a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position.
+Unlike the demo's, our \texttt{validate-data} stage fails the pipeline when an expectation fails instead of only logging the failure count.
 
 \subsubsection{Experiment tracking}
 \label{sec:m2-experiment-tracking}

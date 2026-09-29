@@ -1,0 +1,691 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: python3 -m recommenditos.data.download_raw_dataset
+    deps:
+    - path: recommenditos/data/download_raw_dataset.py
+      hash: md5
+      md5: c53d08a019d957866be3c0c64c54e6f7
+      size: 1971
+    - path: recommenditos/data/synthetic.py
+      hash: md5
+      md5: 914cb88e1b61bc4a5207abc3a8bfda27
+      size: 20778
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        download:
+          source: synthetic
+          rows: 20000
+          zenodo_record: '17643343'
+          filename: autoscout24_dataset_20251108.csv
+          md5: b23a122cc51baf7de39f449193ff0d28
+        seed: 20251108
+    outs:
+    - path: data/raw/listings.parquet
+      hash: md5
+      md5: 60122fd13528df2c9cdc23a349c53988
+      size: 1574023
+  preprocess:
+    cmd: python3 -m recommenditos.data.preprocess
+    deps:
+    - path: data/raw/listings.parquet
+      hash: md5
+      md5: 60122fd13528df2c9cdc23a349c53988
+      size: 1574023
+    - path: recommenditos/data/preprocess.py
+      hash: md5
+      md5: ca5858cc8359f4a2841d149c137f7982
+      size: 3077
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        preprocess:
+          offer_type: U
+          vehicle_type: Car
+          price_min_eur: 500
+          price_max_eur: 2000000
+          dedup_key:
+          - make
+          - model
+          - model_version
+          - mileage_km_raw
+          - registration_date
+          - price
+          - power_kw
+          pii_columns:
+          - vin
+          - street
+          - zip
+          - city
+          - latitude
+          - longitude
+          - seller_company_name
+        reference_date: '2025-11-08'
+    outs:
+    - path: data/interim/listings.parquet
+      hash: md5
+      md5: 29e3966114f12acae48a70477a219b8c
+      size: 638612
+  configure_gx:
+    cmd: python3 -m recommenditos.data.gx_context_configuration
+    deps:
+    - path: recommenditos/data/gx_context_configuration.py
+      hash: md5
+      md5: 3a27983a109d8248b4e883877b305399
+      size: 1657
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+  validate-data:
+    cmd: python3 -m recommenditos.data.validate_data
+    deps:
+    - path: data/interim/listings.parquet
+      hash: md5
+      md5: 29e3966114f12acae48a70477a219b8c
+      size: 638612
+    - path: data/raw/listings.parquet
+      hash: md5
+      md5: 60122fd13528df2c9cdc23a349c53988
+      size: 1574023
+    - path: recommenditos/data/gx_context_configuration.py
+      hash: md5
+      md5: 3a27983a109d8248b4e883877b305399
+      size: 1657
+    - path: recommenditos/data/validate_data.py
+      hash: md5
+      md5: 29af4d5c1297e5e058049c9eb74be7df
+      size: 1890
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+  split:
+    cmd: python3 -m recommenditos.data.split_data
+    deps:
+    - path: data/interim/listings.parquet
+      hash: md5
+      md5: 29e3966114f12acae48a70477a219b8c
+      size: 638612
+    - path: recommenditos/data/split_data.py
+      hash: md5
+      md5: a3c3760552eb64e88d0d5a042502756a
+      size: 4050
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        seed: 20251108
+        split:
+          holdout_country: ES
+          min_listings_per_make: 300
+          group_key: seller_group_id
+          ratios:
+            train: 0.6
+            validation: 0.1
+            calibration: 0.1
+            test: 0.2
+    outs:
+    - path: data/processed/calibration.parquet
+      hash: md5
+      md5: 80cd10e7e2c01e9aaa635ea0edb25570
+      size: 102898
+    - path: data/processed/holdout_es.parquet
+      hash: md5
+      md5: e3df5d32e6b18a9b6f7016d05d2ab143
+      size: 95685
+    - path: data/processed/supported_makes.json
+      hash: md5
+      md5: ae1ee779e49609e5e91027a725f30767
+      size: 28
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: 8eb71471922fc866f6c93e514af19dbe
+      size: 164829
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 2b74af0f563ed7426439d2ee1f5e25e7
+      size: 392712
+    - path: data/processed/validation.parquet
+      hash: md5
+      md5: bd36ff16eb8a763fcd2597b66dcfd796
+      size: 105588
+  features@basic:
+    cmd: python3 -m recommenditos.data.build_features basic
+    deps:
+    - path: data/processed/calibration.parquet
+      hash: md5
+      md5: 80cd10e7e2c01e9aaa635ea0edb25570
+      size: 102898
+    - path: data/processed/holdout_es.parquet
+      hash: md5
+      md5: e3df5d32e6b18a9b6f7016d05d2ab143
+      size: 95685
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: 8eb71471922fc866f6c93e514af19dbe
+      size: 164829
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 2b74af0f563ed7426439d2ee1f5e25e7
+      size: 392712
+    - path: data/processed/validation.parquet
+      hash: md5
+      md5: bd36ff16eb8a763fcd2597b66dcfd796
+      size: 105588
+    - path: recommenditos/data/build_features.py
+      hash: md5
+      md5: f533294fb426b65ba2e409ece6f79925
+      size: 2799
+    - path: recommenditos/data/split_data.py
+      hash: md5
+      md5: a3c3760552eb64e88d0d5a042502756a
+      size: 4050
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        features.sets.basic:
+        - make
+        - model
+        - body_type
+        - age_years
+        - mileage_km_raw
+        - nr_prev_owners
+        - power_kw
+        - fuel_category
+        - transmission
+        - drive_train
+        - gears
+        - cylinders_volume_cc
+        - nr_seats
+        - nr_doors
+        - country_code
+        - seller_type
+        reference_date: '2025-11-08'
+    outs:
+    - path: data/processed/features/basic
+      hash: md5
+      md5: 99accafe3389d52a9c86c84cbaef7ccf.dir
+      size: 488836
+      nfiles: 5
+  features@extended:
+    cmd: python3 -m recommenditos.data.build_features extended
+    deps:
+    - path: data/processed/calibration.parquet
+      hash: md5
+      md5: 80cd10e7e2c01e9aaa635ea0edb25570
+      size: 102898
+    - path: data/processed/holdout_es.parquet
+      hash: md5
+      md5: e3df5d32e6b18a9b6f7016d05d2ab143
+      size: 95685
+    - path: data/processed/test.parquet
+      hash: md5
+      md5: 8eb71471922fc866f6c93e514af19dbe
+      size: 164829
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 2b74af0f563ed7426439d2ee1f5e25e7
+      size: 392712
+    - path: data/processed/validation.parquet
+      hash: md5
+      md5: bd36ff16eb8a763fcd2597b66dcfd796
+      size: 105588
+    - path: recommenditos/data/build_features.py
+      hash: md5
+      md5: f533294fb426b65ba2e409ece6f79925
+      size: 2799
+    - path: recommenditos/data/split_data.py
+      hash: md5
+      md5: a3c3760552eb64e88d0d5a042502756a
+      size: 4050
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        features.sets.extended:
+        - make
+        - model
+        - body_type
+        - age_years
+        - mileage_km_raw
+        - nr_prev_owners
+        - power_kw
+        - fuel_category
+        - transmission
+        - drive_train
+        - gears
+        - cylinders_volume_cc
+        - nr_seats
+        - nr_doors
+        - country_code
+        - seller_type
+        - equipment_comfort
+        - equipment_entertainment
+        - equipment_extra
+        - equipment_safety
+        - has_full_service_history
+        - non_smoking
+        - is_rental
+        - body_color
+        - paint_type
+        - upholstery
+        - upholstery_color
+        - model_version
+        - weight_kg
+        - cylinders
+        - electric_range_km
+        - envir_standard
+        - original_market
+        reference_date: '2025-11-08'
+    outs:
+    - path: data/processed/features/extended
+      hash: md5
+      md5: 753232378921d4f7efb9dbed86ebf1b2.dir
+      size: 700129
+      nfiles: 5
+  train@b0:
+    cmd: python3 -m recommenditos.modeling.train b0
+    deps:
+    - path: data/processed/features/basic
+      hash: md5
+      md5: 99accafe3389d52a9c86c84cbaef7ccf.dir
+      size: 488836
+      nfiles: 5
+    - path: recommenditos/modeling/train.py
+      hash: md5
+      md5: c0015ee34bced6d48ca52a221abcfe2c
+      size: 2566
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        features.sets.basic:
+        - make
+        - model
+        - body_type
+        - age_years
+        - mileage_km_raw
+        - nr_prev_owners
+        - power_kw
+        - fuel_category
+        - transmission
+        - drive_train
+        - gears
+        - cylinders_volume_cc
+        - nr_seats
+        - nr_doors
+        - country_code
+        - seller_type
+        seed: 20251108
+        train.variants.b0:
+          estimator: median_baseline
+          feature_set: basic
+          params:
+            age_bucket_years: 2
+    outs:
+    - path: models/b0
+      hash: md5
+      md5: 85814634b2cecc54b32db49b2c827a4f.dir
+      size: 554
+      nfiles: 1
+  train@b1:
+    cmd: python3 -m recommenditos.modeling.train b1
+    deps:
+    - path: data/processed/features/basic
+      hash: md5
+      md5: 99accafe3389d52a9c86c84cbaef7ccf.dir
+      size: 488836
+      nfiles: 5
+    - path: recommenditos/modeling/train.py
+      hash: md5
+      md5: c0015ee34bced6d48ca52a221abcfe2c
+      size: 2566
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        features.sets.basic:
+        - make
+        - model
+        - body_type
+        - age_years
+        - mileage_km_raw
+        - nr_prev_owners
+        - power_kw
+        - fuel_category
+        - transmission
+        - drive_train
+        - gears
+        - cylinders_volume_cc
+        - nr_seats
+        - nr_doors
+        - country_code
+        - seller_type
+        seed: 20251108
+        train.variants.b1:
+          estimator: ridge
+          feature_set: basic
+          params:
+            alpha: 1.0
+    outs:
+    - path: models/b1
+      hash: md5
+      md5: cadbe450119341430a996288cf64fb8f.dir
+      size: 544
+      nfiles: 1
+  train@lgbm-basic:
+    cmd: python3 -m recommenditos.modeling.train lgbm-basic
+    deps:
+    - path: data/processed/features/basic
+      hash: md5
+      md5: 99accafe3389d52a9c86c84cbaef7ccf.dir
+      size: 488836
+      nfiles: 5
+    - path: recommenditos/modeling/train.py
+      hash: md5
+      md5: c0015ee34bced6d48ca52a221abcfe2c
+      size: 2566
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        features.sets.basic:
+        - make
+        - model
+        - body_type
+        - age_years
+        - mileage_km_raw
+        - nr_prev_owners
+        - power_kw
+        - fuel_category
+        - transmission
+        - drive_train
+        - gears
+        - cylinders_volume_cc
+        - nr_seats
+        - nr_doors
+        - country_code
+        - seller_type
+        seed: 20251108
+        train.variants.lgbm-basic:
+          estimator: lightgbm
+          feature_set: basic
+          params:
+            learning_rate: 0.05
+            num_leaves: 63
+            n_estimators: 1000
+            early_stopping_rounds: 50
+    outs:
+    - path: models/lgbm-basic
+      hash: md5
+      md5: 635dfb6f7035ae4da8b2b0173e91dc48.dir
+      size: 555
+      nfiles: 1
+  train@lgbm-extended:
+    cmd: python3 -m recommenditos.modeling.train lgbm-extended
+    deps:
+    - path: data/processed/features/extended
+      hash: md5
+      md5: 753232378921d4f7efb9dbed86ebf1b2.dir
+      size: 700129
+      nfiles: 5
+    - path: recommenditos/modeling/train.py
+      hash: md5
+      md5: c0015ee34bced6d48ca52a221abcfe2c
+      size: 2566
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        features.sets.extended:
+        - make
+        - model
+        - body_type
+        - age_years
+        - mileage_km_raw
+        - nr_prev_owners
+        - power_kw
+        - fuel_category
+        - transmission
+        - drive_train
+        - gears
+        - cylinders_volume_cc
+        - nr_seats
+        - nr_doors
+        - country_code
+        - seller_type
+        - equipment_comfort
+        - equipment_entertainment
+        - equipment_extra
+        - equipment_safety
+        - has_full_service_history
+        - non_smoking
+        - is_rental
+        - body_color
+        - paint_type
+        - upholstery
+        - upholstery_color
+        - model_version
+        - weight_kg
+        - cylinders
+        - electric_range_km
+        - envir_standard
+        - original_market
+        seed: 20251108
+        train.variants.lgbm-extended:
+          estimator: lightgbm
+          feature_set: extended
+          params:
+            learning_rate: 0.05
+            num_leaves: 63
+            n_estimators: 1000
+            early_stopping_rounds: 50
+    outs:
+    - path: models/lgbm-extended
+      hash: md5
+      md5: 6ed10538a4797205023a991e140e8bcc.dir
+      size: 935
+      nfiles: 1
+  evaluate:
+    cmd: python3 -m recommenditos.modeling.evaluate
+    deps:
+    - path: data/processed/features
+      hash: md5
+      md5: 89296aef80a0572a9bf8684a9c917e73.dir
+      size: 1188982
+      nfiles: 11
+    - path: models
+      hash: md5
+      md5: 7431bda9435a896ab755fd2148096648.dir
+      size: 2623
+      nfiles: 6
+    - path: recommenditos/modeling/evaluate.py
+      hash: md5
+      md5: 3052eb63535fb8087e1c42061e9e3f8a
+      size: 6807
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 9e776f5465cee0315cf7b87c6cac63e2
+      size: 19493
+    params:
+      params.yaml:
+        evaluate:
+          segments:
+          - make
+          - country_code
+          - seller_type
+          - fuel_category
+          - age_bucket
+          age_bucket_edges:
+          - 0
+          - 1
+          - 3
+          - 6
+          - 10
+          - 20
+          baseline_variant: b0
+          success_criteria:
+            sc01_mdape_max: 0.09
+            sc02_within_20pct_min: 0.85
+            sc03_mdape_improvement_over_baseline_min: 0.3
+            sc04_segment_mdape_max: 0.15
+            sc04_min_segment_rows: 500
+            sc05_coverage_min: 0.88
+            sc05_coverage_max: 0.92
+            sc06_masked_mdape_ratio_max: 1.5
+        features.sets:
+          basic:
+          - make
+          - model
+          - body_type
+          - age_years
+          - mileage_km_raw
+          - nr_prev_owners
+          - power_kw
+          - fuel_category
+          - transmission
+          - drive_train
+          - gears
+          - cylinders_volume_cc
+          - nr_seats
+          - nr_doors
+          - country_code
+          - seller_type
+          extended:
+          - make
+          - model
+          - body_type
+          - age_years
+          - mileage_km_raw
+          - nr_prev_owners
+          - power_kw
+          - fuel_category
+          - transmission
+          - drive_train
+          - gears
+          - cylinders_volume_cc
+          - nr_seats
+          - nr_doors
+          - country_code
+          - seller_type
+          - equipment_comfort
+          - equipment_entertainment
+          - equipment_extra
+          - equipment_safety
+          - has_full_service_history
+          - non_smoking
+          - is_rental
+          - body_color
+          - paint_type
+          - upholstery
+          - upholstery_color
+          - model_version
+          - weight_kg
+          - cylinders
+          - electric_range_km
+          - envir_standard
+          - original_market
+        train.variants:
+          b0:
+            estimator: median_baseline
+            feature_set: basic
+            params:
+              age_bucket_years: 2
+          b1:
+            estimator: ridge
+            feature_set: basic
+            params:
+              alpha: 1.0
+          lgbm-basic:
+            estimator: lightgbm
+            feature_set: basic
+            params:
+              learning_rate: 0.05
+              num_leaves: 63
+              n_estimators: 1000
+              early_stopping_rounds: 50
+          lgbm-extended:
+            estimator: lightgbm
+            feature_set: extended
+            params:
+              learning_rate: 0.05
+              num_leaves: 63
+              n_estimators: 1000
+              early_stopping_rounds: 50
+    outs:
+    - path: metrics.json
+      hash: md5
+      md5: 340af3c4ed6f2138fa85f6e20a687a7c
+      size: 664
+    - path: reports/metrics
+      hash: md5
+      md5: 421a83053b53bbfcbc449f304f776db3.dir
+      size: 3242
+      nfiles: 4

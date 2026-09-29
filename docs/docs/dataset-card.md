@@ -169,7 +169,9 @@ The full framing lives in the [problem specification](problem-spec.md); this sec
 - **Excluded as leakage.** `price_net` and `price_vat_rate` are derived from the target. `price_tax_deductible` and `price_negotiable` are seller-side listing options tied to the price rather than properties of the car.
 - **Excluded as identifiers or PII.** `id`, `vin`, `german_hsn_tsn`, `street`, `zip`, `city`, `latitude`, `longitude` and `seller_company_name`. The last is used only in hashed form, as the grouping key for the split.
 - **Splits.** Listings are deduplicated first, and every remaining `ES` listing (8,015 before deduplication) is then held out as a simulated new market for drift monitoring, never reaching training, validation or calibration. The remainder is split into train, validation, calibration and test grouped by seller, so that no seller appears in two splits. A purely random split would leak near-identical listings from the same dealer across splits, and no listing date exists, so a temporal split is not possible.
-- **Not yet fixed.** The split proportions and the random seed will be pinned in `params.yaml` once the DVC pipeline exists, and this section will be updated with the realised split sizes.
+- **Proportions and seed.** Pinned in `params.yaml`: 60 % train, 10 % validation, 10 % calibration and 20 % test of the non-`ES` listings, with seed `20251108`.
+  The test share is 20 % because SC-04 only checks a segment once it holds 500 test rows, and below about 15 % Volvo and then Suzuki drop under that bar.
+- **Not yet fixed.** The realised split sizes, which follow once the preprocessing rules run on the real snapshot rather than on the synthetic fixture.
 
 ## Dataset Creation
 
