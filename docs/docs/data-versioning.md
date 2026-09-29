@@ -63,7 +63,7 @@ it truly is one indivisible dataset.
 
 ```bash
 # Good
-dvc add data/raw/cars.csv
+dvc add data/raw/autoscout24_dataset_20251108.csv
 
 # Avoid
 dvc add data
@@ -94,8 +94,23 @@ In practice that means:
 
 ## `.gitignore`
 
-Don't add blanket rules like `/data/` to `.gitignore`. DVC generates its own `.gitignore` entries next
-to each tracked path, and Git still needs to see the `.dvc` pointer files themselves.
+Keep `data/` ignored, but let the pointers through. The root `.gitignore` does this:
+
+```gitignore
+/data/**
+!/data/**/
+!/data/**/*.dvc
+!/data/**/.gitignore
+```
+
+A bare `/data/` rule is not enough, because it would also hide the `.dvc` pointer files Git has to see,
+and Git cannot re-include a file inside an ignored directory - hence the `**` form plus the directory
+negation. The last line keeps the `.gitignore` files DVC generates next to each tracked path
+committable; without it DVC's own entries would be ignored and could never reach a commit.
+
+The rule matters most before `dvc add` runs. A raw file dropped into `data/raw/` to look at it is
+covered from the moment it lands, so a stray `git add .` cannot put it - or its personal data - into a
+repository the whole cohort can read.
 
 ## Day to day
 

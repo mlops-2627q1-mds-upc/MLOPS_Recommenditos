@@ -1,3 +1,10 @@
+# Data: contents are tracked by DVC, not Git. Only the pointer files and the
+# .gitignore files DVC generates next to each tracked path belong in a commit.
+/data/**
+!/data/**/
+!/data/**/*.dvc
+!/data/**/.gitignore
+
 # PDFs and Word files are not tracked (e.g. lab/course material, generated reports).
 # Their Markdown conversions live in references/.
 *.pdf
