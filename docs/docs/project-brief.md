@@ -7,8 +7,12 @@ Keep this page up to date: it is the shared starting point for teammates and AI 
 Status markers:
 
 - **[decided]** agreed by the team.
-- **[planned]** current plan, may change.
+- **[proposed]** proposed and pending team confirmation.
+  The alternatives are in [Decisions pending confirmation](specification.md#decisions-pending-confirmation), and a confirmed proposal becomes **[decided]**.
 - **[open]** not decided yet; decisions that could reasonably go differently go through the EDN process in [AGENTS.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/AGENTS.md) before they are settled.
+
+These three are the whole set, and this is the only place they are defined.
+Every other page links here instead of repeating them, so the definitions cannot drift apart.
 
 ## 1. Project goal
 
@@ -21,7 +25,7 @@ We build and deploy a **used-car price component**: an ML model behind an API th
 The course grades how well we apply MLOps practices (reproducibility, QA, deployment, CI/CD, monitoring), not model accuracy.
 "Excellent" requires extended or innovative use of each practice, so we prefer clean, well-justified engineering over model complexity.
 
-## 2. Use cases **[planned]**
+## 2. Use cases
 
 | ID | Use case | Input | Output |
 |----|----------|-------|--------|
@@ -76,7 +80,8 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
 - **[decided]**, [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown, with a warning in the response ([requirements](requirements.md) FR-05).
   An API test covers this case.
-- **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
+- **Optional, if time allows:** a synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
+  Nobody is waiting on this, so it carries no status marker.
 - Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded. NFR-11 nevertheless states a window of 1,000, because the control clause and the "at least three changed properties" clause do not hold at 100 ([EDN-26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
   Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
   The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
@@ -123,7 +128,7 @@ The report describes this check as part of the data decisions.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   Great Expectations checks must cover these ranges.
 
-## 4. Modelling plan **[planned]**
+## 4. Modelling plan
 
 Target, features, metrics, baselines and success criteria (`SC-01` to `SC-06`) are defined in the [problem specification](problem-spec.md).
 
@@ -163,7 +168,7 @@ Explainability: SHAP (TreeExplainer) per prediction and globally.
 Why gradient boosting: best-in-class on medium tabular data, native categoricals and missing values, trains in minutes on CPU, small artefacts, exact SHAP.
 Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical Bayes, LLM zero-shot.
 
-## 5. Target architecture **[planned]**
+## 5. Target architecture
 
 ```
 client --> reverse proxy --> FastAPI (model + SHAP + intervals)

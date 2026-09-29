@@ -25,7 +25,7 @@ It is the model behind the project's API.
 **Status: draft, no trained artefact yet.**
 This is the initial model card, written in Milestone 1 before a model exists, so everything about training and results is a plan rather than a measurement.
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the placeholder results are replaced with measured values after Milestone 2 (first trained model) and Milestone 3 (model tests asserting each `SC-xx`).
-Sections that describe an intention rather than a fact carry the status markers of the [project brief](project-brief.md): **[decided]**, **[planned]** and **[open]**.
+Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 
 This card owns the trained model.
 It does not repeat what other pages own, it links to them:
@@ -62,12 +62,12 @@ The same trained booster serves the point estimate, its explanation and, through
 
 - **Repository:** <https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos>
 - **Training data:** [dataset card](dataset-card.md)
-- **Experiment tracking:** MLflow on DagsHub, from Milestone 2 (**[planned]**, EDN-19, pending confirmation by the full team).
+- **Experiment tracking:** MLflow on DagsHub, from Milestone 2 (**[proposed]**, EDN-19, pending confirmation by the full team).
 - **Model artefact:** DVC-tracked pipeline output, baked into the API image at CI build time (FR-12, EDN-08).
 
 ### Model family **[decided, EDN-02]**
 
-- **Main model:** **LightGBM** gradient boosting on `log(price)`, with the basic and then the extended feature set ([experiment ladder](project-brief.md#4-modelling-plan-planned) steps 3 and 4).
+- **Main model:** **LightGBM** gradient boosting on `log(price)`, with the basic and then the extended feature set ([experiment ladder](project-brief.md#4-modelling-plan) steps 3 and 4).
 - **Challenger:** **CatBoost** (step 5), for high-cardinality categoricals.
 - **Baselines:** B0, the median price per make, model and 2-year age bucket; B1, Ridge regression on `log(price)` ([problem specification](problem-spec.md#7-baselines)).
 
@@ -183,7 +183,7 @@ The data carries no protected attributes of people, only of cars and of seller t
 
 ## How to Get Started with the Model
 
-**[open]** until the first model exists.
+Filled in once the first model exists.
 The intended entry point is the project's API, not the artefact ([specification](specification.md) FR-06 and FR-16):
 
 ```bash
@@ -239,16 +239,17 @@ Every stage runs under DVC, and a clean clone reproduces the same splits and met
   **Calibration set:** UC2 interval calibration only, never tuning.
 - **Intervals (UC2):** Conformalized Quantile Regression with MAPIE (1.x) on quantile LightGBM models, trained with random masking of optional fields so that partial inputs produce wider intervals.
   The coverage guarantee is marginal, that is on average over all inputs, not per missing-field pattern.
-- **Point model and missing fields [open]:** whether the point model needs the same random masking, or whether LightGBM's native missing handling suffices, is measured in Milestone 2 once the pipeline exists ([project brief](project-brief.md#4-modelling-plan-planned)).
+- **Point model and missing fields [open]:** whether the point model needs the same random masking, or whether LightGBM's native missing handling suffices, is measured in Milestone 2 once the pipeline exists ([project brief](project-brief.md#4-modelling-plan)).
   Either way SC-06 bounds the outcome, and NFR-01's gate enforces it.
 - **Comparables:** a filtered lookup over the processed listings, matching make and model within 2 years of age and 25 % of mileage, **not** a learned nearest-neighbour model.
   The filters are never relaxed to fill the list ([specification](specification.md) FR-09).
 
 Hyperparameters, seeds and the chosen configuration are recorded here once the runs exist, and tracked in MLflow and `params.yaml`.
 
-#### Speeds, Sizes, Times **[planned]**
+#### Speeds, Sizes, Times
 
 Targets are set by the [requirements](requirements.md#2-non-functional-requirements); measured values replace them after Milestone 3.
+The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR-10's training-time target is agreed.
 
 | Property | Target | Measured |
 |---|---|---|
@@ -428,4 +429,4 @@ Concretely:
 - **After Milestone 2:** the measured results per `SC-xx`, the chosen hyperparameters, the artefact size and the training time.
 - **After Milestone 3:** the CodeCarbon figures, and confirmation that the model tests assert each criterion.
 - **Whenever a model is promoted:** the version, the results and any change to the limitations above.
-- **Once the first model exists:** move the modelling-plan parts of [project brief](project-brief.md#4-modelling-plan-planned) into this card and leave a link behind in the brief.
+- **Once the first model exists:** move the modelling-plan parts of [project brief](project-brief.md#4-modelling-plan) into this card and leave a link behind in the brief.

@@ -15,11 +15,8 @@ The "Verified by" column says how each entry is checked:
 - **[manual]** the entry cannot be checked from Pytest (a load test, a chaos test, a deployment run, a `dvc repro` on a clean clone, a human drill).
   The cell then names the evidence, and the matrix shows the entry as manually verified rather than as missing.
 
-Status markers as in the project brief:
-
-- **[decided]** agreed by the team.
-- **[proposed]** proposed and pending team confirmation (see [Decisions pending confirmation](#decisions-pending-confirmation)).
-- **[open]** depends on a decision that is not made yet.
+Status markers **[decided]**, **[proposed]** and **[open]** mean what the [project brief](project-brief.md) defines them to mean; that is the only place they are defined.
+The alternatives behind a **[proposed]** marker are in [Decisions pending confirmation](#decisions-pending-confirmation).
 
 ## 1. Functional requirements
 
