@@ -30,12 +30,21 @@ training scope, to find the fields that FR-01 may not leave optional because the
 see them missing.
 `fillrates_results.txt` is the output of the run recorded in EDN-15 (2026-09-29).
 
-Run them against the raw dataset, which is not in the repo (NFR-08, EDN-07):
+## SC-04 coverage per make (model card)
+
+`make_support.py` compares EDN-05's support threshold, which admits a make into scope at 300
+listings, against SC-04's segment size, which only checks a segment once it holds 500 test rows.
+It reports which supported makes therefore never reach the quality gate.
+`make_support_results.txt` is the output of the run cited in the model card (2026-09-29).
+
+Run them against the raw dataset, which `dvc pull` fetches into `data/raw/` (EDN-25):
 
 ```bash
-curl -L -o cars.csv "https://zenodo.org/records/17643343/files/autoscout24_dataset_20251108.csv?download=1"
-python reports/analysis/nfr11_check.py cars.csv
+dvc pull data/raw/autoscout24_dataset_20251108.csv.dvc
+CARS=data/raw/autoscout24_dataset_20251108.csv
+python reports/analysis/nfr11_check.py "$CARS"
 python reports/analysis/nfr11_diag.py    # expects cars.csv in the working directory
-python reports/analysis/fillrates.py cars.csv
-PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py cars.csv
+python reports/analysis/fillrates.py "$CARS"
+python reports/analysis/make_support.py "$CARS"
+PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py "$CARS"
 ```

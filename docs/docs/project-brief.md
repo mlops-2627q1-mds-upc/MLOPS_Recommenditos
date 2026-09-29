@@ -125,7 +125,7 @@ The report describes this check as part of the data decisions.
 
 ## 4. Modelling plan **[planned]**
 
-Target, features, metrics, baselines and success criteria (`SC-01` to `SC-05`) are defined in the [problem specification](problem-spec.md).
+Target, features, metrics, baselines and success criteria (`SC-01` to `SC-06`) are defined in the [problem specification](problem-spec.md).
 
 Experiment ladder (each step is one or more MLflow runs in the same experiment):
 
