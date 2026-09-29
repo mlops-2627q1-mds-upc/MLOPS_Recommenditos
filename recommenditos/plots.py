@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from loguru import logger
-from tqdm import tqdm
 import typer
 
 from recommenditos.config import FIGURES_DIR, PROCESSED_DATA_DIR
@@ -18,9 +17,6 @@ def main(
 ):
     # ---- REPLACE THIS WITH YOUR OWN CODE ----
     logger.info("Generating plot from data...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
     logger.success("Plot generation complete.")
     # -----------------------------------------
 

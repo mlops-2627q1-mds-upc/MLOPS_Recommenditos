@@ -2,7 +2,7 @@ One-off analyses
 ================
 
 Scripts behind EDN entries, kept so a decision can be re-checked later.
-They are not part of the DVC pipeline and not covered by the ruff config.
+They are not part of the DVC pipeline, and `[tool.ruff]` in `pyproject.toml` excludes this directory, so they stay as they were run.
 
 ## NFR-11 drift feasibility (EDN-14)
 
