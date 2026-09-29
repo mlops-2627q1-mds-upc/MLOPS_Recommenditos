@@ -31,7 +31,7 @@ The allowed categorical values and the supported makes are not fixed in the sche
 
 | ID | Requirement | Verified by |
 |----|-------------|-------------|
-| FR-01 | **UC1 required fields [proposed]:** `/predict` requires `make`, `model`, `registration_date` (year and month), `mileage_km_raw`, `power_kw`, `fuel_category`, `transmission` and `country_code`. All other features of the basic and extended set are optional; a missing optional field is passed to the model as missing. **[open]** This assumes the point model is trained to handle each optional field's absence the way it is actually used at serving time; see the modelling plan (project brief section 4) for whether that needs the same random masking already planned for the UC2 interval models. | **[automated]** API test per required field, e.g. `test_fr01_rejects_missing_power_kw`; once trained, a per-field masked-input accuracy check |
+| FR-01 | **UC1 required fields [decided, EDN-15]:** `/predict` requires `make`, `model`, `registration_date` (year and month), `mileage_km_raw`, `power_kw`, `fuel_category`, `transmission`, `country_code`, `body_type` and `seller_type`. All other features of the basic and extended set are optional; a missing optional field is passed to the model as missing, and the point estimate then degrades no more than SC-06 of the [problem specification](problem-spec.md#8-success-criteria) allows. `body_type` and `seller_type` are required because both are filled in 100 % of the training listings (EDN-15), so a model trained on that data never sees them absent and accepting them as absent would be a promise the training data cannot back; whoever owns the car knows both. How the model keeps SC-06 for the remaining optional fields, native missing handling or the random masking planned for the UC2 interval models, is a modelling decision and not part of this contract (project brief section 4). | **[automated]** API test per required field, e.g. `test_fr01_rejects_missing_power_kw`; the model test for SC-06 |
 | FR-02 | **UC2 required fields:** `/price-range` requires only `make`; any subset of the other features is accepted. | **[automated]** API test with `make` only and with the partial-input scenario P1 of SC-05 |
 | FR-03 | **Validation:** fields are type-checked; `registration_date` lies between 1900-01 and the request month; `mileage_km_raw` is between 0 and 1,000,000; `power_kw` is between 1 and 1,200; low-cardinality categoricals (`fuel_category`, `transmission`, `body_type`, `drive_train`, `seller_type`) must be one of the values in the training data of the loaded model; `country_code` is one of the 8 countries of the data (problem specification section 2), so any other country is rejected as out of scope. An invalid request gets HTTP 422 with one error per invalid field. | **[automated]** Parametrised API tests, including a country outside the 8 (e.g. `US`) |
 | FR-04 | **Scope check:** a `make` outside the supported makes (computed by the pipeline, [EDN-05](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) is rejected with HTTP 422, and the response lists the supported makes. | **[automated]** API test |
@@ -73,13 +73,13 @@ They are checked with the first load test in M4 and adjusted there if needed.
 > Affected are NFR-05 (Better Uptime has to ping the VM from outside), NFR-09 (no TLS, because a Let's Encrypt HTTP-01 challenge needs port 80 on a host name we control) and NFR-13 (SSH from a GitHub-hosted runner, with a self-hosted runner on the VM as the fallback).
 > Each of them names its fallback, so none of them blocks work before M4.
 >
-> Once we have access, one person checks three things, and we settle all three requirements together (decision 5 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
+> Once we have access, one person checks three things, and we settle all three requirements together (decision 4 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
 > Until then, do not build anything that silently assumes one of the answers, and do not write these assumptions into the report as facts.
 > Nothing else on this page changes with the answer: FR-10's `/feedback` stays internal either way, and no target moves.
 
 | ID | Quality | Requirement and target | Verified by |
 |----|---------|------------------------|-------------|
-| NFR-01 | Model quality | A model is only deployed if it meets all success criteria SC-01 to SC-05 of the [problem specification](problem-spec.md#8-success-criteria). This requirement sets no thresholds of its own. | **[automated]** Model tests (M3) and the gate before a model version is promoted (FR-15) |
+| NFR-01 | Model quality | A model is only deployed if it meets all success criteria SC-01 to SC-06 of the [problem specification](problem-spec.md#8-success-criteria). This requirement sets no thresholds of its own. | **[automated]** Model tests (M3) and the gate before a model version is promoted (FR-15) |
 | NFR-02 | Latency | On the target VM, p95 latency is at most 200 ms for `/predict` (including SHAP) and at most 300 ms for `/price-range` and `/comparables`. | **[manual]** Load test and the Prometheus latency histogram |
 | NFR-03 | Throughput and scalability | The API sustains 20 requests/s for 5 minutes with less than 1 % errors, while still meeting NFR-02's latency targets. Correctness does not depend on how many worker processes or replicas run: the API keeps no per-request or per-session state, and the model and the comparables index are read-only, so they can be shared. Whatever the worker count, every request appears exactly once in FR-13's prediction log, and every FR-10 feedback record is visible to the drift job (FR-14). How the prediction log and the feedback store achieve this is a design decision, still open (project brief section 5). | **[manual]** Load test (throughput, error rate, NFR-02's latency targets); the same load test with 2 worker processes, asserting the prediction log holds exactly one entry per request |
 | NFR-04 | Resources | **RAM:** the full stack runs in the VM's 4 GB; the API container stays below 1 GB RSS under the NFR-03 load. **Image:** the API image is at most 1 GB and contains no GPU or deep-learning libraries. **Drift job:** it runs in its own container (project brief section 6) and only while it works, started on a schedule instead of kept running, so its numpy<2 / pandas<3 stack with transformers, opencv and scikit-image never competes with the API for memory. **Disk:** the stack fits the VM's 20 GB with at least 4 GB free at all times: container images together at most 6 GB, Prometheus capped at 2 GB by a retention size, and the prediction log and feedback (FR-13, FR-10) capped at 2 GB by rotation, oldest first. The VM needs no DVC cache, because the model ships inside the image (FR-12). | **[manual]** `docker stats` during the load test; image size check in CI; the disk metric in Grafana with an alert on the 4 GB floor; a deployment check that the retention and rotation caps are configured, not just intended |
@@ -117,29 +117,22 @@ Three rows have no equivalent in either standard; they are here because the cour
 The items marked **[proposed]** are proposals that could reasonably go differently.
 Once the team confirms them, they become **[decided]** and are recorded in the [EDN](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 
-1. **UC1 required fields (FR-01).**
-   - **A (proposed):** a small required core that every owner knows; everything else is optional.
-     Keeps UC1 clearly different from UC2 without asking for fields users often do not know.
-   - **B:** only `make` required on both endpoints.
-     Simplest, but `/predict` then returns point estimates for barely described cars and the two use cases blur.
-   - **C:** all basic features required.
-     Best accuracy, but hostile to users: `nr_prev_owners` is filled in only 55 % of the listings.
-2. **Unseen values (FR-05).**
+1. **Unseen values (FR-05).**
    - **A (proposed):** accept with a warning.
      Needed for the `ES` drift scenario and supported natively by LightGBM.
    - **B:** reject with HTTP 422.
      Stricter, but breaks the new-market scenario.
-3. **Endpoint split (FR-06, FR-07).**
+2. **Endpoint split (FR-06, FR-07).**
    - **A (proposed):** separate `/predict` and `/price-range`, as in the project brief.
      The two use cases have different validation rules, so each endpoint has one clear contract.
    - **B:** one `/valuation` endpoint that returns the estimate and the interval.
      Fewer endpoints, but the required fields would depend on the use case inside one schema.
-4. **Performance and resource targets (NFR-02 to NFR-04).**
+3. **Performance and resource targets (NFR-02 to NFR-04).**
    - **A (proposed):** commit to the estimated targets now and revisit them after the first M4 load test.
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.
      Avoids guessing, but leaves M4 without acceptance criteria.
-5. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
+4. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
    Deliberately left open: nobody has access to the VM yet, so this is decided once someone has tried it, and not before (see the warning at the top of section 2).
    Three questions, to be answered in one go by whoever gets access first:
    - **Reachable from outside at all, on which ports?**
@@ -151,6 +144,10 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
    - **How does CD reach the VM (NFR-13)?**
      **A (proposed):** SSH from the GitHub-hosted runner, which keeps everything in GitHub Actions and needs nothing running on the VM, but only works if the SSH port is reachable from outside the UPC network.
      **B:** a self-hosted runner on the VM that polls GitHub and needs no inbound connection, which works behind NAT and still leaves the deployment record in Actions, but costs RAM on the 4 GB VM and, since the repository is public, may only run on `push` to `main`, never on `pull_request`.
+
+**Decided:** the UC1 required fields (FR-01), recorded as [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+A small required core stays, but `body_type` and `seller_type` join it, because both are filled in 100 % of the training listings and the car's owner knows both anyway.
+The same entry adds SC-06 to the [problem specification](problem-spec.md#8-success-criteria), so NFR-01's gate covers what happens when an optional field is absent.
 
 **Decided:** the feedback endpoint and its exposure (FR-10, NFR-09), recorded as [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 `/feedback` stays, because the delayed labels are what let FR-14 report a real error and coverage drop instead of input drift alone, and because the `ES` holdout was chosen for exactly that (EDN-03).

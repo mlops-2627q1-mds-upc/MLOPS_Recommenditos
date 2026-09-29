@@ -132,9 +132,17 @@ Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) o
 Train with random masking of optional fields so the model produces wider intervals for partial inputs.
 The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
 
-**[open]:** whether the point model (UC1, steps 1-4 above) needs the same random masking, or can rely on native missing-value handling, depends on per-field fill rates in the training data that have not been profiled yet.
-`nr_prev_owners` is naturally missing often enough (55 % filled) that the model should learn real "missing" behaviour for it; the other optional basic-set fields (`body_type`, `drive_train`, `gears`, `cylinders_volume_cc`, `nr_seats`, `nr_doors`, `seller_type`) have no documented fill rate and may be close to always present, in which case the model never sees them missing during training and falls back to an unvalidated default at serving time (see [requirements](requirements.md) FR-01).
-No current success criterion would catch this: SC-04's segments do not include "with optional field X masked", and SC-05's partial-input check (P1) covers UC2's intervals, not UC1's point estimate.
+Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
+
+- `body_type` and `seller_type` are filled in **100 %** of the training listings, so a model trained on them never learns a direction for their absence.
+  Both are now required fields of `/predict` ([requirements](requirements.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
+- `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %) are missing rarely, so the signal for their absence is thin but real.
+- `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.
+  Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data too.
+
+**[open]:** whether the three rarely-missing fields need the same random masking as the UC2 interval models, or whether native missing-value handling is enough.
+This is a modelling decision, not an API one, and it is taken in M2/M3 once the pipeline exists and the effect can be measured.
+Either way the outcome is bounded: SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
 The exact window is defined in the [requirements](requirements.md) FR-09.
@@ -226,6 +234,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-12: retraining and promotion are human-triggered, not automated.
 - EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
 - EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
+- EDN-15: UC1 required fields, after measuring the fill rates, plus SC-06 for absent optional fields.
 
 Made in M1, still to be written up:
 
@@ -234,7 +243,7 @@ Made in M1, still to be written up:
 **[open]**, to decide with the team:
 
 - Deduplication key and split strategy.
-- Whether the point model needs random masking of optional fields, like the UC2 interval models, or a narrower optional-field list in FR-01; depends on fill rates not yet profiled (section 4).
+- Whether the point model needs random masking for the optional fields that are rarely missing in training, or whether native missing-value handling is enough (section 4); the field list itself is settled in EDN-15.
 
 ## 9. Reference links
 
