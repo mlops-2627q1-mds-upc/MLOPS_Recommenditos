@@ -228,7 +228,7 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-04: used cars only.
 - EDN-05: minimum listing support per make.
 - EDN-06: success criteria.
-- EDN-07: raw data hosting (import from Zenodo, never push to our own remote).
+- EDN-07: raw data hosting (import from Zenodo, never push to our own remote), amended by EDN-25: tracked with `dvc add` and pushed to our own remote.
 - EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
 - EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
 - EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
@@ -240,6 +240,8 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-16: separate `/predict` and `/price-range`, one endpoint per use case.
 - EDN-17: deployment target is the FIB Virtech VM.
 - EDN-18: unseen countries and models are accepted with a warning.
+- EDN-19: the requirements and their specification are separate pages, sharing one set of `FR-xx`/`NFR-xx` IDs.
+- EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison.
 
 Made in M1, still to be written up:
 
