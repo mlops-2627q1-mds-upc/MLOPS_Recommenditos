@@ -405,6 +405,50 @@ How to add an entry:
 - **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-06, FR-07, FR-09; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
+### EDN-17: Deployment target is the FIB Virtech VM
+
+- **Date:** 2026-09-29
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Deployment
+- **Participants:** @lukas2510
+- **Decision:** The component is deployed on the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, CPU-only, one semester). The project brief no longer lists the target as an open point, and the requirements say so once instead of assuming it in every target.
+- **Alternatives considered:**
+  - **Option A (chosen): the FIB Virtech VM.**
+    Pros: free and provided for the course, so no payment details and no personal cloud account for a semester project; 4 GB is enough with the budgets NFR-04 already sets (drift job scheduled in its own container, Prometheus capped by retention, logs capped by rotation, 4 GB disk kept free); every target in the requirements is written for this machine.
+    Cons: tight on RAM, a single unattended host with no redundancy, and nobody on the team has access yet.
+  - **Option B: another cloud (AWS, DigitalOcean, Oracle Always Free or similar).**
+    Pros: more headroom, and a free ARM tier exists at one provider.
+    Cons: either paid or tied to a private account with payment details; the grading rewards nothing for the hosting choice; NFR-02 to NFR-04 would have to be re-derived for different hardware, and an ARM tier would also mean multi-architecture images.
+- **Rationale:** The requirements already named this VM in eight places (NFR-02, NFR-04, NFR-05, NFR-09, NFR-12, NFR-13 and the network warning), so the decision had been made by writing rather than by deciding, while the brief still listed the target as open. The reason the brief gave for keeping it open, that the stack is tight on 4 GB, has since been planned for in NFR-04, so the open point was stale. What stays genuinely open is not the target but what the VM's network allows, which the requirements already track with a fallback per requirement. Access is a task, not a decision, and it has a date: if nobody has access at the M4a lab on 2026-10-21, we raise it with the teachers.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** While reviewing PR #19, AI reported the brief and the requirements as contradicting each other on the deployment target. Asked to look again, it corrected its own framing: the `[proposed]` marker in the requirements refers to the performance numbers, not to the machine, and the requirements treat the VM as settled throughout, so the real issue was an implicit decision rather than a disagreement between two pages. It also pointed out that the brief's stated reason for leaving the point open is already covered by NFR-04. Lukas kept the change small and deliberately left the performance targets `[proposed]` until the first M4 load test.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: after Lukas asked "analysiere das nochmal. dann erkläre es mir und mach mir eine begründete recommendation was der beste weg ist" about the deployment target, AI recommended fixing the VM as the target with a dated trigger for the missing access, and Lukas replied "ja mache das".
+- **Other evidence:** [Requirements](../docs/docs/requirements.md) section 2 and NFR-04; [project brief](../docs/docs/project-brief.md) section 5; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** no
+
+### EDN-18: Unseen countries and models are accepted with a warning, not rejected
+
+- **Date:** 2026-09-29
+- **Milestone:** M4: Model Deployment (serving contract; enables M6: Monitoring)
+- **Activity / Topic:** API Design
+- **Participants:** @lukas2510
+- **Decision:** FR-05 loses its `[proposed]` marker. A `country_code` among the 8 countries of the data or a `model` that is missing from the training data is accepted, passed to the model as unknown, and reported in the response's `warnings` field.
+- **Alternatives considered:**
+  - **Option A (chosen): accept and warn.**
+    Pros: the `ES` replay reaches the model at all, which is what EDN-03's new-market drift scenario and all of M6 depend on; LightGBM handles an unseen category natively, so nothing has to be built; the caller still learns that the answer is extrapolated, and the warning is in the prediction log (FR-13).
+    Cons: the API answers for inputs the model has never seen, and the estimate can be worse than the metrics suggest without the caller noticing the warning.
+  - **Option B: reject with HTTP 422.**
+    Pros: stricter, and never answers outside what was trained.
+    Cons: would reject every `ES` listing, so the drift scenario could not be replayed and the retraining loop (FR-15) could not be demonstrated. The scope check we do want is about the make (FR-04), which stays a 422.
+- **Rationale:** The decision was effectively made by EDN-03, which chose Spain as the held-out new market precisely so that unseen traffic can be replayed against the running API in M6. Rejecting it would have removed the scenario the monitoring milestone is built on. Out-of-scope makes are a different case and keep their 422 (FR-04), so "accept" is not a blanket rule.
+- **AI involvement:** Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI pointed out that this item was already prejudiced by EDN-03 and cost nothing to confirm, which is why it stayed unmarked longer than necessary. No further analysis was needed.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: AI noted that FR-05 "ist faktisch schon durch EDN-03 präjudiziert" and recommended lifting it to `[decided]`; Lukas replied "mache das".
+- **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-05 and FR-04; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** no
+
 ## Template
 
 ```markdown

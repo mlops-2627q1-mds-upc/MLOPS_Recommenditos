@@ -35,7 +35,7 @@ The allowed categorical values and the supported makes are not fixed in the sche
 | FR-02 | **UC2 required fields:** `/price-range` requires only `make`; any subset of the other features is accepted. | **[automated]** API test with `make` only and with the partial-input scenario P1 of SC-05 |
 | FR-03 | **Validation:** fields are type-checked; `registration_date` lies between 1900-01 and the request month; `mileage_km_raw` is between 0 and 1,000,000; `power_kw` is between 1 and 1,200; low-cardinality categoricals (`fuel_category`, `transmission`, `body_type`, `drive_train`, `seller_type`) must be one of the values in the training data of the loaded model; `country_code` is one of the 8 countries of the data (problem specification section 2), so any other country is rejected as out of scope. An invalid request gets HTTP 422 with one error per invalid field. | **[automated]** Parametrised API tests, including a country outside the 8 (e.g. `US`) |
 | FR-04 | **Scope check:** a `make` outside the supported makes (computed by the pipeline, [EDN-05](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) is rejected with HTTP 422, and the response lists the supported makes. | **[automated]** API test |
-| FR-05 | **Unseen values [proposed]:** a `country_code` among the 8 countries or a `model` that is missing from the training data (currently the country `ES`, see project brief section 3.2) is accepted, passed to the model as unknown, and reported in a `warnings` field of the response. | **[automated]** API test for `ES` and for an unseen model |
+| FR-05 | **Unseen values [decided, EDN-18]:** a `country_code` among the 8 countries or a `model` that is missing from the training data (currently the country `ES`, see project brief section 3.2) is accepted, passed to the model as unknown, and reported in a `warnings` field of the response. | **[automated]** API test for `ES` and for an unseen model |
 
 ### Outputs and endpoints
 
@@ -63,8 +63,8 @@ All endpoint paths are served under `/v1` (omitted from the table below for brev
 
 ## 2. Non-functional requirements
 
-Targets for latency, throughput and resources (NFR-02 to NFR-04) are estimates for the planned 4 GB, CPU-only VM **[proposed]**.
-They are checked with the first load test in M4 and adjusted there if needed.
+The deployment target is the FIB Virtech VM, 4 GB RAM and 20 GB disk, CPU-only (**[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+The targets for latency, throughput and resources (NFR-02 to NFR-04) are estimates for that machine and are themselves **[proposed]**: they are checked with the first load test in M4 and adjusted there if needed.
 
 > **Unverified: what the VM's network allows.**
 > Nobody on the team has access to the FIB Virtech VM yet, so anything below that depends on how the VM can be reached from the internet is an assumption, not a decision.
@@ -73,7 +73,7 @@ They are checked with the first load test in M4 and adjusted there if needed.
 > Affected are NFR-05 (Better Uptime has to ping the VM from outside), NFR-09 (no TLS, because a Let's Encrypt HTTP-01 challenge needs port 80 on a host name we control) and NFR-13 (SSH from a GitHub-hosted runner, with a self-hosted runner on the VM as the fallback).
 > Each of them names its fallback, so none of them blocks work before M4.
 >
-> Once we have access, one person checks three things, and we settle all three requirements together (decision 3 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
+> Once we have access, one person checks three things, and we settle all three requirements together (decision 2 in [Decisions pending confirmation](#decisions-pending-confirmation)): whether the VM is reachable from the public internet at all, on which ports, and whether there is a host name we control enough to get a certificate for.
 > Until then, do not build anything that silently assumes one of the answers, and do not write these assumptions into the report as facts.
 > Nothing else on this page changes with the answer: FR-10's `/feedback` stays internal either way, and no target moves.
 
@@ -117,17 +117,12 @@ Three rows have no equivalent in either standard; they are here because the cour
 The items marked **[proposed]** are proposals that could reasonably go differently.
 Once the team confirms them, they become **[decided]** and are recorded in the [EDN](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 
-1. **Unseen values (FR-05).**
-   - **A (proposed):** accept with a warning.
-     Needed for the `ES` drift scenario and supported natively by LightGBM.
-   - **B:** reject with HTTP 422.
-     Stricter, but breaks the new-market scenario.
-2. **Performance and resource targets (NFR-02 to NFR-04).**
+1. **Performance and resource targets (NFR-02 to NFR-04).**
    - **A (proposed):** commit to the estimated targets now and revisit them after the first M4 load test.
      Gives the load tests and the report a target from the start.
    - **B:** leave the targets open until they are measured.
      Avoids guessing, but leaves M4 without acceptance criteria.
-3. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
+2. **What the VM's network allows (NFR-05, NFR-09, NFR-13).**
    Deliberately left open: nobody has access to the VM yet, so this is decided once someone has tried it, and not before (see the warning at the top of section 2).
    Three questions, to be answered in one go by whoever gets access first:
    - **Reachable from outside at all, on which ports?**
@@ -139,6 +134,9 @@ Once the team confirms them, they become **[decided]** and are recorded in the [
    - **How does CD reach the VM (NFR-13)?**
      **A (proposed):** SSH from the GitHub-hosted runner, which keeps everything in GitHub Actions and needs nothing running on the VM, but only works if the SSH port is reachable from outside the UPC network.
      **B:** a self-hosted runner on the VM that polls GitHub and needs no inbound connection, which works behind NAT and still leaves the deployment record in Actions, but costs RAM on the 4 GB VM and, since the repository is public, may only run on `push` to `main`, never on `pull_request`.
+
+**Decided:** unseen countries and models are accepted with a warning (FR-05), recorded as [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+Rejecting them would make the `ES` replay impossible, which is the drift scenario the whole of M6 is built on (EDN-03).
 
 **Decided:** separate `/predict` and `/price-range` (FR-06, FR-07), recorded as [EDN-16](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 The two use cases have different input contracts, ten required fields against one, which one schema could only express as a conditional rule.

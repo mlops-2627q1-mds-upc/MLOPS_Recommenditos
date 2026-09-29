@@ -69,7 +69,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
-- **[planned]** `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown.
+- **[decided]**, [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown, with a warning in the response ([requirements](requirements.md) FR-05).
   An API test covers this case.
 - **[planned, optional]** A synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
 - Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded.
@@ -176,11 +176,12 @@ The API contract (Pydantic schemas) is the boundary: models can be swapped witho
 Endpoints, inputs and outputs are specified in the [requirements](requirements.md) (`FR-xx`, `NFR-xx`).
 Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the model is a DVC-tracked pipeline artifact baked into the API image at CI build time (`dvc pull`, pinned to the version `main` points to), not fetched from the MLflow registry at build or run time.
 Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [requirements](requirements.md) FR-12).
+Deployment target **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, one semester), which is what every target in the [requirements](requirements.md) is written for.
+It is tight on 4 GB, and that is planned for rather than left open: NFR-04 gives the drift job its own scheduled container, caps Prometheus by retention size and the logs by rotation, and keeps 4 GB of disk free.
+Nobody has access yet; if that is still true at the M4a lab on 2026-10-21, we raise it with the teachers instead of planning on further.
 
 Open points:
 
-- Deployment target: FIB Virtech VM (free, 4 GB RAM, 20 GB disk, one semester) or another cloud.
-  The full stack is tight on 4 GB.
 - Storage: PostgreSQL only pays off if monitoring reads the prediction log; a lighter store may be enough.
   Monitoring does read it: FR-14 joins the prediction log and the feedback labels, so the store has to support that join.
 - MLflow hosting: DagsHub (as in the course demo) or self-hosted.
@@ -236,6 +237,8 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
 - EDN-15: UC1 required fields, after measuring the fill rates, plus SC-06 for absent optional fields.
 - EDN-16: separate `/predict` and `/price-range`, one endpoint per use case.
+- EDN-17: deployment target is the FIB Virtech VM.
+- EDN-18: unseen countries and models are accepted with a warning.
 
 Made in M1, still to be written up:
 
