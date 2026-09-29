@@ -10,17 +10,49 @@ This page only documents the conventions we've settled on for this project, on t
 ## Remote
 
 We use DagsHub Storage as the DVC remote, configured over **HTTP** (not S3), as the demo prescribes.
-Setup status is tracked in [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10).
+The DagsHub repo is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>.
+It belongs to the `recommenditos` DagsHub organisation, which the team owns, so the remote does not depend on any one person's private account.
+It is connected through DagsHub's GitHub integration, not as a plain git mirror, which is why issues and pull requests show up on DagsHub and why it syncs by webhook instead of polling.
 
-Credentials never go into a commit.
-Each person configures their own token locally:
+The shared part of the configuration is committed in `.dvc/config`:
 
-```bash
-dvc remote modify origin --local access_key_id <token>
-dvc remote modify origin --local secret_access_key <token>
+```ini
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/recommenditos/MLOPS_Recommenditos.dvc
+    auth = basic
 ```
 
-This writes to `.dvc/config.local`, which is gitignored by DVC itself.
+### First-time setup
+
+1. Create a [DagsHub](https://dagshub.com) account and ask @lukas2510 to add you to the `recommenditos`
+   organisation with write access, otherwise `dvc push` is rejected.
+2. Install the project environment, which includes DVC:
+
+    ```bash
+    uv sync
+    ```
+
+3. Copy your token from DagsHub (profile picture → **Settings → Tokens**) and store your credentials locally:
+
+    ```bash
+    uv run dvc remote modify origin --local user <your-dagshub-username>
+    uv run dvc remote modify origin --local password <your-dagshub-token>
+    ```
+
+4. Check that it works:
+
+    ```bash
+    uv run dvc pull
+    ```
+
+    Before any data is tracked, this prints "Everything is up to date".
+    A 401 or 403 error means the username, the token or the collaborator access is wrong.
+
+Credentials never go into a commit.
+The commands in step 3 write to `.dvc/config.local`, which DVC's own `.dvc/.gitignore` keeps out of Git.
+Never run them without `--local`: that would write the token into the committed `.dvc/config`.
 
 ## Tracking granularity
 
@@ -31,7 +63,7 @@ it truly is one indivisible dataset.
 
 ```bash
 # Good
-dvc add data/raw/cars.csv
+dvc add data/raw/autoscout24_dataset_20251108.csv
 
 # Avoid
 dvc add data
@@ -62,8 +94,23 @@ In practice that means:
 
 ## `.gitignore`
 
-Don't add blanket rules like `/data/` to `.gitignore`. DVC generates its own `.gitignore` entries next
-to each tracked path, and Git still needs to see the `.dvc` pointer files themselves.
+Keep `data/` ignored, but let the pointers through. The root `.gitignore` does this:
+
+```gitignore
+/data/**
+!/data/**/
+!/data/**/*.dvc
+!/data/**/.gitignore
+```
+
+A bare `/data/` rule is not enough, because it would also hide the `.dvc` pointer files Git has to see,
+and Git cannot re-include a file inside an ignored directory - hence the `**` form plus the directory
+negation. The last line keeps the `.gitignore` files DVC generates next to each tracked path
+committable; without it DVC's own entries would be ignored and could never reach a commit.
+
+The rule matters most before `dvc add` runs. A raw file dropped into `data/raw/` to look at it is
+covered from the moment it lands, so a stray `git add .` cannot put it - or its personal data - into a
+repository the whole cohort can read.
 
 ## Day to day
 
