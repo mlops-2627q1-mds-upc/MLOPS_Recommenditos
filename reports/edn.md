@@ -89,6 +89,8 @@ How to add an entry:
 - **Assessment of the AI contribution:** The three options came from our own feasibility check. AI (Claude Code) explained the trade-offs against the M6 rubric and recommended Option A with `ES` as the held-out country (smaller training loss than `IT`), keeping `country` as a feature with unseen countries treated as unknown, and an optional synthetic drift scenario with a controlled cause. We accepted it because it answers the supervisor's concern with evidence, keeps the pipeline to one data source, and lets M6 show both input drift and performance degradation.
 - **AI interaction evidence:** Claude Code session, 2026-09-22: prompt "explain this to me again and give me a recommendation [...] what is feasible for our project and still in the scope of the course" on project brief §3.2; the response compared options A-C against the M6 rubric and recommended A with `ES`.
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13), project brief §3.2 (`docs/docs/project-brief.md`).
+- **In LaTeX:** no
+
 ### EDN-04: Model scope: used passenger cars only
 
 - **Date:** 2026-09-22
@@ -458,31 +460,232 @@ How to add an entry:
 - **Other evidence:** [requirements](../docs/docs/requirements.md) FR-05 and FR-04; [specification](../docs/docs/specification.md) FR-05; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
-### EDN-19: Separate the requirements from their specification, keeping one set of FR/NFR IDs
+### EDN-19: Which DagsHub repository the team uses as DVC remote and MLflow server
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Experiment Tracking
+- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Pending confirmation by the full team at the next sprint review.
+- **Decision:** A DagsHub **organisation** owned by the team hosts the connected repository, and every team member joins it with push rights (option A).
+  The repository is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>, owned by the `recommenditos` DagsHub organisation and connected through DagsHub's GitHub integration.
+  A first decision for `pauadal03/MLOPS_Recommenditos` was taken and withdrawn on the same day, once it turned out that pauadal03 is not a member of this team: they hold read-only access to our GitHub repository, have never contributed to it, and are not on the roster.
+  Their DagsHub repository is a mirror of our public repository made from outside the team, so it is not a candidate.
+  Later the same day `mark.welf.atzberger/MLOPS_Recommenditos` was deleted, so that candidate no longer exists either and the raw object it held is gone with it.
+  The practical choice is therefore between a DagsHub organisation owned by the team and a fresh repository under one team member's account.
+  Whether the repository stays public was decided separately, see EDN-20.
+- **Alternatives considered:**
+  - **Option A (chosen): a DagsHub organisation owns the connected repository, every team member is a member with push rights.**
+    Pros: nothing the project depends on hangs off one person's private account; push rights follow membership instead of manual collaborator entries, and the team is five people, so inviting everyone is trivial; visibility is set in one place; data and experiment history survive if a member leaves or cleans up their account.
+    Cons: one-time setup (create the organisation, connect the GitHub repository, invite four people); under a `dvc add` mechanism the 548.6 MB raw object has to be pushed once more, though under `import-url` there is nothing to move.
+  - **Option B: use `mark.welf.atzberger/MLOPS_Recommenditos`, reconnected properly.** No longer available: the repository was deleted on 2026-09-29.
+    Pros (while it existed): it belonged to a teammate and already held the raw object; no organisation to create.
+    Cons: its mirror was demonstrably not in sync (see the evidence below), and the likely fix was to delete and re-import it through the GitHub integration, which would have lost the pushed object anyway; the project would still have hung off one teammate's private account, with a manual collaborator entry needed per member.
+  - **Option C: a fresh repository under one team member's account, connected through the GitHub integration.**
+    Pros: one form less than an organisation; whoever creates it is admin and can add the other four without waiting on anyone.
+    Cons: identical to option B's structural drawbacks - the project hangs off one private account and rights are granted per person by hand. The saving over option A is a single setup form.
+  - **Option D: use `pauadal03/MLOPS_Recommenditos`.** Chosen on 2026-09-29 and withdrawn the same day.
+    Pros: it is the only mirror verifiably connected through the GitHub integration, and adopting it would have cost nothing.
+    Cons: ruled out on ownership, not on measurements - pauadal03 is not on the team, has `read` permission on our GitHub repository and has never contributed to it, so the project's data and experiment history would sit on the account of someone who cannot even push to the repository they mirrored.
+    For the record, no project data was ever on that mirror: the raw object returns 404 there, so it holds our public git history and nothing else.
+  - **Option E: keep several mirrors and let everyone push to their own.**
+    Pros: no coordination needed.
+    Cons: not viable - the remote URL is committed in `.dvc/config`, so the team would overwrite each other's setting, and data and experiment history would be split across accounts.
+- **Rationale:** By the time the decision was taken the alternatives had collapsed: option D was disqualified on ownership and option B ceased to exist when that repository was deleted, so every remaining candidate required a fresh connect through the GitHub integration anyway.
+  That removed the only real argument against option A, which had been that a correctly connected repository already existed elsewhere at zero cost.
+  What was left is a one-form difference - an organisation versus a repository under one member's account, for the same connect and the same invitations - against the fact that fifteen cohort members outside the team hold read access to the GitHub repository and can mirror it at any time, as one of them already had.
+  The team's standing rule was to take the better-engineered option unless it is overkill for a one-semester course project; with four teammates to invite rather than the whole twenty-one-person collaborator list an earlier miscount had assumed, option A is not overkill.
+  Evidence gathered on 2026-09-29 against the DagsHub and GitHub APIs.
+  Ownership: write access to the GitHub repository is held by @lukas2510, @kadameit, @ulasawczuk, @W11W11W11 and @michudud04, plus @martinezmatias and @santidrj, the two lecturers who own the course organisation; @pauadal03 has `read`, zero pull requests and zero commits, and does not appear on the roster in `docs/docs/scrum/index.md`.
+  Sync: `pauadal03/MLOPS_Recommenditos` is at `2e902e2143`, identical to GitHub `main`, carries all 7 branches and mirrors all 7 open issues, while `mark.welf.atzberger/MLOPS_Recommenditos` is at `8b1d64fc`, is missing the `docs/data-facts-corrections` and `model-card` branches, still carries `feature/ruff-pl-and-coverage` which GitHub deleted after the merge, and mirrors 0 issues.
+  DagsHub only mirrors issues and pull requests for repositories connected through the GitHub integration, so the issue count is the clearest signal that the two were connected in different ways and that mark's is a plain git mirror.
+  Visibility: both report `private: false`; EDN-07 as first written on the issue #3 branch assumed the remote was private, a premise found false and recorded in EDN-20.
+  The reason that original check misled us: anonymous access is not evidence either way, because DagsHub refuses every anonymous request, including for a known-public control repository (`DAGsHub-Official/dagshub-docs`, also `private: false`) and for a repository that does not exist.
+  Access: `lukas2510` was granted `push` on mark's repository on 2026-09-29, shortly before it was deleted, and has `pull` only on pauadal03's; the rest of the team had push on neither.
+  State at the end of 2026-09-29: `mark.welf.atzberger/MLOPS_Recommenditos` returns 404 and so does the raw object it held; `pauadal03/MLOPS_Recommenditos` still exists and still holds no data; a repository search returns that mirror as the only one left.
+  Structural point behind all of this: fifteen cohort members outside the team hold `read` on our GitHub repository, so anyone of them can create a mirror at any time without doing anything wrong. The rule the team needs is therefore not "check who owns a mirror" but "the project's infrastructure lives somewhere the team owns", which is an argument for option A independent of the measurements.
+  Follow-up: [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) now commits the organisation's URL in `.dvc/config`, and the owner still has to grant push rights to everyone.
+  Nothing has to be migrated: the 548.6 MB raw object that had been pushed to mark's repository is gone with that repository, so under the `dvc add` mechanism settled in EDN-25 ([PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27)) it is re-downloaded from Zenodo and pushed once to the organisation's remote.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI found the two mirrors, measured them against GitHub and recommended `pauadal03`'s on those measurements. The measurements were correct and the recommendation was wrong, because AI never checked whether that repository belonged to anyone on the team - it ranked the candidates it had found without asking where they came from. Lukas caught it by asking who pauadal03 is, which invalidated the recommendation and the decision taken on it. Recorded here rather than silently corrected, because the failure is the instructive part: a candidate that scores best on every technical measurement can still be disqualified by a question nobody asked. AI's useful contributions were the measurements, the finding that mark's mirror is not properly connected, and the control-repository method behind EDN-20; its first recommendation was not one of them. Its second recommendation, option A, was the one the team accepted, and only after Lukas had rejected the first and asked who the account behind it belonged to.
+  This is the second decision in the same week reached on a premise nobody had checked, after "the DagsHub repository is private" in the first version of EDN-07 on the issue #3 branch, and in both cases the check that settled it took one API call and was available before the decision rather than after it. The pattern, not either individual fix, is the thing worth carrying into the working agreements: state the premise a decision rests on, and verify it, before recording the decision.
+- **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: the comparison and the recommendation for pauadal03 followed "isn't this our DagsHub repo, the one that matches our GitHub repo?" and "why did that repo score worst?"; the retraction followed "I think pauadal03 is one of our lecturers - is it bad that everything now has to go through them?".
+- **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-20, EDN-25, roster in `docs/docs/scrum/index.md`.
+- **In LaTeX:** no
+
+### EDN-20: The DagsHub remote stays public
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Privacy
+- **Participants:** @lukas2510 (Scrum Master). Pending confirmation by the full team at the next sprint review.
+- **Decision:** The DagsHub repository that serves as our DVC remote and MLflow tracking server stays public.
+  We accept that the raw file's PII columns are readable by anyone with a DagsHub account, which follows from EDN-25 tracking the raw file with `dvc add` and pushing it to that remote.
+  The additional exposure this creates is small, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the MIT license.
+  It is not nothing: hosting our own copy makes the team a publisher of that personal data in its own right and under its own name, which the earlier publication mitigates but does not undo.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the repository public and say so.**
+    Pros: graders and supervisors can inspect code, data and experiments without being added as collaborators, which is the reason the course puts the project on DagsHub in the first place; it matches how the source dataset is already published.
+    Cons: the raw file, which still carries `vin`, `street`, `seller_company_name` and coordinates, can be pulled by every logged-in DagsHub user; re-hosting it is a publishing act of our own, so "the author already published it" reduces the marginal risk but does not transfer the responsibility; the decision has to be revisited the moment we host data that is not already public elsewhere.
+  - **Option B: make the repository private.**
+    Pros: the rationale first given for pushing the raw file would hold as written; the PII sits behind an access wall.
+    Cons: every grader, supervisor and teammate then needs a manual collaborator entry; it buys little real protection, because the identical file stays publicly downloadable from Zenodo either way.
+- **Rationale:** The question only came up because the premise of the raw-data decision turned out to be false.
+  The first version of EDN-07, on the issue #3 branch, justified pushing the raw file with "the DagsHub repo is private (anonymous access is redirected to the login page and an anonymous data download returns 401)".
+  Checked on 2026-09-29: DagsHub refuses anonymous access to everything, public repositories included.
+  A known-public control repository (`DAGsHub-Official/dagshub-docs`, `private: false`) answers anonymous requests exactly like ours, and so does a repository that does not exist, so the observation has no discriminating power.
+  The authenticated API reports `private: false` for both mirrors that existed at the time.
+  Given a real choice between hiding a file that is already public and saying openly that it is public, Lukas chose the second: the protection gained would be nominal, while the access cost for graders and supervisors would be real.
+  Under EDN-19 the organisation is the team's own, so the visibility is ours to change and this decision can be revisited at any time without asking anyone outside the team.
+  Recorded deliberately as an accepted risk rather than a solved problem, because the two are not the same thing: the marginal exposure is small, but we are still the ones publishing personal data, and an entry that claimed the concern was spent would not survive a reviewer who cares about privacy.
+  State after the decision: `mark.welf.atzberger/MLOPS_Recommenditos`, the repository that held the raw copy, was deleted on 2026-09-29, and the object returns 404. The team therefore publishes no personal data on any DagsHub remote at present, and this decision governs whatever remote EDN-19 settles on rather than an exposure that exists today.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment
+- **Response to AI:** Used as input for further analysis
+- **Assessment of the AI contribution:** AI found that the privacy premise of the raw-data decision was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
+- **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: after the finding was presented with the two options ("either mark switches it to private ... or you keep it public and write that honestly into the raw-data entry"), Lukas answered "we keep it public".
+- **Other evidence:** EDN-19, EDN-25, [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27).
+- **In LaTeX:** no
+
+### EDN-21: Report the upstream licence contradiction instead of resolving it
 
 - **Date:** 2026-09-29
 - **Milestone:** M1: Project Inception
-- **Activity / Topic:** Requirements Engineering
+- **Activity / Topic:** Data Licensing and Provenance
 - **Participants:** @lukas2510
-- **Decision:** `docs/docs/requirements.md` keeps the `FR-xx` and `NFR-xx` vocabulary but is rewritten at a design-free level: what must be true, for whom, with a priority and an acceptance criterion, and without endpoints, formats, status codes, libraries or deployment mechanics. Everything design-level moves to a new `docs/docs/specification.md`, which carries the same IDs, so `FR-04` there specifies `FR-04` here. Tests, the requirement-to-test matrix and all earlier EDN entries keep pointing at one unchanged ID space.
+- **Decision:** The dataset card reports both licence statements that the Zenodo record makes about the AutoScout24 dataset, and names the contradiction, rather than picking one or asking the author to resolve it. The YAML frontmatter carries `license: mit` because that is the record's structured field, and the body explains the discrepancy.
 - **Alternatives considered:**
-  - **Option A (chosen): two levels, one ID space.**
-    Pros: the requirements answer what the component must do and can be read by someone who does not know the architecture, which is what the feedback asked for; every design decision that was already analysed and settled (EDN-08, EDN-11 to EDN-18) survives in full, at the level where it belongs; a later design change, for example a different endpoint split or a different deployment path, no longer looks like a requirements change; the `FR-xx`/`NFR-xx` IDs that tests and twelve earlier EDN entries refer to keep working, and the requirement-to-test traceability is unaffected.
-    Cons: two pages to keep consistent, and a reader has to know which of the two answers their question; every cross-reference in the brief, the problem specification, `data-versioning.md`, `CONTRIBUTING.md` and the EDN evidence links had to be repointed to the level it actually meant.
-  - **Option B: rewrite the requirements as user stories (`US-xx`) with a specification behind them.**
-    Pros: the most explicit way to show the user's intent, and the standard form in agile requirements engineering, which fits the Scrum setup of the course.
-    Cons: introduces a second ID space on top of `FR-xx`/`NFR-xx`, so every test and every earlier EDN entry would reach its requirement through one more hop; the course material and the report template speak of functional and non-functional requirements, so the team would be renaming the artefact the report has to deliver. The team tried this form first and rejected it for these reasons; the abstraction it was meant to bring is achieved by the rewrite in option A without the renaming.
-  - **Option C: keep one page and only soften its wording.**
-    Pros: no new file, no link changes.
-    Cons: the design decisions would still sit inside the requirements, only less visibly, so the criticism would be answered in form and not in substance; and there would be no place left for the endpoint-level detail that M4 needs.
-- **Rationale:** The lecturer's feedback on the M1 requirements was that they read as a specification: too technical, and fixing design where they should fix intent. The diagnosis holds. The page stated endpoints, HTTP status codes, header names, container mechanics and image tags, which meant that changing any of those looked like changing a requirement, and that a reader could not tell what the component owes its users from what we happened to choose. The detail itself is not the problem, since it is what the tests and the M4 deployment work are built on, so it was moved rather than dropped. Keeping a single ID space across both levels was the deciding factor against option B: the traceability the report has to show runs from a requirement ID to a test, and adding a second vocabulary on top of that would have cost a hop and gained nothing the rewrite does not already give.
-- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+  - **Option A (chosen): report both statements and flag the contradiction.**
+    Pros: it is the only accurate description of what the source actually says; it costs nothing, because both readings permit non-commercial academic use; it warns anyone who later reuses our work for a commercial purpose, which is exactly where the difference would start to matter; it demonstrates the provenance care the course rewards.
+    Cons: a reader has to absorb an ambiguity rather than a single answer; the frontmatter still has to commit to one identifier, so the card is slightly inconsistent with itself unless the body is read.
+  - **Option B: report MIT only.**
+    Pros: simplest; matches the machine-readable metadata field that tooling and aggregators would read; MIT is the more permissive of the two, so it cannot under-claim our own rights.
+    Cons: silently discards a restriction the author wrote on the same record; would mislead a future reader who wanted to use the data commercially; asserts a certainty we do not have.
+  - **Option C: report the restrictive prose only.**
+    Pros: the conservative reading, so it cannot over-claim rights.
+    Cons: contradicts the structured licence field; "research, educational or analytical" is not a recognised licence, so it is not expressible in the card's frontmatter; over-restricts what may genuinely be MIT.
+  - **Option D: ask the author to resolve it before finishing the card.**
+    Pros: would produce a definitive answer and a citable clarification.
+    Cons: blocks a sprint deliverable on a stranger's response time with no deadline; disproportionate for a university project whose use is permitted under either reading.
+- **Rationale:** The contradiction is in the source, not in our reading of it: the Zenodo record's structured licence field says MIT while the author's description on the same record says "You are welcome to use this dataset for research, educational, or analytical purposes". Since our use is non-commercial academic work, both readings permit it, so resolving the ambiguity would change nothing about what we are allowed to do. Documenting it honestly is therefore strictly better than choosing a side, and materially better than blocking the deliverable on an email. Option D was explicitly declined by the team as disproportionate for the size of the project.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** Lukas relayed the feedback and asked for a more abstract version, with the explicit constraint that the existing analysis must not be lost. AI confirmed the criticism against the actual page and proposed the split into two levels, which the team accepted. Its first execution went further than asked and replaced the requirements with user stories; Lukas corrected this, because the course material, the report template and the existing IDs all speak of functional and non-functional requirements, and the stories had been meant as orientation only. AI then reworked the page to the agreed form. The abstraction of each requirement and the acceptance criteria are its proposal and were reviewed by the team.
-- **AI interaction evidence:** Claude Code session on 2026-09-29 (prompts were in German, translated here): Lukas relayed the feedback as "we got feedback on the requirements. The lecturer said they are too technical, they are more of a specification. He would rather have them like user stories, more abstract. Can you do that, but please also write a spec so the work was not for nothing", and after AI delivered user stories corrected it with "user stories were only meant as orientation for you. We still want to call them functional and non-functional requirements. But as said they should not be so technical, rather more abstract, and should not fix architecture decisions yet".
-- **Other evidence:** [Requirements](../docs/docs/requirements.md); [Specification](../docs/docs/specification.md); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Assessment of the AI contribution:** AI found the contradiction while re-validating PR #22, and in doing so corrected its own earlier review, which had asserted that the card's restrictive wording was simply wrong and contradicted the MIT licence recorded in the project brief. Fetching the Zenodo API record showed that both statements come from the same source, so the card's author had not made a mistake and the project brief's flat "License: MIT" was itself incomplete. AI laid out the four options above and recommended option A. The team accepted the recommendation but rejected the accompanying suggestion to contact the author, on the grounds that it is disproportionate for a university project.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 while reviewing PR #22. AI fetched `https://zenodo.org/api/records/17643343` and reported that `metadata.license.id` is `mit-license` while the description text welcomes use for research, education and analysis, which reads as narrower than MIT; it then flagged the choice as EDN-worthy rather than deciding it. Lukas replied, in German, that the team should not be pedantic and should simply take the recommendation, since this is a small university-course project, which settled option A and ruled out option D.
+- **Other evidence:** [PR #22](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/22), the Licensing section of [the dataset card](../docs/docs/dataset-card.md), Zenodo record [10.5281/zenodo.17643343](https://doi.org/10.5281/zenodo.17643343).
 - **In LaTeX:** no
 
+### EDN-22: Drop listings registered after the age reference date
+
+- **Date:** 2026-09-29
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Data Validation and Preprocessing
+- **Participants:** @lukas2510
+- **Decision:** Preprocessing drops the 164 listings whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
+- **Alternatives considered:**
+  - **Option A (chosen): drop the rows.**
+    Pros: 164 of 118,382 raw rows is 0.14 %, and only 26 of them survive the EDN-04 scope, so nothing measurable is lost; makes `age >= 0` a genuine invariant that the pipeline, the tests and the API contract can all rely on; no special case anywhere in the feature code.
+    Cons: throws away the other, possibly correct attributes of those listings; the rule has to live in preprocessing, so the raw expectation has to tolerate what preprocessing removes.
+  - **Option B: clamp the age at zero.**
+    Pros: keeps the rows and their remaining attributes; a single `max(0, ...)` in the feature code.
+    Cons: invents a registration date that the source does not support, and does so for rows whose date is demonstrably wrong (the latest is 2026-11-01, almost a year after the snapshot); a clamped zero is indistinguishable from a genuinely new car, which is exactly the group EDN-04 scopes out.
+  - **Option C: keep the rows with a negative age.**
+    Pros: no data loss, no cleaning rule; gradient boosting tolerates the values.
+    Cons: the API would have to accept a negative age too, or training and serving would disagree; removes the cheapest available sanity check on the most important feature.
+  - **Option D: repair the date from `production_year`.**
+    Pros: would keep the rows with a defensible value.
+    Cons: `production_year` is only 19 % filled, so it repairs almost none of them; a repair rule needs its own validation for a group this small.
+- **Rationale:** For the rows this decision actually governs, a registration date after the snapshot is a data-entry error rather than a rare but real phenomenon: 137 of the 164 sit in a single month, January 2026, which looks like a year typo. The reading is weaker for the 114 new cars among them, where a dealer entering a planned first-registration date is plausible, but those fall outside the used-car scope before preprocessing runs; only 26 of the 164 reach it. At that share the cost of dropping them is nil, while every alternative either fabricates a value or gives up the `age >= 0` invariant. Bounding the raw data with `mostly=0.99` rather than a hard rule keeps the raw suite honest about what the source actually contains while still catching a systematic worsening, which matters because the `ES` holdout and the M6 drift scenario re-run these checks on data we have not profiled.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI profiled the 164 rows, laid out the four options above and recommended dropping them, together with the split between a hard expectation on the processed data and a `mostly` bound on the raw data. Lukas accepted the recommendation because the dropped share is negligible and the invariant is worth more than the rows.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 while analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI presented the options as a decision question, Lukas chose "drop them".
+- **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), [problem specification](../docs/docs/problem-spec.md) section 2.
+- **In LaTeX:** no
+
+### EDN-23: Read the condition flags as one-sided assertions instead of encoding them three-valued
+
+- **Date:** 2026-09-29
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Feature Encoding and Data Validation
+- **Participants:** @lukas2510
+- **Decision:** `has_full_service_history`, `non_smoking` and `is_rental` stay plain booleans and are read as "the seller asserted this" versus "the seller did not assert this", never as "yes" versus "no". No three-valued (true / false / unknown) encoding is built and no `False` is mapped to missing. `is_used` is excluded entirely because `offer_type` already carries the same information reliably. The Great Expectations suite only checks that the columns are boolean and non-null.
+- **Alternatives considered:**
+  - **Option A (chosen): keep them binary, fix the interpretation.**
+    Pros: no pipeline, API or serialisation complexity; loses nothing, because the ambiguity is in the source and no encoding can resolve it; the risk it addresses (somebody reading a `False` as a denial) is a documentation and naming problem, so it is solved where it actually lives, in the problem spec, the dataset card and the model card.
+    Cons: the column name still reads like a two-sided statement, so the documentation has to carry the caveat; a reader who skips it can still misread the feature.
+  - **Option B: encode three-valued, or map `False` to missing.**
+    Pros: makes the ambiguity visible in the data itself rather than only in prose; the shape a careful reviewer expects.
+    Cons: it is not actually three-valued, because we cannot tell a real `False` from an unknown, so the third state would be empty and the encoding would misrepresent the problem as solved; for a gradient-boosted tree a column holding only `{True, NaN}` splits exactly like `{True, False}`, so the model gains no information at all; adds an extra state to the API schema, the training pipeline and the expectations for that zero gain.
+  - **Option C: drop all affected flags.**
+    Pros: the easiest position to defend; no ambiguous column ever reaches the model.
+    Cons: discards the half of the signal that is reliable, since a `True` is a real assertion; full service history and non-smoking are exactly the kind of attributes that move a used-car price.
+  - **Option D: recover the true value from `description` or the equipment lists.**
+    Pros: would turn the flags into genuine two-sided features.
+    Cons: needs multilingual free-text parsing, which the problem spec puts out of scope; produces labels with no ground truth to validate against.
+- **Rationale:** The flags are one-sided by construction: a listing form offers a checkbox, so a tick is evidence and an empty box is the absence of evidence. 14,744 rows flagged as neither used, new nor pre-registered, and 18,108 scoped rows with `is_used = False` while `offer_type = U`, are the direct measurement of that. Since no information exists to separate "no" from "not stated", every encoding choice carries identical information, and the one that costs nothing wins. This deliberately overrides the original proposal in issue #25 to encode the flags three-valued.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** The three-valued encoding was AI's own earlier proposal, written into issue #25. On re-reading the issue, AI argued against it: it showed that `{True, NaN}` and `{True, False}` are informationally identical for the tree models we use, so the encoding would add complexity without any effect on the model, and recommended fixing the interpretation instead. Lukas accepted the reversal because the argument was concrete rather than stylistic.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI presented the options as a decision question, Lukas chose "keep them binary".
+- **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), [problem specification](../docs/docs/problem-spec.md) section 4.
+- **In LaTeX:** no
+
+### EDN-24: Keep the pre-registered exclusion although the flag behind it is unreliable
+
+- **Date:** 2026-09-29
+- **Milestone:** M1: Project Inception
+- **Activity / Topic:** Problem Specification (model scope)
+- **Participants:** @lukas2510
+- **Decision:** The scope of EDN-04 stands: the pipeline keeps excluding listings with `is_preregistered = True` and the API keeps rejecting pre-registered cars. Because a `False` in that flag can also mean "not stated" (EDN-23), an unknown residue of unmarked pre-registered listings stays in the training data; this is recorded as a known limitation in the problem spec instead of being worked around, and is to be carried into the dataset card and the model card. `is_preregistered` is therefore not a feature: a column that defines the scope filter cannot also be a model input.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the exclusion, document the residue.**
+    Pros: keeps the product scope of EDN-04 ("used-car price") intact and the API rule unchanged; removes the 3,695 listings that are demonstrably pre-registered; states the limitation honestly instead of implying a clean filter.
+    Cons: the residue cannot be quantified, only bounded by the 14,744 unflagged rows; a small amount of out-of-scope data stays in training.
+  - **Option B: revise EDN-04 and keep pre-registered cars in scope, with the flag as a feature.**
+    Pros: more data; a pre-registered car really is priced differently, so the flag carries genuine signal; no contradiction between filter and feature.
+    Cons: reopens a settled scope decision whose deciding argument was product clarity, not accuracy (EDN-04 measured 6.8 % vs 6.9 % MdAPE, so almost nothing is at stake); the API would have to accept and explain a vehicle condition the component is not meant to price; the feature would be exactly as unreliable as the filter, because the same `False` ambiguity applies.
+  - **Option C: detect unmarked pre-registered listings with a heuristic and drop them too.**
+    Pros: would shrink the residue.
+    Cons: a heuristic on recent registration and low mileage has no ground truth to validate against, so it would trade a known, documented residue for an unknown number of wrongly dropped ordinary used cars.
+- **Rationale:** An earlier profiling run suggested promoting `is_preregistered` into the extended feature set, because it is `True` in 3,695 of the 113,708 rows that survive a scoping by `offer_type` and `vehicle_type`. That run simply did not apply the pre-registered filter, so the finding contradicted EDN-04 rather than extending it, and the suggestion was withdrawn. Of the remaining options, reopening the scope buys almost no accuracy (EDN-04's own measurement) while costing the product clarity that decided EDN-04 in the first place, and a heuristic would invent labels. Documenting a bounded, honest limitation is the proportionate answer.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found the contradiction between its own change in PR #24 and EDN-04 while checking whether issue #25 was still current, and reported that the scope filter itself, not only the feature set, is affected by the unreliable flag. It laid out the three options and recommended keeping EDN-04. Lukas accepted it, because reopening a settled scope decision for an effect EDN-04 had already measured as negligible is not worth it.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI reported the contradiction unprompted and presented the options as a decision question; Lukas chose to keep EDN-04.
+- **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), EDN-04, [problem specification](../docs/docs/problem-spec.md) section 2.
+- **In LaTeX:** no
+
+### EDN-25: Raw data acquisition: track with `dvc add` and push to our DagsHub remote
+
+- **Date:** 2026-09-26
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning
+- **Participants:** @W11W11W11, confirmed by @lukas2510 on 2026-09-29 when the premise below was corrected. Pending confirmation by the full team at the next sprint review.
+- **Decision:** Amends EDN-07, which had proposed importing the raw file from Zenodo and never pushing it to our own remote.
+  Download the raw file `autoscout24_dataset_20251108.csv` once from Zenodo, track it with `dvc add data/raw/autoscout24_dataset_20251108.csv` and push it to our DagsHub remote.
+  Teammates get it with `dvc pull`; the PII columns are removed later in preprocessing.
+  The remote is public (EDN-20), so this re-publishes the raw file's PII columns under the team's own name; that is accepted, with the reasoning recorded in EDN-20.
+- **Alternatives considered:**
+  - **Option A: `dvc import-url` from Zenodo.** The `.dvc` file records the Zenodo URL and the file hash; the raw file is fetched from Zenodo and never stored on our remote.
+    Pros: no second copy of the raw PII (`vin`, `street`, `seller_company_name`, coordinates); provenance is recorded in the pointer file itself.
+    Cons: every fresh setup downloads 548.6 MB from Zenodo and depends on it being online; Zenodo sends no ETag, so `dvc update` change detection is less reliable; differs from the course demo, which uses `dvc add`.
+  - **Option B (chosen): `dvc add` plus `dvc push` to DagsHub.**
+    Pros: the workflow of the course demo and of issue #3; one place to pull all data from, independent of Zenodo; fast pulls.
+    Cons: we store a copy of the raw PII ourselves, on a remote that is public, so the team becomes a publisher of that personal data in its own right.
+  - **Option C: `dvc add` plus push to a remote made private for this purpose.**
+    Pros: the raw PII would sit behind an access wall.
+    Cons: same access overhead as B, plus a manual collaborator entry for every grader and supervisor; it buys little real protection, because the identical file stays publicly downloadable from Zenodo either way (EDN-20).
+- **Rationale:** B follows the DVC workflow the course demo prescribes; `docs/dvc-demo.md` there teaches `dvc add` on the raw file, and its `dvc import`/`dvc get` commands are for data coming from another DVC or Git repository rather than from an arbitrary URL.
+  The remote is public, so pushing the raw file re-publishes its PII columns under the team's own name. We accept that because the identical file is already publicly downloadable from the pinned Zenodo DOI under the same licence, and because the marginal exposure is small while the access cost of a private remote for graders and supervisors would be real (EDN-20).
+  Option A was also weaker than it looked on the mechanism itself: the Zenodo URL answers a HEAD request with neither an `ETag` nor a `Content-MD5` header, and `dvc import-url` derives its change detection from one of those, so the mechanism was never verified against this source.
+  The MD5 of our copy matches the checksum Zenodo publishes (`b23a122cc51baf7de39f449193ff0d28`), so provenance stays verifiable either way.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Rejected
+- **Assessment of the AI contribution:** AI (Claude Code) checked the Zenodo endpoint (size, MD5, no ETag), laid out options A to C and recommended A to keep the raw PII off our infrastructure. Mark chose B because it follows the course demo.
+  After the choice, AI checked the DagsHub repository's visibility, reported it as private, and recorded that as the mitigation for the main risk it had raised against B. That check was wrong: DagsHub refuses anonymous access to every repository, public ones included, so the observation had no discriminating power, and the authenticated API reports `private: false`.
+  The error is recorded rather than quietly fixed, because the decision stands while the reason given for it did not: B is still the right option, but on the grounds in the rationale above rather than on a privacy mitigation that never existed. Verified on 2026-09-29 against a known-public control repository and a repository that does not exist, both of which answer anonymously exactly like ours.
+- **AI interaction evidence:** Claude Code session on 2026-09-26 while working on issue #3: prompt "How should the raw AutoScout24 file get into DVC (PII handling)?" with options A to C and the recommendation for A; Mark chose B, reason "because it follows the demo".
+- **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3, EDN-07, EDN-19, EDN-20.
 ### EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison
 
 - **Date:** 2026-09-29
@@ -517,6 +720,31 @@ How to add an entry:
 - **Assessment of the AI contribution:** A reviewing agent reported that the control clause fails at window 100 and proposed stating window 1,000. A second agent argued that the window was the wrong lever, because the false alarms come from `model`, and recommended excluding it while keeping window 100; Lukas chose that option. The measurement then refuted it: the control improves from 5.4 to 2.2 flagged windows of 20 but stays above the promised 1, and the three-feature clause fails in one run in five at window 100 either way. Two claims in that recommendation were also wrong and are recorded rather than quietly dropped: `model` was described as having roughly 10,000 levels, where it has 349 in the reference (84,171 is `model_version`, a different column), and the reviewing agent's control figure at window 1,000 was 0.6 of 20 against the 1.4 measured here, a difference that decides whether the clause holds with `model` kept. The argument that a 349-level chi-square against a 100-row window is under-powered survived the measurement; its effect was simply smaller than claimed. Lukas then chose the combination, which is the only configuration that was demonstrated to work.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: a peer agent's review of PR #19 reported the control failure and proposed window 1,000; this session verified the finding by inspection, argued for excluding `model` instead, and Lukas chose that. After the measurement refuted it, this session reported the four measured configurations and recommended the combination, which Lukas chose.
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-11; [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_model_excluded.py`, `nfr11_model_excluded_results.json`, run of 2026-09-29); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+### EDN-27: Separate the requirements from their specification, keeping one set of FR/NFR IDs
+
+- **Date:** 2026-09-29
+- **Milestone:** M1: Project Inception
+- **Activity / Topic:** Requirements Engineering
+- **Participants:** @lukas2510
+- **Decision:** `docs/docs/requirements.md` keeps the `FR-xx` and `NFR-xx` vocabulary but is rewritten at a design-free level: what must be true, for whom, with a priority and an acceptance criterion, and without endpoints, formats, status codes, libraries or deployment mechanics. Everything design-level moves to a new `docs/docs/specification.md`, which carries the same IDs, so `FR-04` there specifies `FR-04` here. Tests, the requirement-to-test matrix and all earlier EDN entries keep pointing at one unchanged ID space.
+- **Alternatives considered:**
+  - **Option A (chosen): two levels, one ID space.**
+    Pros: the requirements answer what the component must do and can be read by someone who does not know the architecture, which is what the feedback asked for; every design decision that was already analysed and settled (EDN-08, EDN-11 to EDN-18) survives in full, at the level where it belongs; a later design change, for example a different endpoint split or a different deployment path, no longer looks like a requirements change; the `FR-xx`/`NFR-xx` IDs that tests and twelve earlier EDN entries refer to keep working, and the requirement-to-test traceability is unaffected.
+    Cons: two pages to keep consistent, and a reader has to know which of the two answers their question; every cross-reference in the brief, the problem specification, `data-versioning.md`, `CONTRIBUTING.md` and the EDN evidence links had to be repointed to the level it actually meant.
+  - **Option B: rewrite the requirements as user stories (`US-xx`) with a specification behind them.**
+    Pros: the most explicit way to show the user's intent, and the standard form in agile requirements engineering, which fits the Scrum setup of the course.
+    Cons: introduces a second ID space on top of `FR-xx`/`NFR-xx`, so every test and every earlier EDN entry would reach its requirement through one more hop; the course material and the report template speak of functional and non-functional requirements, so the team would be renaming the artefact the report has to deliver. The team tried this form first and rejected it for these reasons; the abstraction it was meant to bring is achieved by the rewrite in option A without the renaming.
+  - **Option C: keep one page and only soften its wording.**
+    Pros: no new file, no link changes.
+    Cons: the design decisions would still sit inside the requirements, only less visibly, so the criticism would be answered in form and not in substance; and there would be no place left for the endpoint-level detail that M4 needs.
+- **Rationale:** The lecturer's feedback on the M1 requirements was that they read as a specification: too technical, and fixing design where they should fix intent. The diagnosis holds. The page stated endpoints, HTTP status codes, header names, container mechanics and image tags, which meant that changing any of those looked like changing a requirement, and that a reader could not tell what the component owes its users from what we happened to choose. The detail itself is not the problem, since it is what the tests and the M4 deployment work are built on, so it was moved rather than dropped. Keeping a single ID space across both levels was the deciding factor against option B: the traceability the report has to show runs from a requirement ID to a test, and adding a second vocabulary on top of that would have cost a hop and gained nothing the rewrite does not already give.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** Lukas relayed the feedback and asked for a more abstract version, with the explicit constraint that the existing analysis must not be lost. AI confirmed the criticism against the actual page and proposed the split into two levels, which the team accepted. Its first execution went further than asked and replaced the requirements with user stories; Lukas corrected this, because the course material, the report template and the existing IDs all speak of functional and non-functional requirements, and the stories had been meant as orientation only. AI then reworked the page to the agreed form. The abstraction of each requirement and the acceptance criteria are its proposal and were reviewed by the team.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 (prompts were in German, translated here): Lukas relayed the feedback as "we got feedback on the requirements. The lecturer said they are too technical, they are more of a specification. He would rather have them like user stories, more abstract. Can you do that, but please also write a spec so the work was not for nothing", and after AI delivered user stories corrected it with "user stories were only meant as orientation for you. We still want to call them functional and non-functional requirements. But as said they should not be so technical, rather more abstract, and should not fix architecture decisions yet".
+- **Other evidence:** [Requirements](../docs/docs/requirements.md); [Specification](../docs/docs/specification.md); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** no
+
 - **In LaTeX:** no
 
 ## Template
