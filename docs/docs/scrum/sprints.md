@@ -5,7 +5,7 @@ Record of each sprint's goal and outcome.
 
 | Sprint | Dates | Goal | Outcome |
 | ------ | ----- | ---- | ------- |
-| 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met, except the model card. 14 pull requests merged, 6 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, problem specification and requirements written. Model card (#30) and requirements (#19) carried into sprint 2. |
+| 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met, except the model card. 15 pull requests merged, 7 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, problem specification and requirements written. Only the model card (#30) is carried into sprint 2. |
 | 2      | 2026-09-29 - 2026-10-06 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | In progress |
 
 ## Sprint 1 planning notes (2026-09-22)
@@ -41,14 +41,14 @@ Record of each sprint's goal and outcome.
 setup with the DagsHub remote (#26) and the raw AutoScout24 file tracked (#27); the dataset card
 (#22); the problem specification (#17); the project brief (#13); the LaTeX report and EDN templates
 (#12); ruff's Pylint rules and coverage (#23); the data-fact corrections found while re-profiling
-(#24); the DagsHub repository decisions (#28); English as the repository language (#29).
+(#24); the DagsHub repository decisions (#28); English as the repository language (#29); and the
+requirements with their separate specification (#19), merged on the last day of the sprint.
 
-**Carried into sprint 2:** the model card (#5, PR #30) and the requirements and specification
-(#14, PR #19), both still in review at the end of the sprint. The Discord server (#15) is set up
-but its issue is still open.
+**Carried into sprint 2:** only the model card (#5, PR #30), still in review at the end of the
+sprint. The Discord server (#15) is set up but its issue is still open.
 
-**Decisions recorded:** 13 EDN entries on `main`, 14 more waiting in PR #19, each with its
-alternatives, its rationale and a record of how AI was involved.
+**Decisions recorded:** 27 EDN entries on `main`, each with its alternatives, its rationale and a
+record of how AI was involved.
 
 ## Sprint 2 planning notes (2026-09-29)
 
@@ -99,7 +99,7 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
   threshold hidden in a test; a `features` stage, which the demo's text model does not need; and a
   synthetic fixture instead of a data sample, because the raw file carries PII we may not re-host.
 - **NFR-11 restated** at a window of 1,000 requests with `model` excluded from the drift comparison,
-  after measuring that neither change works on its own (EDN-26, in PR #19).
+  after measuring that neither change works on its own (EDN-26).
 - **A working rule for coding agents**, written into the [working agreements](working-agreements.md).
   Its EDN entry follows before the first delivery.
 
@@ -107,8 +107,6 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
 
 - Nobody has access to the FIB Virtech VM yet. If that is still true at the M4a lab on 2026-10-21,
   we raise it with the teachers instead of planning further on it.
-- EDN-19 was assigned twice on parallel branches, to the requirements split and to the DagsHub
-  repository decision. One of them has to be renumbered before both land.
 - The committed analysis outputs in `reports/analysis/` no longer reproduce now that #24 dropped the
   164 listings registered after the snapshot. They are cited as EDN evidence, so both scripts need
   one re-run against the new scope.
@@ -134,8 +132,8 @@ Drafted from the sprint's record on 2026-09-29, to be confirmed and extended by 
 - **What to improve:**
     - Seven pull requests were open at the same time and blocked each other, two of them with merge
       conflicts. Nothing could be built on the data contract while its pull request was open.
-    - EDN numbers were handed out on parallel branches without reserving them first, so EDN-19
-      exists twice.
+    - EDN numbers were handed out on parallel branches without reserving them first, so EDN-19 was
+      assigned twice and the requirements split had to be renumbered to EDN-27 while merging.
     - Requirements were written ahead of the code they describe. Two of them referenced a pointer
       file that was never created, and one prescribed a mechanism the team later reversed.
     - Committed analysis outputs were treated as settled, but a later scope decision changed the
