@@ -2426,7 +2426,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "coverage" },
-    { name = "dvc", specifier = ">=3.67.1" },
+    { name = "dvc" },
     { name = "ipython" },
     { name = "jupyterlab" },
     { name = "loguru" },
