@@ -43,7 +43,8 @@ Run them against the raw dataset, which `dvc pull` fetches into `data/raw/` (EDN
 dvc pull data/raw/autoscout24_dataset_20251108.csv.dvc
 CARS=data/raw/autoscout24_dataset_20251108.csv
 python reports/analysis/nfr11_check.py "$CARS"
-python reports/analysis/nfr11_diag.py    # expects cars.csv in the working directory
+ln -sf "$CARS" cars.csv   # nfr11_diag.py reads a hardcoded cars.csv
+python reports/analysis/nfr11_diag.py
 python reports/analysis/fillrates.py "$CARS"
 python reports/analysis/make_support.py "$CARS"
 PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py "$CARS"

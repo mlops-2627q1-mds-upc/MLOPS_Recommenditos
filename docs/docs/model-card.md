@@ -10,8 +10,6 @@ tags:
 - lightgbm
 - conformal-prediction
 pipeline_tag: tabular-regression
-datasets:
-- autoscout24-car-listings-2025
 metrics:
 - mdape
 - mae
@@ -27,7 +25,7 @@ It is the model behind the project's API.
 **Status: draft, no trained artefact yet.**
 This is the initial model card, written in Milestone 1 before a model exists, so everything about training and results is a plan rather than a measurement.
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the placeholder results are replaced with measured values after Milestone 2 (first trained model) and Milestone 3 (model tests asserting each `SC-xx`).
-Sections that describe an intention rather than a fact carry the status markers of the [project brief](project-brief.md): **[decided]**, **[proposed]** and **[open]**.
+Sections that describe an intention rather than a fact carry the status markers of the [project brief](project-brief.md): **[decided]**, **[planned]** and **[open]**.
 
 This card owns the trained model.
 It does not repeat what other pages own, it links to them:
@@ -64,7 +62,7 @@ The same trained booster serves the point estimate, its explanation and, through
 
 - **Repository:** <https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos>
 - **Training data:** [dataset card](dataset-card.md)
-- **Experiment tracking:** MLflow on DagsHub, from Milestone 2 (EDN-19).
+- **Experiment tracking:** MLflow on DagsHub, from Milestone 2 (**[planned]**, EDN-19, pending confirmation by the full team).
 - **Model artefact:** DVC-tracked pipeline output, baked into the API image at CI build time (FR-12, EDN-08).
 
 ### Model family **[decided, EDN-02]**
@@ -102,7 +100,7 @@ The [requirements](requirements.md#who-the-component-is-for) name three roles, a
 The scope is defined by the [problem specification](problem-spec.md#2-scope) and enforced by the API before anything reaches the model.
 
 - **Used passenger cars only:** `offer_type = U`, not pre-registered, `vehicle_type = Car` (EDN-04).
-- **Supported makes only:** makes with at least 300 listings in the cleaned used-car data, computed by the pipeline rather than hard-coded (EDN-05).
+- **Supported makes only:** makes with at least 300 listings in the cleaned used-car data, counted after removing the `ES` holdout and before the split, and computed by the pipeline rather than hard-coded (EDN-05).
   With the current data that is 11 makes covering 98.6 % of the used listings.
   A make outside that list is **refused, not guessed**, and the refusal names what is supported ([specification](specification.md) FR-04).
 - **Markets:** trained on 7 countries (DE, IT, NL, BE, AT, FR, LU) with `country_code` as a feature.
@@ -142,9 +140,11 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
 - **Severe brand skew, and a gate that cannot see it.**
   BMW, Porsche, Mercedes-Benz and Audi are 82.9 % of the source data ([dataset card](dataset-card.md#bias-risks-and-limitations)).
   Mass-market brands are not simply out of scope: Volkswagen, Honda, Hyundai and Suzuki clear the 300-listing threshold and are served.
-  But four supported makes sit so close to that threshold that SC-04 never checks them.
-  A make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at an 80/20 split, and **Honda (798), Hyundai (548), Aston Martin (360) and Volkswagen (348) fall short**, together 2.1 % of the training scope (measured 2026-09-29, `reports/analysis/make_support.py`).
-  For these makes the quality gate is silent by construction: they are in scope, they are answered, and no success criterion covers them.
+  But several supported makes sit so close to that threshold that SC-04 never checks them.
+  A make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at a 20 % test share, and **Honda (798), Hyundai (548), Aston Martin (360) and Volkswagen (348) fall short**, together 2.1 % of the training scope (listing counts measured 2026-09-29, `reports/analysis/make_support.py`).
+  Four is a floor rather than a count: the split proportions are not pinned yet, and a four-way train, validation, calibration and test split leaves the test set below 20 %, at which point Volvo joins below a 15 % share and Suzuki below 13 %.
+  Their rows still count towards the pooled criteria SC-01 to SC-03 and SC-05 to SC-06, but no criterion isolates them, so a failure specific to one of these makes cannot surface as a missed criterion.
+  For these makes the per-segment half of the quality gate is blind by construction.
   Closing that gap, by raising the support threshold, lowering SC-04's segment size, or naming these makes as low-confidence in the response, is an open task for Milestone 3.
 - **Classic and old cars.**
   In the reference run, cars older than 20 years are the only segment that breaches the per-segment target, at 15.3 % MdAPE against SC-04's 15 % limit.
@@ -232,21 +232,21 @@ The pipeline is built in Milestone 2; these steps are fixed by decisions already
 
 Every stage runs under DVC, and a clean clone reproduces the same splits and metrics within 0.1 percentage points (NFR-06).
 
-#### Training **[open]**
+#### Training
 
 - **Target:** `log(price)`, predictions transformed back with `exp`.
 - **Validation set:** early stopping and hyperparameter tuning.
   **Calibration set:** UC2 interval calibration only, never tuning.
 - **Intervals (UC2):** Conformalized Quantile Regression with MAPIE (1.x) on quantile LightGBM models, trained with random masking of optional fields so that partial inputs produce wider intervals.
   The coverage guarantee is marginal, that is on average over all inputs, not per missing-field pattern.
-- **Point model and missing fields:** whether the point model needs the same random masking, or whether LightGBM's native missing handling suffices, is measured in Milestone 2 once the pipeline exists ([project brief](project-brief.md#4-modelling-plan-planned)).
+- **Point model and missing fields [open]:** whether the point model needs the same random masking, or whether LightGBM's native missing handling suffices, is measured in Milestone 2 once the pipeline exists ([project brief](project-brief.md#4-modelling-plan-planned)).
   Either way SC-06 bounds the outcome, and NFR-01's gate enforces it.
 - **Comparables:** a filtered lookup over the processed listings, matching make and model within 2 years of age and 25 % of mileage, **not** a learned nearest-neighbour model.
   The filters are never relaxed to fill the list ([specification](specification.md) FR-09).
 
 Hyperparameters, seeds and the chosen configuration are recorded here once the runs exist, and tracked in MLflow and `params.yaml`.
 
-#### Speeds, Sizes, Times **[proposed]**
+#### Speeds, Sizes, Times **[planned]**
 
 Targets are set by the [requirements](requirements.md#2-non-functional-requirements); measured values replace them after Milestone 3.
 
@@ -381,6 +381,13 @@ Cite the project by its repository, and the data by its Zenodo record, as the da
 }
 ```
 
+**APA:**
+
+Häußler, L., Adameit, K., Sawczuk, U., Dudek, M., & Atzberger, M. (2026).
+*Recommenditos: a used-car price model* [Computer software].
+Machine Learning Systems in Production (MLOps), FIB-UPC.
+<https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos>
+
 The dataset's own BibTeX and APA entries are in the [dataset card](dataset-card.md#citation).
 
 ## Decision records
@@ -398,6 +405,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-15: UC1 required fields, and SC-06 for absent optional fields.
 - EDN-17: deployment target is the FIB Virtech VM.
 - EDN-18: unseen countries and models are accepted with a warning, not rejected.
+- EDN-19: DagsHub as the DVC remote and the MLflow tracking server.
 - EDN-22: drop listings registered after the age reference date.
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion although the flag behind it is unreliable.

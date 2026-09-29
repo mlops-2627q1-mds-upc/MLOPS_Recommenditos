@@ -84,6 +84,12 @@ def main():
     )
     print(f"they are: {', '.join(unchecked.index)}")
 
+    # The split is four-way and its proportions are not pinned yet, so the test share is an
+    # assumption. A smaller one only adds makes; this is the share at which each one drops out.
+    print("\nsensitivity: test share below which a make falls under 500 test rows")
+    for make, n in supported.items():
+        print(f"  {make:16}{MIN_SEGMENT_TEST_ROWS / n * 100:6.1f} %")
+
 
 if __name__ == "__main__":
     main()

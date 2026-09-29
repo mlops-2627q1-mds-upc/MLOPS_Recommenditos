@@ -17,3 +17,16 @@ Volkswagen             348              70  NO
 
 supported but never checked by SC-04: 4 of 11 makes, 2,054 listings (2.1 % of the training scope)
 they are: Honda, Hyundai, Aston Martin, Volkswagen
+
+sensitivity: test share below which a make falls under 500 test rows
+  BMW                1.5 %
+  Porsche            2.2 %
+  Mercedes-Benz      3.7 %
+  Audi               4.1 %
+  Alfa Romeo         8.0 %
+  Suzuki            13.0 %
+  Volvo             14.9 %
+  Honda             62.7 %
+  Hyundai           91.2 %
+  Aston Martin     138.9 %
+  Volkswagen       143.7 %
