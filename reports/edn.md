@@ -11,6 +11,8 @@ How to add an entry:
 - Copy the template at the end of this file and append the new entry above the template, oldest entry first.
 - Give it the next free ID (`EDN-01`, `EDN-02`, ...).
   IDs never change once assigned, because the report refers to them.
+  Reserve the ID by adding its heading to this file on `main` before opening the branch that needs it.
+  Sprint 1 handed out EDN-19 on two branches at once, and the entry that lost the race had to be renumbered to EDN-27 while merging.
 - Fill in every field; write "-" for optional fields that do not apply.
 - Record the alternatives with their pros and cons even when the choice looked obvious.
   They are the evidence that the decision was actually weighed.

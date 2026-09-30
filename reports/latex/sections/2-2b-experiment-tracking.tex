@@ -1,0 +1,16 @@
+% Milestone 2b: experiment tracking. Included from sections/2-2-reproducibility.tex,
+% so it appears as subsection 2.2's last sub-subsection.
+% Owner: @ulasawczuk. Split out of 2-2-reproducibility.tex so that the two
+% people writing about Milestone 2 each own one file and never conflict.
+
+\subsubsection{Experiment tracking}
+\label{sec:m2-experiment-tracking}
+\guidance{
+  \textbf{Template:} e.g.\ MLflow.\\
+  \textbf{Rubric (5 pts):} How does our experiment tracking help us and others compare, understand, and extend our results?\\
+  The demo uses DagsHub as shared MLflow tracking server with credentials in \texttt{.env}.
+  Show what we log (parameters, metrics, artifacts, emissions) and a comparison of runs.
+  Our own starting points: one experiment \texttt{recommenditos-price} (\texttt{train.mlflow\_experiment} in \texttt{params.yaml}), one run per variant of the experiment ladder (\texttt{b0}, \texttt{b1}, \texttt{lgbm-basic}, \texttt{lgbm-extended}), and the DagsHub repository of EDN-19 as tracking server.
+}
+
+\tbd{experiment tracking setup and results}
