@@ -21,19 +21,37 @@ import yaml
 from recommenditos.config import PARAMS_FILE
 from recommenditos.data import preprocess, split_data
 from recommenditos.data.split_data import (
+    DISPERSION_SIGMAS,
     HOLDOUT_NAME,
     MAKES_FILE,
+    MAX_DISPERSION_BOUND,
+    MAX_GROUP_SHARE,
+    MIN_SHARE_OF_RATIO,
     SPLIT_NAMES,
+    GateLimits,
     assign_split,
     check_ratios,
-    ratio_tolerances,
+    cross_holdout_sellers,
+    dispersion_bounds,
     supported_makes,
 )
 from recommenditos.schema import PROCESSED_SCHEMA
 
-#: Enough seeds that the ratio tolerance is a property of the stage rather than
-#: a lucky draw of the one seed params.yaml happens to carry.
+#: Enough seeds that the gate is a property of the stage rather than a lucky
+#: draw of the one seed params.yaml happens to carry.
 SEED_SWEEP = range(1, 26)
+
+#: The floor to sweep seeds against on the fixture pool, instead of the
+#: project's `MIN_SHARE_OF_RATIO`.
+#:
+#: The floor is a statement about a pool of the real snapshot's granularity.
+#: The fixture pool has 608 seller groups against the snapshot's 28,435, so its
+#: shares scatter far more: over 2,000 seeds the smallest share any set reaches
+#: is 0.478 of its ratio here against 0.820 on the snapshot
+#: (`reports/analysis/split_gate_results.txt`). Sweeping the project's 0.75 here
+#: would therefore measure the fixture's size, not the stage's correctness. The
+#: project value is exercised on the one real run of the stage, in `processed`.
+FIXTURE_MIN_SHARE_OF_RATIO = 0.45
 
 
 @pytest.fixture(scope="module")
@@ -145,6 +163,63 @@ def test_no_seller_group_appears_in_two_sets(sets: dict[str, pd.DataFrame], para
             assert seen.setdefault(group, name) == name, f"{group} is in {seen[group]} and {name}"
 
 
+def test_the_holdout_is_included_in_the_disjointness_check(
+    sets: dict[str, pd.DataFrame], params: dict
+):
+    # Iterating SPLIT_NAMES alone leaves the holdout out of every disjointness
+    # assertion, which is how a seller in the holdout *and* in train went
+    # unnoticed: 81 of them in this fixture. The overlap is allowed here, but it
+    # has to be exactly the set the stage reports, not whatever happens to be
+    # there.
+    key = params["split"]["group_key"]
+    split_groups = pd.concat([sets[name][key] for name in SPLIT_NAMES])
+    reported = cross_holdout_sellers(sets[HOLDOUT_NAME][key], split_groups)
+
+    overlap = set(sets[HOLDOUT_NAME][key].unique()) & set(split_groups.unique())
+
+    assert overlap == reported
+
+
+def test_the_fixtures_cross_border_sellers_are_counted_rather_than_hidden(
+    sets: dict[str, pd.DataFrame], params: dict
+):
+    # EDN-03 holds out every row of the holdout country, and the holdout is
+    # selected per row, so a dealer listing in `ES` and elsewhere is in the
+    # holdout and in a split set. On the real snapshot this happens 0 times,
+    # because `hash_seller_group` keys a dealer by its company name and no name
+    # appears both inside and outside `ES` there. The fixture draws names
+    # independently of the country, so it does happen here - and a replay of a
+    # holdout that contains dealers the model trained on understates drift
+    # (EDN-14), which is a limitation of the fixture worth pinning rather than
+    # discovering later.
+    key = params["split"]["group_key"]
+    split_groups = pd.concat([sets[name][key] for name in SPLIT_NAMES])
+
+    crossing = cross_holdout_sellers(sets[HOLDOUT_NAME][key], split_groups)
+
+    assert len(crossing) == 81, (
+        f"the fixture's cross-border seller count moved to {len(crossing)}; if the "
+        f"generator or hash_seller_group changed, re-measure it, and if it reached 0 the "
+        f"fixture no longer exercises this case at all"
+    )
+
+
+def test_a_seller_only_inside_the_holdout_country_never_reaches_a_split_set(
+    sets: dict[str, pd.DataFrame], params: dict
+):
+    # The half of the conflict that must hold unconditionally: whatever the
+    # cross-border dealers do, a seller whose every listing is `ES` is entirely
+    # in the holdout, or the drift replay would be missing its own rows.
+    key, country = params["split"]["group_key"], params["split"]["holdout_country"]
+    holdout = sets[HOLDOUT_NAME]
+    split_groups = set(pd.concat([sets[name][key] for name in SPLIT_NAMES]).unique())
+
+    only_es = set(holdout[key].unique()) - split_groups
+
+    assert only_es, "the fixture has no seller that lists only in the holdout country"
+    assert not (holdout[holdout[key].isin(only_es)]["country_code"] != country).any()
+
+
 def test_the_five_artefacts_partition_the_interim_frame(
     sets: dict[str, pd.DataFrame], interim: pd.DataFrame
 ):
@@ -211,30 +286,73 @@ def test_a_seller_keeps_its_set_when_the_data_grows(pool: pd.DataFrame, params: 
 # --------------------------------------------------------------------------
 
 
-def test_the_realised_ratios_stay_inside_the_tolerance_the_group_sizes_allow(
+def test_every_set_clears_the_floor_and_the_dispersion_bound(
     sets: dict[str, pd.DataFrame], pool: pd.DataFrame, params: dict
 ):
+    # The oracle is independent of the function under test: the floor is a
+    # fraction of the configured ratio, which no measurement of the realised
+    # data can move.
+    ratios = params["split"]["ratios"]
     sizes = {name: len(sets[name]) for name in SPLIT_NAMES}
     group_sizes = pool[params["split"]["group_key"]].value_counts()
+    total = sum(sizes.values())
 
-    deviations = check_ratios(sizes, group_sizes, params["split"]["ratios"])
+    report = check_ratios(sizes, group_sizes, ratios)
 
-    tolerances = ratio_tolerances(group_sizes, params["split"]["ratios"])
     for name in SPLIT_NAMES:
-        assert abs(deviations[name]) <= tolerances[name], name
-    assert min(sizes.values()) > 0
+        assert sizes[name] > 0, name
+        assert sizes[name] / total >= ratios[name] * MIN_SHARE_OF_RATIO, name
+        assert abs(report["deviations"][name]) <= report["bounds"][name], name
+    assert int(group_sizes.max()) / total <= MAX_GROUP_SHARE
 
 
-def test_the_ratios_hold_for_every_seed_and_not_only_for_ours(pool: pd.DataFrame, params: dict):
-    # The tolerance has to be a statement about the stage, not about the one
-    # seed params.yaml carries, or the next `dvc exp` sweep turns it red.
+def test_the_gate_holds_for_every_seed_and_not_only_for_ours(pool: pd.DataFrame, params: dict):
+    # The gate has to be a statement about the stage, not about the one seed
+    # params.yaml carries, or the next `dvc exp` sweep turns it red.
     ratios, key = params["split"]["ratios"], params["split"]["group_key"]
     group_sizes = pool[key].value_counts()
 
     for seed in SEED_SWEEP:
         assigned = assign_split(pool[key], ratios, seed)
         sizes = {name: int((assigned == name).sum()) for name in SPLIT_NAMES}
-        check_ratios(sizes, group_sizes, ratios)
+        check_ratios(
+            sizes,
+            group_sizes,
+            ratios,
+            GateLimits(min_share_of_ratio=FIXTURE_MIN_SHARE_OF_RATIO),
+        )
+
+
+def test_the_stage_itself_refuses_a_split_the_gate_rejects(
+    interim_path: Path, tmp_path: Path, params: dict
+):
+    # The gate being right is worth nothing if `main` does not call it.
+    # Replacing the `check_ratios(...)` call with a dict of zeros used to
+    # survive the whole suite, because every gate test called the function
+    # directly with hand-made sizes. This one runs the stage, and it groups by
+    # `make` - the mis-set `group_key` that the old bound could not see at all,
+    # because a handful of huge groups derived a bound no share could miss.
+    with pytest.raises(ValueError, match=r"\[concentration\]"):
+        split_data.main(
+            interim_path,
+            tmp_path / "processed",
+            _params_with(tmp_path, params, group_key="make"),
+        )
+
+
+def test_a_rejected_split_writes_no_artefact_at_all(
+    interim_path: Path, tmp_path: Path, params: dict
+):
+    # The gate used to run after all six artefacts were written, so a rejected
+    # split had already overwritten the previous run's train.parquet and
+    # supported_makes.json before failing.
+    output = tmp_path / "processed"
+
+    with pytest.raises(ValueError):
+        split_data.main(interim_path, output, _params_with(tmp_path, params, group_key="make"))
+
+    written = sorted(path.name for path in output.glob("*")) if output.exists() else []
+    assert not written, f"a rejected split left {written} behind"
 
 
 def test_a_ratio_block_that_does_not_describe_a_split_is_refused(pool: pd.DataFrame, params: dict):
@@ -255,45 +373,212 @@ def test_a_ratio_block_that_does_not_describe_a_split_is_refused(pool: pd.DataFr
 
 
 def test_an_empty_pool_is_reported_rather_than_divided_by_zero(params: dict):
-    # The stage would otherwise fail on a zero division deep inside a share
-    # calculation, which says nothing about the interim frame being empty.
+    # Reached from the library rather than from `main`, which stops at the
+    # holdout with a message naming that cause instead. Both guards stay,
+    # because a zero division deep inside a share calculation says nothing at
+    # all about the frame that caused it.
     with pytest.raises(ValueError, match="no row was assigned"):
         split_data.realised_shares(dict.fromkeys(SPLIT_NAMES, 0))
 
     with pytest.raises(ValueError, match="no groups to split"):
-        ratio_tolerances(pd.Series([], dtype="int64"), params["split"]["ratios"])
+        dispersion_bounds(pd.Series([], dtype="int64"), params["split"]["ratios"])
 
 
-def test_the_tolerance_tightens_as_the_pool_gains_sellers(params: dict):
+def test_a_frame_that_is_all_holdout_country_says_so_rather_than_blaming_the_makes(
+    tmp_path: Path, interim: pd.DataFrame, params: dict
+):
+    # The old message was "no make reaches 300 listings in 0 rows", which sends
+    # the reader to the support threshold for a frame that held nothing but
+    # `ES`.
+    country = params["split"]["holdout_country"]
+    all_holdout = interim.copy()
+    all_holdout["country_code"] = country
+    path = tmp_path / "all-holdout.parquet"
+    all_holdout.to_parquet(path, index=False)
+
+    with pytest.raises(ValueError, match="nothing left to split"):
+        split_data.main(path, tmp_path / "processed", PARAMS_FILE)
+
+
+def test_the_dispersion_bound_tightens_as_the_pool_gains_sellers(params: dict):
     ratios = params["split"]["ratios"]
-    small = ratio_tolerances(pd.Series([1] * 200), ratios)
-    large = ratio_tolerances(pd.Series([1] * 20_000), ratios)
+    small = dispersion_bounds(pd.Series([1] * 200), ratios)
+    large = dispersion_bounds(pd.Series([1] * 20_000), ratios)
 
     for name in SPLIT_NAMES:
         assert large[name] < small[name], name
 
 
-def test_one_dominant_seller_widens_the_tolerance_rather_than_hiding_in_it(params: dict):
-    # A seller holding a tenth of the pool cannot be placed neatly by any
-    # grouped split. The tolerance has to say so out loud, because a fixed
-    # percentage would either fail every run or accept any size at all.
+def test_the_dispersion_bound_is_capped_so_concentration_cannot_buy_slack(params: dict):
+    # The defect the cap exists for: the bound was derived from the realised
+    # group sizes, so it widened exactly when one dealer dominated and the
+    # split deserved more suspicion. Uncapped, a single group holding the whole
+    # pool derives a 196 pp allowance that no realised share can miss.
     ratios = params["split"]["ratios"]
-    even = ratio_tolerances(pd.Series([1] * 1000), ratios)
-    lopsided = ratio_tolerances(pd.Series([100] + [1] * 900), ratios)
+
+    lopsided = dispersion_bounds(pd.Series([1_200] + [1] * 8_800), ratios)
+    degenerate = dispersion_bounds(pd.Series([10_000]), ratios)
 
     for name in SPLIT_NAMES:
-        assert lopsided[name] > even[name], name
+        assert lopsided[name] <= MAX_DISPERSION_BOUND, name
+        assert degenerate[name] == MAX_DISPERSION_BOUND, name
 
 
-def test_a_split_that_misses_its_ratios_fails_instead_of_being_logged(params: dict):
+def test_the_gate_accepts_a_split_that_came_out_right(params: dict):
     ratios = params["split"]["ratios"]
     group_sizes = pd.Series([1] * 10_000)
     honest = {"train": 6_000, "validation": 1_000, "calibration": 1_000, "test": 2_000}
 
-    check_ratios(honest, group_sizes, ratios)
+    report = check_ratios(honest, group_sizes, ratios)
 
-    with pytest.raises(ValueError, match="calibration"):
-        check_ratios({**honest, "calibration": 0, "train": 7_000}, group_sizes, ratios)
+    assert report["deviations"] == dict.fromkeys(SPLIT_NAMES, 0.0)
+
+
+def test_an_empty_set_fails_the_gate_however_the_bound_came_out(params: dict):
+    # The exploit this closes: with one group holding the whole pool the derived
+    # bound reached 196 pp, so three empty sets passed without an error.
+    ratios = params["split"]["ratios"]
+    all_in_train = {"train": 10_000, "validation": 0, "calibration": 0, "test": 0}
+
+    with pytest.raises(ValueError, match=r"\[non-empty\]") as raised:
+        check_ratios(all_in_train, pd.Series([10_000]), ratios)
+
+    assert "validation, calibration, test" in str(raised.value)
+
+
+def test_a_set_below_the_floor_fails_the_gate_however_wide_the_bound_is(params: dict):
+    # A calibration set at 0.58 of its intended size cleared the derived bound
+    # on the real snapshot, which is the same failure the PR rejected a fixed
+    # 6.8 pp bound for, one factor weaker. The floor is a fraction of the
+    # *configured* ratio, so no property of the realised data can widen it.
+    ratios = params["split"]["ratios"]
+    group_sizes = pd.Series([1] * 10_000)
+    shrunk = round(1_000 * 0.58)
+    broken = {
+        "train": 6_000 + (1_000 - shrunk),
+        "validation": 1_000,
+        "calibration": shrunk,
+        "test": 2_000,
+    }
+
+    with pytest.raises(ValueError, match=r"\[floor\].*calibration"):
+        check_ratios(broken, group_sizes, ratios)
+
+
+def test_the_floor_is_a_fraction_of_the_ratio_and_not_of_the_realised_data(params: dict):
+    # The property that makes the floor unconditional: the share at which it
+    # fires is the same on two pools whose derived bounds differ, because it is
+    # a fraction of the configured ratio and of nothing else. The old gate had
+    # no such share - it moved with the group sizes, which is how a calibration
+    # set at 0.58 of its intended size got through.
+    #
+    # Both pools are coarse on purpose. On a fine-grained pool the dispersion
+    # rule is the tighter of the two and fires first, which is right: a 25 %
+    # shortfall among 10,000 singleton sellers really is more surprising than
+    # among a few hundred large ones. The floor is what binds at the real
+    # snapshot's granularity, which is pinned separately.
+    ratios = params["split"]["ratios"]
+    at_the_floor = round(10_000 * ratios["calibration"] * MIN_SHARE_OF_RATIO) + 1
+    sizes = {
+        "train": 6_000 + (1_000 - at_the_floor),
+        "validation": 1_000,
+        "calibration": at_the_floor,
+        "test": 2_000,
+    }
+
+    for group_sizes in (pd.Series([1_000] + [1] * 9_000), pd.Series([300] * 10 + [1] * 7_000)):
+        check_ratios(sizes, group_sizes, ratios, GateLimits(max_group_share=1.0))
+        with pytest.raises(ValueError, match=r"\[floor\]"):
+            check_ratios(
+                {**sizes, "calibration": at_the_floor - 2, "train": sizes["train"] + 2},
+                group_sizes,
+                ratios,
+                GateLimits(max_group_share=1.0),
+            )
+
+
+def test_a_group_above_the_declared_share_fails_the_gate(params: dict):
+    # The rule that catches the two cases the derived bound could not: a dealer
+    # dumped into one set, and a `group_key` naming the wrong column. Both look
+    # to the bound like a pool that simply allows more slack.
+    ratios = params["split"]["ratios"]
+    dominant = 1_200
+    group_sizes = pd.Series([dominant] + [1] * (10_000 - dominant))
+    rest = 10_000 - dominant
+    dumped = {
+        "train": rest - round(rest * 0.1) - round(rest * 0.2),
+        "validation": round(rest * 0.1) + dominant,
+        "calibration": round(rest * 0.1),
+        "test": round(rest * 0.2),
+    }
+    dumped["train"] += 10_000 - sum(dumped.values())
+
+    with pytest.raises(ValueError, match=r"\[concentration\].*group_key") as raised:
+        check_ratios(dumped, group_sizes, ratios)
+
+    assert "12.0%" in str(raised.value)
+
+
+def test_the_gate_names_every_rule_that_fired_not_only_the_first(params: dict):
+    # A message naming one rule sends the reader after one cause when several
+    # are true, and the concentration rule is usually the one that explains the
+    # others. An empty set is reported as empty and not also as below the floor,
+    # because the second statement adds nothing to the first.
+    ratios = params["split"]["ratios"]
+
+    with pytest.raises(ValueError) as degenerate:
+        check_ratios(
+            {"train": 10_000, "validation": 0, "calibration": 0, "test": 0},
+            pd.Series([10_000]),
+            ratios,
+        )
+
+    message = str(degenerate.value)
+    assert "[non-empty]" in message
+    assert "[concentration]" in message
+    assert "[floor]" not in message
+
+    # A dealer holding a fifth of the pool, dumped into train: nothing is empty,
+    # but the shares are wrong and the reason is the concentration.
+    with pytest.raises(ValueError) as dumped:
+        check_ratios(
+            {"train": 7_600, "validation": 800, "calibration": 800, "test": 800},
+            pd.Series([2_000] + [1] * 8_000),
+            ratios,
+        )
+
+    message = str(dumped.value)
+    assert "[floor]" in message
+    assert "[concentration]" in message
+
+
+def test_the_gate_constants_are_the_ones_the_measurement_chose(params: dict):
+    # One test pins each constant, so a change to a number that a committed
+    # measurement justifies cannot pass as a tidy-up. The measurement is
+    # reports/analysis/split_gate.py; re-run it before moving any of these.
+    assert DISPERSION_SIGMAS == 5.0
+    assert MIN_SHARE_OF_RATIO == 0.75
+    assert MAX_GROUP_SHARE == 0.05
+    assert MAX_DISPERSION_BOUND == 0.15
+    # The floor has to bind before the dispersion bound on the real snapshot's
+    # granularity, or it is decoration: the dispersion rule would fire first and
+    # the floor would never be the reason anything failed.
+    real_pool = pd.Series([3_383] + [3] * 33_000)
+    bounds = dispersion_bounds(real_pool, params["split"]["ratios"])
+    for name in ("validation", "calibration"):
+        floor_slack = params["split"]["ratios"][name] * (1 - MIN_SHARE_OF_RATIO)
+        assert floor_slack < bounds[name], name
+
+
+def test_a_null_group_key_is_refused_rather_than_split_by_its_spelling(params: dict):
+    # Unreachable through the stage, because the interim contract declares the
+    # column non-nullable. Worth a guard anyway: the key is stringified, so
+    # `None` and `float("nan")` would land in different sets while the pool the
+    # bounds are derived from drops both.
+    groups = pd.Series(["a", "b", None, float("nan")], dtype="object")
+
+    with pytest.raises(ValueError, match="carry no group key"):
+        assign_split(groups, params["split"]["ratios"], params["seed"])
 
 
 def test_the_realised_test_share_keeps_sc04_measurable(
@@ -306,16 +591,28 @@ def test_the_realised_test_share_keeps_sc04_measurable(
 
 
 # --------------------------------------------------------------------------
-# The supported-make list (EDN-05, FR-04)
+# The supported-make list (EDN-05)
+#
+# Deliberately unmarked with `@pytest.mark.req("FR-04")`. FR-04 is the API's
+# 422, and the specification names an API test as its route; these tests cover
+# the pipeline half, that the list is computed from the data and written where
+# the API reads it. The requirement matrix that PR #51 adds has one granularity,
+# "covered by a test", so marking them would make FR-04 read as verified while
+# the rejection nobody has written yet is what the requirement is about. The
+# link is kept in prose instead, and FR-04 stays open until the API test exists.
 # --------------------------------------------------------------------------
 
 
 @pytest.fixture(scope="module")
-def make_list(processed: Path) -> list[dict]:
-    return json.loads((processed / MAKES_FILE).read_text(encoding="utf-8"))["supported_makes"]
+def make_document(processed: Path) -> dict:
+    return json.loads((processed / MAKES_FILE).read_text(encoding="utf-8"))
 
 
-@pytest.mark.req("FR-04")
+@pytest.fixture(scope="module")
+def make_list(make_document: dict) -> list[dict]:
+    return make_document["supported_makes"]
+
+
 def test_every_entry_names_a_make_and_the_count_that_admitted_it(make_list: list[dict]):
     assert make_list, "the fixture produced no supported make"
     for entry in make_list:
@@ -324,7 +621,17 @@ def test_every_entry_names_a_make_and_the_count_that_admitted_it(make_list: list
         assert isinstance(entry["listings"], int)
 
 
-@pytest.mark.req("FR-04")
+def test_the_artefact_carries_the_threshold_and_the_population_it_was_counted_over(
+    make_document: dict, pool: pd.DataFrame, params: dict
+):
+    # Without these a reader sees `{"make": "Volkswagen", "listings": 348}` and
+    # cannot tell whether 348 cleared the bar or what it is 348 out of, so the
+    # artefact cannot be audited on its own. They cannot drift from the values
+    # that were applied, because the same call emits and applies them.
+    assert make_document["min_listings_per_make"] == params["split"]["min_listings_per_make"]
+    assert make_document["counted_over_rows"] == len(pool)
+
+
 def test_the_list_is_exactly_the_makes_that_reach_the_threshold(
     make_list: list[dict], pool: pd.DataFrame, params: dict
 ):
