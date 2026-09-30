@@ -58,9 +58,10 @@ markers = [
 # `[tool.coverage.run]` below says, so the scope lives in one place only.
 #
 # The two files under `reports/` are for whoever reads the run instead of
-# watching it: CI uploads them, and the JUnit XML is the machine-readable record
-# of which test verified which requirement on a delivery commit. Both are
-# rewritten by every run and therefore gitignored.
+# watching it: CI uploads them, so a failure on a delivery commit can be read
+# test by test and line by line months later. Which test verified which
+# requirement is the matrix of NFR-07, not this record. Both files are rewritten
+# by every run and therefore gitignored.
 addopts = [
     "--cov",
     "--cov-report=term",
