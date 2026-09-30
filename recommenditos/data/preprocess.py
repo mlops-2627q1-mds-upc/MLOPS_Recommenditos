@@ -8,8 +8,12 @@ duplicates among listings that are actually in scope. The order is therefore
 expressed once, as `ROW_RULES`, and the stage reports one row count per rule so
 the report can cite the funnel rather than a single before-and-after pair.
 
-The supported-make filter is deliberately not here: EDN-05 counts support after
-the `ES` holdout, which happens in `split`.
+The supported-make restriction is deliberately not here, and it is not a row
+rule anywhere: `split` counts support after the `ES` holdout (EDN-05) and writes
+the list, and `features`, `train` and `evaluate` read it and restrict to it, so
+the model is fitted and the gate measured only on the makes the API serves
+(EDN-48). This stage keeps every make, which is also what lets the fixture's
+unsupported make reach the stages that have to reject it.
 
 `hash_seller_group` lives here rather than in `split` because its input is
 `seller_company_name`, which no later stage can see: the interim contract does
