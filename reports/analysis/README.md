@@ -58,17 +58,25 @@ an engine letter - and what range `weight_kg` covers once parsed out of its text
 `extended_features_results.txt` is the output of the run cited in EDN-41, the model card and the
 dataset card (2026-09-30).
 
-Run them against the raw dataset, which is not in the repo (NFR-08, EDN-07):
+Run them against the raw dataset, which is not in the repo (NFR-08; EDN-35 for where it does live).
+Use the `download` stage's own cache rather than a second 548 MB copy: `uv run dvc repro download`
+with `download.source: zenodo` puts the pinned file there, verified against `download.md5`, and
+reuses it on every later run.
 
 ```bash
-curl -L -o cars.csv "https://zenodo.org/records/17643343/files/autoscout24_dataset_20251108.csv?download=1"
-python reports/analysis/nfr11_check.py cars.csv
-python reports/analysis/nfr11_diag.py    # expects cars.csv in the working directory
-python reports/analysis/fillrates.py cars.csv
-python reports/analysis/make_support.py cars.csv
-python reports/analysis/extended_features.py cars.csv
-PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py cars.csv
-PYTHONPATH=reports/analysis python reports/analysis/nfr11_alpha_sweep.py cars.csv
+ROOT="$PWD"
+CSV="$ROOT/data/external/autoscout24_dataset_20251108.csv"
+python reports/analysis/nfr11_check.py "$CSV"
+python reports/analysis/fillrates.py "$CSV"
+python reports/analysis/make_support.py "$CSV"
+python reports/analysis/extended_features.py "$CSV"
+PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py "$CSV"
+PYTHONPATH=reports/analysis python reports/analysis/nfr11_alpha_sweep.py "$CSV"
+
+# nfr11_diag.py is kept exactly as it was run and hard-codes `cars.csv` in the working
+# directory, so give the cache that name inside the gitignored cache directory.
+ln -sf "$CSV" "$ROOT/data/external/cars.csv"
+cd "$ROOT/data/external" && PYTHONPATH="$ROOT/reports/analysis" python "$ROOT/reports/analysis/nfr11_diag.py"
 ```
 
 The scope of these scripts follows the pipeline: used cars only (EDN-04), listings registered

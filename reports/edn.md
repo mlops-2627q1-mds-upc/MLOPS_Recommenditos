@@ -667,6 +667,9 @@ How to add an entry:
 
 ### EDN-25: Raw data acquisition: track with `dvc add` and push to our DagsHub remote
 
+> **Amended by EDN-36** (2026-09-30, PR #54): the `dvc add` pointer is retired, the `download` stage acquires the file from Zenodo itself, and no copy of the CSV is hosted by us any more.
+> This entry is kept as the record of what was decided on 2026-09-26 and of the reasoning EDN-36 revised; the rejection of `dvc import-url` is the part of it that still stands.
+
 - **Date:** 2026-09-26
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning
@@ -695,7 +698,9 @@ How to add an entry:
   After the choice, AI checked the DagsHub repository's visibility, reported it as private, and recorded that as the mitigation for the main risk it had raised against B. That check was wrong: DagsHub refuses anonymous access to every repository, public ones included, so the observation had no discriminating power, and the authenticated API reports `private: false`.
   The error is recorded rather than quietly fixed, because the decision stands while the reason given for it did not: B is still the right option, but on the grounds in the rationale above rather than on a privacy mitigation that never existed. Verified on 2026-09-29 against a known-public control repository and a repository that does not exist, both of which answer anonymously exactly like ours.
 - **AI interaction evidence:** Claude Code session on 2026-09-26 while working on issue #3: prompt "How should the raw AutoScout24 file get into DVC (PII handling)?" with options A to C and the recommendation for A; Mark chose B, reason "because it follows the demo".
-- **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3, EDN-07, EDN-19, EDN-20.
+- **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3, EDN-07, EDN-19, EDN-20, EDN-36.
+- **In LaTeX:** no
+
 ### EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison
 
 > **Amended by EDN-29** (2026-09-29): the drift job runs at a significance level of 0.005, not 0.05.
@@ -734,6 +739,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** A reviewing agent reported that the control clause fails at window 100 and proposed stating window 1,000. A second agent argued that the window was the wrong lever, because the false alarms come from `model`, and recommended excluding it while keeping window 100; Lukas chose that option. The measurement then refuted it: the control improves from 5.4 to 2.2 flagged windows of 20 but stays above the promised 1, and the three-feature clause fails in one run in five at window 100 either way. Two claims in that recommendation were also wrong and are recorded rather than quietly dropped: `model` was described as having roughly 10,000 levels, where it has 349 in the reference (84,171 is `model_version`, a different column), and the reviewing agent's control figure at window 1,000 was 0.6 of 20 against the 1.4 measured here, a difference that decides whether the clause holds with `model` kept. The argument that a 349-level chi-square against a 100-row window is under-powered survived the measurement; its effect was simply smaller than claimed. Lukas then chose the combination, which is the only configuration that was demonstrated to work.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: a peer agent's review of PR #19 reported the control failure and proposed window 1,000; this session verified the finding by inspection, argued for excluding `model` instead, and Lukas chose that. After the measurement refuted it, this session reported the four measured configurations and recommended the combination, which Lukas chose.
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-11; [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_model_excluded.py`, `nfr11_model_excluded_results.json`, run of 2026-09-29); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+
 ### EDN-27: Separate the requirements from their specification, keeping one set of FR/NFR IDs
 
 - **Date:** 2026-09-29
@@ -917,6 +923,8 @@ How to add an entry:
     Pros: nothing is fabricated at any point.
     Cons: every test and every `dvc repro` would need `dvc pull` of 548 MB and DagsHub access, so the working agreements' requirement that a ticket have a local oracle would hold for nobody until the download ticket lands - which is the bottleneck the whole sprint was cut to avoid.
 - **Rationale:** The two properties that matter are that nobody is blocked and that no personal data enters the Git history, and only a generated fixture gives both. Making the source a parameter rather than a hard-coded branch is what keeps the option honest: the choice is versioned in `dvc.lock`, it is visible in a params diff, and the stage refuses any other value with a `NotImplementedError` naming the ticket that implements it, so nobody can flip it early and silently get synthetic data. The fixture deliberately keeps the real make skew and gives each seller several listings, because a seller-grouped split on a flat distribution would be indistinguishable from a random one and the split ticket's central invariant would be untestable.
+
+  Corrected on 2026-09-30 while reviewing [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54), and recorded rather than quietly edited: "it is visible in a params diff" above, and the same claim in option A, is wrong. `dvc params diff` compares the params files of two Git revisions, not the lock against the workspace, so it prints nothing about a workspace running on the synthetic source. What actually makes such a run visible is the committed `dvc.lock`, which records the source every artefact was built from, and `dvc status`, which reports a workspace that disagrees with it. The decision is unaffected: making the source a parameter is still what puts the choice in the lock.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI framed the trade-off as the one between the team being unblocked and fabricated data reaching `main`, and proposed the parameter as the way to keep both, rather than presenting the synthetic stub as free. It also derived the fixture's edge-case list from the individual stage tickets so that each ticket's rule has something to act on, and pointed out the skew requirement that a naive uniform generator would have missed. Lukas reviewed the three options and accepted A.
@@ -925,7 +933,6 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session on 2026-09-29: AI presented the three options with the parallel-work and PII consequences of each and recommended A; Lukas chose it. The generated distribution was then checked against the dataset card's published make and country shares.
 - **Other evidence:** [`recommenditos/data/synthetic.py`](../recommenditos/data/synthetic.py); [`tests/test_data.py`](../tests/test_data.py); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
 - **In LaTeX:** no
-
 
 ### EDN-34: The derived raw Parquet keeps its PII columns and is pushed like any other stage output
 
@@ -956,6 +963,94 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the question in the first place, while reviewing the pipeline skeleton: the `download` stage's output had inherited EDN-25's acceptance without anyone noticing that EDN-25 had only ever weighed the CSV. Its first write-up estimated the Parquet at "roughly another 550 MB"; asked to explain the trade-off, it measured instead and reported 215.3 MB, of which the PII columns are 3.1 MB, which moved the argument off storage entirely. It also found, while explaining, a reproducibility flaw in its own earlier suggestion of `push: false` and withdrew it. It recommended C as the clean option and A as defensible; Lukas chose A as the cheapest of the two it stood behind. The modification is that the cost of A is written down here rather than treated as settled by EDN-25.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 and 2026-09-30: the question was raised in the review of PR #48, the sizes were measured against the Zenodo file, and the four options were laid out with the reproducibility catch in B; Lukas replied "mache die einfachste variante die du recommendest".
 - **Other evidence:** [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48).
+- **In LaTeX:** no
+
+### EDN-35: The `download` stage owns `data/raw/`, and the published CSV is a local cache outside the DAG
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Pipeline Design
+- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Decision:** The `download` stage owns `data/raw/`.
+  Under `download.source: zenodo` it fetches the pinned file from the Zenodo record itself and writes `data/raw/listings.parquet` as its only output, so acquisition is inside the pipeline instead of a manual step beside it.
+  The published CSV is kept as a local cache under `data/external/` and is neither a stage `out` nor a `dep`; `download.md5` in `params.yaml` is the dependency that pins the bytes, and the stage refuses to read a file that hashes to anything else.
+  The standalone pointer `data/raw/autoscout24_dataset_20251108.csv.dvc` is deleted, which EDN-36 records as the amendment to EDN-25.
+- **Alternatives considered:**
+  - **Option A: the pointer stays and the stage reads it (issue #33's option A).** `download` takes the `dvc add`-tracked CSV as a `dep` and writes only the Parquet.
+    Pros: a fresh setup gets the CSV from DagsHub rather than from Zenodo, so it is fast and independent of Zenodo's uptime; one place to pull all data from; the snapshot's hash sits in a file at the tip of `main`, so recovering it never involves the Git history.
+    Cons: acquisition stays a manual `dvc add` outside the pipeline, so "reproduce from a clean clone" is not true of the pipeline alone, which is what the data-versioning page and the course demo describe; we keep re-publishing the CSV's PII columns on a public remote; and DVC hashes every `dep` to answer `dvc status`, so 548.6 MB is read before the pipeline can say whether anything changed.
+  - **Option B (chosen): the stage fetches the file, and the CSV is a local cache outside the graph.**
+    Pros: the pipeline acquires its own input, so a clean clone reproduces it with `dvc repro` and no manual step; nothing about the CSV is re-published by us; and `dvc status` stays instant, because the stage's deps are code and params only. A clean clone does not even pay the download, because `data/raw/listings.parquet` is a pushed stage output and the stage is up to date after `dvc pull`.
+    Cons: the file the stage really reads is not in the DAG, so DVC cannot report anything about it and a reader has to know that `download.md5` is standing in for it; and the repository stops holding a tracked copy of the raw snapshot (see the consequence below).
+  - **Option C: declare the CSV as a plain `out` of the stage.**
+    Pros: the acquired file would be in the graph, cached and recoverable with `dvc checkout`.
+    Cons: DVC removes a stage's outputs before running it, so every `dvc repro download` would re-download 548.6 MB; and a cached `out` puts the raw PII on our remote again, which is the copy EDN-36 exists to stop.
+  - **Option D: declare the CSV as a `dep`.**
+    Cons: the same 548.6 MB hash per `dvc status` as option A, plus a worse failure mode: a missing `dep` is an error DVC raises before the stage runs, so the stage could never fetch the file it depends on, and a clean clone would be stuck.
+  - **Option E: declare it as `persist: true, cache: false` (`dvc stage add --outs-persist-no-cache`, verified present in DVC 3.67.1).**
+    Pros: this is the option the first write-up of this decision missed, and it removes the objection to option C outright. `persist: true` means DVC does not delete the file before the run, so it is fetched once and reused, and `cache: false` keeps it out of the cache and off the remote, so there is no second copy of the PII. It would also make `dvc status` honest about the CSV: the file the stage reads would be named in the graph, and a damaged or swapped local copy would be reported by DVC and not only by our own check.
+    Cons: a non-cached out is still hashed to build the lock and to answer `dvc status`, so it costs exactly the 548.6 MB read per status call that ruled out options A and D, on every run including the many that never touch the raw layer. It is also not recoverable despite being in the graph: `dvc checkout` cannot restore a file DVC never cached, so the lock would carry a hash with nothing behind it. And it would put a second, DVC-owned copy of a fact `download.md5` already states, so re-pinning the file would mean editing the parameter and refreshing the lock instead of only the parameter.
+- **Rationale:** The honest reason the CSV stays out of the graph is not that DVC cannot express "a file the stage fetches and keeps".
+  It can, with `persist: true` and `cache: false` (option E), and the first version of this entry claimed a limitation that does not exist.
+  The reason is what that expression costs against what it buys.
+
+  What it buys is a `dvc status` that mentions the CSV and reports a local copy that has changed.
+  The stage already has that check and gives it more context: it re-hashes the file on every run, not only after a download, and it fails with a message naming the two things that can have happened, a damaged local copy or a genuinely re-pinned upstream file, because those need different answers.
+  And because `download.md5` is a parameter, re-pinning is a change DVC reruns on, which is the dependency edge a graph entry would have drawn.
+
+  What it costs is a 548.6 MB read on every `dvc status`, which is the cost that ruled out the `dep` shape in the first place, plus a lock entry with no recoverable object behind it.
+  So the property is already covered by the stage while the cost would be paid by everyone on every status call, and the file stays a cache.
+
+  It lives under `data/external/` because that is the third-party slot of the project layout: a copy of a published artefact, reproducible from the DOI and the pinned MD5, with nothing for DVC to version. Keeping it out of `data/raw/` is what lets that directory belong to the pipeline alone.
+
+  **Consequence, recorded rather than argued away.** After this change no `.dvc` file at the tip of the branch references the raw blob.
+  The blob is still on DagsHub and in local caches, and the pointer's hash is still in the Git history of the deleted file, so an earlier commit can still `dvc pull` and the snapshot is recoverable.
+  But recovering it without Zenodo now means somebody reading a hash out of the Git history, and a workspace-scoped `dvc gc` would delete the blob without asking.
+  That is why the rule never to run `dvc gc` without `--all-commits` is written down in the data-versioning page as part of this change.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI implemented issue #33's option B and proposed the refinement that the CSV is a local cache rather than a stage output, with the measurements behind it: the CSV is 548.6 MB, the Parquet 215.3 MB, the stage 88 s cold and 66 s warm.
+  Its option table was wrong in one way that mattered: it argued the CSV could only be an `out` that is re-downloaded every run or a `dep` that is hashed on every `dvc status`, and presented the cache as the only way out, which made a DVC limitation out of a design trade-off.
+  An adversarial review of PR #54, also run with AI, found `--outs-persist-no-cache` in DVC 3.67.1 and established that a `persist: true, cache: false` out is neither deleted before the run nor pushed, and the same review found the recoverability consequence above.
+  Lukas kept the mechanism and required the rationale to be rewritten so that it rests on the cost of the 548.6 MB hash and on the check the stage already performs, rather than on a limitation that does not exist, and required the consequence to be recorded.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33), which produced the first option table in the body of [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); a second Claude Code session the same day reviewing that PR adversarially, which produced the `persist` finding and the recoverability consequence; Lukas directed that the entry be corrected rather than the mechanism changed.
+- **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the `download` stage in `dvc.yaml` and the `download` block of `params.yaml`; [Data versioning](../docs/docs/data-versioning.md), "Raw data"; `tests/test_download.py`; EDN-25, EDN-34, EDN-36.
+- **In LaTeX:** no
+
+### EDN-36: Retire EDN-25's `dvc add` pointer, so we no longer host a copy of the raw CSV
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Personal Data
+- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25 itself.
+- **Decision:** Amends EDN-25, which had tracked the raw CSV with `dvc add` and pushed it to our DagsHub remote.
+  The pointer `data/raw/autoscout24_dataset_20251108.csv.dvc` is deleted, the CSV is neither tracked nor pushed by us any more, and the `download` stage acquires it instead (EDN-35).
+  The blob the pointer referenced is left on the remote untouched, so checking out an earlier commit and running `dvc pull` still works.
+  What EDN-25 decided about `dvc import-url` is unchanged and was independently confirmed while implementing the stage.
+- **Alternatives considered:**
+  - **Option A (chosen): delete the pointer with `dvc remove`, leave the blob on the remote.**
+    Pros: only one mechanism owns `data/raw/` at a time, which is what the tracking-granularity rule requires and what DVC enforces anyway, since it refuses an output that overlaps a tracked path; every earlier commit stays reproducible, because the blob stays; and we stop re-publishing the CSV's PII columns going forward.
+    Cons: nothing at the tip references the blob, so recovering that snapshot without Zenodo means reading the hash out of the Git history of the deleted pointer, and a workspace-scoped `dvc gc` would delete it silently.
+  - **Option B: keep the pointer beside the stage as a record of the hash.**
+    Pros: the snapshot's hash stays visible at the tip, and `dvc pull` keeps fetching the CSV for anyone who wants it.
+    Cons: two owners of one path, which is what the granularity rule forbids and what DVC rejects outright once a stage declares anything under `data/raw/`; and we would go on re-publishing the PII columns for no gain over the pinned Zenodo DOI.
+  - **Option C: delete the pointer and the blob (`dvc gc --cloud`), so no copy of the CSV is left anywhere of ours.**
+    Pros: the second copy of the personal data would actually be gone, which is what EDN-07 originally wanted.
+    Cons: every earlier commit becomes unreproducible without Zenodo, and it removes an exposure that the pinned DOI provides publicly anyway. It trades real recoverability for no real privacy.
+- **Rationale:** EDN-25 chose `dvc add` because the course demo teaches it for a raw input that somebody acquires by hand.
+  Once the pipeline acquires the file, that premise is gone: the demo's own pattern is that a stage's outputs are tracked by the pipeline rather than by `dvc add`, and the data-versioning page had already said the manual pointer would be replaced by the `download` stage once the pipeline existed.
+  Keeping the pointer was rejected because two owners of one path is exactly what the granularity rule exists to prevent, and deleting the blob was rejected because recoverability is worth more than removing a copy of data that is public at its source.
+
+  What EDN-25 got right about the mechanism survives untouched. The Zenodo URL answers a HEAD request with neither an `ETag` nor a `Content-MD5` header, and `dvc import-url` derives its change detection from one of those, so that mechanism was never verifiable against this source. Implementing the stage measured a second instance of the same gap: Zenodo serves this file chunked and sends no `Content-Length` either.
+
+  The personal-data consequence changes shape rather than going away. We stop hosting the CSV, and we host the Parquet derived from it with the same columns, which is what EDN-34 weighed; that takes effect when `download.source` flips to `zenodo` and the lock is refreshed (issue #57).
+- **AI involvement:** Information seeking, Alternative assessment, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI retired the pointer as the implementation of issue #33's option B and, rather than assuming the consequence, checked the remote: the blob is still there (`files/md5/b2/3a12...`, HTTP 200, `content-length: 548610318`), so an earlier commit can still `dvc pull`, and nothing was deleted from the remote.
+  An adversarial review of the same PR found what that leaves behind: no pointer at the tip references the blob, `dvc gc` and `dvc gc --cloud` both default to workspace scope and would delete it, and `dvc gc` appeared nowhere in the repository, so nobody was warned.
+  Lukas accepted the mechanism and required the rule about `dvc gc --all-commits` to be documented as part of the same change.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33) and verifying the remote by authenticated request; a second Claude Code session the same day reviewing [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54), which reported the `dvc gc` exposure.
+- **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the deleted pointer `data/raw/autoscout24_dataset_20251108.csv.dvc`; [Data versioning](../docs/docs/data-versioning.md), "Raw data" and "Never run `dvc gc` without `--all-commits`"; EDN-07, EDN-20, EDN-25, EDN-34, EDN-35.
 - **In LaTeX:** no
 
 ### EDN-41: `model_version` becomes the leading token of the normalised trim plus a frequency floor
@@ -1045,6 +1140,61 @@ How to add an entry:
 - **Other evidence:** [`recommenditos/schema.py`](../recommenditos/schema.py); [`tests/test_schema.py`](../tests/test_schema.py); [EDN-02](#edn-02-model-family-gradient-boosting-lightgbm-as-main-model); [EDN-31](#edn-31-the-processed-data-contract-is-a-hand-written-schemapy-not-pandera); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39); [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55).
 - **In LaTeX:** no
 
+### EDN-44: The traceability gate is milestone-scoped, and its expected-coverage set is a validated YAML file
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Testing Strategy, CI/CD
+- **Participants:** Lukas
+- **Decision:** NFR-07's requirement-to-test matrix is gated per milestone rather than over the whole table, and which requirement owes evidence when lives in `tools/expected_coverage.yaml`, a schema-validated file the generator checks, rather than in a `Due` column of the specification's tables. Milestone names are validated against M1 to M6 and the enforced set is read off that known order, never off the order the file lists them in.
+- **Alternatives considered:**
+  - **Option A (chosen): a small validated YAML file, gate enforced per milestone up to `current`.**
+    Pros: the due date of a requirement is a parameter of a CI gate, not a statement about the system, so it does not belong in a requirement document; the generator can enforce a strict schema (every documented requirement booked exactly once, no unknown ID, no unknown or out-of-order milestone) where a table cell cannot be checked at all; bumping `current` is a one-line, dated, reviewable diff; the file carries the reasoning per milestone in comments.
+    Cons: a second place to look; the gate is only as honest as the bookings, so a requirement can be deferred by moving one line, which is why the M3 membership and the verification route of every already-due requirement are pinned by a test.
+  - **Option B: a `Due` column in the specification's tables.**
+    Pros: everything in one document, visible next to the requirement it belongs to.
+    Cons: mixes a CI parameter into a document that is supposed to describe the system; `current` would still have needed a home in prose; the specification's tables are already the widest thing in the docs; nothing can validate a table cell, so a typo or a missing cell would be invisible.
+  - **Option C: no completeness gate at all, matrix published for a human to read.**
+    Pros: never a red build nobody can fix; zero maintenance.
+    Cons: leaves NFR-07's promise to a review that nothing reminds anyone to do, which is the state that let the matrix go unimplemented until this PR.
+  - **Option D: enforce completeness over the whole table from the start.**
+    Pros: no bookkeeping, no bookings to argue about.
+    Cons: before M4 there is no API, so fourteen of the sixteen functional requirements cannot have a test; the build would be red from the first commit until M6, and a gate that is always red stops being read.
+- **Rationale:** A gate is only useful if someone acts on it, which rules out D, and only trustworthy if something enforces it, which rules out C. Between A and B, the deciding argument is that the generator can refuse a malformed expected-coverage set and cannot refuse a malformed table cell: the file makes the gate tighten by itself, because a requirement added to the documents fails the build until someone decides when its evidence is due. The decision rests on two specification amendments, both recorded in this PR: NFR-07 said CI "does not enforce completeness" and now describes this gate, and the "Verified by" legend claimed **[automated]** means a test already carries the marker, which was false for fourteen of sixteen functional entries and is now described as the route to the evidence with the due date pointing at `tools/expected_coverage.yaml`. Neither amendment changes what the system must do; both make the documents describe what CI actually does. An adversarial review of the first implementation found three ways to drop a requirement out of the gate with a one-line edit, one of which - appending an out-of-order milestone block, because the enforced set was positional in the file - was not a reviewable statement at all; validating the names against M1 to M6 and reading the order off that closes it, and the other two are now pinned by a test so the argument for loosening the gate has to be written down.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI laid out A to D with the trade-offs and recommended A, and implemented it. An adversarial AI review of that implementation then found, by execution rather than by reading, that the gate could be loosened three ways without a reviewable statement, and that the enforced set was positional in the YAML. That finding is the modification: the validated milestone order and the tests that pin the gate's parameters were not in the first design and are the reason the decision is defensible as written.
+- **AI interaction evidence:** Claude Code sessions on 2026-09-30: the options were laid out and A implemented for issue #40; a second, adversarial review session reproduced each loosening route by running the generator against a modified file and reported the exit codes, and the fixes were then verified the same way.
+- **Other evidence:** [issue #40](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/40); [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `tools/expected_coverage.yaml`; `DUE_AT_M3` in `tests/test_requirement_matrix.py`.
+- **In LaTeX:** no
+
+### EDN-45: A `req` marker is verification only where the specification says a test is the evidence
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Testing Strategy
+- **Participants:** Lukas
+- **Decision:** The matrix reports four statuses, not two, and the specification's "Verified by" tag decides which one a `req` marker earns: a marker on an **[automated]** entry is *verified by a test*, a marker on a **[manual]** entry is *named by a test* and does not stand in for the drill its cell names. A marker on a **[manual]** entry whose cell names nothing does not satisfy the gate.
+- **Alternatives considered:**
+  - **Option A (chosen): the specification's tag decides, and "named by a test" is a status of its own.**
+    Pros: a fully checkable rule, no judgement in the tool; catches the real failure the review found, where NFR-06's determinism and MLflow provenance were reported as covered by a test whose whole body asserts that two files exist; closes the cheapest way to fake coverage, which was to tag an entry **[manual]**, leave its cell empty and put a marker on any test; makes the matrix state plainly that no status means a person agreed the evidence is enough.
+    Cons: one more concept for a reader; a marker on a **[manual]** entry with named evidence still satisfies the gate, so the distinction changes the report and not the build in that case.
+  - **Option B: keep one `covered` status, fix only the two wrong markers.**
+    Pros: smallest diff; the two specific lies are gone.
+    Cons: the mechanism that produced them stays, so the next marker on a **[manual]** entry reports as verified again; and the matrix keeps asserting something a tool cannot know.
+  - **Option C: require the specification cell to name the test, and count a marker only when the named test exists.**
+    Pros: the strongest claim of the three, and would also catch a marker on the wrong test.
+    Cons: most cells name a category and not a test ("API test"), so it would need every cell rewritten before the API exists; "does this cell name a test" is a judgement a parser cannot make without a heuristic, and a heuristic in the middle of the traceability evidence is worse than a coarser rule that is exact.
+  - **Option D: drop the automated/manual distinction from the gate and treat any marker as a claim needing human sign-off.**
+    Pros: honest about the tool's limits.
+    Cons: gives up the one thing the tool can check, and turns the gate back into a reminder.
+- **Rationale:** The matrix is what the report cites for NFR-07, so its worst failure mode is reporting a requirement as verified when nothing verified it, and that is exactly what happened: NFR-06 and NFR-01 were both green while their evidence was partly or wholly absent. A tool cannot read a test body and judge whether it verifies a criterion, so the honest move is to let the document that already says which evidence counts decide, and to say out loud in the generated table that a status is about the route being walked and not about a person agreeing it is enough. C would claim more than the documents can back today; B leaves the mechanism in place. The same reasoning is why the human review stays in NFR-07 rather than being replaced by this gate: NFR-01 still reads *verified by a test* while two of its six success criteria have no thresholds, and only a person reading the table can notice that.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** An adversarial AI review found the flaw and proved it by execution, naming the test whose body asserts that two files exist and the covering test whose own comment says four of the six criteria are still null. A second AI session generated A to D, recommended A over C on the grounds that C needs a heuristic, and implemented it. The modification is in the markers rather than the tool: AI's first instinct was to strip NFR-01's markers so the requirement reads as uncovered, which would have thrown away real evidence and turned the M3 gate red with nothing to fix; instead the marker moved onto the test that keeps SC-04 to SC-06 from ever counting as met, and the residual over-claim is stated in the pull request rather than hidden.
+- **AI interaction evidence:** Claude Code adversarial review of PR #51 on 2026-09-30, which reproduced the finding by running the generator and reading the covering tests; the follow-up session laid out A to D and verified each fix by re-running the reproduction.
+- **Other evidence:** [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `Entry.status` and `Entry.has_the_promised_evidence` in `tools/requirement_matrix.py`; the status table in `CONTRIBUTING.md`; [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) for the SC-04 to SC-06 thresholds.
+- **In LaTeX:** no
 
 ## Template
 

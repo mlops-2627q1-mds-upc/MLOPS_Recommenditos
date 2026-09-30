@@ -37,6 +37,10 @@ dependencies = [
     "pytest",
     "pytest-cov",
     "python-dotenv",
+    # The `download` stage streams the raw file from Zenodo. It arrives with DVC
+    # anyway, but a direct import of a transitive dependency breaks the day that
+    # dependency changes, so it is declared here.
+    "requests",
     # params.yaml, read by every stage and by the tests that check dvc.yaml.
     "pyyaml",
     "ruff",
@@ -56,8 +60,23 @@ markers = [
 # checks the 80 % on the delivery commit, and a per-PR gate would block merges
 # while the test suite is still being built. Bare `--cov` measures whatever
 # `[tool.coverage.run]` below says, so the scope lives in one place only.
-addopts = "--cov --cov-report=term"
+#
+# The two files under `reports/` are for whoever reads the run instead of
+# watching it: CI uploads them, so a failure on a delivery commit can be read
+# test by test and line by line months later. Which test verified which
+# requirement is the matrix of NFR-07, not this record. Both files are rewritten
+# by every run and therefore gitignored.
+addopts = [
+    "--cov",
+    "--cov-report=term",
+    "--cov-report=xml:reports/coverage.xml",
+    "--junitxml=reports/junit.xml",
+]
 testpaths = ["tests"]
+# `tests/` and `tools/` are repository code, not part of the installed
+# `recommenditos` package, so the shared fixture constants and the matrix
+# generator are only importable if the root is on the path.
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["recommenditos"]

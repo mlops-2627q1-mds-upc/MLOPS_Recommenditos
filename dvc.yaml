@@ -16,11 +16,18 @@ stages:
   # ----------------------------------------------------------------------
   # download: make the raw snapshot available as a typed Parquet file.
   #
-  # `download.source` is `synthetic` while the skeleton stands, so this needs
-  # neither the 548 MB file nor DagsHub credentials. Issue #33 implements
-  # `zenodo`, asserts `download.md5` and takes over `data/raw/`, at which point
-  # data/raw/autoscout24_dataset_20251108.csv.dvc is replaced by this stage
-  # (see docs/docs/data-versioning.md, "Pipeline ownership").
+  # This stage owns `data/raw/` now: under `download.source: zenodo` it fetches
+  # the pinned file itself, so the manual `dvc add` pointer for the CSV is gone
+  # (see docs/docs/data-versioning.md, "Pipeline ownership"). The default is
+  # `synthetic`, which needs neither the 548 MB file nor DagsHub credentials;
+  # params.yaml says when that flips.
+  #
+  # The CSV is deliberately neither a `dep` nor an `out`. DVC deletes a stage's
+  # outputs before running it, so declaring the CSV would re-download 548 MB on
+  # every run; and a `dep` DVC has to hash on every `dvc status` would make the
+  # whole pipeline wait on a 548 MB read. `download.md5` is the dependency
+  # instead: it pins the bytes, it is a parameter, so re-pinning reruns the
+  # stage, and the stage refuses to read a file that hashes to anything else.
   # ----------------------------------------------------------------------
   download:
     cmd: python3 -m recommenditos.data.download_raw_dataset
@@ -32,7 +39,16 @@ stages:
       - recommenditos/pipeline.py
     params:
       - seed
-      - download
+      # Named one by one rather than as the whole `download` block, so a key
+      # added there later - a second source's credentials, say - does not
+      # invalidate this stage by existing. `rows` is listed although only
+      # `synthetic` reads it: a stage's params cannot be conditional, so editing
+      # it reruns the stage under `zenodo` too, as a re-read of the cached CSV.
+      - download.source
+      - download.rows
+      - download.zenodo_record
+      - download.filename
+      - download.md5
     outs:
       - data/raw/listings.parquet
 

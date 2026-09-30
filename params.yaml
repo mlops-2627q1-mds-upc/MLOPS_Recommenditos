@@ -18,18 +18,30 @@ seed: 20251108
 reference_date: "2025-11-08"
 
 download:
-  # STUB. The skeleton generates a synthetic stand-in of the raw file so that
-  # `dvc repro` is green on a clean clone with no credentials and no 548 MB
-  # download, which is what lets the stage tickets be built in parallel.
-  # Issue #33 implements `zenodo` and flips this key; because the value is a
-  # parameter it is recorded in `dvc.lock` and shows up in `dvc params diff`,
-  # so a pipeline still running on synthetic data cannot pass unnoticed.
+  # `zenodo` fetches the real snapshot; `synthetic` generates a stand-in, which
+  # is what lets the test suite and a clean clone run with no network and no
+  # credentials.
+  #
+  # The `zenodo` source is implemented and tested (#33). The default stays
+  # `synthetic` until `preprocess`, `split` and `features` have landed, because
+  # flipping it only means something together with a refreshed `dvc.lock` and a
+  # `dvc push` of the artefacts that lock names. Doing that once at the end of
+  # the stage chain records one real end-to-end run instead of four half-real
+  # ones, each leaving a lock in Git nobody had pushed the data for (#57).
+  #
+  # A pipeline running on synthetic data still cannot pass unnoticed: because
+  # the value is a parameter, the committed `dvc.lock` records which source
+  # every artefact was built from, and `dvc status` reports a workspace that
+  # disagrees with it. `dvc params diff` does not show this - it compares the
+  # params files of two Git revisions, not the lock against the workspace.
   source: synthetic
   # Used only by `source: synthetic`.
   rows: 20000
-  # Used only by `source: zenodo` (#33). The MD5 is the checksum Zenodo
-  # publishes and equals the one in data/raw/autoscout24_dataset_20251108.csv.dvc,
-  # so a silently changed upstream file fails loudly.
+  # Used only by `source: zenodo`. The MD5 is the checksum Zenodo publishes, so
+  # anyone can verify our copy is the original, and the stage refuses to read
+  # bytes that hash to anything else. Because it is a parameter, re-pinning the
+  # file is a change DVC sees and reruns on - which is also what stands in for
+  # the 548 MB CSV not being a dependency of the stage (see dvc.yaml).
   zenodo_record: "17643343"
   filename: autoscout24_dataset_20251108.csv
   md5: b23a122cc51baf7de39f449193ff0d28
