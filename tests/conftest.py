@@ -12,6 +12,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
+import yaml
 
 from recommenditos.config import METRICS_FILE, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
 from recommenditos.data.synthetic import generate_raw_listings
@@ -124,4 +125,19 @@ def raw_path(raw_frame: pd.DataFrame, tmp_path: Path) -> Path:
     path = tmp_path / "raw" / "listings.parquet"
     path.parent.mkdir(parents=True, exist_ok=True)
     raw_frame.to_parquet(path, index=False)
+    return path
+
+
+def params_override(tmp_path: Path, params: dict, **blocks) -> Path:
+    """A copy of params.yaml with some keys of some blocks changed.
+
+    Every stage takes its params file as an argument for exactly this reason: a
+    test can vary a parameter without monkeypatching anything, which is what lets
+    a stage test run the real `main` against a parameter set the project would
+    never ship. Shared here rather than per module, because more than one stage
+    needs it.
+    """
+    changed = {**params, **{key: {**params[key], **value} for key, value in blocks.items()}}
+    path = tmp_path / "params.yaml"
+    path.write_text(yaml.safe_dump(changed), encoding="utf-8")
     return path
