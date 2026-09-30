@@ -5,8 +5,8 @@ Record of each sprint's goal and outcome.
 
 | Sprint | Dates | Goal | Outcome |
 | ------ | ----- | ---- | ------- |
-| 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met, except the model card. 15 pull requests merged, 7 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, problem specification and requirements written. Only the model card (#30) is carried into sprint 2. |
-| 2      | 2026-09-29 - 2026-10-06 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | In progress |
+| 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met. 16 pull requests of sprint 1 scope merged, 7 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, model card, problem specification and requirements written. The model card (#5, PR #30) landed on the last day, minutes after the review was written, so nothing was carried into sprint 2 but the Discord ticket (#15), which is set up and still open. |
+| 2      | 2026-09-29 - 2026-10-07 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | In progress |
 
 ## Sprint 1 planning notes (2026-09-22)
 
@@ -113,11 +113,33 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
 - The first delivery on 2026-10-13 falls into sprint 3. Nothing in sprint 2 may slip past
   2026-10-08 without the report losing the numbers it is meant to cite.
 
+## Sprint 2 progress (2026-09-30)
+
+Recorded on day 2 of the sprint from the merged pull requests and the closed issues, so the sprint 2 review has a trail to read rather than a week to reconstruct.
+
+**Landed since planning:**
+
+- The model card ([#5](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/5), [PR #30](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/30)) merged on 2026-09-29, minutes after the sprint 1 review was written.
+  That emptied the pull request backlog and closed [#31](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/31), so sprint 1 carried nothing into sprint 2.
+- The project structure deviation is recorded as EDN-28 ([PR #46](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/46)), which the planning notes above still list as outstanding.
+- The committed analysis outputs in `reports/analysis/` reproduce again and NFR-11's false-alarm bound is corrected as EDN-29 ([PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47)).
+  That closes the second risk the sprint carried in.
+- The pipeline skeleton and the processed-data contract ([#32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32), [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48)) merged on 2026-09-30: all eight DVC stages defined and running as stubs, `params.yaml`, `recommenditos/schema.py`, the synthetic fixture, and EDN-30 to EDN-34 for the decisions behind them.
+
+**What that unblocks.** [#33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33) to [#39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) and [#25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25) each waited on #32 and on nothing else, so every pipeline ticket can now be built in parallel against the schema and the fixture instead of against another branch.
+The board and its labels are in place as of this sprint, so the work can be filtered per milestone and per area.
+
+**Still open from planning.** Nobody has access to the FIB Virtech VM; if that holds at the M4a session on 2026-10-21 it is raised with the teachers.
+The 2026-10-08 cut-off for pipeline work stands, because the first report is due 2026-10-13 and has to cite measured numbers.
+
+**Sprint boundary.** The sprint runs to the laboratory session on 2026-10-07 rather than to Tuesday 2026-10-06, so that Planning, Review and Retrospective happen where the whole team is present, and sprint 3 starts at that session.
+This is the change the [working agreements](working-agreements.md) now describe, and it is **[proposed]** until the team confirms it in the laboratory.
+
 ## Retrospective notes
 
 ### Sprint 1
 
-Drafted from the sprint's record on 2026-09-29, to be confirmed and extended by the team.
+Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be confirmed by the team in the laboratory session.
 
 - **What went well:**
     - The scope was locked before any code was written: dataset, modelling family, supported makes
@@ -141,9 +163,19 @@ Drafted from the sprint's record on 2026-09-29, to be confirmed and extended by 
     - The work was very unevenly distributed: almost every commit on `main` came from one person.
       The laboratory grade carries an individual factor based on contributions, so this matters
       beyond fairness.
+    - The board had no milestone labels, no area labels and no GitHub milestones until the last day
+      of the sprint, and six tickets were still closed without any of them. The trace the course
+      grades had to be assembled from the git history instead of being read off the board.
+    - The working agreements named a ceremony day that the lab schedule contradicts: they put
+      Planning in a Tuesday laboratory session while every session in the schedule is a Wednesday.
+      A page describing our own process was never checked against the document that fixes it.
 - **Action items:**
     - Cut sprint 2 so that each ticket owns its own files, and land the shared contracts first
       (#32).
     - Reserve EDN numbers in `reports/edn.md` on `main` before opening a branch that needs one.
     - Re-run the committed analysis outputs whenever a decision changes the data scope.
     - Every teammate owns at least one pipeline stage and writes the report section for it.
+    - Give every ticket its milestone label, area label, GitHub milestone and owner when it is
+      written, not when the sprint is reviewed.
+    - Hold the ceremonies in the Wednesday laboratory session and run the sprint from Wednesday to
+      Wednesday, so the plan is made where the whole team is present.
