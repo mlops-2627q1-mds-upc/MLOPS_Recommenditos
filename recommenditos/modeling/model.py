@@ -285,11 +285,9 @@ class Model:
         """
         items = self.space.vocabulary.equipment.get(field)
         candidates = (
-            (field,)
-            if items is None
-            else tuple(equipment_feature_name(field, item) for item in items)
+            {field} if items is None else {equipment_feature_name(field, item) for item in items}
         )
-        columns = tuple(name for name in self.features if name in set(candidates))
+        columns = tuple(name for name in self.features if name in candidates)
         if not columns:
             raise ModelError(
                 f"{self.variant!r} consumes no column of field {field!r}, so there is nothing "

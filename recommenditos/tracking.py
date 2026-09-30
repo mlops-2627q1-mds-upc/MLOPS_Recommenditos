@@ -270,10 +270,10 @@ def optional_run(experiment: str, run_name: str) -> Iterator[Run]:
         return
     with _degrading(
         lambda: tracked_run(experiment, run_name),
-        on_failure=(
-            "MLflow tracking is off for this run ({cause}). The model is written normally; set "
+        on_failure=lambda cause: (
+            f"MLflow tracking is off for this run ({cause}). The model is written normally; set "
             f"{', '.join(REQUIRED_ENV_VARS)} to record it, or {REQUIRE_TRACKING_ENV_VAR}=1 to "
-            "make this a failure."
+            f"make this a failure."
         ),
     ) as run:
         yield run
@@ -316,14 +316,16 @@ def resume_run(run_id: str | None) -> Iterator[Run]:
         return mlflow.start_run(run_id=run_id)
 
     with _degrading(
-        reopen, on_failure=f"could not resume MLflow run {run_id} " + "({cause})."
+        reopen, on_failure=lambda cause: f"could not resume MLflow run {run_id} ({cause})."
     ) as run:
         yield run
 
 
 @contextmanager
 def _degrading(
-    open_run: Callable[[], AbstractContextManager[mlflow.ActiveRun]], *, on_failure: str
+    open_run: Callable[[], AbstractContextManager[mlflow.ActiveRun]],
+    *,
+    on_failure: Callable[[str], str],
 ) -> Iterator[Run]:
     """The run `open_run` opens as a handle, or a `DisabledRun` if it cannot open.
 
@@ -346,7 +348,7 @@ def _degrading(
         opened = open_run()
         active = opened.__enter__()
     except Exception as error:  # noqa: BLE001 - any failure to reach the server
-        logger.warning(on_failure.format(cause=f"{type(error).__name__}: {error}"))
+        logger.warning(on_failure(f"{type(error).__name__}: {error}"))
         yield DisabledRun()
         return
     try:
