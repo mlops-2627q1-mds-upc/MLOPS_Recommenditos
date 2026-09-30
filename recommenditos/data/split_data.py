@@ -467,10 +467,10 @@ def main(
     sizes = {name: len(subset) for name, subset in subsets.items()}
     group_sizes = groups.value_counts()
 
-    # Checked before anything is written. A rejected split used to leave the
-    # previous run's train.parquet, test.parquet and supported_makes.json
-    # overwritten on disk, so the stage failed and the artefacts were already
-    # gone.
+    # Assign, check, then write, so that a rejected split leaves the previous
+    # run's artefacts intact. Checking after the writes means the stage fails
+    # with train.parquet, test.parquet and supported_makes.json already
+    # overwritten, which is the one state nobody can recover from.
     report = check_ratios(sizes, group_sizes, split_params["ratios"])
 
     write_frame(holdout, output_dir / f"{HOLDOUT_NAME}.parquet", PROCESSED_SCHEMA)
