@@ -20,10 +20,21 @@ reference_date: "2025-11-08"
 download:
   # `zenodo` fetches the real snapshot; `synthetic` generates a stand-in, which
   # is what lets the test suite and a clean clone run with no network and no
-  # credentials. Because the value is a parameter it is recorded in `dvc.lock`
-  # and shows up in `dvc params diff`, so a pipeline running on synthetic data
-  # cannot pass unnoticed.
-  source: zenodo
+  # credentials.
+  #
+  # The `zenodo` source is implemented and tested (#33). The default stays
+  # `synthetic` until `preprocess`, `split` and `features` have landed, because
+  # flipping it only means something together with a refreshed `dvc.lock` and a
+  # `dvc push` of the artefacts that lock names. Doing that once at the end of
+  # the stage chain records one real end-to-end run instead of four half-real
+  # ones, each leaving a lock in Git nobody had pushed the data for (#57).
+  #
+  # A pipeline running on synthetic data still cannot pass unnoticed: because
+  # the value is a parameter, the committed `dvc.lock` records which source
+  # every artefact was built from, and `dvc status` reports a workspace that
+  # disagrees with it. `dvc params diff` does not show this - it compares the
+  # params files of two Git revisions, not the lock against the workspace.
+  source: synthetic
   # Used only by `source: synthetic`.
   rows: 20000
   # Used only by `source: zenodo`. The MD5 is the checksum Zenodo publishes, so
