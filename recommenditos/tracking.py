@@ -150,6 +150,12 @@ def run_provenance() -> dict[str, str]:
     `git_dirty` is separate from `git_commit` on purpose: a commit alone says
     nothing about a working tree that has moved on from it, and a run nobody can
     map back to a state of the code is not evidence.
+
+    It counts untracked files, because an untracked module the code imports makes
+    a run as unreproducible from its commit as an edited tracked file does. The
+    cost of that reading is that anything left lying in the tree marks every run
+    dirty, so whatever is genuinely noise has to be in `.gitignore` - which is
+    where the agent tooling's `/.claude/worktrees/` entry comes from.
     """
     tags = {"git_commit": _git("rev-parse", "HEAD") or "unknown", "git_dirty": "false"}
     if _git("status", "--porcelain"):
