@@ -207,10 +207,15 @@ from recommenditos.modeling.model import load_model
 model = load_model(Path("models/lgbm-basic"))
 model.features  # the matrix columns the model consumes, in its own order
 model.predict_eur(frame)  # EUR, float64, one row in one row out, indexed like `frame`
+model.columns_of("equipment_comfort")  # the multi-hot columns one request field became
+model.mask_absent(frame, ["equipment_comfort"])  # the frame with that field not given
 ```
 
 `predict_eur` takes the feature matrix as it comes: it selects and casts what it needs, ignores extra columns such as `price`, and raises naming any column it needs and cannot find.
-A missing value is passed through unimputed and the estimator decides what to do with it (EDN-15); what "missing" means for a field whose domain already represents absence is fixed by EDN-23, so an omitted assertion flag is `False` and an omitted equipment list is empty.
+An empty frame gives an empty Series, because one row in one row out has to hold at no rows too.
+A missing value is passed through unimputed and the estimator decides what to do with it (EDN-15).
+What "missing" means for a field whose domain already represents absence is not left to the caller: `mask_absent` is the one implementation of it, and it is the one the API, SC-06's masking sweep and the tests all go through.
+An omitted assertion flag is `False`, which is all the source can mean (EDN-23); an omitted equipment list is **absent throughout**, which is not the same as an empty one, because an empty list asserts the car has none of those items (EDN-61).
 The frame handed in is never modified.
 `model.predict_log_price(frame)` is the log of the same number, which is what a future conformal step needs; `predict_interval_eur` is the reserved name for SC-05's intervals and does not exist yet.
 
@@ -279,7 +284,7 @@ Every variant is fitted only on the makes the API serves: `split` records them i
 - **Target:** `log(price)`, predictions transformed back with `exp`.
   **No bias correction** is applied to the inverse transform (EDN-49).
   `exp(E[log P | x])` is the conditional median, which is what every metric here reports, and a Duan smearing correction targets the conditional mean instead, so it biases every prediction upward and away from the typical asking price a seller wants.
-  Measured on the real snapshot, it makes every variant worse: smearing factor 1.0283 and MdAPE 9.71 % to 10.03 % for `b1`, 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`, 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`.
+  Measured on the real snapshot, it makes every variant worse: smearing factor 1.0258 and MdAPE 9.52 % to 9.83 % for `b1`, 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`, 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`.
   `b0` needs no inverse transform at all, because it is fitted on `price` directly.
 - **Validation set:** early stopping and hyperparameter tuning.
   **Calibration set:** UC2 interval calibration only, never tuning.
@@ -287,8 +292,8 @@ Every variant is fitted only on the makes the API serves: `split` records them i
   `predict_eur` clips in log space before the exponential, to the observed minimum and maximum `price` of its own training rows, which are recorded in the bundle.
   On the real snapshot that range is 500 to 1,814,750 EUR.
   This is what makes the interface's "finite and strictly positive" true of the arithmetic rather than of a hope: `exp` overflows to `inf` above about 710 in log space and underflows to exactly `0.0` below -746, and an `inf` prediction would turn MdAPE into `nan` and pass the gate's comparison unnoticed.
-  It also catches a real extrapolation rather than only a theoretical one: over the 19,665 test rows, B1's unbounded prediction leaves the range **once**, at **25,292,552 EUR**, while none of the other three variants leaves it at all (unbounded maxima 1,549,910 for B0, 1,055,373 for `lgbm-basic`, 731,089 for `lgbm-extended`).
-  The bound is a guard rail and not a calibration, and it should not be read as one: it turns that 25 million into 1,814,750, which is the most expensive car the model was trained on rather than a sensible estimate for the car in question.
+  It also catches a real extrapolation rather than only a theoretical one: over the 19,665 test rows, B1's unbounded prediction leaves the range **once**, at **10,635,538 EUR**, while none of the other three variants leaves it at all (unbounded maxima 1,549,910 for B0, 1,055,373 for `lgbm-basic`, 731,089 for `lgbm-extended`).
+  The bound is a guard rail and not a calibration, and it should not be read as one: it turns that 10.6 million into 1,814,750, which is the most expensive car the model was trained on rather than a sensible estimate for the car in question.
   Because the range is recorded in the bundle, the share of predictions sitting exactly on an edge can be reported instead of the clip hiding the pathology.
 
 ##### Hyperparameters as trained
@@ -304,13 +309,16 @@ All of these live in `params.yaml`, so a change reruns exactly the variant it af
 
 The settings that are **not** parameters are modelling choices rather than knobs a sweep should touch, and they are the same for both LightGBM variants: `objective="regression"` (squared error on log price, because the log transform already handles the multiplicative error structure) and `metric="l1"` with `first_metric_only=True` for early stopping.
 The absolute error in log space *is* the symmetric relative error, so the stopping point lines up with MdAPE, the metric the gate reads, rather than with a squared error nothing reports.
-`n_estimators: 1000` is a ceiling, not a count: early stopping on the validation split decides the real number, and the booster is saved at that iteration, so the file *is* the early-stopped model and no consumer has to remember an iteration argument.
+`n_estimators: 1000` is the budget early stopping on the validation split may stop short of, and the booster is saved at whatever iteration it reached, so the file *is* the model and no consumer has to remember an iteration argument.
+On the real snapshot it is the budget that binds and not early stopping, which is a finding rather than the intention: see the [ladder](#the-experiment-ladder-as-measured) below and issue #64.
 
 B1's encoding is two decisions that look, at a glance, like rules of this project being broken, and both are recorded.
 Its categoricals are **one-hot encoded**, which EDN-02 rules out for the tree models and which EDN-50 confines to B1: Ridge is linear, has no native categorical handling, and dropping the categoricals would leave the depreciation baseline unable to tell a Porsche from a Dacia.
 Its numerics are **mean-filled with a per-feature missingness indicator**, which EDN-51 argues is not imputation under EDN-15: with an indicator for every feature the encoding is information-preserving, so the fill is a numerically neutral placeholder rather than a guess at the value.
-`min_category_rows: 5` groups the levels below that many training rows into one shared column, which is also where an unseen level goes at serving time (EDN-18).
-Folding is not free and the value is the smallest one that still does the job: measured on the real snapshot, no folding gives 503 encoded columns at 9.48 % MdAPE, 5 gives 404 at 9.52 %, 30 gives 294 at 9.71 % and 100 gives 187 at 10.61 %.
+`min_category_rows: 5` groups the levels below that many training rows into one shared column, which is also where an unseen level goes at serving time where such a group exists (EDN-18).
+Folding is not free: measured on the real snapshot, no folding gives 503 encoded columns at 9.48 % MdAPE, 5 gives 404 at 9.52 %, 30 gives 294 at 9.71 % and 100 gives 187 at 10.61 %.
+What the 0.04 pp buys is that a level seen in a handful of rows does not get a coefficient fitted on them, and 47 of the 100 levels folded at 5 are `model` values seen exactly once.
+At 5 only `model` and `fuel_category` have an infrequent group at all; the other six categoricals encode an unseen or absent value as all zeros, which answers just as well and is measured per column in EDN-50.
 
 ##### Determinism
 
@@ -320,9 +328,11 @@ Folding is not free and the value is the smallest one that still does the job: m
 - **Threads:** `train.num_threads: 1`, never LightGBM's default of every core (EDN-53).
   The trees are already thread-independent - identical at 1, 2, 4 and 8 threads - but LightGBM writes the count into `booster.txt`, so a default would make the artefact's hash depend on the machine that ran `dvc repro`.
   1 rather than a larger pinned value because only 1 is a value every machine can honour.
-  This is a real trade and not a free one: measured on the real snapshot, `lgbm-extended` fits in a median 26.9 s at 1 thread against 14.3 s at 2 and 15.1 s at 4, so pinning costs about half the fit and the ladder takes 67 s where it might take 45 s.
-  That is far inside NFR-10's budget, which is what makes the trade cheap rather than costless.
-  On the 744-row test fixture the direction reverses and more threads are catastrophic (0.33 s at 1 thread against 28.6 s at 8), because OpenMP's overhead dominates a fit that small - and the suite fits every variant on that fixture.
+  It costs something, and against a specific alternative: measured on the real snapshot as medians of three fits on an idle 8-core machine, `lgbm-extended` fits in 18.3 s at 1 thread against 12.8 s at 2 and 12.2 s at 4, so a *pinned* 2 or 4 would buy back about a third of the fit.
+  Against LightGBM's default of every core, which is what the pin actually replaces, it is a gain rather than a cost: 18.3 s against 29.2 s at 8 threads, and 7.1 s against 17.7 s for `lgbm-basic`.
+  It is also the steadiest value by a long way - three fits at 1 thread land within a second of each other, three at 8 span 26 s - so it is what makes a reported fit time mean anything.
+  The same reversal is sharper on the 744-row test fixture (0.33 s at 1 thread against 28.6 s at 8), because OpenMP's overhead dominates whenever there is little work per thread - and the suite fits every variant on that fixture.
+  These seconds are a controlled sweep for the ratios, not comparable with the ladder table's one-off wall-clock fit times below.
 - **LightGBM:** `deterministic=True` and `force_row_wise=True`, so the histogram construction is not chosen by data size and thread count.
   Documented insurance rather than a measured fix, and worth being exact about: with both flags **off** the trees are still identical across 1, 2, 4 and 8 threads, so the flags are not what makes the result thread-independent here.
   They do change *which* trees are built, so they are not without consequence; they are simply not load-bearing for this property at this data size.
@@ -365,7 +375,10 @@ tags.git_commit = '<the full SHA of the run you want>'
 ```
 
 with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.energy_kwh`.
-`tags.dvc_lock_md5` is the sharper filter where the lock file exists, because it identifies the data and parameters a run saw rather than the code alone.
+`tags.dvc_lock_md5` is a digest of the committed `dvc.lock`, and it is **not** a filter to trust yet.
+The lock in Git is still the one the pipeline skeleton wrote: it names two of the four variants, has no `b0` or `b1`, and its `train` stage depends on a 2.5 KB `train.py` that fitted nothing.
+So the tag currently identifies a pipeline no run here ran, and two runs sharing it say nothing about sharing their inputs.
+Issue #57 refreshes the lock once for the whole chain, and from then on the tag means what its name says - the data and parameters a run saw, rather than the code alone.
 
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
@@ -429,7 +442,7 @@ Every number is from the test split, at `train.num_threads: 1`, and MdAPE is the
 | Variant | Ladder step | Features | MdAPE | Within 20 % | Validation L1 (log price) | Trees | Fit time | Payload |
 |---|---|---|---|---|---|---|---|---|
 | `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.7 s | 19 KB |
-| `b1` | 2 | 16 | 9.71 % | 79.3 % | 0.1451 | - | 5.2 s | 19 KB |
+| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 5.2 s | 19 KB |
 | `lgbm-basic` | 3 | 16 | 6.83 % | 89.7 % | 0.1005 | 1,000 | 17.8 s | 6.3 MB |
 | `lgbm-extended` | 4 | 162 | **6.32 %** | **90.4 %** | 0.0974 | 996 | 43.1 s | 6.8 MB |
 
