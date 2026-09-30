@@ -159,20 +159,25 @@ features:
     - equipment_safety
   # An equipment item becomes its own column only above this share of the
   # training rows, so the matrix does not grow a tail of near-constant columns.
-  # On the scoped snapshot this keeps 133 of the 150 items.
+  # It keeps 133 of the 146 items the training rows hold.
   equipment_min_frequency: 0.01
   # `model_version` is free text truncated at 50 characters, multilingual and
-  # full of marketing: 82,203 distinct values over the 113,708 scoped listings,
-  # and folding case, accents and separators still leaves 80,495. So the stage
-  # keeps only the leading tokens of the normalised trim, which are the ones
-  # that name it ("d", "911", "2.0", "xdrive", "avant"); one token leaves 2,922
-  # distinct values, two leaves 18,562.
+  # full of marketing: 80,332 distinct values over the 105,405 scoped listings,
+  # and folding case, accents and separators still leaves 78,738. So the stage
+  # keeps only the leading tokens of the normalised trim; one token leaves 2,882
+  # distinct values, two leaves 18,248.
   model_version_tokens: 1
   # A normalised trim becomes a level only above this share of the training
   # rows. Below it the value is missing rather than a level of its own, the same
   # treatment any absent value gets (EDN-15). One token at this threshold keeps
-  # 274 levels covering 84.5 % of the scoped listings; at 0.001 it keeps 169
-  # covering 77.4 %.
+  # 279 levels covering 85.9 % of the training rows; at 0.001 it keeps 167
+  # covering 78.1 %.
+  #
+  # Both values are coarse on purpose and the ladder is meant to sweep them: the
+  # leading token names the body style for some makes and the engine letter for
+  # others, which merges heavily (EDN-41). The measurements behind these numbers,
+  # and the rejected finer alternatives, are in the model card and in
+  # reports/analysis/extended_features.py (2026-09-30).
   model_version_min_frequency: 0.0005
 
 validate:

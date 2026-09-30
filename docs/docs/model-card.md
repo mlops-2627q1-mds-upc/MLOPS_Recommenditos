@@ -232,6 +232,30 @@ The pipeline is built in Milestone 2; these steps are fixed by decisions already
 
 Every stage runs under DVC, and a clean clone reproduces the same splits and metrics within 0.1 percentage points (NFR-06).
 
+#### Feature space
+
+The two feature sets are defined in the [problem specification](problem-spec.md#4-features).
+What the data-dependent parts of them currently amount to is measured, not specified, because both thresholds are parameters the experiment ladder sweeps.
+Measured on 2026-09-30 by [`reports/analysis/extended_features.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/extended_features.py) over the scoped, deduplicated snapshot (105,405 listings, 61,180 of them in the training split), at `equipment_min_frequency` 0.01, `model_version_tokens` 1 and `model_version_min_frequency` 0.0005.
+
+| Measurement | Value |
+|---|---|
+| Multi-hot equipment columns | 133 of the 146 distinct items in the training rows (comfort 43 of 45, entertainment 16 of 16, extra 38 of 49, safety 36 of 36) |
+| `model_version` distinct raw values | 80,332, of which 78,738 survive folding case, accents and separators |
+| `model_version` distinct leading tokens | 2,882 at one token, 18,248 at two |
+| `model_version` levels above the floor | 279, covering 85.9 % of the training rows (167 and 78.1 % at a floor of 0.001) |
+| `weight_kg` parsed range | 1 kg to 93,000 kg, median 1,810 kg; 30 rows below 500 kg and 9 above 4,000 kg |
+
+Two of these are known weaknesses rather than results.
+
+The `model_version` levels are coarse, and unevenly so.
+The leading token names the body style for Audi and Porsche, and the engine letter for the German premium models that make up most of the data: `d`, `911` and `e` are the three most frequent levels, and 12.4 % of the training rows lead with an engine letter, which largely repeats `fuel_category` while discarding the trim.
+Inside a single make and model the merging is heavy, with Porsche 992 level `911` covering 743 distinct raw trims and Audi A6 `avant` 473, and 329 pairs of levels survive where one is a prefix of the other.
+This is accepted as a parameterised starting point; [EDN-41](problem-spec.md#decision-records) records the two finer alternatives that were measured and rejected.
+
+`weight_kg` runs from 1 kg to 93,000 kg, so the column carries data-entry errors from the source.
+The pipeline deliberately does not clean them: a value range is a data-quality rule and belongs to the Great Expectations suites (issue #25), not to the feature code.
+
 #### Training
 
 - **Target:** `log(price)`, predictions transformed back with `exp`.

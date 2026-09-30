@@ -48,6 +48,16 @@ listings, against SC-04's segment size, which only checks a segment once it hold
 It reports which supported makes therefore never reach the quality gate.
 `make_support_results.txt` is the output of the run cited in the model card (2026-09-29).
 
+## Extended feature set: `model_version` and `weight_kg` (EDN-41, model card)
+
+`extended_features.py` answers the two questions the `features` stage had to decide and the
+specification did not cover.
+It measures how much the `model_version` normalisation merges - per make and model, and against
+the two finer alternatives of prefixing the token with make and model or keeping two tokens after
+an engine letter - and what range `weight_kg` covers once parsed out of its text form.
+`extended_features_results.txt` is the output of the run cited in EDN-41, the model card and the
+dataset card (2026-09-30).
+
 Run them against the raw dataset, which is not in the repo (NFR-08, EDN-07):
 
 ```bash
@@ -56,6 +66,7 @@ python reports/analysis/nfr11_check.py cars.csv
 python reports/analysis/nfr11_diag.py    # expects cars.csv in the working directory
 python reports/analysis/fillrates.py cars.csv
 python reports/analysis/make_support.py cars.csv
+python reports/analysis/extended_features.py cars.csv
 PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py cars.csv
 PYTHONPATH=reports/analysis python reports/analysis/nfr11_alpha_sweep.py cars.csv
 ```

@@ -30,6 +30,8 @@ It does not forecast future prices.
 - **Markets:** the model is trained on 7 countries (DE, IT, NL, BE, AT, FR, LU), with the country as a feature.
   All `ES` listings are held out as the new-market drift scenario ([EDN-03](#decision-records), project brief section 3.2); they join the training data only after the drift is confirmed and the model is retrained.
   The component accepts `ES` and treats it as an unknown country until then.
+  A consequence worth stating, because it looks like a defect: `country_code` is encoded over the levels the training rows hold, so the holdout's own country is not a level and its feature matrix has **no `country_code` at all**, in any row.
+  That is the scenario rather than a bug - the model genuinely has never seen that market - and it is the treatment [EDN-18](#decision-records) requires of an unseen value, which is why the `features` stage logs a warning naming any column a split leaves entirely empty instead of dropping or renaming it.
 - **Price range used for training:** 500 EUR to 2M EUR; listings outside it are treated as data errors or collector outliers.
 - **Registration date up to the reference date:** 164 listings in the raw file are registered after the 2025-11-08 snapshot, which would give them a negative age.
   114 of them are new cars and fall outside the used-car scope anyway; the 26 that survive the scope filters are treated as data errors and dropped ([EDN-22](#decision-records)).
@@ -72,15 +74,17 @@ As time passes, served cars therefore get older than anything seen in training a
 Added on top of the basic set, to measure what they are worth:
 
 - Equipment: the four equipment lists (`equipment_comfort`, `equipment_entertainment`, `equipment_extra`, `equipment_safety`) as multi-hot features.
-  An item becomes its own column only above `features.equipment_min_frequency` of the training rows, which keeps 133 of the 150 items in the snapshot.
+  An item becomes its own column only above a configured minimum share of the training rows, so the matrix does not grow a tail of near-constant columns.
   The vocabulary is decided by the training rows alone and versioned as an artefact, so the same columns are built for every split and for a request.
+  How many items that keeps is measured, not specified: the [model card](model-card.md#feature-space) carries the count with the date it was measured, because the experiment ladder sweeps the threshold.
 - History flags: `has_full_service_history`, `non_smoking`, `is_rental`.
   These are one-sided: a `True` is an assertion by the seller, a `False` only means the assertion is absent, not that the opposite holds.
   They therefore enter the model as plain "asserted" indicators and are never read as a denial ([EDN-23](#decision-records)); the dataset card documents the same.
 - Appearance: `body_color`, `paint_type`, `upholstery`, `upholstery_color`.
 - Further technical data: `model_version` (normalised), `weight_kg` (parsed out of its text form, `'1,945 kg'`), `cylinders`, `electric_range_km`, `envir_standard`, `original_market`.
-  `model_version` is free text with 82,203 distinct values over the scoped listings, so normalising means: fold case and accents, collapse the separators, keep the leading `features.model_version_tokens` tokens, and keep only the levels above `features.model_version_min_frequency` of the training rows.
-  At the configured values that is 280 levels covering 86 % of the training rows; the rest of the column is missing, which is how any unknown value is treated ([EDN-15](#decision-records)).
+  `model_version` is free text with over 80,000 distinct values across the scoped listings, so normalising means: fold case and accents, collapse the separators, keep a configured number of leading tokens, and keep only the levels above a configured minimum share of the training rows.
+  Everything below that floor is missing, which is how any unknown value is treated ([EDN-15](#decision-records)).
+  How many levels that leaves, how much of the column they cover and how coarse they are is measured rather than specified, for the same reason: both numbers are parameters the ladder sweeps, and the [model card](model-card.md#feature-space) carries them with their date.
 
 ### Excluded columns
 
