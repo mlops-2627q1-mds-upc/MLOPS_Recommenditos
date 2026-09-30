@@ -20,7 +20,7 @@
 \tbd{DRAFT, owner \texttt{@ulasawczuk}. This sub-subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words. The tracking code is issue \#37 and is not merged yet, so everything here except the design is still to be measured; the placeholders name each missing piece.}
 
 Experiments are tracked in MLflow with the team's DagsHub repository as the shared tracking server (EDN-19), which is also the DVC remote, so a run and the data version it was trained on live in the same place.
-Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reachable from a developer machine only, never from the API: the served model is a DVC-tracked artefact baked into the image at CI build time, so nothing in the serving path depends on MLflow being up (EDN-08, FR-12).
+Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reached from a developer machine only: nothing in the serving path depends on MLflow being up (EDN-08).
 
 There is exactly one experiment, \texttt{recommenditos-price}, and one run per rung of the experiment ladder.
 Both are configuration rather than code: \texttt{params.yaml} holds the experiment name as \texttt{train.\allowbreak mlflow\_experiment}, and the four variants as a \texttt{train.\allowbreak variants} mapping that \texttt{dvc.yaml} iterates with \texttt{foreach}.

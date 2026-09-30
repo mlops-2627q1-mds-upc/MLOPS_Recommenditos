@@ -91,8 +91,7 @@ And in the 48 hours before a presentation only fixes are merged, because every m
 }
 
 Data and artefacts are versioned with DVC against a DagsHub remote over HTTP, as the course prescribes, and the conventions on top of that are in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/data-versioning.md}{\texttt{docs/docs/data-versioning.md}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{\texttt{docs/docs/pipeline.md}}.
-The remote belongs to a DagsHub organisation the team owns, not to a member's private account, so push rights follow membership and the data and experiment history survive if anyone leaves or tidies up (EDN-19).
-Fifteen people outside the team hold read access to our GitHub repository and one of them had already mirrored it, which is what turned \enquote{check who owns a mirror} into the rule \enquote{the project's infrastructure lives somewhere the team owns}.
+The remote belongs to a DagsHub organisation the team owns rather than to a member's private account, so push rights follow membership and the data and experiment history survive if anyone leaves or tidies up; the rule behind that, after a cohort member outside the team had already mirrored our public repository, is that the project's infrastructure lives somewhere the team owns (EDN-19).
 Credentials are written with \texttt{dvc remote modify --local}, which lands in \texttt{.dvc/config.local} and never in a commit.
 Tracking is per file: \texttt{data/raw}, \texttt{data/interim} and \texttt{data/processed} have different lifecycles, and one pointer over \texttt{data/} would hide which artefact changed.
 

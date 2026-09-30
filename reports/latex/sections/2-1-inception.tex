@@ -21,37 +21,24 @@
 \paragraph{How the problem was selected.}
 Four product ideas were on the table in the first sprint: the used-car price component, a route-safety model, a recommender and a grocery idea.
 The used-car price component won, and the reasoning behind that first choice is the one M1 decision not yet written up: \tbd{the project-choice rationale, from the EDN entry that project brief section~8 lists as outstanding}.
-
-What did settle the shape of the problem is recorded, and it was settled by the data rather than by the idea.
-The AutoScout24 snapshot was chosen over smaller single-market listing datasets because it is the only candidate large and rich enough for the planned gradient-boosting model, with a citable licence and verifiable provenance (EDN-01).
-Its brand skew was then turned into an explicit scope rule instead of being hidden: used passenger cars only (EDN-04), and only makes with at least 300 listings, a list the pipeline computes rather than hard-codes (EDN-05).
-Each of those filters costs data and the entry says how much, which is what makes the scope statement testable.
+What did settle the shape of the problem is recorded, and the data settled it: the AutoScout24 snapshot was the only candidate large and rich enough for the planned gradient-boosting model, with a citable licence and verifiable provenance (EDN-01), and its brand skew was turned into explicit scope rules instead of being hidden, namely used passenger cars only (EDN-04) and only makes with at least 300 listings, a list the pipeline computes rather than hard-codes (EDN-05).
 
 \paragraph{The requirements, and what is distinctive about them.}
-The component has 16 functional and 13 non-functional requirements.
-Each carries a MoSCoW priority and an acceptance criterion, and the criterion is written as something a test can do, not as an adjective.
+The component has 16 functional and 13 non-functional requirements, each with a MoSCoW priority and an acceptance criterion written as something a test can do rather than as an adjective, and each non-functional one declares its quality characteristic against ISO/IEC 25010 and the AI extension 25059, with the three that have no equivalent in either, reproducibility, energy efficiency and delivery, saying so instead of being forced into a category.
 Three properties go beyond writing requirements down.
 
 \emph{Two levels, one identifier space (EDN-27).}
-The first version of the requirements fixed endpoints, status codes, header names and image tags, and the lecturer's feedback was that it read as a specification.
-Rather than soften the wording, we split the page: \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{docs/docs/requirements.md}} states what must be true and for whom, design-free, and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{docs/docs/specification.md}} states how each one is realised, under the same \texttt{FR-xx} and \texttt{NFR-xx} IDs.
-A second vocabulary of user stories was tried and rejected, because the IDs are what tests and EDN entries point at and a second layer would have cost a hop and gained nothing.
-A design change therefore no longer looks like a requirements change.
+After the lecturer's feedback that the first version read as a specification, because it fixed endpoints, status codes and image tags, we split the page rather than soften the wording: \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{docs/docs/requirements.md}} states what must be true and for whom, design-free, and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{docs/docs/specification.md}} states how each one is realised, under the same \texttt{FR-xx} and \texttt{NFR-xx} IDs.
+A second vocabulary of user stories was tried and rejected because those IDs are what tests and EDN entries point at, and a design change now no longer looks like a requirements change.
 
 \emph{Requirements measured before they were committed to.}
-The requirements we could not check by reading, we checked by measuring, and three of them changed as a result.
-NFR-11, the drift-detection promise, was rewritten three times because a measurement refuted each written form: the seller-grouped control it originally named is flagged in 200 of 200 windows and is therefore impossible, not merely hard (EDN-14); a window of 100 requests cannot carry the \enquote{at least three changed properties} clause (EDN-26); and the Bonferroni construction makes the family-wise false-alarm rate equal to the significance level, so at the conventional 0.05 the requirement was asking the detector to perform at its own theoretical bound with no margin (EDN-29).
-At the significance level we settled on, 0.005, the control flags between 0 and 0.6 of 20 windows across three independent splits while the Spanish replay is still flagged in every trial.
-FR-01's required input fields were derived the same way: measured fill rates show \texttt{body\_type} present in 100.000\,\% and \texttt{seller\_type} in 99.986\,\% of the training scope, so a model can never learn what their absence means, and both became required fields at no cost to the user (EDN-15).
-NFR-05 dropped its uptime percentage altogether, because a single unattended VM cannot honour one, and replaced it with a 30-second recovery time plus a zero-downtime commitment for the graded presentation window (EDN-10).
-Where a target still cannot be measured, it carries a \textbf{[proposed]} marker instead of an invented number: the latency, throughput and resource targets NFR-02 to NFR-04 are estimates until the first load test in Milestone~4.
-
-\emph{Quality objectives mapped to a standard, with the gaps named.}
-Every non-functional requirement declares the quality characteristic it belongs to, mapped to ISO/IEC 25010 and its AI extension 25059.
-Three rows have no equivalent in either standard, and the requirements page says so rather than forcing them into a category: reproducibility, energy efficiency and delivery are there because the course grades them as practices of their own.
+Three requirements changed because a measurement refuted what they claimed about the data.
+NFR-11, the drift-detection promise, was rewritten three times, the last because the Bonferroni construction makes the family-wise false-alarm rate equal to the significance level, so at the conventional 0.05 it was asking the detector to perform at its own theoretical bound with no margin; at the 0.005 we settled on, the control flags between 0 and 0.6 of 20 windows across three independent splits while the Spanish replay is still flagged in every trial (EDN-14, EDN-26, EDN-29).
+FR-01 gained two required fields because \texttt{body\_type} is filled in 100.000\,\% and \texttt{seller\_type} in 99.986\,\% of the training scope, so a model can never learn what their absence means (EDN-15), and NFR-05 traded an uptime percentage that a single unattended VM cannot honour for a 30-second recovery time plus a zero-downtime commitment for the graded presentation (EDN-10).
+Where a target still cannot be measured it carries a \textbf{[proposed]} marker instead of an invented number.
 
 \emph{Traceability as a build artefact.}
-The ID is the unit of traceability: a test declares the requirements it verifies with a \texttt{@pytest.mark.req} marker, and CI turns the markers into a requirement-to-test matrix so that every FR and NFR is either traceable to a test or explicitly marked as verified by hand (NFR-07).
+A test declares the requirements it verifies with a \texttt{@pytest.\allowbreak mark.\allowbreak req} marker and CI turns the markers into a requirement-to-test matrix, so every requirement is traceable to the test that verifies it or explicitly marked as verified by hand (NFR-07).
 Three requirements carry markers today, NFR-01, NFR-06 and NFR-08, across six tests; the matrix itself is \tbd{the requirement-to-test matrix from CI (issue \#40), with the count of requirements covered automatically and by hand}.
 
 \subsubsection{Dataset card}
@@ -65,22 +52,18 @@ Three requirements carry markers today, NFR-01, NFR-06 and NFR-08, across six te
 The dataset card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/dataset-card.md}{\texttt{docs/docs/dataset-card.md}}, written to the Hugging Face template \cite{hf-dataset-card}.
 It documents the AutoScout24 Car Listings Dataset (2025 snapshot), published on Zenodo under DOI \href{https://doi.org/10.5281/zenodo.17643343}{10.5281/zenodo.17643343}: 118,382 listings, 75 columns, one scrape dated 2025-11-08, prices in EUR, eight European markets, no splits provided.
 
-Two things about it are deliberate and both are the reason it is worth reading rather than skimming.
+Two things about it are deliberate.
 
 \emph{Every figure was measured on the file, not copied from the publisher.}
-The publisher's description gives round numbers such as \enquote{$\sim$120K listings} and states that it was written with AI assistance, so we treat it as a claim and report our own profiling instead, against the file whose md5 matches the checksum Zenodo publishes.
-That profiling is what produced the scope rules: Germany alone is 38.5\,\% of the rows and BMW, Porsche, Mercedes-Benz and Audi together 82.9\,\%, with Volkswagen at 352 listings and Toyota, SEAT, Peugeot, Fiat and \v{S}koda absent entirely.
-Four columns are empty, \texttt{had\_accident} is true in 3 rows of 118,382, \texttt{vin} is 34.0\,\% filled so it cannot find duplicates while a composite key finds 6,347 duplicate rows, 164 listings are registered after the snapshot date and would have a negative age, and about 6.9\,\% of the free-text descriptions contain the exact listing price.
-Prices run from 1 to 13,500,000 EUR and mileage to 2,570,000 km, so range checks are not optional.
+The publisher's description gives round numbers and was written with AI assistance, as the Zenodo record itself notes, so we profile the file ourselves instead, against the md5 Zenodo publishes.
+That profiling is what produced the scope rules: Germany alone is 38.5\,\% of the rows and BMW, Porsche, Mercedes-Benz and Audi together 82.9\,\%, four columns are empty, \texttt{vin} is 34.0\,\% filled and so cannot find the 6,347 duplicates a composite key does, and 164 listings are registered after the snapshot date and would have a negative age.
 
 \emph{The limitations are stated as consequences, not as caveats.}
-The card says what each issue forbids: the target is an asking price and never a transaction price; a single snapshot with no per-listing date rules out temporal validation, seasonality and any temporal split; the brand skew makes the data unfit for claims about the European used-car market as a whole; the condition flags encode \enquote{not stated} as \texttt{False}, so a \texttt{False} may never be read as a denial (EDN-23); and 83.3\,\% of listings come from dealers, which is why the split is grouped by seller.
-The card also records what we do with the personal data rather than claiming to have removed the problem: the raw file carries \texttt{vin}, \texttt{street}, \texttt{zip}, \texttt{city}, exact coordinates and \texttt{seller\_company\_name}, we re-host it on a public remote, and that makes the team a publisher of that data in its own right even though the identical file is already public under the same licence (EDN-20, EDN-25, EDN-34).
-The licence itself contradicts itself on the upstream record, MIT in the structured field and research-and-education-only in the author's prose, and we report both readings instead of resolving them, because both clearly permit this project (EDN-21).
+The card says what each issue forbids: the target is an asking price and never a transaction price; one snapshot with no per-listing date rules out temporal validation and any temporal split; the brand skew makes the data unfit for claims about the European used-car market as a whole; and a \texttt{False} in the condition flags means \enquote{not stated} and may never be read as a denial (EDN-23).
+It also records what we do with the personal data instead of claiming to have removed the problem, namely that re-hosting the raw file on a public remote makes the team a publisher of that data in its own right (EDN-20, EDN-25, EDN-34), and it reports both readings of the upstream licence rather than resolving a contradiction that does not affect this project (EDN-21).
 
-Of the 118,382 listings, 110,013 fall in the used-passenger-car scope, and 97,889 remain in the training scope once the price and registration-date rules, deduplication, the Spanish holdout and the make filter have run.
-Those listings are split 60\,\% train, 10\,\% validation, 10\,\% calibration and 20\,\% test, grouped by seller, with the seed \texttt{20251108}, all four pinned in \texttt{params.yaml} (EDN-32).
-The test share is the binding constraint rather than the training share: SC-04 only checks a segment once it holds 500 test rows, so a smaller test set would silently stop checking makes that are currently covered.
+Of the 118,382 listings, 110,013 fall in the used-passenger-car scope and 97,889 remain in the training scope once the price and registration-date rules, deduplication, the Spanish holdout and the make filter have run.
+Those are split 60/10/10/20 grouped by seller with the seed \texttt{20251108}, both pinned in \texttt{params.yaml} (EDN-32); the test share is the binding constraint, because SC-04 only checks a segment once it holds 500 test rows.
 The realised sizes are \tbd{the train, validation, calibration, test and holdout row counts from \texttt{dvc.lock} once the preprocess and split stages run on the real snapshot (issues \#34 and \#35)}.
 
 \subsubsection{Model card}
@@ -92,24 +75,18 @@ The realised sizes are \tbd{the train, validation, calibration, test and holdout
 }
 
 The model card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{\texttt{docs/docs/model-card.md}}, written to the Hugging Face annotated template \cite{hf-model-card, mitchell2019modelcards}.
-It describes a supervised regression on $\log(\mathrm{price})$ with LightGBM as the main model and CatBoost as the challenger, against the baselines B0 and B1 (EDN-02), and it says on its first page that no trained artefact exists yet, so that no reader mistakes a plan for a measurement.
-
+It describes a supervised regression on $\log(\mathrm{price})$ with LightGBM as the main model and CatBoost as the challenger, against the baselines B0 and B1 (EDN-02), and it states on its first page that no trained artefact exists yet, so that no reader mistakes a plan for a measurement.
 Three choices distinguish it from the template it follows.
 
 \emph{It owns the model and links for everything else.}
-Scope, features, metrics and success criteria live in the problem specification, the data facts in the dataset card, the qualities in the requirements; the card carries a table of which page answers which question.
-Nothing is stated twice, so nothing can drift apart, and the card describes the released model rather than the project.
+Scope, features, metrics and success criteria live in the problem specification, the data facts in the dataset card and the qualities in the requirements, and the card carries a table of which page answers which question, so nothing is stated twice and nothing can drift apart.
 
 \emph{The harm is attributed to a party.}
-Instead of a generic bias paragraph, the card asks who pays for a wrong answer.
-The seller acts on a single number about a single car, an estimate 10\,\% low costs them real money once, and they have no way to notice, which is why the valuation ships an explanation (FR-08) rather than a bare number; the buyer uses the interval as a sanity check, which is what SC-05 bounds.
-The card also names a limitation that belongs to the model and not to this deployment: a price estimator trained on asking prices influences the asking prices it would later learn from, so at any real scale it would be evaluated against a market it helped set.
+Instead of a generic bias paragraph the card asks who pays for a wrong answer: the seller acts on a single number about a single car, an estimate 10\,\% low costs them real money once and they have no way to notice, which is why a valuation ships an explanation (FR-08) rather than a bare number, while the buyer uses the interval as a sanity check, which is what SC-05 bounds.
 
 \emph{It names a gap in its own quality gate.}
-Volkswagen, Honda, Hyundai and Aston Martin clear the 300-listing support threshold and are therefore served, but a make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at a 20\,\% test share, and these four hold 348, 798, 548 and 360 listings, together 2.1\,\% of the training scope.
-For them the per-segment half of the gate is blind by construction, and closing that, by raising the threshold, lowering the segment size or marking these makes as low-confidence in the response, is an open Milestone~3 task.
-The same section records that cars older than 20 years were the only segment to breach the per-segment target in the exploratory reference run.
-Per-criterion results, the chosen hyperparameters, the artefact size, the training time and the CodeCarbon figures are the card's declared next update, and they are \tbd{the measured SC-01 to SC-06 results and the training and artefact figures, from \texttt{metrics.json} and the MLflow runs (issues \#37 and \#39)}.
+Volkswagen, Honda, Hyundai and Aston Martin clear the 300-listing support threshold and are therefore served, but a make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at a 20\,\% test share, and these four hold 348, 798, 548 and 360 listings, so for them the per-segment half of the gate is blind by construction and closing it is an open Milestone~3 task.
+The card's declared next update is the per-criterion results, the chosen hyperparameters, the artefact size, the training time and the CodeCarbon figures: \tbd{the measured SC-01 to SC-06 results and the training and artefact figures, from \texttt{metrics.json} and the MLflow runs (issues \#37 and \#39)}.
 
 \subsubsection{Project coordination and communication}
 \label{sec:m1-coordination}
@@ -121,29 +98,25 @@ Per-criterion results, the chosen hyperparameters, the artefact size, the traini
 }
 
 We run Scrum on one-week sprints with GitHub Issues as the backlog, a GitHub Projects board (Backlog, To Do, In Progress, In Review, Done) as the sprint board, and Discord for everything asynchronous.
-The tools were chosen for one reason: the work, the discussion and the evidence should sit next to the code rather than in a separate product, so an issue, the branch that implements it, the pull request that reviews it and the commit that lands it are one chain.
-Only Discord sits outside that chain, because chat is the one thing GitHub does badly.
+The tools were chosen for one reason: the work, the discussion and the evidence should sit next to the code, so an issue, the branch that implements it, the pull request that reviews it and the commit that lands it are one chain, and only chat sits outside it.
 The process is written down in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}}: roles, board columns, a Definition of Done, working agreements and a sprint log.
-
 Four adaptations are ours rather than the course's.
 
 \emph{The ceremonies are held where the whole team is present.}
-There is no daily standup, because the Wednesday laboratory session is the only slot in the week with everybody in one room, so planning, review and retrospective all happen there and the sprint runs Wednesday to Wednesday.
-The first two sprints ran Tuesday to Tuesday and were planned the day before the laboratory, which the sprint~1 retrospective found to be a mistake: the working agreements named a ceremony day that the laboratory schedule contradicts.
-The boundary moves onto the laboratory session with sprint~3.
+There is no daily standup, because the Wednesday laboratory session is the only slot with everybody in one room, so planning, review and retrospective all happen there and the sprint runs Wednesday to Wednesday.
+The first two sprints ran Tuesday to Tuesday, which the sprint~1 retrospective found to be a mistake: the working agreements named a ceremony day that the laboratory schedule contradicts, so the boundary moves onto the session with sprint~3.
 
 \emph{Every ticket is filterable, and that was learned the hard way.}
-Each issue carries a milestone label \texttt{M1} to \texttt{M6}, an area label (\texttt{area:data}, \texttt{area:model}, \texttt{area:api}, \texttt{area:ci}, \texttt{area:docs}, \texttt{area:report}), a GitHub milestone per delivery and an owner.
-Sprint~1 had none of this until its last day and closed six tickets without any of it, so the trace the course grades had to be reconstructed from the git history; giving a ticket its labels when it is written, not when the sprint is reviewed, is a sprint~1 action item.
+Each issue carries a milestone label \texttt{M1} to \texttt{M6}, an area label such as \texttt{area:data} or \texttt{area:report}, a GitHub milestone per delivery and an owner.
+Sprint~1 had none of this until its last day and closed six tickets without any of it, so the trace the course grades had to be reconstructed from the git history; giving a ticket its labels when it is written rather than when the sprint is reviewed is a sprint~1 action item.
 
 \emph{Approval is deliberately not what gates a merge.}
 Branch protection blocks direct pushes to \texttt{main} and squash merge is the only merge method enabled, so \texttt{main} carries exactly one commit per pull request.
-Passing checks gate the merge; a formal approval does not, because GitHub blocks self-approval and a pull request written with an agent runs under its author's own account, so requiring one would leave those pull requests permanently unmergeable.
-A teammate still reads the change whenever one is free, and the pull request's author is responsible for its content whoever or whatever typed it.
+Passing checks gate the merge; a formal approval does not, because GitHub blocks self-approval and a pull request written with an agent runs under its author's own account, so requiring one would leave those pull requests unmergeable.
+A teammate still reads the change whenever one is free, and its author is responsible for its content whoever or whatever typed it.
 
 \emph{The trace is written into the repository, not left in chat.}
-\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{\texttt{docs/docs/scrum/sprints.md}} holds each sprint's goal, its planning notes with the assigned backlog, its review, its progress record and its retrospective, with every issue and pull request linked.
-Sprint~1 closed 7 issues with 16 pull requests merged and left one item in review; 34 engineering decisions are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{\texttt{docs/docs/scrum/sprints.md}} holds each sprint's goal, its planning notes with the assigned backlog, its review, its progress record and its retrospective, with every issue and pull request linked: sprint~1 closed 7 issues with 16 pull requests merged, and 34 engineering decisions are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
 The working agreements also carry a rule for coding agents, since the course grades how we use them: a ticket handed to an agent must have a local oracle, tests or \texttt{dvc repro} that tell it whether it is done, a ticket without one is done by a person, and an agent's claim decides nothing until it has been checked.
 \tbd{a screenshot of the project board at the end of sprint~2, placed in \texttt{reports/latex/figures/}}
 
@@ -156,15 +129,13 @@ The working agreements also carry a rule for coding agents, since the course gra
 }
 
 We deploy on the FIB Virtech virtual machine the course provides: 4\,GB of memory, 20\,GB of disk, CPU only, free for one semester (EDN-17).
-Of the free options the course compares, it is the only one that is both large enough and long enough.
-AWS and Azure give 750 hours a month for twelve months but cap the free instance at 1\,GB of memory, GCP at 0.6\,GB, and Okteto offers 3\,GB with 5\,GB of storage; our stack is an API container, a store, Prometheus, Grafana and a scheduled drift job, which does not fit 1\,GB.
+Of the free options the course compares it is the only one both large enough and long enough: AWS and Azure give 750 hours a month for twelve months but cap the free instance at 1\,GB of memory, GCP at 0.6\,GB and Okteto at 3\,GB, while our stack is an API container, a store, Prometheus, Grafana and a scheduled drift job.
 Paying, or using a personal account with payment details for a semester project, buys nothing the grading rewards.
 
 The choice is tied to the requirements rather than asserted.
-NFR-04 is written for this machine and budgets it: the API container stays below 1\,GB resident, the drift job runs in its own scheduled container so that its heavier dependency stack never competes with the API for memory, Prometheus is capped by retention size, the logs by rotation, and 4\,GB of disk is kept free.
-That the drift job must be separate is a hard constraint and not a preference: Alibi Detect 0.13 requires \texttt{numpy<2} and \texttt{pandas<3} and pulls in transformers, OpenCV and scikit-image, so it cannot share an environment with the API, and its Business Source Licence 1.1 permits only non-production use.
-NFR-12 requires the whole system to start on a fresh machine with a single documented command and to need no paid or external service at run time, which keeps the choice reversible: nothing in the serving path is specific to this provider.
-No GPU appears anywhere, which is also why the model family was chosen (EDN-02) and why \texttt{shap} is kept out of the serving image (EDN-11).
+NFR-04 is written for this machine and budgets it: the API container stays below 1\,GB resident, the drift job runs in its own scheduled container, Prometheus is capped by retention size, the logs by rotation, and 4\,GB of disk is kept free.
+That the drift job must be separate is a hard constraint and not a preference, because Alibi Detect 0.13 requires \texttt{numpy<2} and \texttt{pandas<3} and pulls in transformers, OpenCV and scikit-image, so it cannot share an environment with the API; its Business Source Licence 1.1 also permits only non-production use.
+NFR-12 keeps the choice reversible by requiring the system to start on a fresh machine with one documented command and to need no paid service at run time, so nothing in the serving path is specific to this provider, and no GPU appears anywhere, which is also why the model family was chosen (EDN-02) and why \texttt{shap} is kept out of the serving image (EDN-11).
 
-The cost of the choice is recorded with a date rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
+The cost is recorded with a date rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
 If that is still true at the Milestone~4a laboratory on 2026-10-21, we raise it with the teachers instead of planning further on it.
