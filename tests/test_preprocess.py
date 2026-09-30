@@ -3,7 +3,7 @@
 Every assertion is against the synthetic fixture, so the suite needs no data
 access. The fixture guarantees one row per rule whatever its size, which is
 what makes the exact counts below meaningful rather than brittle: they are 3,
-1, 2 and 1 at 28 rows and at 2,000.
+1, 2 and 1 at 30 rows and at 2,000.
 
 The real snapshot's funnel is measured by `reports/analysis/preprocess_funnel.py`
 and its committed output, because the pipeline itself runs on the fixture until
@@ -13,7 +13,7 @@ issue #33 lands the real acquisition.
 import numpy as np
 import pandas as pd
 import pytest
-from tests.conftest import PII_COLUMNS
+from tests.conftest import PII_COLUMNS, params_override
 
 from recommenditos.config import PARAMS_FILE
 from recommenditos.data.preprocess import (
@@ -21,7 +21,9 @@ from recommenditos.data.preprocess import (
     ROW_RULES,
     apply_row_rules,
     assert_the_contract_excludes,
+    derive_group_key_and_drop_pii,
     hash_seller_group,
+    seller_group_key,
 )
 from recommenditos.data.preprocess import main as preprocess_main
 from recommenditos.data.synthetic import EDGE_CASE_ROWS, SNAPSHOT_DATE
@@ -33,6 +35,21 @@ SCOPE = "used passenger cars"
 DATE = "registered by the reference date"
 PRICE = "price in the training range"
 DEDUP = "deduplicated"
+
+#: One value per deduplication-key column that no generated listing carries, and
+#: that every rule above deduplication keeps: the makes and models come from a
+#: fixed catalogue, body mileages are multiples of 100, powers are whole numbers,
+#: prices are multiples of ten plus at most 15 hundredths, and the earliest
+#: generated registration is 300 months before the 2025-11-08 snapshot.
+A_VALUE_NO_OTHER_LISTING_HAS = {
+    "make": "No Such Make",
+    "model": "No Such Model",
+    "model_version": "No Such Version",
+    "mileage_km_raw": 123_456.0,
+    "registration_date": "1999-01-01",
+    "price": 1234.56,
+    "power_kw": 123.5,
+}
 
 #: The columns problem-spec section 4 excludes for a reason other than PII: the
 #: four leakage columns and the three identifiers. The PII ones are in
@@ -90,14 +107,30 @@ def test_the_group_key_is_hashed_from_the_frame_that_still_has_the_seller_name(s
     assert written.nunique() > 1
 
 
-def test_the_group_key_is_the_one_the_api_will_compute(stage, raw_frame, params, kept):
-    # `hash_seller_group` is the seam the API reuses, so the stage must not hash
-    # anything of its own: the same seller has to hash the same way at training
-    # and at serving time. Row for row, in order.
+def test_the_group_key_is_the_one_the_split_groups_by(stage, raw_frame, params, kept):
+    # The key exists for the split, and for nothing else: no feature set names
+    # `seller_group_id`, and the API could not compute it if it wanted to,
+    # because `zip` and `city` are not among `evaluate.required_input_fields`.
+    # So what has to hold is that the column the split reads is the function's
+    # output, row for row and in order, rather than something the stage hashed
+    # on its own.
     expected = hash_seller_group(raw_frame).loc[kept.index]
 
     assert stage["interim"]["seller_group_id"].tolist() == expected.tolist()
     assert params["split"]["group_key"] in stage["interim"].columns
+
+
+def test_no_two_sellers_share_a_group_id(raw_frame):
+    # A collision merges two sellers into one split group, which is the leak the
+    # grouping exists to prevent, so the digest needs room: 16 hex characters are
+    # 64 bits, where the real file's 30,717 groups collide with a chance near 3
+    # in 100 billion. The width is asserted as well as the injectivity, because
+    # the fixture has a few hundred groups and would not notice a truncation
+    # that already collides once on the real file at 8 characters.
+    hashed = hash_seller_group(raw_frame)
+
+    assert hashed.nunique() == seller_group_key(raw_frame).nunique()
+    assert (hashed.str.len() == 16).all()
 
 
 # --------------------------------------------------------------------------
@@ -130,13 +163,40 @@ def test_the_interim_contract_names_no_column_the_exclusion_table_excludes():
 
 
 @pytest.mark.req("NFR-08")
-def test_the_stage_refuses_to_run_when_the_contract_could_leak_pii():
-    # The guard behind the assertion above, at the point the stage relies on
-    # it: `conform` cannot be trusted to hide a column the contract names.
+def test_the_contract_guard_rejects_a_column_the_contract_keeps():
+    # The guard behind the assertion above: `conform` cannot be trusted to hide
+    # a column the contract names.
     with pytest.raises(ValueError, match="must not survive"):
         assert_the_contract_excludes(["make", "price"], INTERIM_SCHEMA)
 
     assert assert_the_contract_excludes(PII_COLUMNS, INTERIM_SCHEMA) is None
+
+
+@pytest.mark.req("NFR-08")
+def test_the_stage_refuses_to_run_when_the_contract_could_leak_pii(raw_path, tmp_path, params):
+    # The test above covers the assertion, this one covers the call: without it,
+    # deleting the guard from the stage leaves the whole "refuses before it reads
+    # anything" mechanism unobserved, and a green suite is then the only evidence
+    # anyone looks at. The input exists, so the refusal can only come from the
+    # guard, and the output must not: refusing after writing would be no guard.
+    output = tmp_path / "interim.parquet"
+    leaky = params_override(tmp_path, params, preprocess={"pii_columns": ["make"]})
+
+    with pytest.raises(ValueError, match="must not survive"):
+        preprocess_main(raw_path, output, leaky)
+
+    assert not output.exists()
+
+
+@pytest.mark.req("NFR-08")
+def test_the_frame_the_row_rules_see_carries_no_pii(raw_frame, params):
+    # The explicit drop, which the contract makes unnecessary for the artefact
+    # but not for anything in between: a log line, a traceback or an
+    # intermediate artefact someone adds later sees this frame, not the write.
+    prepared = derive_group_key_and_drop_pii(raw_frame, params)
+
+    assert set(params["preprocess"]["pii_columns"]).isdisjoint(prepared.columns)
+    assert prepared["seller_group_id"].notna().all()
 
 
 def test_no_row_rule_reads_a_pii_column(raw_frame, params, funnel):
@@ -202,6 +262,19 @@ def test_the_date_rule_removes_the_post_snapshot_listing_and_nothing_else(funnel
     assert funnel.removed(DATE) == 1
 
 
+def test_a_listing_registered_on_the_reference_date_survives(kept, raw_frame, params):
+    # The bound is inclusive, and only the fixture can show it: every
+    # registration date in the snapshot is the first of a month while the
+    # reference date is the 8th, so a strict bound would remove nothing there and
+    # then drop every listing registered that day in serving, where the
+    # reference date is the request date.
+    reference = pd.Timestamp(params["reference_date"])
+    on_the_bound = pd.to_datetime(raw_frame["registration_date"]) == reference
+
+    assert on_the_bound.sum() == 1
+    assert (kept["registration_date"] == reference).any()
+
+
 def test_a_missing_registration_date_is_kept(kept, raw_frame):
     # Missing age is a case the feature stage and the model handle; a dropped
     # row is one the model never learns from.
@@ -241,15 +314,70 @@ def test_no_duplicate_on_the_key_survives(kept, params):
     assert not kept.duplicated(subset=params["preprocess"]["dedup_key"]).any()
 
 
-def test_deduplication_removes_the_fixture_duplicate_and_keeps_the_first_copy(
+def test_the_key_is_the_seven_columns_the_ticket_fixes(params):
+    # Measured, not a default: on the real file the seven-column key removes
+    # 4,506 rows, the same key without `power_kw` removes 4,542 and without
+    # `price` 6,184, so a column dropped from it deletes listings that are not
+    # duplicates - and the funnel reports the same shape either way.
+    assert tuple(params["preprocess"]["dedup_key"]) == (
+        "make",
+        "model",
+        "model_version",
+        "mileage_km_raw",
+        "registration_date",
+        "price",
+        "power_kw",
+    )
+    assert set(A_VALUE_NO_OTHER_LISTING_HAS) == set(params["preprocess"]["dedup_key"])
+
+
+@pytest.mark.parametrize("column", sorted(A_VALUE_NO_OTHER_LISTING_HAS))
+def test_two_listings_differing_in_one_key_column_are_not_duplicates(
+    raw_frame, params, funnel, column
+):
+    # The test above pins the parameter; this one pins the rule's use of it. A
+    # rule that reads six of the seven columns deletes a listing that differs in
+    # the seventh, and on the real file that is 36 listings for `power_kw` alone.
+    # Every value below passes the rules above deduplication, so the copy can
+    # only be lost to this one.
+    twin = raw_frame.iloc[[0]].assign(**{column: A_VALUE_NO_OTHER_LISTING_HAS[column]})
+    grown = pd.concat([raw_frame, twin], ignore_index=True)
+
+    _, with_twin = apply_row_rules(grown, params)
+
+    assert with_twin.rows(DEDUP) == funnel.rows(DEDUP) + 1
+    assert with_twin.removed(DEDUP) == funnel.removed(DEDUP)
+
+
+def test_which_copy_survives_follows_the_content_and_not_the_row_order(raw_frame, params):
+    # Every other test here counts rows, and the count is the same whichever copy
+    # of a pair survives, so this one asserts the rows themselves. On the real
+    # file the copies differ in equipment, colour, previous owners and the seller
+    # they group by: reversing the input moved 2,730 of the 105,405 survivors and
+    # shuffling it 1,549, with the row count identical in every case. Once #33
+    # fetches the file instead of generating it, a re-publish, a chunked read or
+    # an upstream sort would do the same.
+    kept_ids = set(apply_row_rules(raw_frame, params)[0]["id"])
+    reordered = {
+        "reversed": raw_frame[::-1],
+        "shuffled": raw_frame.sample(frac=1.0, random_state=params["seed"]),
+    }
+
+    for description, frame in reordered.items():
+        survivors = apply_row_rules(frame.reset_index(drop=True), params)[0]
+        assert set(survivors["id"]) == kept_ids, description
+
+
+def test_deduplication_removes_the_fixture_duplicate_and_keeps_the_lower_id(
     kept, raw_frame, params
 ):
     key = params["preprocess"]["dedup_key"]
     pair = raw_frame.index[raw_frame.duplicated(subset=key, keep=False)]
+    lower, higher = raw_frame.loc[pair, "id"].sort_values().index
 
     assert len(pair) == 2
-    assert pair[0] in kept.index
-    assert pair[1] not in kept.index
+    assert lower in kept.index
+    assert higher not in kept.index
 
 
 @pytest.mark.parametrize(
@@ -298,10 +426,15 @@ def test_the_target_is_the_log_of_the_price(stage):
 # --------------------------------------------------------------------------
 
 
-def test_every_rule_this_module_names_is_a_rule_the_stage_runs():
-    # Order-free: a rule renamed in the stage has to fail here, not quietly
-    # turn the tests that name it into tests of nothing.
-    assert {SCOPE, DATE, PRICE, DEDUP} == {rule.name for rule in ROW_RULES}
+def test_the_rules_run_in_the_order_the_ticket_fixes():
+    # The order is a contract, not a comment. Only deduplication's position
+    # changes the artefact; the other three permutations leave the real file at
+    # 105,405 rows either way and still change the per-rule counts the dataset
+    # card and reports/analysis/preprocess_funnel_results.txt publish - the date
+    # rule first removes 164 instead of 27, the price rule first 77 instead of
+    # 75. A rule renamed in the stage also fails here rather than quietly
+    # turning the tests that name it into tests of nothing.
+    assert [rule.name for rule in ROW_RULES] == [SCOPE, DATE, PRICE, DEDUP]
 
 
 def test_the_funnel_reports_the_input_and_then_one_line_per_rule(funnel, raw_frame):

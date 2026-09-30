@@ -27,6 +27,7 @@ count, so a stage ticket can assert against it rather than hope for it:
 Edge case                    The rule it exercises
 ===========================  ===============================================
 Registered after the snapshot  EDN-22, negative age
+Registered on the snapshot     EDN-22, the bound is inclusive
 Duplicate on the dedup key     preprocess step 6, 7-column key
 An `ES` listing                EDN-03, the drift holdout
 A make far below support       EDN-05, the 300-listing threshold
@@ -50,12 +51,14 @@ from recommenditos.schema import RAW_SCHEMA
 SNAPSHOT_DATE = pd.Timestamp("2025-11-08")
 
 # How many rows are appended to guarantee the edge cases above.
-EDGE_CASE_ROWS = 14
+EDGE_CASE_ROWS = 15
 
 #: The composite key preprocessing deduplicates on (params.yaml,
 #: `preprocess.dedup_key`). Repeated here because the edge cases have to be
-#: built so that only the row meant to be a duplicate is one.
-_DEDUP_KEY = (
+#: built so that only the row meant to be a duplicate is one, and this module
+#: takes no params file. `tests/test_data.py` asserts the two are equal, because
+#: a copy that has drifted builds a fixture for a rule the pipeline no longer has.
+DEDUP_KEY = (
     "make",
     "model",
     "model_version",
@@ -486,10 +489,12 @@ def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
     #    pair whose partner an earlier rule deletes never reaches it - copying
     #    row 0 made the pair post-snapshot, and the date rule removed both
     #    before the rule this case exists for ever saw them. And the body row
-    #    comes first in the frame, so it is the copy deduplication keeps, which
-    #    leaves every other edge case below intact.
+    #    carries the lower `id`, so it is the copy deduplication keeps, which
+    #    leaves every other edge case below intact. At the minimum row count
+    #    this body row is also the one the last edge case is built from; that
+    #    case overwrites its own price, so the pair is still exactly one.
     source = body.iloc[-1]
-    for column in _DEDUP_KEY:
+    for column in DEDUP_KEY:
         rows[1][column] = source[column]
     rows[1]["non_smoking"] = not bool(source["non_smoking"])
     # 3. An `ES` listing for the drift holdout (EDN-03).
@@ -528,6 +533,10 @@ def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
     #     inclusive-or-exclusive edge is testable rather than assumed.
     rows[12]["price"] = 500.0
     rows[13]["price"] = 2_000_000.0
+    # 15. Registered exactly on the snapshot date, so the date rule's bound is
+    #     testable the same way. No body row can provide it: they are all
+    #     registered on the first of a month and the snapshot is the 8th.
+    rows[14]["registration_date"] = SNAPSHOT_DATE.strftime("%Y-%m-%d")
 
     return pd.DataFrame(rows).reset_index(drop=True)
 

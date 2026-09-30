@@ -334,7 +334,8 @@ _GROUP_COLUMNS: tuple[Column, ...] = (
         "str",
         False,
         "Hashed seller_company_name, location for private sellers. The split groups by it "
-        "so no seller appears in two sets (EDN-14). Never reversible to the name.",
+        "so no seller appears in two sets (EDN-14). A grouping key, not an anonymisation: "
+        "unsalted, so the public source file inverts it (EDN-35).",
     ),
 )
 

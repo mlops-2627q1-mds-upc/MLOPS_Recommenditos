@@ -5,8 +5,8 @@ published AutoScout24 file? The report cites the funnel, and the pipeline itself
 it for whatever data it was run on, which is the synthetic fixture until #33 lands the real
 acquisition.
 
-It calls the stage's own functions instead of re-implementing the rules, so these numbers cannot
-drift from what the pipeline does. The rule order is the one issue #34 fixes and is load-bearing:
+It calls the stage's own functions instead of re-implementing any of its steps, so these numbers
+cannot drift from what the pipeline does. The rule order is the one issue #34 fixes and is load-bearing:
 each rule sees only what the rule above it left. The raw dataset is not in the repo (NFR-08,
 EDN-07), see the README.
 
@@ -15,11 +15,14 @@ Usage: uv run python reports/analysis/preprocess_funnel.py <the raw CSV>
 
 import sys
 
-import numpy as np
 import pandas as pd
 
 from recommenditos.config import PARAMS_FILE
-from recommenditos.data.preprocess import apply_row_rules, hash_seller_group
+from recommenditos.data.preprocess import (
+    add_the_target,
+    apply_row_rules,
+    derive_group_key_and_drop_pii,
+)
 from recommenditos.pipeline import load_params
 from recommenditos.schema import INTERIM_SCHEMA, RAW_SCHEMA
 
@@ -44,15 +47,14 @@ def main():
         f"  duplicates on the {len(rules['dedup_key'])}-column key: "
         f"{raw.duplicated(subset=rules['dedup_key']).sum():,}"
     )
+    in_scope_offer = raw["offer_type"] == rules["offer_type"]
     print(
-        f"  is_used = False while offer_type = U: "
-        f"{((raw['offer_type'] == 'U') & ~raw['is_used']).sum():,} "
-        f"of {(raw['offer_type'] == 'U').sum():,}"
+        f"  is_used = False while offer_type = {rules['offer_type']}: "
+        f"{(in_scope_offer & ~raw['is_used']).sum():,} of {in_scope_offer.sum():,}"
     )
     print()
 
-    frame = raw.assign(seller_group_id=hash_seller_group(raw))
-    frame = frame.drop(columns=list(rules["pii_columns"]))
+    frame = derive_group_key_and_drop_pii(raw, params)
     kept, funnel = apply_row_rules(frame, params)
     print("row funnel, each rule applied to what the rule above it left:")
     print(funnel.render())
@@ -60,7 +62,7 @@ def main():
 
     # The same call the stage makes before writing, so this also answers whether the real file
     # produces a contract-valid interim frame and not only the synthetic fixture does.
-    interim = INTERIM_SCHEMA.conform(kept.assign(log_price=np.log(kept["price"])))
+    interim = INTERIM_SCHEMA.conform(add_the_target(kept))
     print(
         f"interim frame: {len(interim):,} listings, {len(interim.columns)} columns, "
         f"{interim['seller_group_id'].nunique():,} seller groups, "

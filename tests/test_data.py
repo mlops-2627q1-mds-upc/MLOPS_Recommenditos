@@ -13,6 +13,7 @@ from recommenditos import config
 from recommenditos.data.preprocess import apply_row_rules, hash_seller_group
 from recommenditos.data.split_data import SPLIT_NAMES, assign_split
 from recommenditos.data.synthetic import (
+    DEDUP_KEY,
     EDGE_CASE_ROWS,
     SNAPSHOT_DATE,
     generate_raw_listings,
@@ -53,6 +54,12 @@ def test_a_different_seed_gives_a_different_fixture():
             "registered after the snapshot",
             lambda f: pd.to_datetime(f.registration_date) > SNAPSHOT_DATE,
         ),
+        # EDN-22 again, from the other side: the bound is inclusive, and no body
+        # row can show it because they are all registered on the first of a month.
+        (
+            "registered on the snapshot",
+            lambda f: pd.to_datetime(f.registration_date) == SNAPSHOT_DATE,
+        ),
         # EDN-03: the drift holdout.
         ("an ES listing", lambda f: f.country_code == "ES"),
         # EDN-05 / FR-04: a make far below any support threshold.
@@ -84,6 +91,14 @@ def test_the_fixture_contains(raw_frame, description, predicate):
     assert predicate(raw_frame).any(), f"the fixture has no {description}"
 
 
+def test_the_fixture_deduplicates_on_the_key_the_pipeline_uses(params):
+    # The generator carries its own copy of the key, because it takes no params
+    # file and has to build exactly one duplicate. A copy that has drifted would
+    # build the fixture for a rule the pipeline no longer has, and the duplicate
+    # would be found by neither.
+    assert list(DEDUP_KEY) == list(params["preprocess"]["dedup_key"])
+
+
 def test_the_fixture_contains_exactly_one_duplicate_on_the_dedup_key(raw_frame, params):
     # Exactly one, not "at least one". An earlier version of the generator
     # built every edge row from the same body row, so most of them were
@@ -102,6 +117,10 @@ def test_the_fixture_contains_exactly_one_duplicate_on_the_dedup_key(raw_frame, 
         ("a missing registration date", lambda f: f.registration_date.isna()),
         ("a price on the lower bound", lambda f: f.price == 500),
         ("a price on the upper bound", lambda f: f.price == 2_000_000),
+        (
+            "a listing registered on the reference date",
+            lambda f: pd.to_datetime(f.registration_date) == SNAPSHOT_DATE,
+        ),
     ],
 )
 def test_the_edge_cases_survive_preprocessing(raw_frame, params, description, predicate):
@@ -168,12 +187,15 @@ def test_the_equipment_lists_are_repr_strings_and_never_null(raw_frame):
 # --------------------------------------------------------------------------
 
 
-def test_the_group_key_is_stable_and_hides_the_seller_name(raw_frame):
+def test_the_group_key_is_stable_and_carries_no_plaintext_seller_name(raw_frame):
+    # Stable, so two runs group the same way (NFR-06), and no value is a name.
+    # Not that a name cannot be recovered from a value: the hash is unsalted, so
+    # the published source file inverts it, which EDN-35 accepts and discloses
+    # rather than the code pretending otherwise.
     hashed = hash_seller_group(raw_frame)
 
     assert hashed.notna().all()
     assert hashed.equals(hash_seller_group(raw_frame))
-    # The name must not be recoverable from, or visible in, the key.
     names = set(raw_frame["seller_company_name"].dropna())
     assert names.isdisjoint(set(hashed))
 

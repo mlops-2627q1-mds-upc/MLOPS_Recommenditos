@@ -11,8 +11,11 @@ the report can cite the funnel rather than a single before-and-after pair.
 The supported-make filter is deliberately not here: EDN-05 counts support after
 the `ES` holdout, which happens in `split`.
 
-`hash_seller_group` is the one function the API will reuse, so a seller hashed
-at training time and one hashed at serving time cannot drift apart.
+`hash_seller_group` lives here rather than in `split` because its input is
+`seller_company_name`, which no later stage can see: the interim contract does
+not name it. `split` then groups by the hash alone (`split.group_key`). It is
+the split's grouping key and not an anonymisation measure; the function's own
+docstring says what it protects and what it does not (EDN-35).
 """
 
 from collections.abc import Callable, Iterable
@@ -36,13 +39,50 @@ INPUT_STEP = "as read"
 app = typer.Typer()
 
 
+def seller_group_key(frame: pd.DataFrame) -> pd.Series:
+    """The plaintext key `hash_seller_group` hashes, one value per listing.
+
+    Public so that a test can count the distinct keys without rebuilding them,
+    which is what makes a hash collision observable: two source keys sharing one
+    group id merge two sellers into a single split group, and that is the leak
+    the grouping exists to prevent.
+    """
+    private = frame["seller_company_name"].isna()
+    location = (
+        frame["country_code"].fillna("??").astype("str")
+        + "|"
+        + frame["zip"].fillna("?????").astype("str")
+        + "|"
+        + frame["city"].fillna("?").astype("str")
+    )
+    return frame["seller_company_name"].where(~private, "private|" + location)
+
+
 def hash_seller_group(frame: pd.DataFrame) -> pd.Series:
     """The split's grouping key, derived before `seller_company_name` is dropped.
 
     A dealer groups by its company name. A private seller has none, so it
     groups by location instead, which is what problem-spec section 5 means by
-    "location for private sellers". The hash is one-way: the interim frame
-    carries no way back to the name (NFR-08).
+    "location for private sellers".
+
+    What the hash gives: no column of the artefact holds a seller name, street,
+    zip or city, so nothing downstream - a feature matrix, a model, a log line,
+    an API response - can read a seller's identity off it (NFR-08).
+
+    What it does not give: anonymity. The digest is unsalted, so a key always
+    hashes to the same value, and the key space is the published source file's
+    own columns. A dictionary built from that file inverts all 17,141 dealer ids
+    and all 13,576 private-seller ids in about 50 ms, and for a private seller
+    that recovers `zip` and `city`, two of the columns `preprocess.pii_columns`
+    removes. EDN-35 keeps the hash unsalted and discloses that instead: a pepper
+    would make the split irreproducible on a clean clone without the secret, and
+    the dealer behind a listing is recoverable from the public file regardless by
+    joining on make, model, price, mileage and registration date, which we do
+    publish. Truncating the digest neither helps nor hurts there, because a
+    dictionary attack does not care how short the output is; 16 hex characters
+    are 64 bits, which keeps the chance of an accidental collision over the
+    file's 30,717 groups near 3 in 100 billion, while 8 characters already
+    collide once on that file.
 
     Two deliberate over-groupings, both in the safe direction: listings that
     end up in one group cannot be split across two sets, which is the leak the
@@ -55,16 +95,9 @@ def hash_seller_group(frame: pd.DataFrame) -> pd.Series:
       and deliberately not used, because a dealer with branches in two cities
       is one seller and splitting it would leak.
     """
-    private = frame["seller_company_name"].isna()
-    location = (
-        frame["country_code"].fillna("??").astype("str")
-        + "|"
-        + frame["zip"].fillna("?????").astype("str")
-        + "|"
-        + frame["city"].fillna("?").astype("str")
+    return seller_group_key(frame).map(
+        lambda key: hashlib.sha256(str(key).encode("utf-8")).hexdigest()[:16]
     )
-    raw_key = frame["seller_company_name"].where(~private, "private|" + location)
-    return raw_key.map(lambda key: hashlib.sha256(str(key).encode("utf-8")).hexdigest()[:16])
 
 
 # --------------------------------------------------------------------------
@@ -109,6 +142,12 @@ def _is_registered_by_the_reference_date(frame: pd.DataFrame, params: dict[str, 
     A missing date is kept. It makes age missing, which the feature stage and
     the model handle, while a date after the snapshot would make age negative,
     which nothing downstream is built for.
+
+    The bound is inclusive: age zero is a real car. Nothing in the snapshot sits
+    on it, because every registration date there is the first of a month and the
+    reference date is the 8th, but the reference date is a parameter and is the
+    request date in serving, where a strict bound would drop every listing
+    registered that day.
     """
     registered = frame["registration_date"]
     return registered.isna() | (registered <= pd.Timestamp(params["reference_date"]))
@@ -126,19 +165,33 @@ def _is_priced_in_the_training_range(frame: pd.DataFrame, params: dict[str, Any]
 
 
 def _is_the_first_of_its_kind(frame: pd.DataFrame, params: dict[str, Any]) -> pd.Series:
-    """The 7-column duplicate key, keeping the first listing of each group.
+    """The 7-column duplicate key, keeping the copy with the lowest `id`.
 
     `vin` is only 34 % filled, so a VIN key cannot even see a pair unless both
-    of its copies carry one. Which copy survives does not matter for the model,
-    but it has to be decided rather than left to chance, so that two runs over
-    the same input produce the same frame (NFR-06).
+    of its copies carry one.
+
+    Which copy survives is decided by `id` and not by the order the rows
+    arrived in, so that the artefact is a function of the input's content alone
+    (NFR-06). Without the sort it is a function of the row order too: the copies
+    differ outside the key, in equipment, colour, previous owners and the seller
+    they group by, so a re-published, chunk-read or upstream-sorted snapshot
+    silently moves about 1.5 % of the 105,405 surviving listings while the row
+    count, and every count this stage reports, stays the same. `id` is still in
+    the frame when the rules run and `Schema.conform` drops it at the write, so
+    it costs the artefact nothing.
     """
-    return ~frame.duplicated(subset=params["preprocess"]["dedup_key"], keep="first")
+    # Stable, so equal ids keep their relative order instead of an arbitrary one.
+    ordered = frame.sort_values("id", kind="stable")
+    first = ~ordered.duplicated(subset=params["preprocess"]["dedup_key"], keep="first")
+    return first.reindex(frame.index)
 
 
 #: The row rules of issue #34, in the order it fixes. See the module docstring:
 #: each rule sees what the rule above it left, so reordering this tuple changes
-#: the result, and deduplication in particular has to stay last.
+#: the counts the report and the dataset card publish even where it leaves the
+#: artefact identical, and deduplication in particular has to stay last. The
+#: order is asserted in `tests/test_preprocess.py`, because a comment cannot
+#: hold a contract.
 ROW_RULES: tuple[RowRule, ...] = (
     RowRule("used passenger cars", _is_a_used_passenger_car),
     RowRule("registered by the reference date", _is_registered_by_the_reference_date),
@@ -242,6 +295,36 @@ def assert_the_contract_excludes(columns: Iterable[str], schema: Schema) -> None
         )
 
 
+def derive_group_key_and_drop_pii(frame: pd.DataFrame, params: dict[str, Any]) -> pd.DataFrame:
+    """Steps 1 and 2: hash the seller into the group key, then drop the PII columns.
+
+    In that order, because the key is derived from one of the columns the drop
+    removes; hashing after the drop could only produce a constant.
+
+    What reaches the artefact is decided by the interim contract, which names
+    none of the excluded columns, so this drop is not what keeps PII out of the
+    output. It is here so that nothing between the read and the write - a log
+    line, a traceback, an intermediate artefact someone adds later - can carry
+    PII (NFR-08), and so that `preprocess.pii_columns` is a parameter something
+    actually reads.
+
+    A step of its own, and not inlined into `main`, so that
+    `reports/analysis/preprocess_funnel.py` measures this stage on the real file
+    rather than its own copy of it.
+    """
+    hashed = frame.assign(seller_group_id=hash_seller_group(frame))
+    return hashed.drop(columns=list(params["preprocess"]["pii_columns"]))
+
+
+def add_the_target(frame: pd.DataFrame) -> pd.DataFrame:
+    """Step 7: the target, after the price range and never before.
+
+    The raw file starts at 1 EUR, and `log(0)` is `-inf`, which no contract can
+    catch - it is a float like any other.
+    """
+    return frame.assign(log_price=np.log(frame["price"]))
+
+
 @app.command()
 def main(
     input_path: Path = RAW_DATA_DIR / "listings.parquet",
@@ -249,34 +332,21 @@ def main(
     params_path: Path = PARAMS_FILE,
 ) -> Funnel:
     params = load_params(params_path)
-    pii_columns = params["preprocess"]["pii_columns"]
-    assert_the_contract_excludes(pii_columns, INTERIM_SCHEMA)
+    # Before the read, not after: a stage whose output contract could leak PII
+    # has no business touching the data at all.
+    assert_the_contract_excludes(params["preprocess"]["pii_columns"], INTERIM_SCHEMA)
 
     frame = read_frame(input_path, RAW_SCHEMA)
+    frame = derive_group_key_and_drop_pii(frame, params)
 
-    # 1. Before the PII columns go, because it is derived from one of them.
-    frame["seller_group_id"] = hash_seller_group(frame)
-
-    # 2. What reaches the artefact is decided by the contract, which names none
-    #    of the excluded columns - the check above is what keeps that true. This
-    #    drop changes nothing a test can observe, and it is here anyway: it makes
-    #    `preprocess.pii_columns` a parameter something actually reads, and it
-    #    means nothing between the read and the write - a log line, a traceback,
-    #    an intermediate artefact someone adds later - can carry PII (NFR-08).
-    frame = frame.drop(columns=list(pii_columns))
-
-    # 3. to 6. The row rules, in the order the module docstring explains.
+    # Steps 3 to 6: the row rules, in the order the module docstring explains.
     frame, funnel = apply_row_rules(frame, params)
     logger.info(
         f"Row funnel, each rule applied to what the rule above it left "
         f"(reference date {params['reference_date']}):\n{funnel.render()}"
     )
 
-    # 7. The target, after the price range and never before: the raw file
-    #    starts at 1 EUR, and log(0) is -inf, which no contract can catch.
-    frame = frame.assign(log_price=np.log(frame["price"]))
-
-    write_frame(frame, output_path, INTERIM_SCHEMA)
+    write_frame(add_the_target(frame), output_path, INTERIM_SCHEMA)
     return funnel
 
 
