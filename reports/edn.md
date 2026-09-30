@@ -1366,6 +1366,103 @@ How to add an entry:
 - **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py); the `supported_makes.json` dependency on the `features` stage in [`dvc.yaml`](../dvc.yaml); [pipeline docs](../docs/docs/pipeline.md), "Known gaps", for the four downstream guarantees; [`reports/analysis/split_gate.py`](analysis/split_gate.py) for the 0.08 pp and 5,979 measurements; [EDN-05](#edn-05-supported-makes-minimum-listing-support-per-make); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [EDN-39](#edn-39-the-splits-size-gate-is-four-rules-with-an-unconditional-floor-not-one-bound-derived-from-the-realised-data); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
 - **In LaTeX:** no
 
+### EDN-49: No bias correction on the log-to-euro inverse transform
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Modelling Approach, Evaluation Protocol
+- **Participants:** @lukas2510
+- **Decision:** `predict_eur` is `exp` of the model's log-space prediction, with no Duan smearing factor and no lognormal variance correction. The target functional is the conditional **median** price, and that is what every metric this project reports measures.
+- **Alternatives considered:**
+  - **Option A (chosen): naive `exp`.**
+    Pros: it is the conditional median of price, which is exactly what MdAPE, the +/-20 % share and the conformal intervals are about; it needs no statistic fitted on the training residuals, so nothing extra has to be persisted, versioned or kept in step between `train`, `evaluate` and the API; and it is what the model card already told readers the model does.
+    Cons: it is *not* an unbiased estimate of the mean price, so anyone reading the estimate as an expected sale value is reading it wrong. The model card and the response schema say "typical price" for that reason.
+  - **Option B: Duan's smearing estimator.** Multiply by the mean of `exp(residual)` over the training rows.
+    Pros: the textbook correction for a log-linear model, non-parametric, and it is what a reviewer who knows the retransformation problem will ask about.
+    Cons: it targets the conditional mean, so it shifts every prediction upward, away from the typical asking price. Measured on the real snapshot's 19,665 test rows it makes every variant worse: factor 1.0283 and MdAPE 9.71 % to 10.03 % for `b1`; 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`; 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`. It also adds a fitted constant to the artefact that has to travel with the model and be applied identically in three places.
+  - **Option C: lognormal variance correction,** multiply by `exp(sigma^2 / 2)`.
+    Pros: closed form, no residual pass needed.
+    Cons: everything option B has, plus a distributional assumption the residuals do not have to satisfy; it is strictly weaker than smearing, which estimates the same quantity without the assumption.
+- **Rationale:** The correction answers a question nobody here asks. Fitting with squared error on `log(price)` estimates `E[log P | x]`, so `exp` of it is the geometric mean, which for the conditional distribution of a price is the median. Every number in problem-spec section 6 and every criterion in section 8 is median- or quantile-flavoured: MdAPE is the primary metric, SC-02 is a share within a band, and SC-05's intervals are conformal and therefore calibrated after the fact on held-out data, so they need no correction either. A mean-targeting correction would make each of those numbers worse, and the measurements say it does, on all three variants that have an inverse transform at all.
+
+  `b0` is the reason the decision is visible in the code rather than implicit. The median baseline is fitted on `price` directly, not on `log_price`, because a median commutes with a monotone transform: `exp(median(log price))` and `median(price)` are the same number, and the readable one is the one worth storing in a lookup table a person can audit. So B0 needs no inverse transform, B1 and the two LightGBM variants share one, and the seam puts it inside the model - `predict_eur` returns euros and `predict_log_price` is defined as its log - so `evaluate` and the API cannot come to disagree about it.
+
+  The honest limit of this entry: the effect is small. The largest degradation measured is 0.32 pp, on the interpretable baseline rather than on the deployed candidate. It is recorded because the retransformation problem is a standard question about a log-target model, the answer has numbers behind it, and the alternative would have quietly cost accuracy.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI raised the retransformation question unprompted, named the two standard corrections and argued from the target functional rather than from convention, which is the argument that decides it. Its first write-up carried the effect sizes from a different run (0.5 to 2.2 pp) as if they were ours; those were re-measured on the real snapshot and are an order of magnitude smaller, so the entry now claims what this project measured and says that the effect is small. The direction of the effect - worse on every variant - reproduced.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the smearing factor and the paired MdAPE per variant were computed on the real snapshot in a scratchpad run of the whole chain, with the numbers reproduced in the model card.
+- **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.predict_eur` and `MedianBaselineModel`; [model card](../docs/docs/model-card.md), Training Procedure, Training; `tests/test_model.py::test_predict_log_price_is_exactly_the_log_of_predict_eur`; [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
+- **In LaTeX:** no
+
+### EDN-50: One-hot encoding for the Ridge baseline only, against EDN-02's "no one-hot"
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Feature Engineering, Modelling Approach
+- **Participants:** @lukas2510
+- **Decision:** The `b1` Ridge variant one-hot encodes its categoricals, with `handle_unknown="infrequent_if_exist"` and `min_category_rows: 5` as the threshold below which levels share one column. This is confined to `b1`: the LightGBM variants and the CatBoost challenger take the categoricals natively, as `category` codes over the levels the `features` stage fixed, and no one-hot column exists anywhere near them.
+- **Alternatives considered:**
+  - **Option A (chosen): one-hot, confined to B1.**
+    Pros: it is the standard encoding for a linear model, it needs no target information, and it keeps B1 able to do the job it exists for - telling a Porsche from a Dacia as part of an interpretable depreciation baseline. `handle_unknown="infrequent_if_exist"` is also what makes an unseen level an answer rather than an error, which EDN-18 requires of the serving path.
+    Cons: it is the encoding EDN-02 rules out, so a reader who takes that rule as project-wide sees a violation. The column count grows with the level count: 503 columns at real scale before any folding, against 16 input features.
+  - **Option B: target encoding with cross-fitting.**
+    Pros: one column per categorical however many levels it has, and it usually beats one-hot for a linear model on high-cardinality data.
+    Cons: it encodes the target into a feature, so it leaks unless it is cross-fitted, and cross-fitting means a second resampling scheme inside the stage, a second thing to persist and a second thing that can differ between training and serving. For a baseline whose purpose is to be simple and auditable that is the wrong trade, and the leak is the kind of defect this project would only find by not finding it.
+  - **Option C: drop the categoricals from B1 and fit on the numerics alone.**
+    Pros: no encoding decision at all, and the ladder still has a linear baseline.
+    Cons: it destroys the baseline. A depreciation model that cannot see the make is not a weaker version of B1, it is a different and much worse thing, and SC-03's comparison against B0 would be against a baseline nobody would have built.
+  - **Option D: read EDN-02 as project-wide and drop B1 from the ladder.**
+    Pros: no apparent contradiction to explain.
+    Cons: problem-spec section 7 names B1 as a baseline, and the interpretable linear reference is what makes the tree models' gain legible. Removing a baseline to preserve the letter of a rule about a different model family is the wrong direction.
+- **Rationale:** EDN-02 is a decision about the *model family*, and "categoricals stay categorical, no one-hot" is stated there as one of the reasons gradient boosting was chosen over the alternatives - LightGBM and CatBoost handle them natively, so the pipeline does not have to blow up the matrix. It is not a constraint on how a linear baseline encodes its inputs, because a linear model has no native handling to use: the choice is one-hot, target encoding or nothing. Recording this keeps the next reader from either "fixing" B1 to match the rule or reading the rule as broken.
+
+  Two details of the encoding are decisions in their own right and are measured rather than assumed.
+
+  Absence is a level. Categoricals are mapped to a literal `"__missing__"` value before encoding, deterministically at fit and at predict time, so an absent value gets a coefficient like any other level instead of failing the fit or being dropped. That is the same treatment EDN-15 asks for, expressed in the only way a linear model can express it.
+
+  `min_category_rows` is an absolute row count rather than a share, so that what the threshold means does not change as the training set grows, and it is set to the smallest value that still does its job. Measured on the real snapshot (60,378 training rows, MdAPE on the 19,665 test rows): no folding gives 503 encoded columns at 9.48 %, 5 gives 404 at 9.52 %, 30 gives 294 at 9.71 %, 100 gives 187 at 10.61 % and 1,000 gives 68 at 13.45 %. So folding costs accuracy monotonically, and the reason to fold at all is not accuracy: `handle_unknown="infrequent_if_exist"` needs an infrequent group to exist before an unseen level has anywhere to go, and at no folding there is none. 5 buys that group for 0.04 pp, and it also stops a level seen once from getting a coefficient fitted on one row, which is the situation on the 2,000-row test fixture. The value is a parameter precisely so the ladder can revisit it.
+
+  One claim that did **not** survive measurement and is recorded so nobody repeats it: the design this work followed justified a much larger threshold with a small-data pathology, a mid-range car with an unseen model and country predicted at 94,323 EUR. That did not reproduce here at either scale. On the fixture the same probe gives 13,993 EUR unfolded and 15,413 EUR at a threshold of 30; at real scale, 32,332 EUR and 33,104 EUR. The threshold is justified by the infrequent group and by the one-row-coefficient argument, not by a pathology this project observed.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI spotted the apparent conflict with EDN-02 before writing the estimator and flagged it as an EDN candidate rather than resolving it silently, and its reading - that EDN-02 is about the tree family - is the one the entry records. It was overruled on the threshold: it recommended 30 on the strength of a measurement from another run and asserted the value was free at real scale. Sweeping it here showed folding is not free and that its pathology did not reproduce, so the value is 5 and the entry says what the evidence actually supports.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the threshold sweep was run on the fixture and then on the real snapshot, and the "unseen model and country" probe was re-measured at both scales before the recommended value was changed.
+- **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `RidgeModel`; the `min_category_rows` comment in [`params.yaml`](../params.yaml); [model card](../docs/docs/model-card.md), Training Procedure, Training; `tests/test_model.py::test_an_unseen_category_is_treated_as_missing_not_an_error`; [EDN-02](#edn-02-model-family-gradient-boosting-lightgbm-as-main-model); [EDN-18](#edn-18-unseen-countries-and-models-are-accepted-with-a-warning-not-rejected); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
+- **In LaTeX:** no
+
+### EDN-51: Mean fill plus a per-feature missingness indicator for the Ridge numerics, which is not imputation
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Feature Engineering, Modelling Approach
+- **Participants:** @lukas2510
+- **Decision:** The `b1` Ridge variant's numeric branch is the union of two paths: a mean-filled, standardised copy of every numeric feature, and `MissingIndicator(features="all")`, which emits one indicator column per feature whether or not that feature was ever missing at fit time. No other estimator fills anything, and no artefact of the pipeline is imputed: the fill exists only inside B1's fitted pipeline.
+- **Alternatives considered:**
+  - **Option A (chosen): mean fill plus an indicator for every feature.**
+    Pros: information-preserving for a linear model. For a row where feature `j` is absent the contribution is `beta_j * mean_j + gamma_j`, and `gamma_j` is free to absorb whatever the absence is worth, so the fill value is a numerically neutral placeholder rather than a guess at the value. Nothing about the missingness is destroyed, which is what EDN-15 is protecting. `features="all"` also makes SC-06 honest: the criterion masks a field and measures what it costs, and it can only do that if masking a field the training rows happened to fill still produces an indicator.
+    Cons: a reader who sees `SimpleImputer` in the pipeline will conclude the project imputes, which is exactly the misreading this entry exists to prevent. It also doubles the numeric column count.
+  - **Option B: `SimpleImputer` alone, or `SimpleImputer(add_indicator=True)` at its default.**
+    Pros: less to explain, fewer columns.
+    Cons: this is the option that silently breaks SC-06, and it is the default, which is why it is worth an entry. scikit-learn emits an indicator only for features that were missing **at fit time**, so a column complete in the training split is mean-filled with no indicator the moment the criterion masks it - the model then reports the training mean for that field, the prediction barely moves, and SC-06 measures the model's own imputation rather than the cost of the missing input. Without the indicator at all, an absent value is indistinguishable from an average one, which is imputation in the sense EDN-15 rejects.
+  - **Option C: drop the rows or the columns with missing values.**
+    Pros: no fill anywhere, so no explaining to do.
+    Cons: dropping rows would fit B1 on a different and much smaller population than the other three variants, so the ladder would stop being a comparison. Dropping columns would throw away `nr_prev_owners` and `gears`, which are missing in a third and a quarter of the training rows respectively, and the missingness itself carries signal (EDN-15).
+  - **Option D: give up on B1 taking numerics with gaps and use a model that handles them natively.**
+    Pros: no encoding at all.
+    Cons: that model is LightGBM, which is ladder steps 3 and 4. B1's value is that it is a *linear* reference.
+- **Rationale:** EDN-15's rule is that a missing value is never imputed, because the missingness itself carries signal. Ridge cannot consume NaN, so B1 either encodes the gaps or does not exist. The construction above is the encoding under which nothing is lost: the pair `(filled value, indicator)` is a bijection with `(value, present)` for a present value and carries the absence explicitly for an absent one, so the linear model has exactly the information the tree models get from a NaN split. The fill is a placeholder chosen to be numerically harmless after standardisation, not an estimate of the missing value, and the entry exists because those two look identical in the code.
+
+  `features="all"` is the load-bearing part and it is the part a test has to hold, because it is invisible from the outside. It is also invisible on the synthetic fixture: every numeric column there has a missing value in the training split, so the default emits the same set of indicators and a test written against the fixture cannot tell the two apart. That was found by breaking the implementation on purpose and watching the test suite pass. The test now fills one column completely before fitting, which is the situation on real data, and it fails with the default.
+
+  The other half of the same discipline is what the estimator does *not* do. `SimpleImputer(keep_empty_features=True)` keeps an all-missing column in place rather than dropping it, so the matrix shape does not depend on which columns the training rows happened to fill; and nothing outside B1's pipeline fills anything, so no artefact on disk and no other variant carries a filled value.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI identified that the obvious construction would make SC-06 measure its own imputation, which is a subtle failure that would have produced a passing criterion and a wrong conclusion, and it named `features="all"` as the fix and flagged the whole construction as an EDN candidate because of how it reads. It also proposed the test for it. The test it proposed was then shown, by mutating the implementation, to pass either way on this fixture, and it was replaced with one that fills a column first; that correction came from the mutation exercise rather than from the design.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the mutation battery run before the pull request recorded `MissingIndicator(features="all")` to `MissingIndicator()` as a surviving mutation, which is what produced the replacement test.
+- **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `RidgeModel` and `_ridge_pipeline`; `tests/test_model.py::test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature` and `::test_a_numeric_feature_complete_in_training_still_gets_an_indicator`; [model card](../docs/docs/model-card.md), Training Procedure, Training; [EDN-15](#edn-15-uc1-required-fields-after-measuring-the-fill-rates-plus-sc-06-for-absent-optional-fields); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
+- **In LaTeX:** no
+
 
 ## Template
 

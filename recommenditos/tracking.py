@@ -186,7 +186,9 @@ class Run:
     #: whether its numbers reached the server or only the disk.
     mode = "enabled"
 
-    def __init__(self, run_id: str) -> None:
+    def __init__(self, run_id: str | None) -> None:
+        #: `None` only on a `DisabledRun`, which is what `model.json` records so
+        #: that `evaluate` knows there is no run to append to.
         self.run_id = run_id
 
     def log_params(self, params: dict) -> None:

@@ -876,6 +876,26 @@ def test_a_payload_written_by_another_library_version_is_flagged(tmp_path: Path,
     assert any("scikit-learn 0.0.1" in message for message in reported), reported
 
 
+def test_a_training_price_range_that_cannot_bound_a_price_is_refused(
+    tmp_path: Path, trained: dict
+):
+    """`predict_eur` promises a positive price, and the bound is how it keeps it.
+
+    A lower edge of 0 would clip to `log(0)`, so `exp` would return exactly 0.0
+    and the promise would be silently false. `preprocess.price_min_eur: 500` makes
+    it unreachable from the pipeline; this is the guard for a bundle somebody
+    edited.
+    """
+    bundle = tmp_path / "unbounded"
+    shutil.copytree(trained["dir"] / "b0", bundle)
+    record = json.loads((bundle / MODEL_FILE).read_text(encoding="utf-8"))
+    record["training"]["price_min_eur"] = 0.0
+    (bundle / MODEL_FILE).write_text(json.dumps(record), encoding="utf-8")
+
+    with pytest.raises(ModelError, match="cannot bound a price"):
+        load_model(bundle)
+
+
 def test_a_matrix_column_no_estimator_can_encode_is_refused():
     """A feature set may name a column the catalogue has and no estimator can use.
 

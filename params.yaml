@@ -237,7 +237,16 @@ train:
         # rather than a share, so that what it means does not change as the
         # training set grows. Only the `ridge` variant has this: the tree models
         # handle a rare level natively (EDN-02).
-        min_category_rows: 30
+        #
+        # 5 rather than a larger value, measured on the real snapshot (60,378
+        # training rows, MdAPE on the test split): no folding at all gives 503
+        # encoded columns and 9.48 %, 5 gives 404 and 9.52 %, 30 gives 294 and
+        # 9.71 %, 100 gives 187 and 10.61 %. So folding is not free, and 5 is the
+        # smallest value that still *has* an infrequent group for an unseen level
+        # to fall into, which is what EDN-18 needs. It also stops a level seen
+        # once from getting a coefficient fitted on one row, which is what the
+        # 2,000-row test fixture is full of.
+        min_category_rows: 5
     # Ladder step 3: the main model.
     lgbm-basic:
       estimator: lightgbm

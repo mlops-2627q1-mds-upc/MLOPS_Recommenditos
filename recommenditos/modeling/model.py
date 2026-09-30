@@ -153,6 +153,12 @@ class Model:
     is what makes "finite and strictly positive" a property of the arithmetic
     rather than a hope, and it costs the median-preserving estimators nothing,
     because `exp` is monotone.
+
+    The bound is not only a guard against a float limit: measured on the real
+    snapshot, B1's unbounded prediction leaves the training price range once in
+    19,665 test rows, at 25,292,552 EUR. It is a guard rail rather than a
+    calibration, though, and the comment is not a claim that the bounded number
+    is right - it is the price of the most expensive car in the training rows.
     """
 
     #: The libraries whose version a subclass records, beyond python itself.
@@ -174,13 +180,22 @@ class Model:
         self.input_schema: Schema = space.schema.features(name=f"{metadata['feature_set']}-input")
         self._check_the_bundle_agrees_with_itself()
         training = metadata["training"]
+        low, high = float(training["price_min_eur"]), float(training["price_max_eur"])
+        # `predict_eur` promises a strictly positive price, and it keeps that
+        # promise by bounding to this range, so a range that does not bound one
+        # has to be refused here rather than produce a zero. `preprocess` makes it
+        # impossible from the pipeline (`price_min_eur: 500`); a hand-edited
+        # bundle is what this guard is for.
+        if not 0 < low <= high:
+            raise ModelError(
+                f"the training price range of {self.metadata['variant']!r} is "
+                f"[{low}, {high}], which cannot bound a price: the lower edge has to be "
+                f"above 0 and at or below the upper one."
+            )
         # In log space, because that is where the bound is applied. Kept as euros
         # in the metadata, so a reader - and #39's report of how many predictions
         # sit on a bound - sees the number in the unit it means.
-        self._log_bounds = (
-            float(np.log(training["price_min_eur"])),
-            float(np.log(training["price_max_eur"])),
-        )
+        self._log_bounds = (float(np.log(low)), float(np.log(high)))
 
     def _check_the_bundle_agrees_with_itself(self) -> None:
         """Refuse a bundle whose record and feature space describe different models.
