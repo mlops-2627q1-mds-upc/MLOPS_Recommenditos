@@ -51,3 +51,39 @@ make test     # pytest, which also reports the coverage of recommenditos/
 `make test` prints a coverage table; CI puts the same table in the summary of its test job.
 There is no coverage gate on a PR, so a number below 80 % does not fail anything.
 NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
+
+## Requirement traceability
+
+Every `FR-xx` and `NFR-xx` of the [requirements](docs/docs/requirements.md) is either verified by a test or verified by hand, and NFR-07 asks us to prove which.
+A test says what it verifies with the `req` marker:
+
+```python
+@pytest.mark.req("FR-15", "NFR-01")
+def test_a_candidate_that_misses_a_criterion_is_not_promoted(): ...
+```
+
+- The IDs have to exist in the [requirements](docs/docs/requirements.md).
+  A test whose marker names an unknown ID **fails**, so a typo cannot quietly drop the coverage it was meant to record.
+- One marker may name several IDs, and several tests may name the same ID.
+- Mark the test that actually verifies the requirement, not every test that happens to touch the code on the way.
+
+Build the matrix locally with
+
+```bash
+uv run python -m tools.requirement_matrix
+```
+
+It writes `reports/requirement-matrix.md` and `reports/requirement-matrix.json` - both generated, both gitignored - and exits non-zero when a requirement that owes evidence has none.
+CI runs the same command, puts the Markdown into the job summary and uploads both files as the `requirement-matrix` artefact.
+
+Which requirements owe evidence *now* is [tools/expected_coverage.yaml](tools/expected_coverage.yaml): every requirement is booked to the milestone whose work produces its evidence, and the gate enforces the milestones up to `current`.
+Before M4 there is no API, so an `FR-xx` without a test is reported without failing the build.
+Two things to know when working there:
+
+- A requirement added to the documents has to be booked to a milestone, or the generator fails.
+  That is deliberate: it forces the question of when the requirement gets its evidence.
+- Bumping `current` is how the gate tightens.
+  Do it when the milestone's work is merged, and expect it to turn reported gaps into a red build.
+
+A requirement no test can reach - a load test, a deployment, a drill - is tagged **[manual]** in the [specification](docs/docs/specification.md), and the cell names the evidence.
+The matrix then shows it as verified by hand rather than as a gap, which is why that cell must never be left empty.
