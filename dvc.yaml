@@ -125,6 +125,13 @@ stages:
   # `features@basic` and `features@extended` rather than `features@0`, and each
   # declares only its own key under `params:`. Adding a feature set is a change
   # to params.yaml alone.
+  #
+  # `supported_makes.json` is a dependency although `split` writes the rows of
+  # unsupported makes into the sets rather than dropping them: this stage is
+  # where the list is applied (see docs/docs/pipeline.md, "Known gaps"). Without
+  # the dependency, changing `split.min_listings_per_make` would rewrite the
+  # list and leave every matrix, model and metric downstream of it untouched,
+  # and `dvc.lock` would assert that stale artefacts are current.
   # ----------------------------------------------------------------------
   features:
     foreach: ${features.sets}
@@ -141,6 +148,7 @@ stages:
         - data/processed/calibration.parquet
         - data/processed/test.parquet
         - data/processed/holdout_es.parquet
+        - data/processed/supported_makes.json
       params:
         - reference_date
         - features.sets.${key}

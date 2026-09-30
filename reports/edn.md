@@ -959,6 +959,68 @@ How to add an entry:
 - **In LaTeX:** no
 
 
+### EDN-39: The split's size gate is four rules with an unconditional floor, not one bound derived from the realised data
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility (shapes M3: Quality Assurance)
+- **Activity / Topic:** Evaluation Protocol, Testing Strategy
+- **Participants:** @lukas2510
+- **Decision:** The `split` stage judges its realised sizes against four named rules: every set non-empty; every set at least 75 % of its configured share; no seller group above 5 % of the pool; and the share's scatter inside a bound derived from the group sizes at 5.0 sigma, capped at 15 points. The failure names every rule that fired. `DISPERSION_SIGMAS` is chosen from a stated false-alarm budget - at most 1 seed in 1,000 may turn the stage red on a pool that satisfies the concentration limit - measured over 2,000 seeds on three pools in [`reports/analysis/split_gate.py`](analysis/split_gate.py).
+- **Alternatives considered:**
+  - **Option A: one bound derived from the realised group sizes, at four sigma.** What the first implementation of the stage did.
+    Pros: the bound is a property of the data rather than a number someone liked, it tightens as the pool gains sellers, and the derivation is algebraically correct for independent group assignment.
+    Cons: measured unable to detect the failure it exists for. The bound takes `sum(n_i^2)` from the *realised* sizes, so it widens exactly when one dealer dominates and the split is least trustworthy. One group holding 12 % of a 10,000-row pool, dumped into validation, realises 20.8 % against a 10 % ratio and passes, because the bound has become 14.4 points. A call with three empty sets passes. A `group_key` naming `make` instead of the seller realises train at 38.7 % and passes against a 89.9-point bound, and `country_code` at 70.8 % against 101 points. Four sigma was also wrong in the other direction: the comment claimed 200 seeds reach at worst 3.5 sigma, but seeds 1 to 400 reach 3.92 and 2,000 seeds reach 4.25, so a routine `dvc exp` seed sweep would have turned the stage red on a sound split.
+  - **Option B: a fixed percentage bound.** Rejected in the first implementation and still rejected.
+    Pros: nothing about it can be widened by the data.
+    Cons: to hold on the 1,862-row synthetic fixture pool it would have to allow about 6.8 points, and that width accepts a calibration set at a third of its intended size on the real snapshot. One number cannot serve a 99,326-row pool with 28,435 groups and a 1,862-row one with 608.
+  - **Option C (chosen): keep the derived bound as a scatter check, cap it, and add an unconditional floor plus a declared concentration limit.**
+    Pros: each rule catches what it is for, and the rule that catches an undersized set cannot be widened by any property of the realised data, because it is a fraction of the *configured* ratio. Concentration now fires the gate instead of widening it, which is what makes a mis-set `group_key` detectable at all. The cap stops the derived quantity from becoming vacuous. The failure message names the rule, so the reader is sent to the right cause. All three exploits above now fail, and the real snapshot's own split still passes with the sizes the dataset card states.
+    Cons: four numbers to justify instead of one, and the floor is a statement about a pool of the real snapshot's granularity - on the much smaller fixture pool the shares scatter far more, so the seed-sweep test there sweeps a looser floor and says why. Three of the four rules are module constants rather than `params.yaml` entries, so they are not swept by `dvc exp`.
+  - **Option D: derive the bound from a declared maximum group share instead of the realised sizes.**
+    Pros: would answer the objection directly, with one rule instead of three.
+    Cons: measured not to work. The available closed form, `sum(n_i^2) <= max(n_i) * N`, assumes every group is the maximum size and gives a 26.8-point bound at a 5 % declared share, which is looser than what it replaces. Modelling the tail as equal-sized groups instead understates the real dispersion (0.0346 against a realised 0.0379) and would fail sound splits at seed 206. The declared expectation is therefore used as its own rule, where it is exact, rather than as an input to a bound it cannot model.
+- **Rationale:** The defect was not the formula, which is correct for what it describes, but what it was allowed to do: a single bound that both licensed and was derived from the concentration it should have flagged. Separating the two is what makes each rule checkable. The floor answers "is this set the size we asked for", the concentration limit answers "is the assumption behind the scatter bound still true", and the scatter bound answers "is this more movement than independent assignment explains". Only the third is a statement about noise, and only the third should be derived from the data.
+
+  The constants come from measurement rather than from taste, because the first version showed what taste produces: 4.0 was justified by a sweep that stopped at 200 seeds and was wrong by 2,000. The budget is stated so the number can be re-checked: at most 1 in 1,000 seeds may false-alarm. Over 6,000 seed-pool trials the worst case is 4.25 sigma, so 5.0 gives a measured false-alarm rate of 0 with 0.75 sigma of margin. The floor at 0.75 sits below the smallest share any of 2,000 seeds produced on the real snapshot, 0.820, and rejects the calibration set at 0.58 of its intended size that option A accepted. The concentration limit at 5 % sits above the real snapshot's largest dealer, 3.41 %, and far below the 12 %, 34.6 % and 100 % of the three exploits.
+
+  One thing is deliberately written into the comment rather than left implied: "five sigma" is not a normal-theory quantile here and must not be read as one. The largest dealer alone accounts for 80.7 % of the variance of any set's share, so the distribution is dominated by a single Bernoulli and a Gaussian tail probability would be meaningless. The multiple is an empirical quantile of a measured sweep, and the comment says so.
+- **AI involvement:** Alternative generation, Alternative assessment, Solution generation, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** An agent asked to attack the stage rather than describe it found that the gate the pull request presented as its main safety mechanism could not detect an undersized set, and confirmed each case by execution rather than by argument: the dominant-group dump, the three empty sets, and both wrong `group_key` values, plus a 13-mutation scorecard showing that deleting the `check_ratios` call in `main` survived the entire test suite. It also found the constant's justification wrong in both directions, which is the part that mattered most, because the stage would have failed a sound split at the next seed sweep.
+
+  The modification is option D. The review asked for the bound to be derived from a declared expectation about concentration; that was tried and measured, and it is either looser than what it replaces or tight enough to fail sound splits, so the declared expectation became its own rule instead. Recording that is the point: the reviewer's prescription was not simply adopted, it was tested and the part that did not survive measurement was replaced by something that did.
+- **AI interaction evidence:** Claude Code adversarial review of PR #53 on 2026-09-30, with a 13-mutation scorecard and a reproduction of each exploit; the fixing session re-ran every exploit against the new gate and measured the 2,000-seed sweep that chose the constants.
+- **Other evidence:** [`reports/analysis/split_gate.py`](analysis/split_gate.py) and its committed output; [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py); [`tests/test_split.py`](../tests/test_split.py); [EDN-32](#edn-32-split-proportions-6010101020-and-the-project-seed); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
+- **In LaTeX:** no
+
+
+### EDN-40: The `ES` holdout stays row-selected, so a cross-border dealer is reported rather than moved
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility (shapes M6: Monitoring)
+- **Activity / Topic:** Evaluation Protocol, Monitoring
+- **Participants:** @lukas2510
+- **Decision:** The `split` stage selects the holdout per listing, not per seller, so "every `ES` listing is held out" (EDN-03) takes precedence over "no seller appears in two sets" (EDN-14) for a dealer that lists in `ES` and elsewhere. The stage counts any such seller and reports it as a warning with row counts, the disjointness tests include the holdout instead of iterating the split names only, and the count is pinned by a test.
+- **Alternatives considered:**
+  - **Option A: hold out whole sellers that touch `ES`.** Both invariants would then hold without exception.
+    Pros: the holdout would be seller-disjoint from the training sets, so an `ES` replay could not contain a dealer the model trained on, which is the property EDN-14's finding says matters.
+    Cons: it changes what the holdout *is*. EDN-03 defines it as the `ES` listings and prices its cost as exactly those rows, so the artefact would gain non-`ES` rows that M6 replays as Spanish traffic, and its size would no longer be the 6,079 rows EDN-03 and the dataset card state. On the real snapshot it would also buy nothing: 0 sellers list both inside and outside `ES`, because `hash_seller_group` keys a dealer by its company name and no name occurs on both sides.
+  - **Option B (chosen): keep the row selection, detect the conflict and report it with counts.**
+    Pros: EDN-03's definition of the holdout is untouched, and on the real snapshot the resolution costs nothing measurable. The violation becomes visible where it does occur rather than being silently excluded from the tests: the fixtures the tests run on have 81 such sellers at 2,000 rows and 888 at 20,000, and no test would have noticed, because both disjointness tests iterated the split names and skipped the holdout.
+    Cons: a weaker invariant than option A. The stage does not guarantee seller-disjointness across all five artefacts, only across the four split sets, and a future snapshot with cross-border dealer names would need this decision revisited rather than being handled automatically.
+  - **Option C: leave it as it was, selected per row and unmentioned.**
+    Cons: this is what the pull request did, and it is the reason the conflict went unnoticed. Two documented invariants cannot both hold, and nothing said which one wins or what it costs.
+- **Rationale:** The two rules genuinely conflict and one of them has to lose, so the only bad answer is not saying which. EDN-03 is the authority on what the holdout contains, and its whole purpose is that the replayed rows are a market: rows from other countries in it would change what the drift measurement measures, and the 6,079-row figure is already cited in the dataset card and in EDN-14's count of the `ES` rows the API would accept. Against that, option A's benefit on the real snapshot is exactly zero, because no dealer name crosses the border there.
+
+  What makes option B acceptable rather than a shrug is that the cost is now measured and visible. EDN-14's finding is that dealer-level shift is as large as country-level shift, so a replay containing dealers the model trained on understates drift and confounds both NFR-11's flagging and FR-15's retrain comparison. That is a real limitation of the synthetic fixture as a drift rehearsal, and it is now a reported number with a test pinning it, so if a future snapshot does grow cross-border dealer names the stage says so on every run instead of quietly violating the invariant.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** The adversarial review of PR #53 found the conflict, which the pull request never mentioned, and measured that it occurs 81 and 888 times in the two fixtures the tests run on while occurring 0 times on the real snapshot - the combination that explains why it was invisible. It also identified the mechanism, that both disjointness tests iterate the split names and therefore exclude the holdout by construction. It offered both resolutions and accepted either, provided the invariant became visible. Lukas chose the row selection, because EDN-03 owns the definition of the holdout and option A would have changed a figure already published for no gain on the real data.
+- **AI interaction evidence:** Claude Code adversarial review of PR #53 on 2026-09-30, which measured the cross-border counts in both fixtures and on the real snapshot and named the conflict between EDN-03 and EDN-14.
+- **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py) (`cross_holdout_sellers`); [`tests/test_split.py`](../tests/test_split.py); [`reports/analysis/split_gate.py`](analysis/split_gate.py); [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
+- **In LaTeX:** no
+
+
 ## Template
 
 ```markdown

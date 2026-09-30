@@ -123,7 +123,22 @@ Known gaps
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
 - `data/raw/autoscout24_dataset_20251108.csv.dvc` is still a manual `dvc add` pointer. It is replaced by the `download` stage once that stage fetches the real file, as [Data versioning](data-versioning.md) describes.
-- `data/processed/supported_makes.json` is written by `split` but read by nothing yet, so a change to the supported-make list reruns nothing. The stage that consumes it should declare it as a dependency.
+- `data/processed/supported_makes.json` is written by `split` but read by nothing yet.
+  The `features` stage already declares it as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics; what is still missing is the code that applies it.
+  `split` deliberately records the scope instead of enforcing it: it stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no rows disappear without an artefact saying where they went.
+  Four things the stages that turn a set into model input (#36, #37, #39) have to guarantee, none of them optional:
+
+    1. The filter is applied to train, validation, calibration, test **and** the `ES` holdout.
+       The holdout is the one people forget, and it is the set NFR-11 and FR-15 rest on.
+    2. The filter is applied **before** any training-derived vocabulary or statistic is computed - the equipment multi-hot columns, a category encoding, a mean, a quantile.
+       Fitting on rows the API will refuse puts makes the product cannot serve into the model's own inputs.
+    3. `evaluate`'s per-make segments are restricted to the listed makes, or SC-04 reports a segment the API answers with a 422.
+    4. A test asserts that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
+
+    Measured on the real snapshot: the filter moves every realised share by at most 0.08 pp (99,326 rows to 97,889), so it does not disturb the split proportions.
+    Of the 6,079 holdout rows, 5,979 are a supported make and 100 are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04.
+    The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
+    The problem is a different one: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases. A NumPy upgrade would therefore change `data/raw/listings.parquet` and invalidate `dvc.lock` for everyone. This disappears when the download stage starts fetching the real file.
 - The stage bodies are stubs. Each module's docstring names the issue that implements it and what that issue still owes.
