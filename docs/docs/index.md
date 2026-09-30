@@ -4,6 +4,7 @@
 
 Car price estimation ML system – MLOps course project (UPC 2026/27)
 
+From a fresh clone to pulled data and your first MLflow run: [Getting started](getting-started.md).
 Goal, data, modelling plan and open decisions: [Project brief](project-brief.md).
 ML framing and success criteria: [Problem specification](problem-spec.md).
 What the component must do and which qualities it must have: [Requirements](requirements.md).

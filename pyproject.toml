@@ -23,6 +23,13 @@ dependencies = [
     "loguru",
     "matplotlib",
     "mkdocs",
+    # Experiment tracking against the DagsHub tracking server. The course demo
+    # pins `>=2.22,<3` for DagsHub compatibility; that ceiling is not carried
+    # over, because 3.16.1 was verified against
+    # dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow on 2026-09-30 - a run
+    # with a parameter and a metric was logged, read back through the client and
+    # shown in the UI. The floor is the version that was measured, not a guess.
+    "mlflow>=3.16.1",
     "notebook",
     "nbstripout",
     "numpy",
