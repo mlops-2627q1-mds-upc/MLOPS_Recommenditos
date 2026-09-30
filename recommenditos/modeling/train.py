@@ -105,8 +105,14 @@ def _supported_only(
     Fitting on a make the product will not serve does not inflate a metric - rare
     makes are harder, so a pooled figure over them is if anything pessimistic -
     but it makes the reported population a different one from the served
-    population, and problem-spec section 8's reference values are all
-    post-filter.
+    population, and a number about cars nobody can ask about is not a number about
+    the product.
+
+    That is the whole reason, and it is not a comparability argument: problem-spec
+    section 8's reference values were measured on 96,831 listings with no make
+    filter, so they describe a different population than this one either way. The
+    model card's cross-check against them spans two populations and two split
+    schemes and is labelled as such.
 
     `reset_index(drop=True)` so the frames a fit sees are indexed 0..n-1 whatever
     was removed. Nothing here depends on the index, and leaving gaps in it would

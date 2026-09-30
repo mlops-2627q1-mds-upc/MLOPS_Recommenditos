@@ -245,14 +245,22 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
     well as on the list, because recording the right makes while fitting on every
     row would pass a check that only read the metadata.
     """
-    train_matrix = pd.read_parquet(matrices["features"] / "basic" / "train.parquet")
-    expected = int(train_matrix["make"].isin(supported_makes).sum())
-    assert expected < len(train_matrix), (
-        "the fixture has to contain an unsupported make, or this test cannot fail"
-    )
+    expected = {}
+    for split in ("train", "validation"):
+        matrix = pd.read_parquet(matrices["features"] / "basic" / f"{split}.parquet")
+        expected[split] = int(matrix["make"].isin(supported_makes).sum())
+        assert expected[split] < len(matrix), (
+            f"the fixture's {split} split has to contain an unsupported make, or this test "
+            f"cannot fail"
+        )
     for variant, model in trained["models"].items():
         assert tuple(model.metadata["training"]["supported_makes"]) == supported_makes, variant
-        assert model.metadata["training"]["n_train_rows"] == expected, variant
+        assert model.metadata["training"]["n_train_rows"] == expected["train"], variant
+        # Validation as well as train, and not as a formality: early stopping
+        # watches this split and `validation_l1_log_price` is the only metric the
+        # stage logs, so a validation set holding makes the API refuses would stop
+        # the fit on one population and report a number about another.
+        assert model.metadata["training"]["n_validation_rows"] == expected["validation"], variant
 
 
 def test_the_baseline_lookup_is_a_table_a_person_can_read(trained: dict):
@@ -290,6 +298,84 @@ def test_predict_eur_contract(variant: str, trained: dict, test_frames: dict):
     # Pure: #39 predicts up to 25 times off one frame, so a mutation would make
     # every call after the first measure something else.
     pd.testing.assert_frame_equal(frame, before)
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_one_row_predicts_exactly_what_the_batch_predicts_for_it(
+    variant: str, trained: dict, test_frames: dict
+):
+    """The single property the API is built on, and the one nothing else pins.
+
+    A code is a level's position, so the route that turns a frame into codes has
+    to read the level set off the contract and never off the frame it was handed.
+    Re-inferring it - `astype("object").astype("category").cat.codes`, which is
+    exactly what the class docstring says the explicit route exists to
+    prevent - numbers a one-row request by that row's own single value, so every
+    categorical becomes 0 and the model scores a different car. Measured on the
+    real `lgbm-basic`: 6.83 % to 20.46 % MdAPE over the test frame, and one
+    request of 131,543 EUR answered as 63,597 EUR, a 51.7 % error, with no
+    failure anywhere.
+
+    A relative tolerance rather than bit-identity, because bit-identity is not
+    true of `b1`: `Ridge.predict` is a sparse matrix-vector product, and scipy
+    accumulates a one-row matrix in a different order than an n-row one, which was
+    measured here at 8 ULP - 1.8e-15 relative - on 1 of 25 sampled rows. The
+    tolerance is three orders of magnitude tighter than that noise and eleven
+    orders looser than the error this test exists to catch, so it separates the
+    two without pretending the arithmetic is exact.
+    """
+    model = trained["models"][variant]
+    frame = test_frames[model.feature_set]
+    batch = model.predict_eur(frame)
+    # Spread over the frame rather than the head, so a categorical that happens to
+    # be constant in the first rows cannot hide the case.
+    positions = range(0, len(frame), max(1, len(frame) // 25))
+
+    for position in positions:
+        single = model.predict_eur(frame.iloc[[position]])
+
+        assert single.index.equals(frame.index[[position]]), position
+        np.testing.assert_allclose(
+            single.to_numpy(),
+            batch.to_numpy()[[position]],
+            rtol=1e-12,
+            err_msg=f"row {position}",
+        )
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_predict_eur_answers_an_empty_frame_with_an_empty_series(
+    variant: str, trained: dict, test_frames: dict
+):
+    """ "The same length and the same index as `frame`" has to hold at n = 0 too.
+
+    Three of the four estimators refuse an empty matrix in their own words -
+    scikit-learn with "Found array with 0 sample(s)", LightGBM with "Input data
+    must be 2 dimensional and non empty" - so without the short circuit `b0`
+    answers and the other three raise a library's error for something that is not
+    an error. SC-06's masking sweep can produce an empty segment, and a batch
+    endpoint can be handed an empty list.
+    """
+    model = trained["models"][variant]
+    empty = test_frames[model.feature_set].head(0)
+
+    predicted = model.predict_eur(empty)
+
+    assert len(predicted) == 0
+    assert predicted.index.equals(empty.index)
+    assert str(predicted.dtype) == "float64"
+    assert predicted.name == PREDICTION_NAME
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_predict_eur_still_names_a_missing_column_on_an_empty_frame(
+    variant: str, trained: dict, test_frames: dict
+):
+    """The empty-frame short circuit must not become a way past the contract."""
+    model = trained["models"][variant]
+
+    with pytest.raises(SchemaError, match="make"):
+        model.predict_eur(test_frames[model.feature_set].head(0).drop(columns=["make"]))
 
 
 @pytest.mark.parametrize("variant", VARIANTS)
@@ -395,21 +481,20 @@ def test_an_unseen_category_is_treated_as_missing_not_an_error(
 
 @pytest.mark.parametrize("variant", VARIANTS)
 def test_predict_eur_does_not_raise_with_every_optional_field_absent(
-    variant: str, trained: dict, spaces: dict, test_frames: dict
+    variant: str, trained: dict, test_frames: dict
 ):
     """FR-01's promise, at the model layer: leaving an optional field out is allowed.
 
-    Masked the way EDN-23 says the domain represents absence - an assertion flag
-    is `False`, an equipment column is `False`, everything else is missing - and
-    over the whole test frame rather than one row, because a single row cannot
-    show a masked column destroying the values in the rows beside it.
+    Masked through `Model.mask_absent`, which is the seam's own answer to what an
+    omitted field is, so this asserts the promise about the masking the API and
+    SC-06 will use rather than about one a test invented. Over the whole test
+    frame rather than one row, because a single row cannot show a masked column
+    destroying the values in the rows beside it.
     """
     model = trained["models"][variant]
-    schema = spaces[model.feature_set].schema
     required = set(_project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
-    masked = _mask(
+    masked = model.mask_absent(
         test_frames[model.feature_set],
-        schema,
         [name for name in model.features if name not in required],
     )
 
@@ -417,6 +502,96 @@ def test_predict_eur_does_not_raise_with_every_optional_field_absent(
 
     assert np.isfinite(predicted).all()
     assert (predicted > 0).all()
+
+
+def test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is(
+    trained: dict, test_frames: dict
+):
+    """Four dtypes, four different values, and three of the wrong ones are silent.
+
+    The helper exists because both plausible one-liners get half of it right.
+    `np.nan` everywhere is refused for the three assertion flags, which are
+    non-nullable, so a caller notices - and passes for the equipment columns,
+    which are nullable, so the right answer arrives there by accident. `False`
+    everywhere is the reverse and worse: it asserts an empty equipment list, and
+    in a numeric column it is `0.0`, a mileage of zero kilometres that nothing
+    anywhere reports.
+
+    Nothing would report the equipment case either. Measured on the real
+    snapshot's `lgbm-extended`, masking `equipment_comfort` as absent gives
+    6.8982 % MdAPE and masking it as an empty list 6.8975 %, so no metric this
+    project has can tell the two apart (EDN-61).
+    """
+    model = trained["models"]["lgbm-extended"]
+    frame = test_frames[model.feature_set]
+    before = frame.copy(deep=True)
+    equipment = model.columns_of("equipment_comfort")
+    assert len(equipment) > 1, "the field has to expand, or this test proves nothing"
+
+    masked = model.mask_absent(
+        frame, ["equipment_comfort", "has_full_service_history", "body_color", "weight_kg"]
+    )
+
+    # A list nobody sent is not an empty list: every item is null, never `False`.
+    assert str(masked[equipment[0]].dtype) == "boolean"
+    assert masked[list(equipment)].isna().all().all()
+    # An unticked checkbox is `False`, which is all EDN-23 leaves it able to mean,
+    # and the contract refuses a null there.
+    assert masked["has_full_service_history"].notna().all()
+    assert not masked["has_full_service_history"].any()
+    # Null over the contract's own levels, so `_align` gives the missing code
+    # rather than a level of its own.
+    assert masked["body_color"].isna().all()
+    assert tuple(masked["body_color"].cat.categories) == model.input_schema.levels["body_color"]
+    assert masked["weight_kg"].isna().all()
+    # A masking, not a wiped frame, and not a mutation of the caller's frame.
+    assert masked["make"].equals(frame["make"])
+    pd.testing.assert_frame_equal(frame, before)
+
+    predicted = model.predict_eur(masked)
+    assert np.isfinite(predicted).all()
+    assert (predicted > 0).all()
+
+
+def test_masking_a_field_the_model_does_not_consume_is_refused(trained: dict):
+    """A sweep over the wrong field list would otherwise report a masked metric.
+
+    SC-06's ratio is against the full-input MdAPE, so a field that masked nothing
+    reports a ratio of exactly 1.0 and reads as a criterion that passed.
+    """
+    model = trained["models"]["b1"]
+
+    with pytest.raises(ModelError, match="equipment_comfort"):
+        # A real field of the extended set, and not a column `basic` carries.
+        model.columns_of("equipment_comfort")
+    with pytest.raises(ModelError, match="no_such_field"):
+        model.mask_absent(pd.DataFrame(), ["no_such_field"])
+
+
+def test_align_turns_every_boolean_column_into_a_float(trained: dict, test_frames: dict):
+    """The half of `_align` that is not `conform`, and it is load-bearing.
+
+    An estimator here consumes a float array. `pd.NA` in a nullable `boolean`
+    column has no float to become without saying which, and `False` would turn
+    "the list was not given" into "the car has none of these" (EDN-61). So the
+    conversion is what makes an absent equipment list reach the estimator as the
+    missing value it is, and it is asserted on the dtype because a column with no
+    gap survives either way.
+    """
+    model = trained["models"]["lgbm-extended"]
+    equipment = model.columns_of("equipment_comfort")
+    flags = [
+        name for name in ("has_full_service_history", "non_smoking") if name in model.features
+    ]
+    assert flags, "the extended set has to carry the assertion flags"
+    masked = model.mask_absent(test_frames[model.feature_set], ["equipment_comfort"])
+
+    aligned = model._align(masked)
+
+    assert {str(aligned[name].dtype) for name in (*equipment, *flags)} == {"float64"}
+    assert aligned[equipment[0]].isna().all()
+    # The flags stay the two values they had, as numbers rather than as NaN.
+    assert set(np.unique(aligned[flags[0]])) <= {0.0, 1.0}
 
 
 def test_align_passes_missing_values_through_unimputed(
@@ -431,8 +606,7 @@ def test_align_passes_missing_values_through_unimputed(
     -1 in a masked categorical, which is LightGBM's missing value.
     """
     model = trained["models"]["lgbm-extended"]
-    schema = spaces[model.feature_set].schema
-    masked = _mask(test_frames[model.feature_set], schema, ["weight_kg", "body_color"])
+    masked = model.mask_absent(test_frames[model.feature_set], ["weight_kg", "body_color"])
 
     aligned = model._align(masked)
 
@@ -708,6 +882,39 @@ def test_num_threads_is_pinned_from_params(
     assert record["num_threads"] == 3
 
 
+def test_lightgbm_splits_a_categorical_as_levels_and_never_as_a_number(trained: dict):
+    """`categorical_feature` is the whole of EDN-02's rationale, and it is invisible.
+
+    `_as_codes` hands LightGBM int32 columns, so a fit that was not told which of
+    them are categorical succeeds and splits `make` at `code <= 12.5` - which
+    orders the makes by their position in an alphabetically sorted level list and
+    calls that a feature. Measured on the real snapshot: 6.83 % to 7.05 % MdAPE
+    for `lgbm-basic`, with no failure and no warning.
+
+    Asserted on the saved booster rather than on the fitted wrapper, because the
+    booster is what the API loads, and in both directions: every categorical
+    column that is split at all is split with `==`, and no categorical column is
+    ever split with `<=`.
+    """
+    for variant in ("lgbm-basic", "lgbm-extended"):
+        model = trained["models"][variant]
+        categorical = set(model.categorical_columns)
+        dumped = model.booster.dump_model()
+        names = dumped["feature_names"]
+        split_by = {"==": set(), "<=": set()}
+        for tree in dumped["tree_info"]:
+            nodes = [tree["tree_structure"]]
+            while nodes:
+                node = nodes.pop()
+                if "decision_type" in node:
+                    split_by[node["decision_type"]].add(names[node["split_feature"]])
+                nodes.extend(node[side] for side in ("left_child", "right_child") if side in node)
+
+        assert split_by["=="], f"{variant} has no categorical split at all"
+        assert split_by["=="] <= categorical, variant
+        assert split_by["<="].isdisjoint(categorical), variant
+
+
 def test_the_booster_is_saved_at_its_early_stopped_iteration(trained: dict):
     """The file is the model, so predict needs no iteration argument.
 
@@ -788,17 +995,30 @@ def test_load_model_refuses_a_directory_that_is_not_a_bundle(tmp_path: Path, tra
         load_model(tmp_path / "renamed")
 
 
-def test_a_bundle_whose_two_halves_disagree_is_refused(tmp_path: Path, trained: dict):
+@pytest.mark.parametrize("damage", ["truncated", "reordered"])
+def test_a_bundle_whose_two_halves_disagree_is_refused(damage: str, tmp_path: Path, trained: dict):
     """A record and a feature space from different runs would predict silently wrong.
 
     The two files are written together and restored together, so this needs a
     hand-edited or half-restored bundle - which is exactly the case where nothing
     else would notice.
+
+    Both damages, because they are caught by different comparisons. A shorter list
+    changes the count, so a check that only compared counts would pass this test
+    while letting the worse case through: the same columns in another order, which
+    is the symptom the guard names - encoding a request by one level order and
+    scoring it by another.
     """
-    bundle = tmp_path / "mismatched"
+    bundle = tmp_path / f"mismatched-{damage}"
     shutil.copytree(trained["dir"] / "lgbm-basic", bundle)
     record = json.loads((bundle / MODEL_FILE).read_text(encoding="utf-8"))
-    record["features"] = record["features"][:-1]
+    features = list(record["features"])
+    if damage == "truncated":
+        record["features"] = features[:-1]
+    else:
+        record["features"] = [features[1], features[0], *features[2:]]
+        assert len(record["features"]) == len(features), "a reorder keeps the count"
+        assert set(record["features"]) == set(features), "a reorder keeps the membership"
     (bundle / MODEL_FILE).write_text(json.dumps(record), encoding="utf-8")
 
     with pytest.raises(ModelError, match="disagree"):
@@ -806,7 +1026,7 @@ def test_a_bundle_whose_two_halves_disagree_is_refused(tmp_path: Path, trained: 
 
 
 def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: dict):
-    """EDN-51's load-bearing half, which no prediction on this fixture can show.
+    """EDN-51's guard, which no prediction on this fixture can show.
 
     scikit-learn's default is an indicator only for the features that were
     missing *at fit time*. A column that happens to be complete in the training
@@ -814,6 +1034,11 @@ def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: 
     and the criterion would be measuring the model's own imputation rather than
     the cost of the missing field. `features="all"` is what prevents that, and it
     is invisible from the outside, so it is asserted on the fitted pipeline.
+
+    This assertion does not distinguish `features="all"` from the default on either
+    the fixture or the real snapshot, because no numeric column of `basic` is
+    complete at fit time in either; the test below is the one that does, and says
+    what it constructs.
     """
     model = trained["models"]["b1"]
     encoded = list(model.pipeline["encode"].get_feature_names_out())
@@ -853,14 +1078,21 @@ def test_the_ridge_carries_a_named_level_for_an_absent_categorical(trained: dict
 def test_a_numeric_feature_complete_in_training_still_gets_an_indicator(
     matrices: dict, supported_makes: tuple[str, ...]
 ):
-    """The case `features="all"` exists for, which the fixture does not produce.
+    """The case `features="all"` exists for, which neither fixture nor snapshot has.
 
     Every numeric column of the synthetic fixture happens to have a missing value
     in the training split, so the default `features="missing-only"` emits the same
-    set of indicators there and the test above cannot tell the two apart. This one
-    fills one column completely first, which is the situation on real data:
-    scikit-learn would then mean-fill it with no indicator the moment SC-06 masks
-    it, and the criterion would be measuring the model's own imputation.
+    set of indicators there and the test above cannot tell the two apart. So does
+    every one of the 8 numeric features of `basic`, the only set `b1` uses, on the
+    real snapshot - the emptiest is `age_years`, with 1 gap in 60,378 rows. The
+    construction below is therefore neither configuration, and deliberately: what
+    it pins is that the guard works, not that it currently binds.
+
+    It is worth pinning because the configuration it protects is one change away.
+    136 of the `extended` set's 147 numeric features are complete at fit time, so a
+    Ridge fitted on `extended` would lose 136 indicators to the default, and SC-06
+    would measure the model's own imputation for each of them rather than the cost
+    of the missing field.
     """
     data = train.read_matrices(matrices["features"], "basic", supported_makes)
     complete = data.train.copy()
@@ -904,6 +1136,33 @@ def test_a_refit_does_not_leave_the_previous_estimator_beside_the_new_one(
         FEATURE_SPACE_FILE,
         "pipeline.joblib",
     }
+
+
+def test_a_bundle_that_cannot_be_read_back_fails_the_training_run(
+    matrices: dict, tmp_path: Path, monkeypatch
+):
+    """A successful fit is not a successful stage: `train` ends by loading its own work.
+
+    What `evaluate` and the API use is what came off the disk, so a payload that
+    is not there - or not readable - is a failed training run even though the fit
+    succeeded. Without the read-back the stage is green, DVC records the output,
+    and the failure surfaces in `evaluate` where nothing points at the stage that
+    caused it.
+
+    The payload is simply not written, rather than corrupted, so the failure is
+    one exception with one cause instead of whichever error a particular Parquet
+    version happens to raise for damaged bytes.
+    """
+    for name in REQUIRED_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(MedianBaselineModel, "_save_payload", lambda self, directory: None)
+
+    with pytest.raises(FileNotFoundError, match="lookup.parquet"):
+        train.main("b0", matrices["features"], tmp_path / "models", PARAMS_FILE)
+
+    # The fit itself did finish and the record is on disk, so the read-back is
+    # what failed rather than the training.
+    assert (tmp_path / "models" / "b0" / MODEL_FILE).exists()
 
 
 def test_a_payload_written_by_another_library_version_is_flagged(tmp_path: Path, trained: dict):
@@ -1020,10 +1279,14 @@ def test_every_variant_names_a_known_estimator_and_an_existing_feature_set(param
 
 
 def test_the_interval_method_of_sc05_is_reserved_and_absent(trained: dict):
-    """`evaluate` reports SC-05 as null exactly while this attribute does not exist.
+    """No variant may grow an interval method before SC-05 can really be measured.
 
-    A stub that raised would make the capability check pass and the criterion
-    look measured, which is the one thing NFR-01 cannot tolerate.
+    `evaluate` hardcodes SC-05 as null today, so this pins nothing the metrics
+    artefact currently says. Issue #39 replaces that hardcoded null with a
+    capability check on this attribute, and a stub that raised would then make
+    the criterion read as measurable - which is the one thing NFR-01 cannot
+    tolerate. Pinned before the check exists, because once it does the stub is
+    the cheap way to make a null go away.
     """
     for variant, model in trained["models"].items():
         assert not hasattr(model, "predict_interval_eur"), variant
@@ -1246,41 +1509,23 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
     """One row as the API would hand it over: required fields set, the rest absent.
 
     Python types rather than the matrix's dtypes, because a request comes from
-    JSON. Absence follows EDN-23: an assertion flag and an equipment column are
-    `False`, everything else is `None`.
+    JSON, which is why this builds a dict instead of calling `Model.mask_absent`
+    on a frame: the values have to survive the trip through `pd.DataFrame`.
     """
     required = set(_project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
     row = {}
     for name in model.features:
         column = schema.column(name)
         if name not in required:
-            row[name] = False if column.dtype in {"bool", "boolean"} else None
+            # An unticked checkbox is `False` and the absence of evidence
+            # (EDN-23); an equipment list nobody sent is not an empty one, so it
+            # is `None` and reaches the estimator as missing (EDN-61).
+            row[name] = False if column.dtype == "bool" else None
         elif column.levels is not None:
             row[name] = str(frame[name].dropna().iloc[0])
         else:
             row[name] = float(frame[name].dropna().iloc[0])
     return row
-
-
-def _mask(frame: pd.DataFrame, schema: Schema, columns: list[str]) -> pd.DataFrame:
-    """`frame` with `columns` set to what the API sends when the field is omitted.
-
-    A dtype-driven rule, because the values are not interchangeable: assigning
-    `np.nan` into a pandas `bool` column upcasts the column to float64 and turns
-    every value into NaN, which destroys the column rather than masking a field.
-    """
-    masked = frame.copy()
-    for name in columns:
-        column = schema.column(name)
-        if column.dtype == "bool":
-            masked[name] = False
-        elif column.dtype == "boolean":
-            masked[name] = pd.array([False] * len(masked), dtype="boolean")
-        elif column.levels is not None:
-            masked[name] = pd.Categorical([None] * len(masked), categories=column.levels)
-        else:
-            masked[name] = np.nan
-    return masked
 
 
 def _frame_of(schema: Schema, template: pd.DataFrame, rows: list[tuple]) -> pd.DataFrame:

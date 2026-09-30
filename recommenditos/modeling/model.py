@@ -27,12 +27,14 @@ into the model bundle, and `load_model` reads it back, which is how a served
 request is encoded exactly as a training row was (EDN-02).
 
 `predict_interval_eur` is deliberately **absent**: SC-05's conformalized
-quantile intervals are UC2 work, the `calibration` split is already held for
-them, and `evaluate` reports SC-05 as null precisely because this attribute does
-not exist. Adding it here as a stub that raises would make that check pass and
-the criterion look measured.
+quantile intervals are UC2 work and the `calibration` split is already held for
+them. `evaluate` hardcodes SC-05 as null today and reads nothing off this class;
+issue #39 replaces that with a capability check on this attribute, and a stub
+that raised would then make the criterion read as measurable. The absence is
+pinned by a test now, before the check that will depend on it exists.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version as distribution_version
@@ -51,7 +53,7 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import FeatureUnion, Pipeline, make_pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
-from recommenditos.data.build_features import FeatureSpace
+from recommenditos.data.build_features import FeatureSpace, equipment_feature_name
 from recommenditos.schema import FEATURE_SPACE_FILE, Schema
 
 #: The name every prediction Series carries, so a frame that has been joined
@@ -156,7 +158,7 @@ class Model:
 
     The bound is not only a guard against a float limit: measured on the real
     snapshot, B1's unbounded prediction leaves the training price range once in
-    19,665 test rows, at 25,292,552 EUR. It is a guard rail rather than a
+    19,665 test rows, at 10,635,538 EUR. It is a guard rail rather than a
     calibration, though, and the comment is not a claim that the bounded number
     is right - it is the price of the most expensive car in the training rows.
     """
@@ -206,12 +208,23 @@ class Model:
         input by one level order and scoring it by another, with no error.
         """
         declared = tuple(self.metadata["features"])
-        if declared != self.input_schema.names:
+        expected = self.input_schema.names
+        if declared != expected:
+            misplaced = [
+                f"position {index} is {was!r} in {MODEL_FILE} and {now!r} in {FEATURE_SPACE_FILE}"
+                for index, (was, now) in enumerate(zip(declared, expected, strict=False))
+                if was != now
+            ]
             raise ModelError(
-                f"{MODEL_FILE} lists {len(declared)} feature(s) and the {FEATURE_SPACE_FILE} "
-                f"beside it describes {len(self.input_schema.names)}. The two halves of the "
-                f"bundle disagree about what this model consumes, so its codes cannot be "
-                f"trusted; retrain the variant rather than editing either file."
+                f"the two halves of the {self.metadata['variant']!r} bundle disagree about what "
+                f"it consumes: {MODEL_FILE} lists {len(declared)} feature(s), "
+                f"{FEATURE_SPACE_FILE} describes {len(expected)}, and {len(misplaced)} are not in "
+                f"the same place"
+                + (f" ({misplaced[0]})" if misplaced else "")
+                + ". The order is as load-bearing as the membership, because a column is a "
+                "position and so is a code: a bundle ordered one way in one file and another way "
+                "in the other encodes a request by one order and scores it by another, with no "
+                "error anywhere. Retrain the variant rather than editing either file."
             )
         unknown = {
             column.name: column.dtype
@@ -260,25 +273,105 @@ class Model:
     def numeric_columns(self) -> tuple[str, ...]:
         return tuple(name for name in self.features if name not in self.input_schema.levels)
 
+    def columns_of(self, field: str) -> tuple[str, ...]:
+        """The matrix columns one request field became, in the model's own order.
+
+        One column for almost every field, and one per kept item for an equipment
+        list: `equipment_comfort` is not a matrix column at all, it is the
+        multi-hot columns the vocabulary derived from it. SC-06 masks *fields* and
+        the API receives *fields*, so the expansion is here rather than derived
+        twice - two derivations of it are two answers to "what did masking
+        `equipment_comfort` mask".
+        """
+        items = self.space.vocabulary.equipment.get(field)
+        candidates = (
+            (field,)
+            if items is None
+            else tuple(equipment_feature_name(field, item) for item in items)
+        )
+        columns = tuple(name for name in self.features if name in set(candidates))
+        if not columns:
+            raise ModelError(
+                f"{self.variant!r} consumes no column of field {field!r}, so there is nothing "
+                f"to mask or to supply. Its {len(self.features)} feature(s) come from the "
+                f"{self.feature_set!r} set."
+            )
+        return columns
+
+    def mask_absent(self, frame: pd.DataFrame, fields: Iterable[str]) -> pd.DataFrame:
+        """`frame` with every column of `fields` set to what an omitted field is.
+
+        The single implementation of "the caller did not send this", for SC-06's
+        masking sweep, the API's partial-request path and the tests alike. It is
+        shared because the value is not interchangeable across dtypes and three of
+        the four ways of getting it wrong are silent:
+
+        - a `bool` assertion flag becomes `False`. A tick is evidence and an empty
+          box is the absence of it, which is all the source can mean (EDN-23), and
+          the contract makes those three columns non-nullable to say so.
+        - a nullable `boolean` equipment column becomes `pd.NA`, because an
+          omitted equipment *list* is not an empty one: an empty list is every
+          item `False` and asserts the car has none of them (EDN-61).
+        - a categorical becomes null over the contract's own levels, so `_align`
+          produces the missing code rather than a level of its own.
+        - a number becomes NaN.
+
+        The two one-liners this replaces each get half of it right and neither is
+        caught. `frame[column] = np.nan` is refused for the flags, because a
+        float64 NaN in a non-nullable `bool` column fails the contract's null
+        check - but a nullable `boolean` column upcasts to float64, survives
+        `conform` and arrives as `pd.NA`, so the right answer for equipment comes
+        out by accident and the wrong one for the flags is what you notice.
+        `frame[column] = False` is the reverse, and worse: it asserts an empty
+        equipment list, and in a numeric column it becomes `0.0`, which is a
+        mileage of zero kilometres and nothing anywhere will say so.
+
+        `frame` is not mutated.
+        """
+        masked = frame.copy()
+        for field in fields:
+            for name in self.columns_of(field):
+                column = self.input_schema.column(name)
+                if column.dtype == "bool":
+                    masked[name] = False
+                elif column.dtype == "boolean":
+                    masked[name] = pd.array([pd.NA] * len(masked), dtype="boolean")
+                elif column.levels is not None:
+                    masked[name] = pd.Categorical([None] * len(masked), categories=column.levels)
+                else:
+                    masked[name] = np.nan
+        return masked
+
     # -- prediction ---------------------------------------------------------
 
     def predict_eur(self, frame: pd.DataFrame) -> pd.Series:
         """`frame`'s rows as a price in euros, one per row, in `frame`'s order.
 
         Float64, named `PREDICTION_NAME`, finite, strictly positive and inside
-        the training price range, with the same index as `frame`. Extra columns
-        are ignored; a missing one raises and names itself. `frame` is not
+        the training price range, with the same index as `frame`. An empty frame
+        gives an empty Series, because the length promise is the promise. Extra
+        columns are ignored; a missing one raises and names itself. `frame` is not
         mutated: the alignment works on a copy.
 
         A missing value is passed through unimputed and the estimator decides
         what to do with it (EDN-15). What "missing" means for a column whose
-        domain already represents absence is the caller's business and is fixed
-        by EDN-23: an omitted assertion flag is `False`, an omitted equipment
-        list is empty, everything else is absent. The three flag columns are
-        non-nullable in the contract, so passing `None` for one of them fails
-        here rather than quietly becoming a third state.
+        domain already represents absence is not the caller's to guess:
+        `mask_absent` is the one implementation of it, and an omitted field that
+        does not go through it is the defect EDN-61 records. The three assertion
+        flags are non-nullable in the contract, so passing `None` for one of them
+        fails here rather than quietly becoming a third state (EDN-23).
         """
         aligned = self._align(frame)
+        if aligned.empty:
+            # Short-circuited rather than passed on: "the same length and the same
+            # index as `frame`" is the whole interface, and n = 0 satisfies it
+            # trivially while three of the four estimators refuse it - scikit-learn
+            # with "Found array with 0 sample(s)" and LightGBM with "Input data must
+            # be 2 dimensional and non empty". SC-06's masking sweep can produce an
+            # empty segment and a batch endpoint can be handed an empty list, and
+            # neither is an error. After `_align`, so a frame that is empty *and*
+            # missing a column still names the column.
+            return pd.Series(np.empty(0, dtype="float64"), index=frame.index, name=PREDICTION_NAME)
         log_price = np.asarray(self._predict_log_price(aligned), dtype="float64")
         if log_price.shape != (len(frame),):
             raise ModelError(
@@ -313,8 +406,12 @@ class Model:
         frame happened to arrive in.
 
         What is left afterwards is the second half only: the contract's `bool`
-        and nullable `boolean` columns become float64, because an absent
-        equipment list has to reach the estimators as NaN rather than as False.
+        and nullable `boolean` columns become float64. Load-bearing for the
+        nullable ones, which is every equipment column: an estimator here
+        consumes a float array, and `pd.NA` in a `boolean` column has no float to
+        become without saying which - `False` would turn "the list was not given"
+        into "the car has none of these" (EDN-61), and dropping the row is not on
+        offer. NaN is the only value that says neither.
         """
         aligned = self.input_schema.conform(frame)
         for name in aligned.columns:
@@ -597,10 +694,12 @@ class RidgeModel(Model):
     which leaks the target without cross-fitting, or dropping the categoricals,
     which would leave the baseline unable to tell a Porsche from a Dacia and so
     destroy its purpose. `handle_unknown="infrequent_if_exist"` is what makes an
-    unseen level an answer rather than an error (EDN-18), and it needs
-    `min_frequency` to have a group to send that level to - which is why
-    `min_category_rows` is a parameter and why it is an absolute row count
-    rather than a share: a share changes what it means as the training set grows.
+    unseen level an answer rather than an error (EDN-18): it sends the level to the
+    infrequent group where `min_frequency` produced one, and encodes it as all
+    zeros where it did not. On the real snapshot that is 2 of the 8 categoricals
+    with a group and six without, so both branches are live and both answer
+    (EDN-50). `min_category_rows` is an absolute row count rather than a share
+    because a share changes what it means as the training set grows.
 
     **Mean fill plus a per-feature indicator, which is not imputation
     (EDN-51).** Ridge cannot consume NaN, so the numeric branch is a union of a
@@ -608,11 +707,14 @@ class RidgeModel(Model):
     indicator for every feature the encoding is information-preserving: a masked
     row contributes `beta * mean + gamma`, and `gamma` absorbs the offset, so the
     fill is a numerically neutral placeholder rather than a guess at the value
-    (EDN-15). `features="all"` is load-bearing and not a default: scikit-learn
-    emits an indicator only for features that were missing *at fit time*, so a
-    column that happens to be complete in the training split would be silently
-    mean-filled with no indicator when SC-06 masks it, and the criterion would be
-    measuring its own imputation.
+    (EDN-15). `features="all"` is not the default: scikit-learn emits an indicator
+    only for features that were missing *at fit time*, so a column that happens to
+    be complete in the training split would be silently mean-filled with no
+    indicator when SC-06 masks it, and the criterion would be measuring its own
+    imputation. It is insurance rather than a measured fix as configured, because
+    none of `basic`'s 8 numeric features is complete on the real snapshot - but 136
+    of `extended`'s 147 are, so a Ridge on `extended` would lose 136 indicators to
+    the default (EDN-51).
     """
 
     estimator_name = "ridge"
