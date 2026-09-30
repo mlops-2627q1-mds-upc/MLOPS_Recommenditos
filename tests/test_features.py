@@ -12,13 +12,20 @@ import json
 import math
 from pathlib import Path
 
+from loguru import logger
 import pandas as pd
 import pytest
 import yaml
 
 from recommenditos.data import build_features
 from recommenditos.pipeline import write_frame
-from recommenditos.schema import PROCESSED_SCHEMA, load_feature_schema
+from recommenditos.schema import (
+    PROCESSED_SCHEMA,
+    TARGET_NAMES,
+    FeatureSpaceError,
+    SchemaError,
+    load_feature_schema,
+)
 
 #: The reference date of the snapshot, as params.yaml carries it.
 REFERENCE_DATE = "2025-11-08"
@@ -136,11 +143,22 @@ def run_stage(tmp_path: Path, params: dict):
     tests here is what one split does, not how five of them differ.
     """
 
-    def run(frames: dict, feature_set: str = "extended", **feature_overrides) -> Path:
+    def run(
+        frames: dict,
+        feature_set: str = "extended",
+        supported_makes: "list[str] | None" = None,
+        **feature_overrides,
+    ) -> Path:
         processed = tmp_path / "processed"
         for name in build_features.FEATURE_INPUTS:
             frame = frames.get(name, frames[build_features.VOCABULARY_SPLIT])
             write_frame(frame, processed / f"{name}.parquet", PROCESSED_SCHEMA)
+        # `split` writes this beside the frames, and the stage declares it as a
+        # dependency, so the fixture has to produce it too. The default is the
+        # empty list `split` writes while it is a stub (#35).
+        (processed / build_features.SUPPORTED_MAKES_FILE).write_text(
+            json.dumps({"supported_makes": supported_makes or []}) + "\n", encoding="utf-8"
+        )
 
         overridden = {**params, "features": {**params["features"], **feature_overrides}}
         params_path = tmp_path / "params.yaml"
@@ -194,10 +212,27 @@ def test_age_is_missing_where_the_registration_date_is(run_stage):
 
 
 def test_weight_kg_is_parsed_out_of_its_text_form():
-    parsed = build_features.weight_kg(pd.Series(["1,945 kg", "894 kg", None], dtype="str"))
+    # '93,000 kg' is the heaviest value in the scoped snapshot, so a pattern that
+    # only admitted four digits would reject real data.
+    parsed = build_features.weight_kg(
+        pd.Series(["1,945 kg", "894 kg", "93,000 kg", None], dtype="str")
+    )
 
-    assert parsed.tolist()[:2] == [1945.0, 894.0]
+    assert parsed.tolist()[:3] == [1945.0, 894.0, 93000.0]
     assert str(parsed.dtype) == "float64"
+
+
+@pytest.mark.parametrize("value", ["194,5 kg", "1.945 kg", "1,2,3 kg", "1,9450 kg", "1 945 kg"])
+def test_a_weight_in_another_locale_fails_rather_than_becoming_a_plausible_number(value):
+    # The likely upstream change on a multilingual German site is a locale flip,
+    # not a nonsense value. A pattern that took any mix of digits and commas
+    # would read '194,5 kg' as 1,945 kg and '1.945 kg' as 1.945 kg: a tenfold and
+    # a thousandfold error, both inside or below the plausible range, so no range
+    # check would flag them and no fill-rate expectation would either. Failing the
+    # stage is the only outcome a reader can tell apart from a correct parse,
+    # which is what the comment on the pattern promises.
+    with pytest.raises(ValueError, match="not a weight in kg"):
+        build_features.weight_kg(pd.Series([value], dtype="str"))
 
 
 def test_weight_kg_stays_missing_where_the_text_is():
@@ -332,6 +367,64 @@ def test_every_split_gets_the_same_columns_in_the_same_order(run_stage):
         assert list(matrix(directory, split).columns) == columns
 
 
+def test_the_equipment_threshold_is_a_share_of_every_row_not_of_the_rows_with_a_list(run_stage):
+    # 3 of 10 rows name the item and only 4 rows have a list at all, so the
+    # denominator decides: 3/10 is below 0.35 and 3/4 is well above it. Counting
+    # only the rows that list something would let a near-constant column in and
+    # would make the threshold mean something different per equipment column.
+    frame = processed_frame(
+        [comfort("Cruise control")] * 3 + [comfort("Tow bar")] + [{"equipment_comfort": None}] * 6
+    )
+
+    below = build_features.load_vocabulary(
+        run_stage({"train": frame}, equipment_min_frequency=0.35)
+    )
+    above = build_features.load_vocabulary(
+        run_stage({"train": frame}, equipment_min_frequency=0.25)
+    )
+
+    assert below.equipment["equipment_comfort"] == ()
+    assert above.equipment["equipment_comfort"] == ("Cruise control",)
+
+
+def test_an_item_listed_twice_in_one_listing_counts_as_one_listing(run_stage):
+    # The threshold is a share of listings, not of mentions. Three rows that each
+    # name the item twice must not clear a threshold that six mentions would, and
+    # the encoded column must still be True once rather than counting.
+    frame = processed_frame([comfort("Cruise control", "Cruise control")] * 3 + [comfort()] * 7)
+
+    by_listing = build_features.load_vocabulary(
+        run_stage({"train": frame}, equipment_min_frequency=0.35)
+    )
+    written = matrix(run_stage({"train": frame}, equipment_min_frequency=0.2))
+
+    assert by_listing.equipment["equipment_comfort"] == ()
+    assert written["equipment_comfort_cruise_control"].tolist() == [True] * 3 + [False] * 7
+
+
+def test_the_equipment_items_are_alphabetical_so_two_runs_agree_byte_for_byte(run_stage):
+    # Ordering by frequency would make the artefact, and the order of the
+    # multi-hot columns, depend on counts whose ties break arbitrarily, so the
+    # same data could produce two different files and two different matrices
+    # (NFR-06). 'Cruise control' is the most frequent of the three here, so
+    # frequency order and alphabetical order disagree.
+    frame = processed_frame(
+        [comfort("Tow bar", "Cruise control", "Alloy wheels")] * 6
+        + [comfort("Cruise control")] * 4
+    )
+    directory = run_stage({"train": frame}, equipment_min_frequency=0.2)
+    items = build_features.load_vocabulary(directory).equipment["equipment_comfort"]
+
+    assert items == ("Alloy wheels", "Cruise control", "Tow bar")
+    assert [
+        column for column in matrix(directory).columns if column.startswith("equipment_comfort_")
+    ] == [
+        "equipment_comfort_alloy_wheels",
+        "equipment_comfort_cruise_control",
+        "equipment_comfort_tow_bar",
+    ]
+
+
 def test_a_feature_name_carries_no_character_a_booster_rejects():
     # LightGBM refuses a feature name holding a JSON character, and the snapshot
     # has items like 'Alloy wheels (18")'.
@@ -392,23 +485,93 @@ def test_a_categorical_the_training_rows_never_observe_fails_the_stage(run_stage
         run_stage({"train": frame})
 
 
-def test_no_column_of_the_matrix_is_imputed(run_stage):
-    # Every column the stage passes through keeps its holes exactly. A filled
-    # column would be this stage deciding what a missing gearbox count means,
-    # which is the model's job (EDN-15).
+#: One value per column the stage passes through, so a test can build a frame
+#: where every such column has both a value and a hole. Kept as a constant
+#: because the imputation test's whole point is that it covers all of them.
+_FILLED_ROW = {
+    "mileage_km_raw": 120_000.0,
+    "nr_prev_owners": 1.0,
+    "power_kw": 110.0,
+    "gears": 6.0,
+    "cylinders_volume_cc": 1_995.0,
+    "cylinders": 4.0,
+    "nr_seats": 5.0,
+    "nr_doors": 4.0,
+    "weight_kg": "1,945 kg",
+    "electric_range_km": 0.0,
+    "registration_date": "2020-01-01",
+}
+
+
+def test_no_pass_through_column_of_the_matrix_is_imputed(run_stage, params):
+    # Every column the stage passes through keeps its holes: a value that was
+    # missing on the way in is missing on the way out. A filled column would be
+    # this stage deciding what a missing gearbox count means, which is the
+    # model's job (EDN-15), and the no-imputation rule is the headline of this
+    # ticket.
+    #
+    # Asserted over every pass-through column rather than a chosen few. The
+    # columns most at risk are exactly the ones a plausible default exists for -
+    # `power_kw`, `mileage_km_raw` and `nr_seats` - and a hand-picked list
+    # covering four of about thirty columns let all three through.
+    frame = processed_frame(
+        [_FILLED_ROW, {}, _FILLED_ROW | {"gears": None}, {}, _FILLED_ROW, {"upholstery": None}]
+    )
+    written = matrix(run_stage({"train": frame}))
+
+    passed_through = set(written.columns) & set(frame.columns)
+    # Pinned, so a change that stops passing a column through has to say so here
+    # rather than quietly shrinking what this test covers.
+    assert passed_through == (
+        set(params["features"]["sets"]["extended"])
+        - set(params["features"]["equipment_columns"])
+        - {"age_years"}
+    ) | set(TARGET_NAMES)
+
+    for column in sorted(passed_through):
+        was_missing = frame[column].isna()
+        assert not (was_missing & written[column].notna()).any(), column
+
+
+def test_a_pass_through_column_keeps_its_null_mask_exactly(run_stage):
+    # The other direction, for the columns nothing may add a hole to either: a
+    # number is parsed or passed through, never dropped. The level rules are
+    # allowed to add holes, which is why they are not in this list.
     frame = processed_frame(
         [
             {"gears": 6.0, "nr_prev_owners": 1.0, "weight_kg": "1,945 kg"},
-            {"upholstery": None},
-            {"gears": 7.0, "upholstery": None},
+            {},
+            {"gears": 7.0},
             {},
             {"nr_prev_owners": 2.0},
         ]
     )
     written = matrix(run_stage({"train": frame}))
 
-    for column in ("gears", "nr_prev_owners", "weight_kg", "upholstery"):
+    for column in ("gears", "nr_prev_owners", "weight_kg"):
         assert written[column].isna().tolist() == frame[column].isna().tolist(), column
+
+
+def test_a_matrix_reads_left_to_right_as_its_feature_set_then_the_target(run_stage, params):
+    # `_selection` promises "features then target" and nothing held it: one test
+    # compares the splits with each other and another compares sets, so putting
+    # the target first or reversing the feature order changed nothing visible.
+    # The order matters because a model artefact lists the features by name and
+    # position, and because two runs must produce byte-identical matrices.
+    columns = params["features"]["sets"]["extended"]
+    directory = run_stage({"train": processed_frame([comfort("Cruise control")] * 10)})
+    vocabulary = build_features.load_vocabulary(directory)
+
+    expected = (
+        [name for name in columns if name not in vocabulary.equipment]
+        + [
+            build_features.equipment_feature_name(source, item)
+            for source, items in vocabulary.equipment.items()
+            for item in items
+        ]
+        + list(TARGET_NAMES)
+    )
+    assert list(matrix(directory).columns) == expected
 
 
 # --------------------------------------------------------------------------
@@ -483,6 +646,137 @@ def test_the_vocabulary_round_trips_through_the_artefact(run_stage):
     )
 
 
+#: Four makes, so a level set with an order worth getting wrong.
+_MAKES = ("Audi", "BMW", "Porsche", "Volvo")
+
+
+@pytest.fixture
+def levelled(run_stage):
+    """A run whose `make` column has four levels, and its loaded contract."""
+    frame = processed_frame([{"make": make} for make in _MAKES] * 3)
+    directory = run_stage({"train": frame})
+    return directory, load_feature_schema(directory, name="features-extended")
+
+
+def test_the_written_contract_carries_every_categorical_s_levels(levelled):
+    # Without them the artefact is lossy for the only data-dependent dtype the
+    # stage produces: `str(dtype)` is 'category' whatever the levels are, so a
+    # consumer holding the contract would have to infer them from its own rows.
+    directory, schema = levelled
+    vocabulary = build_features.load_vocabulary(directory)
+
+    categoricals = {
+        column.name: column.levels for column in schema.columns if column.dtype == "category"
+    }
+    assert categoricals == vocabulary.categories
+    assert categoricals["make"] == _MAKES
+
+
+def test_a_matrix_whose_levels_are_in_the_wrong_order_is_refused(levelled):
+    # The codes are level positions, so reversing the levels changes every code
+    # in the column. `str(dtype)` does not change, which is why the contract has
+    # to compare the level list and not only the dtype name.
+    directory, schema = levelled
+    written = matrix(directory)
+    reordered = written.copy()
+    reordered["make"] = written["make"].cat.set_categories(list(reversed(_MAKES)))
+
+    assert reordered["make"].cat.codes.tolist() != written["make"].cat.codes.tolist()
+    with pytest.raises(SchemaError, match="different order"):
+        schema.validate(reordered)
+
+
+def test_conforming_a_subset_uses_the_declared_levels_not_the_ones_it_holds(levelled):
+    # What #37's ridge variant does: take a slice of the matrix and encode the
+    # categoricals itself. Inferring the levels from the slice would give it a
+    # numbering the model never saw, with no error anywhere.
+    directory, schema = levelled
+    written = matrix(directory)
+    subset = written.head(2).copy()
+    subset["make"] = subset["make"].astype("str")
+
+    conformed = schema.conform(subset)
+
+    assert tuple(conformed["make"].cat.categories) == _MAKES
+    assert conformed["make"].cat.codes.tolist() == written["make"].cat.codes.tolist()[:2]
+
+
+def test_a_one_row_serving_frame_gets_the_training_code(levelled):
+    # What the API does: one listing, no price, cast against the loaded
+    # contract. Inferring the levels would give every request the code 0.
+    directory, schema = levelled
+    request = matrix(directory).head(1).drop(columns=list(TARGET_NAMES))
+    request["make"] = pd.Series(["Volvo"], index=request.index, dtype="str")
+
+    served = schema.features().conform(request)
+
+    assert tuple(served["make"].cat.categories) == _MAKES
+    assert served["make"].cat.codes.tolist() == [_MAKES.index("Volvo")]
+    assert not set(TARGET_NAMES) & set(served.columns)
+
+
+def test_the_feature_space_is_one_public_way_to_load_and_build(levelled, params):
+    # The entry point #37, #39 and the API use, so none of them re-derives a
+    # level set or reimplements the cast.
+    directory, schema = levelled
+    space = build_features.FeatureSpace.load(directory, name="features-extended")
+
+    assert space.schema == schema
+    assert space.vocabulary == build_features.load_vocabulary(directory)
+
+    rebuilt = space.matrix(
+        processed_frame([{"make": "Volvo"}]), reference_date=params["reference_date"]
+    )
+    assert list(rebuilt.columns) == list(schema.names)
+    assert rebuilt["make"].cat.codes.tolist() == [_MAKES.index("Volvo")]
+
+
+def test_a_stale_feature_space_artefact_names_the_file_and_the_stage(levelled):
+    # It is a DVC output, so a hand-edited or half-written one is a real state,
+    # and the message has to say which file and which stage rather than raising a
+    # bare KeyError inside whichever stage read it next.
+    directory, _ = levelled
+    (directory / build_features.FEATURE_SPACE_FILE).write_text('{"schema": []}', encoding="utf-8")
+
+    for load in (
+        lambda: load_feature_schema(directory, name="features-extended"),
+        lambda: build_features.load_vocabulary(directory),
+        lambda: build_features.FeatureSpace.load(directory, name="features-extended"),
+    ):
+        with pytest.raises(FeatureSpaceError) as raised:
+            load()
+        assert build_features.FEATURE_SPACE_FILE in str(raised.value)
+        assert "dvc repro features" in str(raised.value)
+
+
+def test_a_vocabulary_with_an_unknown_field_is_refused_rather_than_read_in_part(levelled):
+    # The same posture the contract takes: both halves come out of one artefact,
+    # and a field this code does not know means the file was written by a version
+    # that recorded something more, so reading only the known fields would drop
+    # part of the feature space.
+    directory, _ = levelled
+    space = json.loads((directory / build_features.FEATURE_SPACE_FILE).read_text(encoding="utf-8"))
+    space["vocabulary"]["hashing_seed"] = 7
+    (directory / build_features.FEATURE_SPACE_FILE).write_text(json.dumps(space), encoding="utf-8")
+
+    with pytest.raises(FeatureSpaceError, match="hashing_seed"):
+        build_features.load_vocabulary(directory)
+
+
+def test_the_stage_runs_against_the_empty_supported_make_list_split_writes_today(run_stage):
+    # `split` is a stub and writes `{"supported_makes": []}`, which means "not
+    # computed yet" rather than "no make is supported". The stage reads the list
+    # so that a change to it reruns the matrices; it must not read an empty one as
+    # a restriction to nothing, because that would build a matrix with no make.
+    stubbed = matrix(run_stage({"train": processed_frame([{"make": "BMW"}] * 4)}))
+    computed = matrix(
+        run_stage({"train": processed_frame([{"make": "BMW"}] * 4)}, supported_makes=["BMW"])
+    )
+
+    assert list(stubbed["make"].cat.categories) == ["BMW"]
+    assert list(computed["make"].cat.categories) == ["BMW"]
+
+
 def test_the_written_contract_is_the_one_the_stage_built(run_stage, params):
     # The API rebuilds the contract from the vocabulary; every other stage loads
     # the written one. The two must not be able to disagree.
@@ -504,6 +798,60 @@ def test_switching_the_feature_set_is_a_params_change_only(run_stage, params):
     assert not [column for column in basic.columns if column.startswith("equipment_")]
     assert "equipment_comfort_cruise_control" in extended.columns
     assert set(params["features"]["sets"]["basic"]).issubset(extended.columns)
+
+
+def test_the_holdout_country_is_missing_throughout_its_matrix_on_purpose(run_stage, params):
+    # The `ES` holdout is the new-market drift scenario (EDN-03): it is held out
+    # by construction, so `ES` is not a training level, and a value outside the
+    # training levels becomes missing rather than a level of its own - which is
+    # exactly what EDN-18 requires of an unseen value. So the holdout's
+    # `country_code` is empty in every row, and that is the scenario working
+    # rather than a defect.
+    #
+    # Pinned because the alternative readings are both plausible and both wrong:
+    # somebody debugging it reads an empty column as a bug in this stage, and
+    # somebody "fixing" it makes the holdout country a level, which would hand
+    # the model a code it was never fitted on. A pull-request description does
+    # not survive the squash merge; this does.
+    holdout_country = params["split"]["holdout_country"]
+    frames = {
+        "train": processed_frame([{"country_code": "DE"}, {"country_code": "IT"}] * 5),
+        "holdout_es": processed_frame([{"country_code": holdout_country}] * 4),
+    }
+    directory = run_stage(frames)
+    written = matrix(directory, "holdout_es")
+
+    assert written["country_code"].isna().all()
+    assert holdout_country not in written["country_code"].cat.categories
+    assert list(written["country_code"].cat.categories) == ["DE", "IT"]
+    # And it is the only such column, so the warning names one thing rather than
+    # being noise somebody learns to ignore.
+    training = matrix(directory)
+    assert build_features.unobserved_columns(written) - build_features.unobserved_columns(
+        training
+    ) == {"country_code"}
+
+
+def test_a_column_only_one_split_leaves_empty_is_named_in_a_warning(run_stage, params):
+    # Because nothing else says so. The stage cannot tell the intended case from
+    # a defect, so it names the column and says which is which.
+    holdout_country = params["split"]["holdout_country"]
+    frames = {
+        "train": processed_frame([{"country_code": "DE"}, {"country_code": "IT"}] * 5),
+        "holdout_es": processed_frame([{"country_code": holdout_country}] * 4),
+    }
+    messages: list[str] = []
+    handler = logger.add(messages.append, level="WARNING", format="{message}")
+    try:
+        run_stage(frames)
+    finally:
+        logger.remove(handler)
+
+    unobserved = [message for message in messages if "no value at all" in message]
+    assert len(unobserved) == 1, messages
+    assert "holdout_es" in unobserved[0]
+    assert "country_code" in unobserved[0]
+    assert "EDN-03" in unobserved[0]
 
 
 def test_every_split_and_the_holdout_get_a_schema_valid_matrix(run_stage, params):

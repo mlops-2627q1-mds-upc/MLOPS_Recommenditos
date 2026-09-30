@@ -49,8 +49,11 @@ from recommenditos.schema import (
     FEATURE_SPACE_FILE,
     PROCESSED_SCHEMA,
     Column,
+    FeatureSpaceError,
     Schema,
     feature_schema,
+    load_feature_schema,
+    read_feature_space,
 )
 
 #: The `ES` holdout gets features too: M6 replays it against the API.
@@ -60,6 +63,10 @@ FEATURE_INPUTS: tuple[str, ...] = (*SPLIT_NAMES, "holdout_es")
 #: the holdout, and including a request at serving time - is encoded against
 #: what this one produced, never against its own contents.
 VOCABULARY_SPLIT = "train"
+
+#: The make list `split` writes beside its frames and the API reads out of the
+#: model bundle (FR-04).
+SUPPORTED_MAKES_FILE = "supported_makes.json"
 
 _DAYS_PER_YEAR = 365.25
 
@@ -83,11 +90,17 @@ def age_years(registration_date: pd.Series, reference_date: str) -> pd.Series:
     return (reference - pd.to_datetime(registration_date)).dt.days / _DAYS_PER_YEAR
 
 
-#: `weight_kg` as the published file writes it: '894 kg', '1,945 kg'. Every
-#: non-null value of the snapshot matches, so one that does not is a change in
-#: the upstream format and fails the stage instead of quietly becoming a
-#: missing value that no fill-rate expectation would flag.
-_WEIGHT_KG = re.compile(r"^\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*kg\s*$")
+#: `weight_kg` as the published file writes it: '894 kg', '1,945 kg'. The comma
+#: has to be an English thousands separator in exactly the right place, and there
+#: is no decimal branch, because the alternative is worse than a hard failure: on
+#: a multilingual German site the likely upstream change is a locale flip, and a
+#: looser pattern accepts '194,5 kg' and reads it as 1945 kg, or '1.945 kg' and
+#: reads it as 1.945 kg. A value that does not match fails the stage instead,
+#: which is the only outcome a reader can tell from a correct parse. All 84,051
+#: non-null values of the scoped snapshot match, and none of them needs either
+#: branch: no value carries a decimal point, and none has four digits without a
+#: separator (measured 2026-09-30).
+_WEIGHT_KG = re.compile(r"^\s*([0-9]{1,3}(?:,[0-9]{3})*)\s*kg\s*$")
 
 
 def weight_kg(values: pd.Series) -> pd.Series:
@@ -123,13 +136,28 @@ def model_version(values: pd.Series, *, tokens: int) -> pd.Series:
     """`model_version` cut down to the first `tokens` tokens of its normalised form.
 
     The raw column is free text, truncated at 50 characters, multilingual and
-    stuffed with marketing: 82,203 distinct values over the 113,708 scoped
+    stuffed with marketing: 80,332 distinct values over the 105,405 scoped
     listings, which no level set can use. Folding case and accents and
-    collapsing the separators leaves 80,495 of them, so normalising the text is
-    not enough on its own. The first token is the one that names the trim -
-    'd', '911', '2.0', 'xdrive', 'avant' - and there are 2,922 of those. Which
-    of them becomes a level is then a frequency question, and the vocabulary
-    answers it.
+    collapsing the separators leaves 78,738 of them, so normalising the text is
+    not enough on its own. Keeping the leading token leaves 2,882, and which of
+    those becomes a level is then a frequency question the vocabulary answers.
+
+    What the leading token is worth depends on the make, and the honest summary
+    is that it is a coarse starting point rather than the trim (measured
+    2026-09-30 on the training split, `reports/analysis/model_version.py`). For
+    Audi and Porsche it is usually the body style, so 'avant' or 'coupe' says
+    something. For the German premium engine codes, which are the bulk of the
+    data, it is the engine letter: 'd', '911' and 'e' are the three most frequent
+    levels overall, 12.4 % of the rows lead with an engine letter, and that
+    largely duplicates `fuel_category` while discarding the part a buyer cares
+    about ('M Sport', 'Touring'). Inside one make and model the merging is
+    heavy - Porsche 992 level '911' covers 743 distinct raw trims, Audi A6
+    'avant' 473, BMW 320 'd' 331 - and 329 pairs of levels survive where one is a
+    prefix of the other, so ('20d', '320d') are different levels for the same
+    car. `features.model_version_tokens` and
+    `features.model_version_min_frequency` are parameters precisely so the ladder
+    can measure whether that coarseness costs anything; the EDN entry records the
+    two finer alternatives that were measured and rejected.
 
     The API calls this too, so a request's trim is normalised exactly as a
     training row's was.
@@ -198,12 +226,31 @@ class Vocabulary:
 
     @classmethod
     def from_dict(cls, entry: dict) -> "Vocabulary":
+        """A vocabulary from what `to_dict` wrote.
+
+        A field this code does not know is refused rather than ignored, for the
+        same reason `Schema.from_dicts` refuses one: both read the same artefact,
+        and an unexpected field there means the file was written by a version of
+        this stage that recorded something extra, so reading only the fields we
+        recognise would silently drop part of the feature space.
+        """
+        unknown = sorted(set(entry) - _VOCABULARY_FIELDS)
+        if unknown:
+            raise ValueError(
+                f"the vocabulary carries field(s) this code does not know: {', '.join(unknown)}"
+            )
         return cls(
             equipment={source: tuple(items) for source, items in entry["equipment"].items()},
             categories={column: tuple(levels) for column, levels in entry["categories"].items()},
             model_version_tokens=entry["model_version_tokens"],
             train_rows=entry["train_rows"],
         )
+
+
+#: What `Vocabulary.to_dict` writes, which is what `from_dict` accepts.
+_VOCABULARY_FIELDS: frozenset[str] = frozenset(
+    {"train_rows", "model_version_tokens", "equipment", "categories"}
+)
 
 
 def build_vocabulary(
@@ -264,10 +311,16 @@ def _check_levels(
 def _frequent_items(values: pd.Series, min_frequency: float) -> tuple[str, ...]:
     """The items above `min_frequency` of `values`, alphabetically.
 
+    Three properties, each of which a test holds, because each one is a silent
+    wrong answer if it breaks rather than a failure.
+
     The denominator is every row, null lists included, so the threshold is a
     share of the training rows rather than of the rows that happen to list
-    something. Alphabetical rather than by frequency so that two runs on the
-    same data produce a byte-identical artefact (NFR-06).
+    something. A repeated item inside one listing counts once, because the
+    threshold is a share of listings and not of mentions. And the order is
+    alphabetical rather than by frequency, so that two runs on the same data
+    produce a byte-identical artefact and identically ordered multi-hot columns
+    (NFR-06).
     """
     counts: Counter[str] = Counter()
     for value in values.dropna():
@@ -324,7 +377,13 @@ def _categorical_columns(feature_columns: "list[str]", *, encoded: "set[str]") -
 
 
 def matrix_schema(feature_columns: "list[str]", vocabulary: Vocabulary, *, name: str) -> Schema:
-    """The contract of one feature matrix, its data-dependent columns included."""
+    """The contract of one feature matrix, data-dependent columns and levels included.
+
+    Everything the training rows decided is in the returned contract, not only
+    which columns exist: a categorical carries the levels its codes are positions
+    in, so the stage that reads a matrix, and the API, get them from the artefact
+    instead of inferring them from the rows they happen to hold.
+    """
     features, targets = _selection(feature_columns, name=name)
     sources = [column for column in feature_columns if column in vocabulary.equipment]
     if sources:
@@ -334,8 +393,8 @@ def matrix_schema(feature_columns: "list[str]", vocabulary: Vocabulary, *, name:
     for column, (_, dtype) in _PARSERS.items():
         if column in feature_columns:
             features = features.with_dtype(column, dtype, name=name)
-    for column in vocabulary.categories:
-        features = features.with_dtype(column, "category", name=name)
+    for column, levels in vocabulary.categories.items():
+        features = features.as_category(column, levels, name=name)
     return features.extend(targets, name=name)
 
 
@@ -382,51 +441,143 @@ def encode_equipment(frame: pd.DataFrame, vocabulary: Vocabulary) -> pd.DataFram
 
 def build_matrix(
     frame: pd.DataFrame,
-    feature_columns: "list[str]",
+    schema: Schema,
     vocabulary: Vocabulary,
     *,
     reference_date: str,
 ) -> pd.DataFrame:
-    """One split's feature matrix, before `write_frame` conforms it to the contract.
+    """A `processed`-shaped frame as the feature matrix `schema` describes.
 
-    Columns the feature set does not name are left in place rather than dropped:
-    the contract selects, so only what it names can reach the artefact.
+    The contract and the vocabulary come from the artefact rather than from
+    params.yaml, which is what lets a stage or the API build a matrix without
+    knowing which feature set it is working with. `schema.conform` finishes the
+    job: it selects the contract's columns in its order, so a column the feature
+    set does not name simply never reaches the result, and it casts each
+    categorical to the levels the contract declares rather than to the levels
+    this particular frame happens to hold.
     """
     matrix = frame.copy()
     matrix["age_years"] = age_years(frame["registration_date"], reference_date)
     for column, (parse, _) in _PARSERS.items():
-        if column in feature_columns:
+        if column in schema.names:
             matrix[column] = parse(frame[column])
     if _MODEL_VERSION in vocabulary.categories:
         matrix[_MODEL_VERSION] = model_version(
             frame[_MODEL_VERSION], tokens=vocabulary.model_version_tokens
         )
-    for column, levels in vocabulary.categories.items():
-        matrix[column] = _as_levels(matrix[column], levels)
-    return pd.concat([matrix, encode_equipment(frame, vocabulary)], axis=1)
+    return schema.conform(pd.concat([matrix, encode_equipment(frame, vocabulary)], axis=1))
 
 
-def _as_levels(values: pd.Series, levels: tuple[str, ...]) -> pd.Series:
-    """`values` as a categorical over exactly `levels`, whichever of them occur.
+@dataclass(frozen=True)
+class FeatureSpace:
+    """One feature set's contract and vocabulary, as the `features` stage wrote them.
 
-    The levels are the training rows', for every split and for a request alike,
-    so a code means the same car wherever the model meets it. A value outside
-    them becomes missing: it carries no fitted signal, and the alternative -
-    letting each frame add its own levels - renumbers the others and silently
-    changes what the model is asked about.
+    The public entry point for everything downstream of this stage: `train`
+    (#37), `evaluate` (#39) and the API all hold a directory of matrices and need
+    either the contract they were written against or a frame of their own in that
+    same shape. Both come from here, so none of them re-derives a level set from
+    the rows in front of it - which is the one mistake that produces a model
+    fitted on one numbering and scored on another, with no error anywhere.
+
+    - `space.schema` is the contract. `space.schema.conform(frame)` casts any
+      frame to it, including the categoricals' declared levels, so `.cat.codes`
+      on the result means what it meant during training.
+    - `space.schema.feature_names` and `.target_names` are the split a model
+      needs; `space.schema.features()` is the contract of a frame that carries no
+      label, which is what a request is.
+    - `space.matrix(frame, reference_date=...)` turns a `processed`-shaped frame
+      into that matrix in one call, which is what the masking sweep of SC-06 and
+      a served request both want.
     """
-    return values.where(values.isin(levels)).astype(pd.CategoricalDtype(levels))
+
+    schema: Schema
+    vocabulary: Vocabulary
+
+    @classmethod
+    def load(cls, directory: Path, *, name: str) -> "FeatureSpace":
+        """Both halves of the artefact in `directory`, read once."""
+        space = read_feature_space(directory)
+        return cls(
+            schema=load_feature_schema(directory, name=name),
+            vocabulary=Vocabulary.from_dict(space["vocabulary"]),
+        )
+
+    def matrix(self, frame: pd.DataFrame, *, reference_date: str) -> pd.DataFrame:
+        """`frame` as the matrix this feature space describes."""
+        return build_matrix(frame, self.schema, self.vocabulary, reference_date=reference_date)
 
 
 def load_vocabulary(directory: Path) -> Vocabulary:
     """The vocabulary `build_features` wrote for the matrices in `directory`.
 
-    The API's entry point into this module: with this and the functions above it
-    builds a one-row matrix with the same columns, in the same order, over the
-    same levels as the matrix the model was fitted on.
+    For a caller that needs the vocabulary alone - which equipment items got a
+    column, which levels a categorical has. A caller that also needs the contract
+    wants `FeatureSpace.load`, which reads the file once.
     """
-    space = json.loads((directory / FEATURE_SPACE_FILE).read_text(encoding="utf-8"))
-    return Vocabulary.from_dict(space["vocabulary"])
+    space = read_feature_space(directory)
+    try:
+        return Vocabulary.from_dict(space["vocabulary"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise FeatureSpaceError(
+            f"{directory / FEATURE_SPACE_FILE} carries a vocabulary this code cannot read "
+            f"({error}). It is the artefact of the `features` stage, so rebuild it with "
+            f"`dvc repro features` rather than editing it by hand."
+        ) from error
+
+
+def read_supported_makes(directory: Path) -> tuple[str, ...]:
+    """The makes the API serves, as `split` wrote them beside its frames (FR-04).
+
+    Read here, before the vocabulary is built, because that is the only point at
+    which restricting the model to the supported makes could still decide the
+    level set. `make`'s levels are the sorted unique training values, so
+    restricting the training rows first would make the level set exactly the
+    supported makes, and a make outside them already becomes missing in every
+    other frame rather than a new code.
+
+    This stage does not apply that restriction: whether the model is fitted on
+    the supported makes alone is a modelling decision that is not made yet. What
+    it does is read the list, so that the level count and the supported count are
+    visible together and so a change to the list reruns the matrices. `split`
+    writes an empty list while it is a stub (#35), which means "not computed yet"
+    rather than "no make is supported".
+    """
+    path = directory / SUPPORTED_MAKES_FILE
+    makes = tuple(json.loads(path.read_text(encoding="utf-8"))["supported_makes"])
+    if not makes:
+        logger.warning(
+            f"{path} names no make, so nothing here can be compared against the make "
+            f"levels. Issue #35 computes the list."
+        )
+    return makes
+
+
+def unobserved_columns(matrix: pd.DataFrame) -> set[str]:
+    """The columns of `matrix` that hold no value at all."""
+    return {column for column in matrix.columns if not matrix[column].notna().any()}
+
+
+def _warn_about_unobserved_columns(split: str, columns: "list[str]") -> None:
+    """Name the columns a written split fills in no row at all.
+
+    One column does this on the real snapshot and it is intended: the `ES`
+    holdout's `country_code` is empty, because `ES` is held out by construction
+    (EDN-03), so it is not a training level, and a value outside the training
+    levels becomes missing rather than a level of its own - which is exactly the
+    treatment EDN-18 requires of an unseen value. The holdout is the new-market
+    scenario, and a model that had seen that market would not be one.
+
+    The warning exists because nothing else says so. A fully empty column in a
+    matrix reads as a defect in this stage, a pull-request description does not
+    survive the squash merge, and M6 replays this holdout months from now.
+    """
+    if columns:
+        logger.warning(
+            f"{split}: no value at all in {', '.join(columns)}, although the "
+            f"{VOCABULARY_SPLIT} rows fill it. Expected where the split is defined by that "
+            f"column - the `ES` holdout has no country_code, because `ES` is not a "
+            f"{VOCABULARY_SPLIT} level (EDN-03, EDN-18) - and a defect anywhere else."
+        )
 
 
 def _write_feature_space(directory: Path, schema: Schema, vocabulary: Vocabulary) -> None:
@@ -458,18 +609,32 @@ def main(
     destination = output_dir / feature_set
 
     training = read_frame(input_dir / f"{VOCABULARY_SPLIT}.parquet", PROCESSED_SCHEMA)
+    # Before the vocabulary, because that is the only point at which a
+    # supported-make restriction could still decide the level set.
+    supported = read_supported_makes(input_dir)
     vocabulary = build_vocabulary(training, columns, feature_params)
     schema = matrix_schema(columns, vocabulary, name=f"features-{feature_set}")
     _write_feature_space(destination, schema, vocabulary)
     logger.info(
         f"{feature_set}: {len(schema.names)} columns, {vocabulary.n_equipment_features} of them "
-        f"equipment, decided by the {vocabulary.train_rows:,} {VOCABULARY_SPLIT} rows."
+        f"equipment, decided by the {vocabulary.train_rows:,} {VOCABULARY_SPLIT} rows. "
+        f"{len(vocabulary.categories.get('make', ()))} make level(s) against "
+        f"{len(supported)} supported make(s)."
     )
 
+    unobserved_in_training: set[str] = set()
     for name in FEATURE_INPUTS:
         frame = read_frame(input_dir / f"{name}.parquet", PROCESSED_SCHEMA)
-        matrix = build_matrix(frame, columns, vocabulary, reference_date=params["reference_date"])
+        matrix = build_matrix(frame, schema, vocabulary, reference_date=params["reference_date"])
         write_frame(matrix, destination / f"{name}.parquet", schema)
+        # Compared against the training split rather than reported outright: a
+        # column no split fills is a question for the feature set, and it is
+        # already refused for a categorical, while a column only *this* split
+        # leaves empty is the interesting case (`country_code` in the holdout).
+        empty = unobserved_columns(matrix)
+        if name == VOCABULARY_SPLIT:
+            unobserved_in_training = empty
+        _warn_about_unobserved_columns(name, sorted(empty - unobserved_in_training))
 
 
 if __name__ == "__main__":

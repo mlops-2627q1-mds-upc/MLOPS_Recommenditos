@@ -23,8 +23,8 @@ from loguru import logger
 import typer
 
 from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
+from recommenditos.data.build_features import FeatureSpace
 from recommenditos.pipeline import load_params, read_frame
-from recommenditos.schema import load_feature_schema
 
 app = typer.Typer()
 
@@ -42,8 +42,9 @@ def main(
     # The matrix's columns depend on the data - the equipment multi-hot columns
     # and the category levels are whatever the training rows decided - so the
     # contract travels with the matrices instead of being rebuilt from
-    # params.yaml here.
-    schema = load_feature_schema(input_dir / feature_set, name=f"features-{feature_set}")
+    # params.yaml here. `FeatureSpace` because #37 needs the vocabulary too.
+    space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
+    schema = space.schema
 
     train = read_frame(input_dir / feature_set / "train.parquet", schema)
 
@@ -56,7 +57,14 @@ def main(
         "estimator": "constant_median",
         "planned_estimator": settings["estimator"],
         "feature_set": feature_set,
-        "features": list(schema.names),
+        # Features and targets as two lists, not one. The matrix carries the
+        # label beside the inputs so that one file per split is enough, which
+        # means every consumer of this artefact - #37's estimators, #39's
+        # masking sweep, the API - has to be told where the boundary is. One
+        # list of `schema.names` ends in `price, log_price`, so a consumer that
+        # takes it at its word fits the target on itself.
+        "features": list(schema.feature_names),
+        "targets": list(schema.target_names),
         "seed": params["seed"],
         "constant_log_price": float(train["log_price"].median()),
         "n_training_rows": len(train),

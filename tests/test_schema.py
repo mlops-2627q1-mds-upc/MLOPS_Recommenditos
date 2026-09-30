@@ -4,17 +4,23 @@ Every stage trusts `recommenditos.schema` to catch a broken frame, so these are
 the tests that make that trust reasonable.
 """
 
+import json
+
 import pandas as pd
 import pytest
 
 from recommenditos.schema import (
+    FEATURE_SPACE_FILE,
     INTERIM_SCHEMA,
     PROCESSED_SCHEMA,
     RAW_SCHEMA,
+    TARGET_NAMES,
     Column,
+    FeatureSpaceError,
     Schema,
     SchemaError,
     feature_schema,
+    load_feature_schema,
 )
 
 TOY = Schema(
@@ -26,6 +32,27 @@ TOY = Schema(
         Column("seen_at", "datetime64[ns]", True, "optional timestamp"),
     ),
 )
+
+#: A contract with a categorical, which is the only dtype whose meaning depends
+#: on the data: `LEVELLED`'s codes are positions in this exact list.
+LEVELS = ("Audi", "BMW", "Porsche", "Volvo")
+LEVELLED = Schema(
+    name="levelled",
+    columns=(
+        Column("make", "str", True, "manufacturer"),
+        Column("score", "float64", True, "optional number"),
+    ),
+).as_category("make", LEVELS)
+
+
+def _levelled_frame(*makes: "str | None") -> pd.DataFrame:
+    """A frame for `LEVELLED` whose `make` column holds exactly `makes`, as text."""
+    return pd.DataFrame(
+        {
+            "make": pd.Series(list(makes), dtype="str"),
+            "score": pd.Series([1.5] * len(makes), dtype="float64"),
+        }
+    )
 
 
 def _good_frame() -> pd.DataFrame:
@@ -184,6 +211,185 @@ def test_drop_and_with_dtype_keep_a_stage_out_of_this_module():
     assert reshaped.column("score").dtype == "Int64"
     with pytest.raises(SchemaError, match="no column"):
         TOY.with_dtype("nope", "float64")
+
+
+# --------------------------------------------------------------------------
+# Categoricals: the one dtype whose meaning depends on the data
+# --------------------------------------------------------------------------
+
+
+def test_a_categorical_column_cannot_be_declared_without_its_levels():
+    # `str(dtype)` is 'category' whatever the levels are, so a contract that
+    # omitted them would say nothing about what a code means. Refusing here is
+    # what makes the written artefact lossless rather than nearly lossless.
+    with pytest.raises(SchemaError, match="declares no levels"):
+        Column("make", "category", True, "manufacturer")
+
+
+def test_only_a_categorical_column_may_declare_levels():
+    with pytest.raises(SchemaError, match="only a 'category' column has levels"):
+        Column("score", "float64", True, "number", levels=("1", "2"))
+
+
+def test_with_dtype_refuses_to_make_a_column_categorical():
+    # Because it takes no levels. Routing every categorical through
+    # `as_category` is what leaves no code path that produces a contract saying
+    # 'category' with the levels left for a consumer to infer.
+    with pytest.raises(SchemaError, match="use as_category"):
+        TOY.with_dtype("name", "category")
+
+
+def test_the_levels_survive_the_round_trip_through_the_artefact():
+    written = LEVELLED.to_dicts()
+
+    assert written[0]["levels"] == list(LEVELS)
+    # And a column with no levels does not carry the field at all, so the
+    # artefact stays readable rather than 30 lines of `"levels": null`.
+    assert "levels" not in written[1]
+    assert Schema.from_dicts(written, name="levelled") == LEVELLED
+
+
+def test_validate_refuses_the_same_levels_in_a_different_order():
+    # The failure this whole mechanism exists for. Reversing the levels changes
+    # every code in the column while `str(dtype)` stays 'category', so a
+    # consumer reading `.cat.codes` gets numbers the model never saw.
+    frame = LEVELLED.conform(_levelled_frame("Audi", "Volvo", "BMW"))
+    reordered = frame.copy()
+    reordered["make"] = frame["make"].cat.set_categories(list(reversed(LEVELS)))
+
+    assert reordered["make"].cat.codes.tolist() != frame["make"].cat.codes.tolist()
+    with pytest.raises(SchemaError, match="the same levels in a different order"):
+        LEVELLED.validate(reordered)
+
+
+def test_validate_names_a_level_that_is_absent_and_one_that_was_added():
+    frame = LEVELLED.conform(_levelled_frame("Audi", "BMW"))
+    narrowed = frame.copy()
+    narrowed["make"] = (
+        frame["make"].astype("object").astype(pd.CategoricalDtype(("Audi", "BMW", "Fiat")))
+    )
+
+    with pytest.raises(SchemaError) as raised:
+        LEVELLED.validate(narrowed)
+
+    message = str(raised.value)
+    assert "'Porsche', 'Volvo'] absent" in message
+    assert "'Fiat'] added" in message
+
+
+def test_conform_applies_the_declared_levels_rather_than_inferring_them():
+    # `astype('category')` infers the levels from the rows in hand, so a subset
+    # would come back numbered differently from the matrix a model was fitted
+    # on. This is what #37's ridge variant and #39's masking sweep rely on.
+    conformed = LEVELLED.conform(_levelled_frame("Volvo", "Audi"))
+
+    assert tuple(conformed["make"].cat.categories) == LEVELS
+    assert conformed["make"].cat.codes.tolist() == [3, 0]
+
+
+def test_conform_corrects_an_input_that_is_already_categorical_over_other_levels():
+    # A frame read back from Parquet arrives as a categorical already, and a
+    # stale or hand-built one can carry the wrong levels; the cast has to correct
+    # it rather than pass it through because `str(dtype)` matches.
+    frame = _levelled_frame("Volvo", "Audi")
+    frame["make"] = frame["make"].astype(pd.CategoricalDtype(("Volvo", "Audi")))
+
+    conformed = LEVELLED.conform(frame)
+
+    assert tuple(conformed["make"].cat.categories) == LEVELS
+    assert conformed["make"].cat.codes.tolist() == [3, 0]
+
+
+def test_a_value_outside_the_declared_levels_becomes_missing():
+    conformed = LEVELLED.conform(_levelled_frame("BMW", "Lada"))
+
+    assert conformed["make"].iloc[0] == "BMW"
+    assert conformed["make"].isna().tolist() == [False, True]
+    assert "Lada" not in conformed["make"].cat.categories
+
+
+# --------------------------------------------------------------------------
+# Features and targets
+# --------------------------------------------------------------------------
+
+
+def test_a_contract_separates_its_features_from_its_targets(params):
+    schema = feature_schema(params["features"]["sets"]["basic"], name="basic")
+
+    assert schema.target_names == TARGET_NAMES
+    assert set(schema.feature_names).isdisjoint(TARGET_NAMES)
+    assert set(schema.feature_names) | set(schema.target_names) == set(schema.names)
+
+
+def test_the_feature_only_contract_is_what_a_request_is_checked_against(params):
+    # A request describes the car and not its price, so conforming it to the
+    # full contract would reject it for a column no caller could supply.
+    schema = feature_schema(params["features"]["sets"]["basic"], name="basic")
+
+    features = schema.features()
+
+    assert features.names == schema.feature_names
+    assert "price" not in features.names
+
+
+# --------------------------------------------------------------------------
+# The feature-space artefact: every way it can be stale or wrong
+# --------------------------------------------------------------------------
+
+
+def _artefact(tmp_path, payload) -> "pd.Series":
+    (tmp_path / FEATURE_SPACE_FILE).write_text(payload, encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("label", "payload"),
+    [
+        ("truncated", '{"schema": [{"name": "make"'),
+        ("empty", ""),
+        ("not an object", "[]"),
+        ("no schema section", '{"vocabulary": {}}'),
+        ("no vocabulary section", '{"schema": []}'),
+        ("a zero-column contract", '{"schema": [], "vocabulary": {}}'),
+        (
+            "a row that lost a field",
+            json.dumps({"schema": [{"name": "make", "dtype": "str"}], "vocabulary": {}}),
+        ),
+        (
+            "a row that gained a field",
+            json.dumps(
+                {
+                    "schema": [
+                        {
+                            "name": "make",
+                            "dtype": "str",
+                            "nullable": True,
+                            "description": "",
+                            "unit": "kg",
+                        }
+                    ],
+                    "vocabulary": {},
+                }
+            ),
+        ),
+    ],
+)
+def test_a_broken_feature_space_artefact_names_the_file_and_the_stage(tmp_path, label, payload):
+    # Every one of these used to surface as a bare JSONDecodeError, KeyError or
+    # TypeError inside whichever stage happened to read the file next, which
+    # says nothing about which artefact has to be rebuilt. The zero-column case
+    # was worse: it loaded, and then reported all 164 columns as unexpected.
+    with pytest.raises(FeatureSpaceError) as raised:
+        load_feature_schema(_artefact(tmp_path, payload), name="features-extended")
+
+    message = str(raised.value)
+    assert FEATURE_SPACE_FILE in message, label
+    assert "dvc repro features" in message, label
+
+
+def test_a_missing_feature_space_artefact_names_the_file_and_the_stage(tmp_path):
+    with pytest.raises(FeatureSpaceError, match="dvc repro features"):
+        load_feature_schema(tmp_path / "nowhere", name="features-extended")
 
 
 def test_the_split_preserves_the_interim_columns():
