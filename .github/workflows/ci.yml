@@ -21,6 +21,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       docs: ${{ steps.filter.outputs.docs }}
       report: ${{ steps.filter.outputs.report }}
+      traceability: ${{ steps.filter.outputs.traceability }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -45,6 +46,17 @@ jobs:
             report:
               - "reports/latex/**"
               - "Makefile"
+              - ".github/workflows/ci.yml"
+            # The matrix joins the `req` markers of the tests with the IDs in
+            # the requirement documents, so a change on either side can turn a
+            # covered requirement into a gap.
+            traceability:
+              - "tests/**"
+              - "tools/**"
+              - "docs/docs/requirements.md"
+              - "docs/docs/specification.md"
+              - "pyproject.toml"
+              - "uv.lock"
               - ".github/workflows/ci.yml"
 
   pre-commit:
@@ -82,6 +94,55 @@ jobs:
             echo '## Test coverage'
             uv run coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
+      # Uploaded even when pytest failed, because that is when the JUnit XML is
+      # worth reading: it names the failing tests without scrolling the log.
+      - name: Publish the test and coverage reports
+        uses: actions/upload-artifact@v7
+        if: always() && needs.changes.outputs.code == 'true'
+        with:
+          name: test-reports
+          path: |
+            reports/junit.xml
+            reports/coverage.xml
+
+  # NFR-07 promises that every requirement is traceable to the test that
+  # verifies it or is marked as verified by hand, and that CI builds the matrix
+  # that proves it. The gate is milestone-scoped: see tools/expected_coverage.yaml.
+  traceability:
+    name: Requirement matrix
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        if: needs.changes.outputs.traceability == 'true'
+      - uses: astral-sh/setup-uv@v10.1.0
+        if: needs.changes.outputs.traceability == 'true'
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+        if: needs.changes.outputs.traceability == 'true'
+      # Writes the matrix first and fails afterwards, so the two steps below
+      # still publish the table that explains why the job is red.
+      - name: Build the requirement-to-test matrix
+        if: needs.changes.outputs.traceability == 'true'
+        run: uv run python -m tools.requirement_matrix
+      - name: Publish the matrix to the job summary
+        if: always() && needs.changes.outputs.traceability == 'true'
+        run: |
+          if [ -f reports/requirement-matrix.md ]; then
+            cat reports/requirement-matrix.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## The requirement matrix could not be built, see the job log.' \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always() && needs.changes.outputs.traceability == 'true'
+        with:
+          name: requirement-matrix
+          path: |
+            reports/requirement-matrix.md
+            reports/requirement-matrix.json
 
   docs:
     name: Build docs
