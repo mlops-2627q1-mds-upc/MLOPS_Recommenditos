@@ -1,0 +1,87 @@
+raw rows: 118,382
+scoped, deduplicated rows: 105,405
+training rows: 61,180
+
+==============================================================================
+model_version: what the leading token is worth
+==============================================================================
+distinct raw values over the scoped listings: 80,332
+distinct after folding case, accents and separators: 78,738
+distinct after keeping 1 leading token(s): 2,882
+distinct after keeping 2 leading token(s): 18,248
+
+the 61,180 training rows decide the levels; threshold 0.0005
+12.4% of them lead with an engine letter
+
+  A (chosen): leading token
+    levels above the threshold: 279
+    training rows covered: 85.9%
+    worst merge inside one make and model: 743 distinct raw trims
+    median merge: 3, mean: 13.9
+    make+model+level groups over 50 raw trims: 203
+    level pairs where one is a prefix of the other: 329
+    the six worst merges:
+      Porsche 992, level '911': 743 distinct raw trims
+      Audi A6, level 'avant': 473 distinct raw trims
+      Porsche Cayenne, level 'coupe': 389 distinct raw trims
+      BMW 320, level 'd': 331 distinct raw trims
+      BMW 520, level 'd': 327 distinct raw trims
+      BMW X3, level 'xdrive': 299 distinct raw trims
+    three most frequent levels: ['d', '911', 'e']
+
+  B: make|model|leading token
+    levels above the threshold: 425
+    training rows covered: 62.8%
+    worst merge inside one make and model: 743 distinct raw trims
+    median merge: 47, mean: 70.6
+    make+model+level groups over 50 raw trims: 203
+    level pairs where one is a prefix of the other: 90
+
+  C: two tokens when the first is an engine letter
+    levels above the threshold: 318
+    training rows covered: 82.9%
+    worst merge inside one make and model: 743 distinct raw trims
+    median merge: 3, mean: 12.2
+    make+model+level groups over 50 raw trims: 179
+    level pairs where one is a prefix of the other: 296
+
+  D: two tokens throughout
+    levels above the threshold: 311
+    training rows covered: 44.0%
+    worst merge inside one make and model: 358 distinct raw trims
+    median merge: 5, mean: 12.1
+    make+model+level groups over 50 raw trims: 64
+    level pairs where one is a prefix of the other: 99
+
+  A at the alternative thresholds the ladder can sweep:
+    threshold 0.001: 167 levels, 78.1% of the training rows covered
+    threshold 0.002: 99 levels, 68.5% of the training rows covered
+
+==============================================================================
+equipment: what the threshold of 0.01 keeps
+==============================================================================
+  equipment_comfort: 45 distinct items, 43 above the threshold
+  equipment_entertainment: 16 distinct items, 16 above the threshold
+  equipment_extra: 49 distinct items, 38 above the threshold
+  equipment_safety: 36 distinct items, 36 above the threshold
+  total: 133 of 146 items become a column
+
+==============================================================================
+weight_kg: the range the parse made visible (follow-up for issue #25)
+==============================================================================
+non-null values in the scoped set: 84,051
+  values the stage's pattern rejects: 0 []
+  values a loose pattern rejects: 0 []
+  min 1 kg, max 93,000 kg
+  rows below 500 kg: 30
+  rows above 4,000 kg: 9
+  0.1 % quantile 805 kg, median 1,810 kg, 99.9 % quantile 3,229 kg
+  the six heaviest raw values: ['93,000 kg', '23,000 kg', '16,000 kg', '15,670 kg', '13,950 kg', '4,640 kg']
+
+  what a locale flip would do to a loose pattern, which is why it is not used:
+    '194,5 kg'   loose -> 1945.0   the stage -> refused
+    '1.945 kg'   loose -> 1.945   the stage -> refused
+    '1,2,3 kg'   loose -> 123.0   the stage -> refused
+    '1,9450 kg'  loose -> 19450.0   the stage -> refused
+    '1,945 kg'   loose -> 1945.0   the stage -> 1945.0
+    '894 kg'     loose -> 894.0   the stage -> 894.0

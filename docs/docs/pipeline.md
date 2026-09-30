@@ -88,6 +88,12 @@ Three contracts are defined:
 Feature matrices depend on `features.sets` in `params.yaml`, so they come from `feature_schema(columns, name=...)` rather than from a constant.
 A feature set naming a column no stage produces fails there, with the offending name, instead of producing a matrix that is quietly missing a column.
 
+They also depend on the **data**, which a params-derived contract cannot express: which equipment items cleared the frequency threshold, and which levels each categorical has.
+So the `features` stage writes what it actually built as `feature_space.json` beside its matrices, and every stage that reads a matrix loads that rather than rebuilding it.
+A categorical carries its level list, because a code is a level's position: two frames over the same levels in a different order hold different numbers under the same dtype name.
+`Schema.conform` therefore casts to the **declared** levels rather than inferring them from the frame in front of it, which is what lets a stage encode a subset, a rebuilt frame or a one-row request and get the numbering the model was fitted on.
+`build_features.FeatureSpace.load(directory, name=...)` is the one entry point for a consumer that needs the contract, the vocabulary or a frame cast against them.
+
 Parameters
 ----------
 
