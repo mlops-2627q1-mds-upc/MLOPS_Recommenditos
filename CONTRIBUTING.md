@@ -64,8 +64,35 @@ def test_a_candidate_that_misses_a_criterion_is_not_promoted(): ...
 
 - The IDs have to exist in the [requirements](docs/docs/requirements.md).
   A test whose marker names an unknown ID **fails**, so a typo cannot quietly drop the coverage it was meant to record.
+- A marker naming nothing at all fails too.
+  The per-test check fails the test, and because it cannot run on a test that never runs, the matrix build fails on an empty marker as well and names the test.
 - One marker may name several IDs, and several tests may name the same ID.
 - Mark the test that actually verifies the requirement, not every test that happens to touch the code on the way.
+
+There are two nets for a typo on purpose, and they cover different ground.
+The per-test check fails one test and names the ID, which is what you want locally, but a `skip`, a `skipif` or an `xfail` keeps it from ever running.
+The matrix build reads every marker pytest can collect, whether or not the test runs, so that is the net that catches those.
+
+### What the matrix does and does not say
+
+A marker is a claim, and the matrix reports it as one.
+Which claim depends on what the [specification](docs/docs/specification.md) says the evidence for that entry is, because that document is what decides, not the marker:
+
+| Status | What it means |
+|--------|---------------|
+| verified by a test | The entry is **[automated]**, so a test is the promised evidence, and at least one test carries the ID. |
+| named by a test | A test carries the ID, but the entry is **[manual]**, so the evidence it promises is the drill its cell names and not that test. |
+| verified by hand | The entry is **[manual]** and its cell names the evidence. No test carries the ID. |
+| verified by nothing | Neither. |
+
+The distinction between the first two is the whole point of the table.
+Before it existed, NFR-06 - `dvc repro` on a clean clone reproducing the same splits and metrics, and every MLflow run recording its commit, data version and parameters - was reported as covered because one test named it, and that test's entire body asserted that two files exist.
+So: a marker on a **[manual]** entry is recorded, because it is worth knowing a test touches the requirement, and it does not stand in for the drill.
+
+The gate accepts *verified by a test*, *verified by hand*, and *named by a test* where the **[manual]** cell also names its evidence.
+It refuses *named by a test* on its own, that is a **[manual]** cell left empty with a marker put on some test, because letting the marker alone pass would reopen the cheapest way to fake coverage there is.
+None of the four statuses says a person agreed the evidence is enough; a tool cannot read a test body and judge that.
+That judgement is the review NFR-07 asks for before each delivery, and the matrix is what it reads.
 
 Build the matrix locally with
 
@@ -76,14 +103,22 @@ uv run python -m tools.requirement_matrix
 It writes `reports/requirement-matrix.md` and `reports/requirement-matrix.json` - both generated, both gitignored - and exits non-zero when a requirement that owes evidence has none.
 CI runs the same command, puts the Markdown into the job summary and uploads both files as the `requirement-matrix` artefact.
 
-Which requirements owe evidence *now* is [tools/expected_coverage.yaml](tools/expected_coverage.yaml): every requirement is booked to the milestone whose work produces its evidence, and the gate enforces the milestones up to `current`.
+Which requirements owe evidence *now* is [tools/expected_coverage.yaml](tools/expected_coverage.yaml): every requirement is booked to the milestone whose work produces its evidence, and the gate enforces every milestone at or before `current`.
 Before M4 there is no API, so an `FR-xx` without a test is reported without failing the build.
-Two things to know when working there:
+Four things to know when working there:
 
 - A requirement added to the documents has to be booked to a milestone, or the generator fails.
   That is deliberate: it forces the question of when the requirement gets its evidence.
+- Book it to the milestone whose work produces the *last* piece of its evidence, not the one its topic belongs to.
+  A requirement that is half M3 work and half M4 work is booked M4, because that is when it can first be complete.
+- Milestone names are checked against M1 to M6 and have to be listed in that order, and the gate reads the order off that list rather than off the file.
+  Neither a name nothing knows nor a block in the wrong place can quietly become a bucket that is never enforced.
 - Bumping `current` is how the gate tightens.
   Do it when the milestone's work is merged, and expect it to turn reported gaps into a red build.
+
+The gate's own parameters are pinned by a test: which requirements are already due, and by which route the specification says each is verified.
+Moving an ID to a later milestone and rewriting an **[automated]** cell as **[manual]** are both one-line diffs that would otherwise take a requirement out of the blocking set with no test written and nothing else changed.
+Either is a fine thing to do with a reason; the test is there so the reason gets written down.
 
 A requirement no test can reach - a load test, a deployment, a drill - is tagged **[manual]** in the [specification](docs/docs/specification.md), and the cell names the evidence.
 The matrix then shows it as verified by hand rather than as a gap, which is why that cell must never be left empty.

@@ -9,12 +9,19 @@ What the model learns, its features and its quality targets live in the [problem
 Tests mark the IDs they verify with `@pytest.mark.req("FR-04")` (supports multiple IDs per test, e.g. a test that covers both FR-15 and NFR-01).
 CI turns those markers into a requirement-to-test matrix (NFR-07), which is what the report cites as the traceability evidence.
 
-The "Verified by" column says how each entry is checked:
+The "Verified by" column says how each entry is checked.
+The tag is the route to the evidence, not a claim that the evidence is already there, and the matrix is what reports which entries have walked their route:
 
 - **[automated]** a Pytest test is the evidence, and the cell names the test it will be.
-  The matrix picks the entry up on its own once at least one test carries its `req` marker, and reports it as missing until then, so the tag is the route to the evidence rather than a claim that the test already exists.
+  The matrix reports the entry as verified by a test once at least one test carries its `req` marker, and as verified by nothing until then.
+  A test may also carry the ID of a **[manual]** entry; the matrix reports that as named by a test, because the evidence such an entry promises is its drill and not that test.
 - **[manual]** the entry cannot be checked from Pytest (a load test, a chaos test, a deployment run, a `dvc repro` on a clean clone, a human drill).
-  The cell then names the evidence, and the matrix shows the entry as manually verified rather than as missing.
+  The cell then names the evidence, and the matrix shows the entry as verified by hand rather than as verified by nothing, which is why that cell must never be left empty.
+
+When a route comes due is [`tools/expected_coverage.yaml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/tools/expected_coverage.yaml), not this page.
+It books every requirement to the milestone whose work produces the last piece of its evidence, and CI fails the build once a requirement of an already enforced milestone still has nothing.
+So an entry whose cell names a test nobody has written is an intention until the milestone it is booked to is enforced, and a blocker afterwards.
+The matrix stays something a person reads before each delivery, because no gate can check that a drill was actually run, nor read a test body and judge whether it verifies the criterion.
 
 Status markers **[decided]**, **[proposed]** and **[open]** mean what the [project brief](project-brief.md) defines them to mean; that is the only place they are defined.
 The alternatives behind a **[proposed]** marker are in [Decisions pending confirmation](#decisions-pending-confirmation).
