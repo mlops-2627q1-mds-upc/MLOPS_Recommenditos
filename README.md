@@ -49,7 +49,7 @@ uv sync
 pre-commit install
 ```
 
-To get the data, set up your DagsHub credentials once as described in [Data versioning](docs/docs/data-versioning.md#first-time-setup), then run `uv run dvc pull`.
+[Getting started](docs/docs/getting-started.md) takes it from there: the DagsHub token, `.env`, `dvc pull` and your first MLflow run.
 
 Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md).
 It covers our Git workflow, data versioning with DVC and the checks a PR has to pass.
@@ -57,6 +57,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ## Project organization
 
 ```
+├── .env.template      <- The variables `.env` needs; `.env` itself is gitignored
 ├── LICENSE            <- Open-source license
 ├── Makefile           <- Convenience commands like `make lint` or `make test`
 ├── README.md          <- This file
@@ -75,6 +76,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
     ├── config.py      <- Paths
     ├── schema.py      <- The data contract every stage reads and writes against
     ├── pipeline.py    <- Shared stage plumbing: params in, checked frames out
+    ├── tracking.py    <- MLflow against DagsHub, and the setup check that proves it works
     ├── data           <- One module per data stage of the pipeline
     │   ├── download_raw_dataset.py    <- `download`
     │   ├── preprocess.py              <- `preprocess`
