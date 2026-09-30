@@ -585,12 +585,17 @@ How to add an entry:
 > **Evidence corrected on 2026-09-29.** The decision said preprocessing drops "the 164 listings". 164 is the raw-file count;
 > preprocessing runs after scoping, so it removes 27 of them. The alternatives below already said 26, measured after deduplication.
 > The decision itself is unchanged.
+>
+> **Description corrected on 2026-09-30.** The decision described the 27 as what survives "the EDN-04 scope and the training price range".
+> The rule order implemented in issue #34 puts this rule above the price range, so the 27 survive the scope alone.
+> The number is the same either way, because all 27 are inside the range; only the description of how it was obtained was wrong.
+> The decision itself is unchanged.
 
 - **Date:** 2026-09-29
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Data Validation and Preprocessing
 - **Participants:** @lukas2510
-- **Decision:** Preprocessing drops every listing whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). There are 164 such listings in the raw file, of which **27** survive the EDN-04 scope and the training price range and so are the ones preprocessing actually removes; 26 remain if deduplication runs first, the difference being one duplicate row. The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
+- **Decision:** Preprocessing drops every listing whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). There are 164 such listings in the raw file, of which **27** survive the EDN-04 scope, the one rule the implemented order puts above this one, and so are the ones preprocessing actually removes; all 27 are inside the training price range, which runs after this rule, so the count is the same whichever of the two goes first; 26 remain if deduplication runs first, the difference being one duplicate row. The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
 - **Alternatives considered:**
   - **Option A (chosen): drop the rows.**
     Pros: 164 of 118,382 raw rows is 0.14 %, and only 26 of them survive the EDN-04 scope, so nothing measurable is lost; makes `age >= 0` a genuine invariant that the pipeline, the tests and the API contract can all rely on; no special case anywhere in the feature code.
@@ -1052,6 +1057,46 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33) and verifying the remote by authenticated request; a second Claude Code session the same day reviewing [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54), which reported the `dvc gc` exposure.
 - **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the deleted pointer `data/raw/autoscout24_dataset_20251108.csv.dvc`; [Data versioning](../docs/docs/data-versioning.md), "Raw data" and "Never run `dvc gc` without `--all-commits`"; EDN-07, EDN-20, EDN-25, EDN-34, EDN-35.
 - **In LaTeX:** no
+
+### EDN-37: The seller group key stays an unsalted hash, and the residual risk is disclosed
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Data Validation and Preprocessing, Privacy
+- **Participants:** @lukas2510, deciding while reviewing PR #56.
+- **Decision:** `seller_group_id` stays what it is: an unsalted SHA-256 of the seller's company name, or of `country_code|zip|city` for a private seller, truncated to 16 hex characters.
+  No pepper and no surrogate id.
+  What changes is what we claim about it: it is the split's grouping key, it keeps the seller's name, street, zip and city out of every column of every artefact, and it is **not** an anonymisation measure.
+  The code, the interim contract and the dataset card say so, and no document describes the hash as one-way any more.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the hash unsalted and disclose what it does not protect.**
+    Pros: the split stays reproducible from a clean clone with no secret, which is what `pytest` and `dvc repro` depend on today; nothing to build; the claim we make becomes one that can be verified, namely that no PII column reaches an artefact.
+    Cons: an attacker who holds the published file can map every id back to the name or the location it came from, so for a private seller `zip` and `city` are recoverable from an artefact that is supposed to be free of them; we carry that statement in the dataset card rather than being able to say the ids are opaque.
+  - **Option B: key the hash with a secret pepper from the gitignored `.env`.**
+    Pros: the dictionary attack stops working; the ids become opaque to anyone without the secret, which is what the old wording already claimed.
+    Cons: the split's group assignment then depends on a secret that is not in the repository, so `dvc repro` on a clean clone produces a different split, `dvc.lock` stops matching for anyone who lacks the pepper, and every test that asserts a grouped split has to be given one. It also protects only against an attacker who does not already have the source file, which is a public download.
+  - **Option C: drop `seller_group_id` from the published artefacts and keep the grouping internal to `split`.**
+    Pros: the id would not leave the pipeline, so nothing published could be inverted at all.
+    Cons: `split` needs the key from `preprocess` because only `preprocess` sees `seller_company_name`, so the column has to cross an artefact boundary; and the key is the evidence for the property the split exists to have, so a test, a review or a drift analysis could no longer check that no seller appears in two sets.
+- **Rationale:** The measurement decided it.
+  A dictionary built from the file's own `seller_company_name`, `country_code`, `zip` and `city` columns inverts 17,141 of 17,141 dealer ids and 13,576 of 13,576 private-seller ids in about 50 ms, so the truncated digest offers no protection worth the name: a dictionary attack does not care how short the output is, and the private-seller key space is small enough to enumerate even without the file.
+  That is what makes option B's cost the deciding factor rather than its benefit.
+  A pepper would buy protection only against someone who does not hold a file that anyone can download from the pinned Zenodo DOI, and it would pay for it with the credential-free reproducibility the fixture, the test suite and `dvc repro` on a clean clone are built on (NFR-06).
+  The dealer behind a listing is in any case recoverable from the public file by joining on `make`, `model`, `price`, `mileage_km_raw` and `registration_date`, all of which our processed data publishes, so the group key is not the weakest link.
+
+  The `zip` and `city` recovery is accepted on the same ground, and named rather than argued away.
+  They are two of the seven columns `params.preprocess.pii_columns` removes, and for a private seller the group key is exactly their hash, so an artefact that has no location column still carries a value that a public file turns back into one.
+  We accept it because the same public file already holds those columns next to the listing itself, and because our own remote holds the raw file too (EDN-20, EDN-25), so the group key adds no exposure that is not already there.
+  It is written down so that the moment any of those premises changes - a non-public source, a private remote, a dataset we scrape ourselves - this entry is the place that says the hash was never the control.
+
+  NFR-08 keeps its teeth either way, because it governs columns: no PII column appears in the processed data, the prediction log, the comparables or the model artefacts, and `Schema.conform` enforces that structurally. What this entry corrects is the stronger claim the code and the contract had grown around it.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** The claim had been escalating rather than weakening: `preprocess.py` said "the hash is one-way", `schema.py` said "never reversible to the name", and the description of PR #56 called the rule airtight, none of which anybody had tested. An adversarial review of that PR built the dictionary from the published file and reported the two counts above, together with the timing and the observation that the truncation is irrelevant to a dictionary attack. It laid out the three options with the reproducibility cost of a pepper and the artefact-boundary cost of dropping the column, and recommended keeping the hash and correcting the claims. Lukas accepted that, and the reasoning that settled it is his: the split must stay reproducible without secrets, and the dealer identity is already recoverable by joining on the columns we publish, so the hash is a grouping key and nothing more.
+- **AI interaction evidence:** Claude Code session on 2026-09-30, reviewing PR #56 against the real snapshot: AI was asked to attack the stage's own claims, measured the inversion of all 30,717 group ids, reported that the one-wayness claim was false, and presented keeping the hash, peppering it and dropping the column as the three options; Lukas decided to keep the unsalted hash and to state the residual risk instead.
+- **Other evidence:** [`recommenditos/data/preprocess.py`](../recommenditos/data/preprocess.py) (`hash_seller_group`); [`recommenditos/schema.py`](../recommenditos/schema.py) (`seller_group_id`); [dataset card](../docs/docs/dataset-card.md); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #34](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/34); [PR #56](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/56).
+- **In LaTeX:** no
+
 
 ### EDN-44: The traceability gate is milestone-scoped, and its expected-coverage set is a validated YAML file
 
