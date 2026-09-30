@@ -112,7 +112,7 @@ Working on a stage
 2. Replace the stub body. Keep the module's public functions, because other stages and, later, the API import them: `hash_seller_group`, `assign_split`, `age_years`, `point_metrics`.
 3. If your stage changes a column's type or replaces a column with something derived from it, say so on the schema rather than editing `schema.py`: `schema.with_dtype("weight_kg", "float64")` for a parsed column, `schema.drop([...]).extend([...])` for the equipment multi-hot columns. That keeps the change inside your module.
 4. Every stage takes its parameters file as an argument, so a test can vary a parameter without patching anything.
-5. Add tests to `tests/test_data.py` or `tests/test_model.py` against the fixture. Mark the requirement IDs a test verifies with `@pytest.mark.req("NFR-08")`.
+5. Add tests against the fixture: a module of its own once the stage is more than a stub, as `preprocess` has `tests/test_preprocess.py`, otherwise `tests/test_data.py` or `tests/test_model.py`. Mark the requirement IDs a test verifies with `@pytest.mark.req("NFR-08")`.
 6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`.
 
 `dvc.yaml` is hand-edited on purpose.
@@ -126,4 +126,4 @@ Known gaps
 - `data/processed/supported_makes.json` is written by `split` but read by nothing yet, so a change to the supported-make list reruns nothing. The stage that consumes it should declare it as a dependency.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases. A NumPy upgrade would therefore change `data/raw/listings.parquet` and invalidate `dvc.lock` for everyone. This disappears when the download stage starts fetching the real file.
-- The stage bodies are stubs. Each module's docstring names the issue that implements it and what that issue still owes.
+- The stage bodies are stubs, apart from `preprocess`. Each module's docstring names the issue that implements it and what that issue still owes.

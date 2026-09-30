@@ -10,7 +10,7 @@ import pytest
 from tests.conftest import PII_COLUMNS
 
 from recommenditos import config
-from recommenditos.data.preprocess import hash_seller_group
+from recommenditos.data.preprocess import apply_row_rules, hash_seller_group
 from recommenditos.data.split_data import SPLIT_NAMES, assign_split
 from recommenditos.data.synthetic import (
     EDGE_CASE_ROWS,
@@ -18,16 +18,6 @@ from recommenditos.data.synthetic import (
     generate_raw_listings,
 )
 from recommenditos.schema import RAW_SCHEMA
-
-DEDUP_KEY = [
-    "make",
-    "model",
-    "model_version",
-    "mileage_km_raw",
-    "registration_date",
-    "price",
-    "power_kw",
-]
 
 
 def test_data_dirs_are_nested_under_project_root():
@@ -94,28 +84,12 @@ def test_the_fixture_contains(raw_frame, description, predicate):
     assert predicate(raw_frame).any(), f"the fixture has no {description}"
 
 
-def test_the_fixture_contains_exactly_one_duplicate_on_the_dedup_key(raw_frame):
+def test_the_fixture_contains_exactly_one_duplicate_on_the_dedup_key(raw_frame, params):
     # Exactly one, not "at least one". An earlier version of the generator
     # built every edge row from the same body row, so most of them were
     # duplicates and preprocessing deleted the cases the fixture exists to
     # provide - including the `ES` row and the private seller.
-    assert raw_frame.duplicated(subset=DEDUP_KEY).sum() == 1
-
-
-def _scoped_like_preprocess(frame, params):
-    """The rows issue #34's rules leave behind, in the order it specifies."""
-    rules = params["preprocess"]
-    kept = frame[
-        (frame["offer_type"] == rules["offer_type"])
-        & ~frame["is_preregistered"]
-        & (frame["vehicle_type"] == rules["vehicle_type"])
-    ]
-    registered = pd.to_datetime(kept["registration_date"])
-    kept = kept[registered.isna() | (registered <= pd.Timestamp(params["reference_date"]))]
-    kept = kept[
-        kept["price"].between(rules["price_min_eur"], rules["price_max_eur"], inclusive="both")
-    ]
-    return kept.drop_duplicates(subset=rules["dedup_key"], keep="first")
+    assert raw_frame.duplicated(subset=params["preprocess"]["dedup_key"]).sum() == 1
 
 
 @pytest.mark.parametrize(
@@ -134,9 +108,17 @@ def test_the_edge_cases_survive_preprocessing(raw_frame, params, description, pr
     # Being in the raw frame is not enough: a case the scope, date, price and
     # deduplication rules delete is a case no downstream ticket can test
     # against. These are the ones that must reach the interim frame.
-    assert predicate(_scoped_like_preprocess(raw_frame, params)).any(), (
-        f"{description} does not survive the preprocessing rules"
-    )
+    #
+    # The real rules, not a copy of them: while `preprocess` was a stub this
+    # test carried its own re-implementation, which could have agreed with the
+    # fixture and disagreed with the pipeline. Checked on the edge-case block
+    # itself, because the body rows satisfy most of these predicates by chance,
+    # which would make the test pass however the rules treated the rows the
+    # fixture actually guarantees.
+    kept, _ = apply_row_rules(raw_frame, params)
+    surviving = kept.loc[kept.index.intersection(raw_frame.tail(EDGE_CASE_ROWS).index)]
+
+    assert predicate(surviving).any(), f"{description} does not survive the preprocessing rules"
 
 
 def test_the_holdout_case_does_not_swallow_the_others(raw_frame):

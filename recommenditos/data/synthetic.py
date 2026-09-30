@@ -460,23 +460,38 @@ def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
       them. If that row happened to be Spanish, `split` would divert the whole
       block into the holdout and the train, validation, calibration and test
       frames would contain none of these cases at all.
+    - That price has to be inside the training price range. A sentinel above
+      the ceiling is unique too, but then the price rule deletes every row
+      carrying it, and only the price-specific cases below reach the interim
+      frame - which is the first bullet's failure in another disguise.
     """
     rows = [body.iloc[index].copy() for index in range(EDGE_CASE_ROWS)]
     for index, row in enumerate(rows):
-        # A price nobody else has, so no row below collides on the dedup key
-        # by accident. The price-specific cases overwrite it again.
-        row["price"] = 9_000_000.0 + index
+        # A price nobody else has, so no row below collides on the dedup key by
+        # accident, and one *inside* the training price range, so a row is not
+        # deleted by the price rule when it exists to exercise another one.
+        # Body prices are whole multiples of ten, so a distinct fraction of a
+        # cent makes the uniqueness structural rather than lucky. The
+        # price-specific cases overwrite it again.
+        row["price"] = float(row["price"]) + (index + 1) / 100
         # Never the holdout country unless the row is the holdout case.
         row["country_code"] = "DE"
 
     # 1. Registered after the snapshot: age would be negative (EDN-22).
     rows[0]["registration_date"] = "2026-01-01"
-    # 2. The one intended duplicate: identical to row 0 on all seven columns of
-    #    the deduplication key, different outside it, which is what a real
-    #    duplicate listing looks like.
+    # 2. The one intended duplicate: identical to a plain body listing on all
+    #    seven columns of the deduplication key, different outside it, which is
+    #    what a real duplicate listing looks like. The source is a body row and
+    #    not another edge case for two reasons. Deduplication runs last, so a
+    #    pair whose partner an earlier rule deletes never reaches it - copying
+    #    row 0 made the pair post-snapshot, and the date rule removed both
+    #    before the rule this case exists for ever saw them. And the body row
+    #    comes first in the frame, so it is the copy deduplication keeps, which
+    #    leaves every other edge case below intact.
+    source = body.iloc[-1]
     for column in _DEDUP_KEY:
-        rows[1][column] = rows[0][column]
-    rows[1]["non_smoking"] = not bool(rows[0]["non_smoking"])
+        rows[1][column] = source[column]
+    rows[1]["non_smoking"] = not bool(source["non_smoking"])
     # 3. An `ES` listing for the drift holdout (EDN-03).
     rows[2]["country_code"] = "ES"
     # 4. A make far below any support threshold (EDN-05, FR-04).
