@@ -1,0 +1,76 @@
+# When each requirement owes evidence, and how far CI already enforces that.
+#
+# The gate is deliberately not "every requirement is verified". Before M4 there
+# is no API, so every FR-xx would fail a build that nobody can fix, and a gate
+# that is always red stops being read. Instead every requirement is booked to
+# the milestone whose work produces its evidence, and CI enforces the milestones
+# up to `current`. Tightening the gate is then a one-line diff - bump `current`
+# - which a reviewer sees and the commit dates.
+#
+# Every FR-xx and NFR-xx of docs/docs/requirements.md appears exactly once
+# below. tools/requirement_matrix.py fails when one is missing or unknown, so a
+# requirement cannot enter the docs without someone deciding when it is due.
+#
+# What the gate can check is that a requirement has a route to evidence: a test
+# carrying its ID, or the named manual evidence of the specification's
+# "Verified by" column. It cannot check that a drill was actually run - that is
+# the review NFR-07 asks a person to do before each delivery.
+
+current: M3
+
+milestones:
+  - milestone: M3
+    practice: Model building - reproducibility and quality assurance
+    requirements:
+      # The model gate, the pipeline and the repository quality checks are all
+      # in place by the first delivery, so their evidence is due now.
+      - NFR-01
+      - NFR-06
+      - NFR-07
+      - NFR-08
+      - NFR-10
+
+  - milestone: M4
+    practice: Model deployment - the API
+    requirements:
+      # Every functional requirement is a promise about a request and its
+      # answer, so none of them can be tested before the API exists.
+      - FR-01
+      - FR-02
+      - FR-03
+      - FR-04
+      - FR-05
+      - FR-06
+      - FR-07
+      - FR-08
+      - FR-09
+      - FR-10
+      - FR-11
+      - FR-13
+      - FR-16
+      # Latency, throughput and the request-size limit are measured against a
+      # running API, on the machine of EDN-17.
+      - NFR-02
+      - NFR-03
+      - NFR-09
+
+  - milestone: M5
+    practice: Model deployment - packaging and delivery
+    requirements:
+      # These need the image and the Compose stack: the model is baked into the
+      # image at build time (FR-12, EDN-08), the restart policy and the disk
+      # caps are Compose settings, and the deployment is what CD performs.
+      - FR-12
+      - NFR-04
+      - NFR-05
+      - NFR-12
+      - NFR-13
+
+  - milestone: M6
+    practice: Monitoring
+    requirements:
+      # The drift job and the retraining chain start from a monitoring finding,
+      # so their evidence is the ES replay of M6.
+      - FR-14
+      - FR-15
+      - NFR-11
