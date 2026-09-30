@@ -1172,6 +1172,40 @@ How to add an entry:
 - **In LaTeX:** no
 
 
+### EDN-48: `split` records the supported-make list and stays a lossless partition; the downstream stages apply it
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility (shapes M3: Quality Assurance)
+- **Activity / Topic:** Evaluation Protocol, Data Preparation
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** The `split` stage computes the supported-make list (EDN-05) and writes it as `data/processed/supported_makes.json`, but it does **not** remove the rows of unsupported makes: every interim row lands in exactly one of the five artefacts. The `features`, `train` and `evaluate` stages read that artefact and apply it, so the model is fitted and the SC-01 to SC-06 gate measured only on the makes the API serves. `dvc.yaml` gives `features` the artefact as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
+- **Alternatives considered:**
+  - **Option A: filter in `split`, and write the removed rows to a sixth artefact.**
+    Pros: the frames leaving `split` are already in scope, so no downstream stage can forget the filter, which is the failure this decision is most exposed to. The skeleton pointed this way: `schema.py` said "the supported-make filter and the ES holdout belong to `split`", `preprocess.py` said the filter "is deliberately NOT here [...] which happens in `split`", and every "training scope" figure in the docs is post-filter.
+    Cons: it makes `split` lossy, so "the split loses no row" stops being a testable invariant and becomes a claim about two artefacts plus a sixth one. EDN-05's threshold could no longer be revisited without re-running the split, which is the irreversible direction: a downstream stage can always apply a list, but it cannot recover rows the split threw away. The sixth artefact also needs its own `dvc.yaml` output and its own contract, which is outside issue #35.
+  - **Option B: record the list, and measure the metrics over every make anyway.**
+    Pros: nothing to wire; the split stays lossless and no stage has to remember anything.
+    Cons: it reports a number the product cannot deliver. The gate would be computed over 1,437 listings whose make the API refuses with a 422 (FR-04), and `evaluate`'s per-make segments would include makes that are out of scope, so SC-04 would check a segment the API never answers.
+  - **Option C (chosen): record the list in `split`, and restrict the model input and the metrics downstream.**
+    Pros: keeps both properties that matter. `split` stays a lossless partition, so the threshold stays revisitable and no row disappears without an artefact saying where it went; and the reported population is the served population, because the stages that build model input and measure the gate apply the list. It is also the reversible direction, and `dvc.lock` ties the artefact's hash to the stages that consume it.
+    Cons: the guarantee now lives in three stages rather than in one, so it has to be written down and tested rather than being true by construction. That is the cost this entry accepts, and `docs/docs/pipeline.md` carries the four obligations so they are not only in a squash-merge commit message.
+- **Rationale:** The authority on what the split does is problem-spec section 5, the evaluation protocol, and it removes nothing but `ES`: "The remaining listings are split into train, validation, calibration and test sets grouped by seller". Section 2 scopes the *model*, not the split, and EDN-05 already places the rejection at the API: "the pipeline computes the list and the API rejects other makes". The repository owner read the two documents the same way and confirmed option C.
+
+  The measurements say the choice is cheap in both directions. Applying the list moves every realised share by at most **0.08 pp** (99,326 rows to 97,889), so restricting downstream does not disturb the split proportions the gate of EDN-39 checks. Of the **6,079** holdout rows, **5,979** are a supported make and **100** are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04, so the holdout needs the same filter and the drift and retrain work is unaffected by where the filter sits.
+
+  One framing from the original write-up is corrected here, because it would have gone into the report wrong. The 1,437 out-of-scope rows would **not** inflate the reported metrics: rare makes are harder to price, so a pooled figure computed over them is if anything pessimistic. The real problem is a different one, and it is about comparability rather than optimism: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter. That is why the metrics are restricted even though leaving them unrestricted would not flatter the model.
+
+  What the chosen option owes, and what `docs/docs/pipeline.md` records under "Known gaps", is four guarantees from #36, #37 and #39, none of them optional: the filter applied to train, validation, calibration, test **and** the `ES` holdout; applied **before** any training-derived vocabulary or statistic is computed, since fitting on rows the API refuses puts unservable makes into the model's own inputs; `evaluate`'s per-make segments restricted to the listed makes; and a test asserting that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
+
+  Two stale claims are a consequence still to be applied: the comments in `recommenditos/schema.py` and `recommenditos/data/preprocess.py` that say the supported-make filter belongs to, or happens in, `split`. Both files are owned by issue #34, in flight as PR #56, so they are named here rather than edited across a merge boundary.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found that the skeleton contained evidence for both readings and that the two documents behind them disagree, rather than implementing one and moving on: `schema.py` and `preprocess.py` place the filter in `split`, while problem-spec section 5 and EDN-05 place it at the API. It laid out the options with the irreversibility argument that decided it, and flagged the choice as an EDN candidate before acting on it. It also measured the consequences instead of asserting them, which is what produced the 0.08 pp share shift and the 5,979 of 6,079 holdout figure, and it corrected its own earlier framing that the out-of-scope rows would inflate the metrics once it checked the direction of the effect. Lukas confirmed option C.
+- **AI interaction evidence:** Claude Code sessions on 2026-09-30 while implementing and then adversarially reviewing issue #35: the first flagged the two readings and asked for a decision rather than choosing silently; the adversarial review verified the numbers and found that the obligation existed only in the pull request body, with issues #36, #37 and #39 mentioning the make list nowhere at all.
+- **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py); the `supported_makes.json` dependency on the `features` stage in [`dvc.yaml`](../dvc.yaml); [pipeline docs](../docs/docs/pipeline.md), "Known gaps", for the four downstream guarantees; [`reports/analysis/split_gate.py`](analysis/split_gate.py) for the 0.08 pp and 5,979 measurements; [EDN-05](#edn-05-supported-makes-minimum-listing-support-per-make); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [EDN-39](#edn-39-the-splits-size-gate-is-four-rules-with-an-unconditional-floor-not-one-bound-derived-from-the-realised-data); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
+- **In LaTeX:** no
+
+
 ## Template
 
 ```markdown
