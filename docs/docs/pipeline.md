@@ -135,7 +135,23 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/processed/supported_makes.json` is written by `split` but read by nothing yet, so a change to the supported-make list reruns nothing. The stage that consumes it should declare it as a dependency.
+- `data/processed/supported_makes.json` is read by `features` but **not applied** by it yet.
+  The stage declares it as a dependency and reads it before the vocabulary is built, which is the only point at which the restriction could still decide the level set, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
+  What is still missing is the restriction itself, in all three of `features`, `train` and `evaluate` ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  `split` deliberately records the scope instead of enforcing it: it stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no rows disappear without an artefact saying where they went.
+  Four things the stages that turn a set into model input (#36, #37, #39) have to guarantee, none of them optional:
+
+    1. The filter is applied to train, validation, calibration, test **and** the `ES` holdout.
+       The holdout is the one people forget, and it is the set NFR-11 and FR-15 rest on.
+    2. The filter is applied **before** any training-derived vocabulary or statistic is computed - the equipment multi-hot columns, a category encoding, a mean, a quantile.
+       Fitting on rows the API will refuse puts makes the product cannot serve into the model's own inputs.
+    3. `evaluate`'s per-make segments are restricted to the listed makes, or SC-04 reports a segment the API answers with a 422.
+    4. A test asserts that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
+
+    Measured on the real snapshot: the filter moves every realised share by at most 0.08 pp (99,326 rows to 97,889), so it does not disturb the split proportions.
+    Of the 6,079 holdout rows, 5,979 are a supported make and 100 are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04.
+    The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
+    The problem is a different one: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter.
 - A stage's `deps` and `params` cannot be conditional, so `download` declares both sources' inputs whichever one is selected. Under `download.source: zenodo`, editing `recommenditos/data/synthetic.py` or `download.rows` therefore reruns the stage as a 25-second re-read of the cached CSV that produces an identical Parquet. Dropping either would be worse, because a synthetic run would then not notice that its own generator or row count changed.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what `download.source: synthetic` generates. `zenodo` is pinned harder but not all the way: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. Within one toolchain version the write is byte-stable, which is what NFR-06 is measured against.

@@ -1,0 +1,137 @@
+==============================================================================
+The realised split on the real snapshot
+==============================================================================
+  105,405 listings survive preprocessing
+  6,079 are the ES holdout (5.77%)
+  99,326 are left to split, in 28,435 seller groups
+  rows with no country at all, which are split rather than held out: 14
+
+  at the project seed 20251108, which the gate accepts:
+  set               rows    share  configured  of ratio    bound
+  train           61,180   61.60%         60%     1.027    9.29pp
+  validation       8,992    9.05%         10%     0.905    5.69pp
+  calibration      9,169    9.23%         10%     0.923    5.69pp
+  test            19,985   20.12%         20%     1.006    7.58pp
+
+  the largest dealer alone accounts for 80.7% of the variance of any set's share, so the share's distribution is dominated by one Bernoulli
+
+==============================================================================
+The supported makes (EDN-05), counted after the holdout and before the split
+==============================================================================
+  11 of 25 makes reach 300 listings
+  they cover 97,889 of the 99,326 split rows (98.55%)
+    BMW               34,360
+    Porsche           22,434
+    Mercedes-Benz     13,444
+    Audi              12,115
+    Alfa Romeo         6,285
+    Suzuki             3,849
+    Volvo              3,348
+    Honda                798
+    Hyundai              548
+    Aston Martin         360
+    Volkswagen           348
+
+  applying the list to the split sets moves every realised share by at most 0.08 pp (99,326 rows to 97,889)
+  of the 6,079 holdout rows, 5,979 are a supported make and 100 are not
+
+==============================================================================
+The holdout is selected per row, so a cross-border dealer is in both
+==============================================================================
+  sellers listing both in ES and outside it: 0
+  holdout rows they hold: 0
+  split rows they hold:   0
+  hash_seller_group keys a dealer by its company name, and no name in this snapshot
+  appears both inside and outside the holdout country, so the conflict between
+  EDN-03 and EDN-14 does not bind here. It does on the synthetic fixture, whose
+  dealer names are drawn independently of the country: see the pools below.
+
+==============================================================================
+Reordering SPLIT_NAMES is not a cosmetic change
+==============================================================================
+  reversing the tuple moves 80.0% of sellers to another set
+
+==============================================================================
+The constants, against a sweep of 2,000 seeds per pool
+==============================================================================
+  DISPERSION_SIGMAS     5.0
+  MIN_SHARE_OF_RATIO    0.75
+  MAX_GROUP_SHARE       0.05
+  MAX_DISPERSION_BOUND  0.15
+
+  Budget: at most 1 seed in 1,000 may turn the stage red on a pool that satisfies
+  MAX_GROUP_SHARE. The three pools below are the ones the project runs on: the real
+  snapshot, and the two synthetic fixtures the tests use.
+
+--- real snapshot
+  pool 99,326 rows in 28,435 groups
+  largest group 3,383 rows, 3.41% of the pool
+  dispersion bounds at 5.0 sigma, capped at 15%:
+    train         9.29 pp
+    validation    5.69 pp
+    calibration   5.69 pp
+    test          7.58 pp
+  over 2,000 seeds:
+    worst sigma            4.249  (seed 1479, validation at 14.83%)
+    sigma at quantile 0.5    1.152
+    sigma at quantile 0.9    2.653
+    sigma at quantile 0.99   3.512
+    sigma at quantile 0.999  4.164
+    smallest realised share as a fraction of its ratio: 0.820
+    seeds tripping the dispersion rule at 5.0: 0 of 2,000
+    seeds tripping the floor at 0.75: 0 of 2,000
+
+--- synthetic fixture, 2,000 raw rows
+  pool 1,865 rows in 614 groups
+  largest group 13 rows, 0.70% of the pool
+  dispersion bounds at 5.0 sigma, capped at 15%:
+    train        13.24 pp
+    validation    8.11 pp
+    calibration   8.11 pp
+    test         10.81 pp
+  over 2,000 seeds:
+    worst sigma            3.686  (seed 1970, calibration at 15.98%)
+    sigma at quantile 0.5    1.336
+    sigma at quantile 0.9    2.132
+    sigma at quantile 0.99   2.925
+    sigma at quantile 0.999  3.653
+    smallest realised share as a fraction of its ratio: 0.499
+    seeds tripping the dispersion rule at 5.0: 0 of 2,000
+    seeds tripping the floor at 0.75: 228 of 2,000
+  cross-border sellers: 91, holding 604 rows in all
+
+--- synthetic fixture, 20,000 raw rows
+  pool 18,665 rows in 5,996 groups
+  largest group 16 rows, 0.09% of the pool
+  dispersion bounds at 5.0 sigma, capped at 15%:
+    train         4.22 pp
+    validation    2.59 pp
+    calibration   2.59 pp
+    test          3.45 pp
+  over 2,000 seeds:
+    worst sigma            4.190  (seed 1784, calibration at 7.83%)
+    sigma at quantile 0.5    1.351
+    sigma at quantile 0.9    2.263
+    sigma at quantile 0.99   2.983
+    sigma at quantile 0.999  3.610
+    smallest realised share as a fraction of its ratio: 0.783
+    seeds tripping the dispersion rule at 5.0: 0 of 2,000
+    seeds tripping the floor at 0.75: 0 of 2,000
+  cross-border sellers: 898, holding 5,905 rows in all
+
+==============================================================================
+Verdict
+==============================================================================
+  worst sigma over all 6,000 seed-pool trials: 4.249
+  trials the dispersion rule would have failed at 5.0: 0, a false-alarm rate of 0.0000% against a budget of 0.1%
+  margin above the worst observed: 0.75 sigma
+  the superseded 4.0 would have failed 3 of them, which is what makes it unfit: a seed sweep is a routine thing to run.
+
+  The floor at 0.75 sits below the smallest share any seed produced on the real
+  snapshot (0.820), and it rejects a set at 0.58 of its intended size, which the derived
+  bound alone accepted.
+
+  On the 1,865-row fixture pool the smallest is 0.499, because 614 groups
+  scatter far more than 28,435, so the floor would fire there on 228 of 2,000 seeds. The floor is a
+  statement about a pool of the snapshot's granularity, and tests/test_split.py sweeps that
+  pool against a looser floor, naming this measurement, rather than pretending otherwise.

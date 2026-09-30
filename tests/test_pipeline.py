@@ -154,22 +154,11 @@ def test_the_holdout_takes_every_spanish_listing_and_no_other(pipeline, params):
         assert not (subset["country_code"] == holdout_country).any()
 
 
-def test_no_seller_appears_in_two_sets(pipeline, params):
-    key = params["split"]["group_key"]
-    seen: dict[str, str] = {}
-    for name in SPLIT_NAMES:
-        subset = pd.read_parquet(pipeline["processed"] / f"{name}.parquet")
-        for group in subset[key].unique():
-            assert seen.setdefault(group, name) == name, f"{group} is in {seen[group]} and {name}"
-
-
-def test_the_split_loses_no_row(pipeline):
-    interim = len(pd.read_parquet(pipeline["interim"]))
-    parts = sum(
-        len(pd.read_parquet(pipeline["processed"] / f"{name}.parquet"))
-        for name in (*SPLIT_NAMES, "holdout_es")
-    )
-    assert parts == interim
+# Seller disjointness and the lossless partition are asserted in
+# tests/test_split.py, which owns the stage: `test_no_seller_group_appears_in_two_sets`
+# was body-for-body this file's copy, and `test_the_five_artefacts_partition_the_interim_frame`
+# compares the rebuilt frame row by row instead of summing counts, so it also
+# catches a row duplicated into one set and dropped from another.
 
 
 def test_age_is_derived_and_missing_where_the_date_is(pipeline):
@@ -412,10 +401,12 @@ def _leaf_groups(params: dict, prefix: str = "") -> list[str]:
 def test_the_supported_make_list_has_the_shape_the_api_reads(pipeline):
     # FR-04 rejects a make outside this list and echoes it back, so the API
     # and the split stage have to agree on its shape. Fixing it here means
-    # neither invents one.
+    # neither invents one. The two provenance keys are part of that shape: the
+    # threshold and the population the counts were taken over, without which an
+    # entry's count cannot be read at all (issue #35).
     written = json.loads((pipeline["processed"] / "supported_makes.json").read_text())
 
-    assert set(written) == {"supported_makes"}
+    assert set(written) == {"min_listings_per_make", "counted_over_rows", "supported_makes"}
     assert isinstance(written["supported_makes"], list)
 
 

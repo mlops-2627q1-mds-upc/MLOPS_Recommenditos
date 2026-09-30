@@ -524,8 +524,11 @@ RAW_SCHEMA = Schema(
 # Row-filtered, PII-free, deduplicated and carrying the target, but not yet
 # feature-engineered: `registration_date` is still a date rather than an age,
 # the equipment lists are still repr strings and `weight_kg` is still text.
-# Every make and every country is still present; the supported-make filter and
-# the ES holdout belong to `split` (EDN-05 counts support after the holdout).
+# Every make and every country is still present. The ES holdout belongs to
+# `split`, which also counts the supported makes (EDN-05 counts support after
+# the holdout) and writes them as an artefact; applying that list is the
+# business of the stages that build model input, not of `split`, which stays a
+# lossless partition (EDN-48).
 #
 # The columns here are the raw ones that survive problem-spec section 4, so the
 # exclusion table is enforced by this schema rather than by a drop list a stage

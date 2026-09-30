@@ -9,7 +9,9 @@ expressed once, as `ROW_RULES`, and the stage reports one row count per rule so
 the report can cite the funnel rather than a single before-and-after pair.
 
 The supported-make filter is deliberately not here: EDN-05 counts support after
-the `ES` holdout, which happens in `split`.
+the `ES` holdout, and the holdout happens in `split`. `split` does not apply the
+filter either, only compute the list (EDN-48); the stages that build model input
+do.
 
 `hash_seller_group` lives here rather than in `split` because its input is
 `seller_company_name`, which no later stage can see: the interim contract does

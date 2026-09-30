@@ -152,6 +152,8 @@ stages:
   # the feature space: `make`'s levels are the sorted unique training values, so
   # a change to which makes the API serves changes the level set, and a matrix
   # built against the old list has to be rebuilt rather than reused.
+  # What this stage owes the make list, and what `train` and `evaluate` owe it,
+  # is written down in docs/docs/pipeline.md under "Known gaps" (EDN-48).
   # ----------------------------------------------------------------------
   features:
     foreach: ${features.sets}

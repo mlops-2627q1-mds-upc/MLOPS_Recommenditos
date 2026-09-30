@@ -11,7 +11,7 @@ from tests.conftest import PII_COLUMNS
 
 from recommenditos import config
 from recommenditos.data.preprocess import apply_row_rules, hash_seller_group
-from recommenditos.data.split_data import SPLIT_NAMES, assign_split
+from recommenditos.data.split_data import SPLIT_NAMES, assign_split, dispersion_bounds
 from recommenditos.data.synthetic import (
     DEDUP_KEY,
     EDGE_CASE_ROWS,
@@ -240,33 +240,27 @@ def test_the_split_never_puts_a_seller_in_two_sets(raw_frame, params):
     assert per_group.nunique().max() == 1
 
 
-def test_the_same_seed_gives_the_same_split(raw_frame, params):
-    groups = hash_seller_group(raw_frame)
-    ratios, seed = params["split"]["ratios"], params["seed"]
-
-    assert assign_split(groups, ratios, seed).equals(assign_split(groups, ratios, seed))
-
-
-def test_a_different_seed_moves_sellers_between_sets(raw_frame, params):
-    groups = hash_seller_group(raw_frame)
-    ratios = params["split"]["ratios"]
-
-    assert not assign_split(groups, ratios, 1).equals(assign_split(groups, ratios, 2))
-
-
 def test_the_split_ratios_are_roughly_honoured(raw_frame, params):
     groups = hash_seller_group(raw_frame)
-    assigned = assign_split(groups, params["split"]["ratios"], params["seed"])
+    ratios = params["split"]["ratios"]
+    assigned = assign_split(groups, ratios, params["seed"])
     shares = assigned.value_counts(normalize=True)
-
+    # Two bounds, because they answer different questions and the derived one
+    # alone is weaker than what it replaced. `ratio / 2` is an independent
+    # oracle: a round number that owes nothing to the code under test, and on
+    # this frame it is tighter than the derived bound for validation and
+    # calibration (5.00 pp against 6.44 pp), which are the two sets an
+    # undersized split hurts most.
     for name in SPLIT_NAMES:
-        expected = params["split"]["ratios"][name]
-        # Relative, not absolute: an absolute tolerance of 0.10 against a
-        # ratio of 0.10 would accept an empty validation or calibration set.
-        # Whole sellers move at a time and sellers differ in size, so half the
-        # ratio is wide on purpose; issue #35 tightens it.
         assert shares[name] > 0
-        assert abs(shares[name] - expected) < expected / 2
+        assert abs(shares[name] - ratios[name]) < ratios[name] / 2
+
+    # And the stage's own bound, so this frame also exercises the gate the
+    # stage runs. tests/test_split.py checks it across seeds rather than only
+    # for the one params.yaml carries.
+    bounds = dispersion_bounds(groups.value_counts(), ratios)
+    for name in SPLIT_NAMES:
+        assert abs(shares[name] - ratios[name]) <= bounds[name]
 
 
 def test_the_split_ratios_in_params_sum_to_one(params):

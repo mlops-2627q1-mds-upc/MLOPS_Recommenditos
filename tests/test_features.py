@@ -154,10 +154,26 @@ def run_stage(tmp_path: Path, params: dict):
             frame = frames.get(name, frames[build_features.VOCABULARY_SPLIT])
             write_frame(frame, processed / f"{name}.parquet", PROCESSED_SCHEMA)
         # `split` writes this beside the frames, and the stage declares it as a
-        # dependency, so the fixture has to produce it too. The default is the
-        # empty list `split` writes while it is a stub (#35).
+        # dependency, so the fixture has to produce it too. In the real artefact
+        # each entry carries the count that admitted it, so the fixture writes
+        # that shape rather than bare names: a fixture that invents a simpler one
+        # is how a reader of the real file gets dicts where it expected strings.
+        # The default names every make the training frame holds, which is what
+        # `split` produces now that it computes the list (#35).
+        named = supported_makes
+        if named is None:
+            training = frames[build_features.VOCABULARY_SPLIT]
+            named = sorted(set(training["make"].dropna()))
         (processed / build_features.SUPPORTED_MAKES_FILE).write_text(
-            json.dumps({"supported_makes": supported_makes or []}) + "\n", encoding="utf-8"
+            json.dumps(
+                {
+                    "min_listings_per_make": 1,
+                    "counted_over_rows": len(frames[build_features.VOCABULARY_SPLIT]),
+                    "supported_makes": [{"make": make, "listings": 1} for make in named],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
         )
 
         overridden = {**params, "features": {**params["features"], **feature_overrides}}
@@ -763,18 +779,38 @@ def test_a_vocabulary_with_an_unknown_field_is_refused_rather_than_read_in_part(
         build_features.load_vocabulary(directory)
 
 
-def test_the_stage_runs_against_the_empty_supported_make_list_split_writes_today(run_stage):
-    # `split` is a stub and writes `{"supported_makes": []}`, which means "not
-    # computed yet" rather than "no make is supported". The stage reads the list
-    # so that a change to it reruns the matrices; it must not read an empty one as
-    # a restriction to nothing, because that would build a matrix with no make.
-    stubbed = matrix(run_stage({"train": processed_frame([{"make": "BMW"}] * 4)}))
-    computed = matrix(
-        run_stage({"train": processed_frame([{"make": "BMW"}] * 4)}, supported_makes=["BMW"])
+def test_the_supported_make_list_is_read_as_names_and_not_as_its_entries(run_stage, tmp_path):
+    # This replaces a test of the empty list `split` wrote while it was a stub.
+    # `split` now computes a real list and refuses to write an empty one (#35), so
+    # that case cannot arise from the only producer; what can still go wrong is
+    # the shape. Each entry is `{"make": ..., "listings": ...}`, and reading the
+    # entries instead of the names satisfies the `len()` this stage needs today
+    # while silently matching nothing the first time a caller restricts on it -
+    # which is what EDN-48 leaves #36, #37 and #39 to do.
+    run_stage(
+        {"train": processed_frame([{"make": "BMW"}] * 4 + [{"make": "Audi"}] * 4)},
+        supported_makes=["Audi", "BMW"],
     )
 
-    assert list(stubbed["make"].cat.categories) == ["BMW"]
-    assert list(computed["make"].cat.categories) == ["BMW"]
+    supported = build_features.read_supported_makes(tmp_path / "processed")
+
+    assert supported == ("Audi", "BMW")
+    assert all(isinstance(make, str) for make in supported)
+
+
+def test_an_empty_supported_make_list_is_refused_rather_than_read_as_no_make(run_stage, tmp_path):
+    # An empty list would restrict the model to no make at all. `split` raises
+    # before writing one, so an empty list here means the file did not come from
+    # `split`, and reading it as "not computed yet" would hide that.
+    run_stage({"train": processed_frame([{"make": "BMW"}] * 4)})
+    (tmp_path / "processed" / build_features.SUPPORTED_MAKES_FILE).write_text(
+        json.dumps({"min_listings_per_make": 300, "counted_over_rows": 0, "supported_makes": []})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FeatureSpaceError, match="names no supported make"):
+        build_features.read_supported_makes(tmp_path / "processed")
 
 
 def test_the_written_contract_is_the_one_the_stage_built(run_stage, params):

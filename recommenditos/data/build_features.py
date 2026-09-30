@@ -535,21 +535,33 @@ def read_supported_makes(directory: Path) -> tuple[str, ...]:
     supported makes, and a make outside them already becomes missing in every
     other frame rather than a new code.
 
-    This stage does not apply that restriction: whether the model is fitted on
-    the supported makes alone is a modelling decision that is not made yet. What
-    it does is read the list, so that the level count and the supported count are
-    visible together and so a change to the list reruns the matrices. `split`
-    writes an empty list while it is a stub (#35), which means "not computed yet"
-    rather than "no make is supported".
+    This stage does not apply that restriction yet: whether the model is fitted
+    on the supported makes alone is a modelling decision recorded in EDN-48, and
+    the four things this stage and `train` and `evaluate` owe it are written down
+    in docs/docs/pipeline.md under "Known gaps". What this function does is read
+    the list, so that the level count and the supported count are visible
+    together and so a change to the list reruns the matrices.
+
+    Each entry of the artefact is `{"make": ..., "listings": ...}`, carrying the
+    count that admitted it so the file can be audited on its own, so the name has
+    to be taken out of the entry. Returning the entries themselves would satisfy
+    `len()`, which is all this stage needs today, and then silently match nothing
+    the first time a caller writes `frame["make"].isin(supported)`.
+
+    An empty list is refused rather than read as "no make is supported": `split`
+    raises when no make reaches the threshold, so an empty list here means the
+    artefact did not come from `split`.
     """
     path = directory / SUPPORTED_MAKES_FILE
-    makes = tuple(json.loads(path.read_text(encoding="utf-8"))["supported_makes"])
-    if not makes:
-        logger.warning(
-            f"{path} names no make, so nothing here can be compared against the make "
-            f"levels. Issue #35 computes the list."
+    entries = json.loads(path.read_text(encoding="utf-8"))["supported_makes"]
+    if not entries:
+        raise FeatureSpaceError(
+            f"{path} names no supported make. `split` refuses to write an empty list, so "
+            f"either this file did not come from `split` or its threshold was applied to "
+            f"an empty frame; a matrix built against it would restrict the model to no "
+            f"make at all."
         )
-    return makes
+    return tuple(str(entry["make"]) for entry in entries)
 
 
 def unobserved_columns(matrix: pd.DataFrame) -> set[str]:

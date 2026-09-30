@@ -41,6 +41,25 @@ training scope, to find the fields that FR-01 may not leave optional because the
 see them missing.
 `fillrates_results.txt` is the output of the run recorded in EDN-15 (2026-09-29).
 
+## The `split` stage's size gate (EDN-39, EDN-40)
+
+`split_gate.py` chooses the four constants the gate of `recommenditos/data/split_data.py` is
+calibrated with, and reports the realised split sizes, the group count, the largest dealer and
+the supported-make list that the dataset card states as fact.
+`DISPERSION_SIGMAS` is chosen from a stated false-alarm budget - at most 1 seed in 1,000 may
+turn the stage red on a pool satisfying the concentration limit - measured by sweeping 2,000
+seeds on three pools: the real snapshot and the two synthetic fixtures the tests use.
+It exists because the first version of the constant was justified by a sweep that stopped at 200
+seeds and was wrong by 2,000, in both directions at once: sound splits would have been failed and
+a calibration set at 0.58 of its intended size would have passed.
+`split_gate_results.txt` is the output of the run recorded in EDN-39 and EDN-40 (2026-09-30).
+
+Unlike the other scripts here it imports the stage's own functions rather than re-deriving them,
+so the justification cannot drift from the code it justifies; it therefore has to run from the
+repository root.
+The `split` block of `params.yaml` is copied into it rather than loaded, the way `nfr11_check.py`
+keeps its own `P_VAL`, so the committed output stays attached to the values it was measured at.
+
 ## SC-04 coverage per make (model card)
 
 `make_support.py` compares EDN-05's support threshold, which admits a make into scope at 300
