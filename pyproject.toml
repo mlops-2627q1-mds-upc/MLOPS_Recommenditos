@@ -29,7 +29,12 @@ dependencies = [
     # dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow on 2026-09-30 - a run
     # with a parameter and a metric was logged, read back through the client and
     # shown in the UI. The floor is the version that was measured, not a guess.
-    "mlflow>=3.16.1",
+    # `<4` because 3.16 already changed two defaults this project depends on - the
+    # file store now refuses to run and an unset tracking URI resolves to a local
+    # SQLite database - and NFR-06's reproducibility promise should not rest on
+    # whatever a major release does next. Raising it is a deliberate act with a
+    # re-verification against DagsHub, which is the point.
+    "mlflow>=3.16.1,<4",
     "notebook",
     "nbstripout",
     "numpy",
@@ -65,6 +70,16 @@ markers = [
 # `[tool.coverage.run]` below says, so the scope lives in one place only.
 addopts = "--cov --cov-report=term"
 testpaths = ["tests"]
+filterwarnings = [
+    # mlflow 3.16's SQLAlchemy tracking store builds its trace-metadata mapper
+    # with the `noload` strategy, which SQLAlchemy deprecated in 2.1
+    # (mlflow/store/tracking/utils/sql_trace_metrics_utils.py). Nothing on our
+    # side triggers it and nothing on our side can fix it, so it is filtered by
+    # its message rather than left to be scrolled past in every run - and
+    # narrowly, because a `noload` that ever appears in our own code should still
+    # be a warning. Drop this once mlflow stops using it.
+    "ignore:The ``noload`` loader strategy is deprecated:DeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["recommenditos"]
@@ -98,6 +113,10 @@ extend-exclude = ["reports/analysis"]
 extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL"]
 
 [tool.ruff.lint.per-file-ignores]
+# `recommenditos/tracking.py` sets MLFLOW_DISABLE_AGENT_HINT before `import
+# mlflow`, because mlflow reads that one at import time and cannot be told
+# afterwards. The imports below it are deliberately not at the top of the file.
+"recommenditos/tracking.py" = ["E402"]
 # A test asserts against literal expected values - that is what an assertion is.
 # PLR2004 earns its place in `recommenditos/`, where a bare threshold should get
 # a name, but not on `assert response.status_code == 422`.

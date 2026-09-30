@@ -2759,7 +2759,7 @@ requires-dist = [
     { name = "loguru" },
     { name = "matplotlib" },
     { name = "mkdocs" },
-    { name = "mlflow", specifier = ">=3.16.1" },
+    { name = "mlflow", specifier = ">=3.16.1,<4" },
     { name = "nbstripout" },
     { name = "notebook" },
     { name = "numpy" },
