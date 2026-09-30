@@ -58,7 +58,12 @@ from recommenditos.schema import (
     SchemaError,
     feature_schema,
 )
-from recommenditos.tracking import REQUIRE_TRACKING_ENV_VAR, REQUIRED_ENV_VARS, resume_run
+from recommenditos.tracking import (
+    REQUIRE_TRACKING_ENV_VAR,
+    REQUIRED_ENV_VARS,
+    optional_run,
+    resume_run,
+)
 
 #: A URI that resolves, is syntactically an MLflow tracking server and answers
 #: nothing. Port 1 is privileged and closed, so the connection is refused rather
@@ -1146,6 +1151,79 @@ def test_resume_run_without_a_run_id_does_nothing(caplog):
     with resume_run(None) as run:
         assert run.run_id is None
         run.log_metrics({"mdape": 0.1})
+
+
+def test_a_run_that_cannot_be_opened_degrades_without_failing_the_stage(
+    tmp_path: Path, monkeypatch
+):
+    """The seam's reason to exist, asserted on the seam rather than through a stage.
+
+    `tests/test_model.py::test_a_tracking_failure_does_not_fail_training` walks
+    the same path through `train.main`; this one pins the handle the caller gets
+    and the warning it gets it with, which is what `_degrading` may catch.
+    """
+    _point_at_an_unreachable_server(monkeypatch)
+    reported: list[str] = []
+    sink = logger.add(reported.append, format="{message}", level="WARNING")
+
+    try:
+        with optional_run("some-experiment", "some-run") as run:
+            assert run.mode == "disabled"
+            assert run.run_id is None
+            # Every call is unconditional at the call site, which is the whole
+            # point of the null object.
+            run.log_params({"variant": "b0"})
+            run.log_metrics({"fit_seconds": 1.0})
+            run.set_tags({"dvc_stage": "train@b0"})
+    finally:
+        logger.remove(sink)
+
+    assert any("MLflow tracking is off" in message for message in reported), reported
+
+
+@pytest.mark.parametrize("manager", ["optional_run", "resume_run"])
+def test_a_failure_in_the_body_reaches_the_caller_unchanged(
+    manager: str, tmp_path: Path, monkeypatch
+):
+    """A failing fit must report itself, not the tracking seam that wrapped it.
+
+    With the `yield` inside the `except`, contextlib throws the caller's own
+    exception into the generator at the yield, the handler reads a failing fit as
+    a failing server and yields a second time, and the caller gets
+    `RuntimeError: generator didn't stop after throw()` with the real exception
+    only in `__context__` - as DVC's top-line error, with a log line saying
+    tracking was off when it was on.
+
+    Asserted against a *working* store, because that is the configuration this
+    happens in: a developer who followed getting-started.md has credentials and no
+    `RECOMMENDITOS_REQUIRE_TRACKING`, which is exactly the path that degrades.
+    """
+    before = mlflow.get_tracking_uri()
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{tmp_path / 'mlflow.db'}")
+    monkeypatch.setenv("MLFLOW_TRACKING_USERNAME", "someone")
+    monkeypatch.setenv("MLFLOW_TRACKING_PASSWORD", "a-token")
+    monkeypatch.delenv(REQUIRE_TRACKING_ENV_VAR, raising=False)
+    monkeypatch.chdir(tmp_path)
+    reported: list[str] = []
+    sink = logger.add(reported.append, format="{message}", level="WARNING")
+
+    try:
+        with optional_run("some-experiment", "some-run") as opened:
+            assert opened.mode == "enabled", "the store has to work, or this test proves nothing"
+            run_id = opened.run_id
+        under_test = (
+            optional_run("some-experiment", "another-run")
+            if manager == "optional_run"
+            else resume_run(run_id)
+        )
+
+        with pytest.raises(ValueError, match="the fit failed"), under_test:
+            raise ValueError("the fit failed")
+    finally:
+        logger.remove(sink)
+        mlflow.set_tracking_uri(before)
+
+    assert reported == [], "a failure in the body is not a tracking failure"
 
 
 # --------------------------------------------------------------------------

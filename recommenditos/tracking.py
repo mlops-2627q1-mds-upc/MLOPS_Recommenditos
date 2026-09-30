@@ -36,12 +36,13 @@ metrics. The alternative - one run per DVC stage - is the course demo's wart and
 would scatter four variants over eight runs nothing joins.
 """
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 import hashlib
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 # Set before `import mlflow`, because mlflow reads this one at import time and
@@ -261,16 +262,15 @@ def optional_run(experiment: str, run_name: str) -> Iterator[Run]:
         with tracked_run(experiment, run_name) as run:
             yield Run(run.info.run_id)
         return
-    try:
-        with tracked_run(experiment, run_name) as run:
-            yield Run(run.info.run_id)
-    except Exception as error:  # noqa: BLE001 - any failure to reach the server
-        logger.warning(
-            f"MLflow tracking is off for this run ({type(error).__name__}: {error}). The "
-            f"model is written normally; set {', '.join(REQUIRED_ENV_VARS)} to record it, or "
-            f"{REQUIRE_TRACKING_ENV_VAR}=1 to make this a failure."
-        )
-        yield DisabledRun()
+    with _degrading(
+        lambda: tracked_run(experiment, run_name),
+        on_failure=(
+            "MLflow tracking is off for this run ({cause}). The model is written normally; set "
+            f"{', '.join(REQUIRED_ENV_VARS)} to record it, or {REQUIRE_TRACKING_ENV_VAR}=1 to "
+            "make this a failure."
+        ),
+    ) as run:
+        yield run
 
 
 @contextmanager
@@ -296,20 +296,70 @@ def resume_run(run_id: str | None) -> Iterator[Run]:
             f"run_id={run_id!r}, tracking configured={_tracking_is_configured()}. Retrain so "
             f"that the model records the run its metrics belong to."
         )
-    try:
-        # The URI explicitly, because importing this module points MLflow at the
-        # sentinel when nothing was configured, and that would outlive a `.env`
-        # loaded afterwards.
+    # The URI explicitly, because importing this module points MLflow at the
+    # sentinel when nothing was configured, and that would outlive a `.env`
+    # loaded afterwards.
+    if _require_tracking():
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
         with mlflow.start_run(run_id=run_id):
             yield Run(run_id)
-    except Exception as error:
-        # Any failure to reach the server, re-raised where the caller asked for
-        # tracking to be mandatory.
-        if _require_tracking():
-            raise
-        logger.warning(f"could not resume MLflow run {run_id} ({type(error).__name__}: {error}).")
+        return
+
+    def reopen() -> AbstractContextManager[mlflow.ActiveRun]:
+        mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+        return mlflow.start_run(run_id=run_id)
+
+    with _degrading(
+        reopen, on_failure=f"could not resume MLflow run {run_id} " + "({cause})."
+    ) as run:
+        yield run
+
+
+@contextmanager
+def _degrading(
+    open_run: Callable[[], AbstractContextManager[mlflow.ActiveRun]], *, on_failure: str
+) -> Iterator[Run]:
+    """The run `open_run` opens as a handle, or a `DisabledRun` if it cannot open.
+
+    The `yield` below sits outside every `except` in this function, and that is
+    the whole point of the function existing. A context manager that catches
+    around its own `yield` catches the *caller's* exception too: contextlib
+    throws it in at the yield, so the handler reads a failing fit as a failing
+    server, logs that tracking is off when it was on, and yields a second
+    time - which contextlib reports to the caller as `RuntimeError: generator
+    didn't stop after throw()`, leaving the real exception in `__context__`
+    where no stage log shows it. Opening the run is the only failure this
+    degrades on.
+
+    Ending the run is a third case and neither of the two: a server that dies
+    between the last metric and the terminal status must not turn a model that
+    was written into a failed stage, so that failure is a warning and the run is
+    left unfinished on the server.
+    """
+    try:
+        opened = open_run()
+        active = opened.__enter__()
+    except Exception as error:  # noqa: BLE001 - any failure to reach the server
+        logger.warning(on_failure.format(cause=f"{type(error).__name__}: {error}"))
         yield DisabledRun()
+        return
+    try:
+        yield Run(active.info.run_id)
+    except BaseException:
+        _end_run(opened, sys.exc_info())
+        raise
+    _end_run(opened, (None, None, None))
+
+
+def _end_run(opened: AbstractContextManager[mlflow.ActiveRun], failure: tuple) -> None:
+    """Close `opened`, recording `failure` as the run's status where there is one."""
+    try:
+        opened.__exit__(*failure)
+    except Exception as error:  # noqa: BLE001 - see `_degrading`
+        logger.warning(
+            f"the MLflow run was not closed cleanly ({type(error).__name__}: {error}); it stays "
+            f"unfinished on the server. Everything logged before this point landed."
+        )
 
 
 def _tracking_is_configured() -> bool:
