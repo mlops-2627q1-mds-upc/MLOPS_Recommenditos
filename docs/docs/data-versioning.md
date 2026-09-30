@@ -65,31 +65,50 @@ Never run them without `--local`: that would write the token into the committed 
 
 ## Tracked data
 
-| File | Source | MD5 | Tracked by |
-|------|--------|-----|------------|
-| `data/raw/autoscout24_dataset_20251108.csv` (548.6 MB) | [Zenodo record 17643343](https://zenodo.org/records/17643343), DOI `10.5281/zenodo.17643343`, v1.0.0, MIT in the structured field, though the record's own prose reads narrower | `b23a122cc51baf7de39f449193ff0d28` | `dvc add` (EDN-25) |
+Everything DVC tracks in this repository is a pipeline output.
+There is no manual `dvc add` pointer left.
 
-The MD5 of the raw file equals the checksum Zenodo publishes, so anyone can verify that our copy is the original.
+| Artefact | Written by | Held where |
+|------|--------|-----|
+| `data/raw/listings.parquet` (215.3 MB, 118,382 rows) | `download`, from the pinned Zenodo CSV | DVC cache, pushed |
+| `data/interim/`, `data/processed/`, `models/` | the stages that declare them as outputs | DVC cache, pushed |
+| `reports/data-validation/summary.json`, `reports/metrics/`, `metrics.json` | `validate-data` and `evaluate` | `cache: false`, so Git, and they show up in a pull request's diff |
 
-The `download` stage derives `data/raw/listings.parquet` from it, and that file keeps the same PII
-columns, because preprocessing needs `seller_company_name` and the location to build the split's
-group key before dropping them. It is cached and pushed like any other stage output (**[decided]**,
-EDN-34), so the remote holds the same personal data twice, in two formats. The alternatives were
-weighed there: keeping the Parquet local with `push: false` would have moved the pipeline's first
-artefact from pulled to locally regenerated, and stripping the PII inside `download` would have made
-the raw layer stop being a faithful copy of the published file.
+`data/raw/listings.parquet` keeps the PII columns of the published file, because preprocessing needs `seller_company_name` and the location to build the split's group key before dropping them.
+It is cached and pushed like any other stage output (**[decided]**, EDN-34), so the remote holds that personal data in the Parquet even though we no longer re-host the CSV.
+The alternatives were weighed there: keeping the Parquet local with `push: false` would have moved the pipeline's first artefact from pulled to locally regenerated, and stripping the PII inside `download` would have made the raw layer stop being a faithful copy of the published file.
 
 ## Raw data
 
-**[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md) as amended by EDN-25.
+**[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), amended by EDN-25 and again by the `download` stage of issue #33.
 The raw AutoScout24 file contains PII (street, zip, exact coordinates, seller company name for private sellers, see [Requirements](requirements.md) NFR-08), which preprocessing removes before anything else is tracked.
-The file is downloaded once from its Zenodo DOI, tracked with `dvc add` and pushed to our remote, so a teammate gets it with `dvc pull` like any other input.
+
+The `download` stage acquires it, so acquisition is part of the pipeline rather than a manual step
+beside it:
+
+| | |
+|---|---|
+| Source | [Zenodo record 17643343](https://zenodo.org/records/17643343), DOI `10.5281/zenodo.17643343`, v1.0.0, file `autoscout24_dataset_20251108.csv`, 548.6 MB |
+| Licence | MIT in the structured field, though the record's own prose reads narrower |
+| Pinned by | `download.md5` in `params.yaml`, `b23a122cc51baf7de39f449193ff0d28`, which is the checksum Zenodo publishes |
+| Kept at | `data/external/autoscout24_dataset_20251108.csv`, a local cache: gitignored, not tracked, not pushed |
+
+The CSV is neither a `dep` nor an `out` of the stage, which is deliberate.
+DVC deletes a stage's outputs before running it, so declaring it as an output would re-download 548 MB on every `dvc repro download`, and declaring it as a dependency would make every `dvc status` hash 548 MB.
+`download.md5` does that job instead: the stage refuses to read bytes that hash to anything else, and because the MD5 is a *parameter*, re-pinning the file is a change DVC sees and reruns on.
+A local copy that no longer matches is reported as such rather than used, so a changed upstream file fails the stage instead of quietly retraining the model.
+
+The cache lives under `data/external/` because that is the third-party slot of the project layout, which leaves `data/raw/` to the pipeline alone.
+Delete the file to force a fresh download; nothing else depends on it being there.
 
 EDN-07 had proposed `dvc import-url` with `push: false`, to keep the raw PII off our own remote.
-EDN-25 replaced that: the course demo teaches `dvc add`, and `dvc import-url` derives its change detection from an `ETag` or `Content-MD5` header that the Zenodo URL does not send, so the mechanism was never verified against this source.
+EDN-25 replaced that with `dvc add` plus a push to our remote, because the course demo teaches `dvc add` and `dvc import-url` derives its change detection from an `ETag` or `Content-MD5` header that the Zenodo URL does not send.
+That second point still holds, and the stage measured it: Zenodo serves this file chunked and sends no `Content-Length` either.
+What changed with #33 is only who acquires the file.
+The stage does, so the `dvc add` pointer is gone and the CSV is no longer on our remote; the Parquet derived from it is, with the same PII columns, which is what EDN-34 weighed.
+The blob the old pointer referenced is left on the remote untouched, so checking out an earlier commit and running `dvc pull` still works.
 
-The exact commands are set by the work on issue #3; this page only records which mechanism applies and why.
-A job that needs only some outputs, like the CI build that bakes the model into the API image (FR-12), pulls them by target (`dvc pull <target>`) and never needs the raw file.
+A job that needs only some outputs, like the CI build that bakes the model into the API image (FR-12), pulls them by target (`dvc pull <target>`) and never needs the raw file at all.
 
 ## Tracking granularity
 
@@ -100,7 +119,7 @@ it truly is one indivisible dataset.
 
 ```bash
 # Good
-dvc add data/raw/autoscout24_dataset_20251108.csv
+dvc add data/external/some_third_party_table.csv
 
 # Avoid
 dvc add data
@@ -124,11 +143,14 @@ The `dvc.yaml` pipeline exists (see [The DVC pipeline](pipeline.md)), so stage o
 automatically by the pipeline, not by a manual `dvc add`.
 In practice that means:
 
-- `data/raw`: the `download` stage owns `data/raw/listings.parquet`. The raw CSV is still tracked
-  manually with `dvc add` (see [Raw data](#raw-data)); that pointer is replaced by the stage once
-  the stage fetches the real file rather than generating a synthetic stand-in.
+- `data/raw`: the `download` stage owns it, output and acquisition both. It writes
+  `data/raw/listings.parquet` and fetches the CSV it derives that from (see
+  [Raw data](#raw-data)), so nothing here is tracked by hand any more.
 - `data/interim`, `data/processed`, `models/`: once a stage declares them as `-o` outputs, don't
   `dvc add` them separately. Let `dvc repro` manage them.
+- `data/external`: not tracked at all today. It holds the `download` stage's local copy of the
+  published CSV, which is reproducible from the DOI and the pinned MD5, so there is nothing for DVC
+  to version.
 
 ## `.gitignore`
 

@@ -203,9 +203,10 @@ The raw file carries a real re-identification risk and is handled accordingly.
 - `seller_company_name`, `city`, `street` and exact `latitude` and `longitude` identify a dealership, or for the 19,802 private listings, a specific location.
 - The free-text `description` may contain seller-inserted contact details.
 
-In this project the raw file is tracked with `dvc add` and pushed to our own DVC remote, so the team pulls one copy of it instead of each member re-downloading it from Zenodo (EDN-25).
-That means we re-host the personal data ourselves, on a remote that is public (EDN-20).
-We record this as an accepted risk rather than a solved problem: the marginal exposure is small, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the same licence, but we are publishers of that personal data in our own right.
+In this project the `download` stage fetches the raw file from the pinned Zenodo DOI, verifies it against the published checksum and converts it to `data/raw/listings.parquet`.
+The CSV itself is a local cache and is not pushed anywhere, but that Parquet is, with the same PII columns, because preprocessing needs them to build the split's group key (EDN-34).
+So we do re-host the personal data ourselves, on a remote that is public (EDN-20), in the derived format rather than the published one.
+We record this as an accepted risk rather than a solved problem: the marginal exposure is small, because the identical data is already publicly downloadable from the pinned Zenodo DOI under the same licence, but we are publishers of that personal data in our own right.
 The PII columns are dropped in preprocessing, so no processed dataset, prediction log, comparable listing or model artefact contains them.
 See [Data versioning](data-versioning.md).
 

@@ -13,9 +13,10 @@ uv run dvc repro          # or: make repro
 uv run dvc metrics show   # or: make metrics
 ```
 
-`dvc repro` needs no credentials and no download while `download.source` in `params.yaml` is `synthetic`.
-That is deliberate: the stage tickets are built in parallel, and each one needs a local oracle it can run without waiting for the 548 MB raw file or for DagsHub access.
-Once the download stage is implemented, the parameter flips to `zenodo` and the pipeline runs on the real snapshot.
+`download.source` in `params.yaml` is `zenodo`, so `dvc repro` runs on the real snapshot: the `download` stage fetches the pinned Zenodo file itself, checks it against `download.md5` and converts it to Parquet.
+The 548 MB CSV is downloaded once into `data/external/` and reused from there, so a rerun of the stage costs a read rather than a download (see [Data versioning](data-versioning.md)).
+Setting `download.source` to `synthetic` swaps the real file for a generated stand-in, which needs neither the download nor DagsHub access.
+Because the source is a parameter, it is recorded in `dvc.lock` and shows up in `dvc params diff`, so a run on synthetic data cannot pass unnoticed.
 
 The tests never run the pipeline through DVC.
 They call the same stage functions in the same order against a synthetic fixture in a temporary directory, so `pytest` stays fast and hermetic:
@@ -122,8 +123,7 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/raw/autoscout24_dataset_20251108.csv.dvc` is still a manual `dvc add` pointer. It is replaced by the `download` stage once that stage fetches the real file, as [Data versioning](data-versioning.md) describes.
 - `data/processed/supported_makes.json` is written by `split` but read by nothing yet, so a change to the supported-make list reruns nothing. The stage that consumes it should declare it as a dependency.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
-- The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases. A NumPy upgrade would therefore change `data/raw/listings.parquet` and invalidate `dvc.lock` for everyone. This disappears when the download stage starts fetching the real file.
-- The stage bodies are stubs. Each module's docstring names the issue that implements it and what that issue still owes.
+- The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases. A NumPy upgrade would therefore change what `download.source: synthetic` generates and invalidate `dvc.lock` for anyone running that way. It does not affect the `zenodo` source, whose output is pinned by an MD5.
+- The stage bodies after `download` are stubs. Each module's docstring names the issue that implements it and what that issue still owes.

@@ -262,20 +262,27 @@ def _params_override(tmp_path: Path, params: dict, **blocks) -> Path:
 
 
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
-
+    # The synthetic source, which is what keeps this suite runnable with no
+    # network and no credentials now that params.yaml pins `zenodo`. The real
+    # source is covered in test_download.py.
     output = tmp_path / "listings.parquet"
-    download_raw_dataset.main(output, _params_override(tmp_path, params, download={"rows": 60}))
+    download_raw_dataset.main(
+        output,
+        _params_override(
+            tmp_path, params, download={"source": download_raw_dataset.SYNTHETIC, "rows": 60}
+        ),
+    )
 
     RAW_SCHEMA.validate(pd.read_parquet(output))
 
 
 def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
-    # `zenodo` is issue #33's. Failing loudly beats silently producing
-    # synthetic data when someone flips the parameter early.
-    with pytest.raises(NotImplementedError, match="zenodo"):
+    # Failing loudly beats silently producing synthetic data when someone
+    # mistypes the parameter or names a source nobody has implemented.
+    with pytest.raises(NotImplementedError, match="kaggle"):
         download_raw_dataset.main(
             tmp_path / "listings.parquet",
-            _params_override(tmp_path, params, download={"source": "zenodo"}),
+            _params_override(tmp_path, params, download={"source": "kaggle"}),
         )
 
 
