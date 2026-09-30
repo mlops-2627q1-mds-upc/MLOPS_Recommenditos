@@ -11,27 +11,32 @@
 % Shown without the https:// prefix so they fit on one line.
 \newcommand{\RepoLink}{\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos}{\nolinkurl{github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos}}}
 \newcommand{\BoardLink}{\href{https://github.com/orgs/mlops-2627q1-mds-upc/projects/1}{\nolinkurl{github.com/orgs/mlops-2627q1-mds-upc/projects/1}}}
-\newcommand{\DiscordLink}{Discord}
-\newcommand{\DagsHubLink}{\tbd{DagsHub repository URL}}
+\newcommand{\DiscordLink}{Discord (team channel, invite on request)}
+\newcommand{\DagsHubLink}{\href{https://dagshub.com/recommenditos/MLOPS_Recommenditos}{\nolinkurl{dagshub.com/recommenditos/MLOPS_Recommenditos}}}
 \newcommand{\SlidesLink}{\tbd{presentation slides URL}}
 \newcommand{\ApiLink}{\tbd{deployed API URL}}
 
-% One address that reaches the whole team (course rule).
-\newcommand{\TeamContact}{\tbd{team e-mail or mailing list}}
+% One address that reaches the whole team (course rule). We have no shared
+% mailing list, so this is the Scrum Master, who forwards to the team.
+\newcommand{\TeamMail}[1]{\href{mailto:#1}{\nolinkurl{#1}}}
+\newcommand{\TeamContact}{\TeamMail{lukas.haeussler@estudiantat.upc.edu} (Product Owner and Scrum Master)}
 
 % Team members, used on the cover page and in the CATME table.
 % Short names are what appears in the CATME table headers.
-\newcommand{\MemberA}{\tbd{Name 1}}
-\newcommand{\MemberB}{\tbd{Name 2}}
-\newcommand{\MemberC}{\tbd{Name 3}}
-\newcommand{\MemberD}{\tbd{Name 4}}
-\newcommand{\MemberE}{\tbd{Name 5}}
+\newcommand{\MemberA}{Lukas}
+\newcommand{\MemberB}{Kevin}
+\newcommand{\MemberC}{Urszula}
+\newcommand{\MemberD}{Michal}
+\newcommand{\MemberE}{Mark}
 
 % Rows for the cover page table: Surname & Name & UPC e-mail & GitHub account.
+% Addresses exactly as recorded in the repository README. The last two are on
+% estudiant.upc.edu while the other three are on estudiantat.upc.edu, so each
+% of the two has to confirm their own address before the submission.
 \newcommand{\TeamMemberRows}{%
-  \tbd{Surname} & \tbd{Name} & \tbd{UPC e-mail} & \texttt{lukas2510} \\
-  \tbd{Surname} & \tbd{Name} & \tbd{UPC e-mail} & \tbd{account} \\
-  \tbd{Surname} & \tbd{Name} & \tbd{UPC e-mail} & \tbd{account} \\
-  \tbd{Surname} & \tbd{Name} & \tbd{UPC e-mail} & \tbd{account} \\
-  \tbd{Surname} & \tbd{Name} & \tbd{UPC e-mail} & \tbd{account} \\
+  H\"au{\ss}ler & Lukas & \TeamMail{lukas.haeussler@estudiantat.upc.edu} & \texttt{lukas2510} \\
+  Adameit & Kevin & \TeamMail{kevin.adameit@estudiantat.upc.edu} & \texttt{kadameit} \\
+  Sawczuk & Urszula & \TeamMail{urszula.wanda.sawczuk@estudiantat.upc.edu} & \texttt{ulasawczuk} \\
+  Dudek & Michal & \TeamMail{michal.feliks.dudek@estudiant.upc.edu} \tbd{Michal confirms this domain} & \texttt{michudud04} \\
+  Atzberger & Mark & \TeamMail{mark.welf.atzberger@estudiant.upc.edu} \tbd{Mark confirms this domain} & \texttt{W11W11W11} \\
 }
