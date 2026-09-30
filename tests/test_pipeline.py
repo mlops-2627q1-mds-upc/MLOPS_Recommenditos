@@ -249,31 +249,36 @@ def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
 
 
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
-
+    # The synthetic source, pinned here rather than inherited from params.yaml,
+    # so that the flip to `zenodo` (#57) does not turn this test into a 548 MB
+    # download. The real source is covered in test_download.py.
     output = tmp_path / "listings.parquet"
-    download_raw_dataset.main(output, params_override(tmp_path, params, download={"rows": 60}))
+    download_raw_dataset.main(
+        output,
+        params_override(
+            tmp_path, params, download={"source": download_raw_dataset.SYNTHETIC, "rows": 60}
+        ),
+    )
 
     RAW_SCHEMA.validate(pd.read_parquet(output))
 
 
 def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
-    # `zenodo` is issue #33's. Failing loudly beats silently producing
-    # synthetic data when someone flips the parameter early.
-    with pytest.raises(NotImplementedError, match="zenodo"):
+    # Failing loudly beats silently producing synthetic data when someone
+    # mistypes the parameter or names a source nobody has implemented.
+    with pytest.raises(NotImplementedError, match="kaggle"):
         download_raw_dataset.main(
             tmp_path / "listings.parquet",
-            params_override(tmp_path, params, download={"source": "zenodo"}),
+            params_override(tmp_path, params, download={"source": "kaggle"}),
         )
 
 
 def test_the_download_source_is_one_the_stage_implements(params):
-    # Not pinned to `synthetic`: issue #33 flips this to `zenodo`, and a
-    # tripwire that turns the suite red would just teach its author to edit a
-    # test. What must hold is that the value names a source the stage knows.
-    assert params["download"]["source"] in {
-        download_raw_dataset.SYNTHETIC,
-        download_raw_dataset.ZENODO,
-    }
+    # Not pinned to `synthetic`: issue #57 flips this to `zenodo` together with
+    # the lock refresh, and a tripwire that turns the suite red would just teach
+    # its author to edit a test. What must hold is that the value names a source
+    # the stage knows, which is what the stage exports `SOURCES` for.
+    assert params["download"]["source"] in download_raw_dataset.SOURCES
 
 
 def test_configure_gx_is_runnable():

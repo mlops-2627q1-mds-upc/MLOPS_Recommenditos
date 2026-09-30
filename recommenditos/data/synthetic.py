@@ -16,8 +16,8 @@ It is used in two places:
 
 - `tests/` build every fixture from it, so a test needs no data access.
 - the `download` stage produces it while `download.source` is `synthetic`,
-  which is what keeps `dvc repro` green before #33 implements the real
-  acquisition.
+  which is what keeps `dvc repro` green, and cheap, without fetching the real
+  file.
 
 The frame is deliberately awkward in the same ways the real file is. Every
 edge case the pipeline rules exist for is guaranteed present whatever the row

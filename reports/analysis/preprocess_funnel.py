@@ -2,8 +2,8 @@
 
 Question: how many listings does each row rule of the `preprocess` stage remove from the
 published AutoScout24 file? The report cites the funnel, and the pipeline itself only ever logs
-it for whatever data it was run on, which is the synthetic fixture until #33 lands the real
-acquisition.
+it for whatever data it was run on, which is the synthetic stand-in while `download.source` is
+`synthetic` (#57 flips it).
 
 It calls the stage's own functions instead of re-implementing any of its steps, so these numbers
 cannot drift from what the pipeline does. The rule order is the one issue #34 fixes and is load-bearing:

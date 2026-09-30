@@ -6,8 +6,8 @@ what makes the exact counts below meaningful rather than brittle: they are 3,
 1, 2 and 1 at 30 rows and at 2,000.
 
 The real snapshot's funnel is measured by `reports/analysis/preprocess_funnel.py`
-and its committed output, because the pipeline itself runs on the fixture until
-issue #33 lands the real acquisition.
+and its committed output, because the pipeline itself runs on the synthetic
+stand-in while `download.source` is `synthetic` (#57 flips it).
 """
 
 import numpy as np
@@ -354,9 +354,9 @@ def test_which_copy_survives_follows_the_content_and_not_the_row_order(raw_frame
     # of a pair survives, so this one asserts the rows themselves. On the real
     # file the copies differ in equipment, colour, previous owners and the seller
     # they group by: reversing the input moved 2,730 of the 105,405 survivors and
-    # shuffling it 1,549, with the row count identical in every case. Once #33
-    # fetches the file instead of generating it, a re-publish, a chunked read or
-    # an upstream sort would do the same.
+    # shuffling it 1,549, with the row count identical in every case. Now that the
+    # stage fetches the published file instead of generating it, a re-publish, a
+    # chunked read or an upstream sort would do the same.
     kept_ids = set(apply_row_rules(raw_frame, params)[0]["id"])
     reordered = {
         "reversed": raw_frame[::-1],
