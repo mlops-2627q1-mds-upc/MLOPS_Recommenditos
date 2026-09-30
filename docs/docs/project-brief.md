@@ -105,7 +105,7 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII. **[decided]** It is tracked with `dvc add` and pushed to our DagsHub remote, which is public (EDN-20), so we accept that the PII columns are re-published there; the identical file is already public on Zenodo (EDN-25, [Data versioning](data-versioning.md)). The PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08.
+  The raw file itself contains this PII. **[decided]** The `download` stage fetches it from the pinned Zenodo DOI and keeps it as a gitignored local cache under `data/external/`, so we do not track or re-publish the CSV (EDN-35, EDN-36, [Data versioning](data-versioning.md)). **[decided]** The Parquet the stage derives from it keeps the same PII columns, because preprocessing needs them to build the split's group key, and it is pushed to our DagsHub remote, which is public (EDN-20), so we accept that those columns are re-published in that format; the identical data is already public on Zenodo (EDN-34). The PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08.
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** about 7 % of descriptions contain the exact listing price (6.85 % measured on 2026-09-29).
@@ -261,9 +261,18 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-22: drop listings registered after the reference date.
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion despite the unreliable flag.
-- EDN-25: raw data acquisition (`dvc add` and push to our DagsHub remote).
+- EDN-25: raw data acquisition (`dvc add` and push to our DagsHub remote), amended by EDN-36.
 - EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison.
 - EDN-27: the requirements and their specification are separate pages, sharing one set of `FR-xx`/`NFR-xx` IDs.
+- EDN-28: one module per DVC stage, deviating from the flat Cookiecutter layout.
+- EDN-29: the drift job runs at a significance level of 0.005, not 0.05.
+- EDN-30: pipeline configuration lives in `params.yaml`, not in `config.py`.
+- EDN-31: the processed-data contract is a hand-written `schema.py`, not Pandera.
+- EDN-32: split proportions 60/10/10/20 and the project seed.
+- EDN-33: a generated synthetic fixture, and a `download.source` parameter so the skeleton runs without the raw file.
+- EDN-34: the derived raw Parquet keeps its PII columns and is pushed like any other stage output.
+- EDN-35: the `download` stage owns `data/raw/`, and the published CSV is a local cache outside the DAG.
+- EDN-36: the `dvc add` pointer of EDN-25 is retired, so we no longer host a copy of the raw CSV.
 
 Made in M1, still to be written up:
 
