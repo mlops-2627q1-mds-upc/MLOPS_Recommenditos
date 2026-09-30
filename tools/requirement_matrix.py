@@ -145,7 +145,7 @@ class Entry:
         says nothing either way: a marker on a **[manual]** entry neither creates
         the drill the cell names nor removes it. So the weaker state satisfies the
         gate exactly when the manual route it sits on is named, and on its own -
-        a **[manual]** cell left empty with a marker slapped on some test - it does
+        a **[manual]** cell left empty with a marker put on some test - it does
         not. Letting the marker alone satisfy the gate would reopen the cheapest
         way to fake coverage there is.
         """
