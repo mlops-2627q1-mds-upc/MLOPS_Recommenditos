@@ -168,10 +168,26 @@ The full framing lives in the [problem specification](problem-spec.md); this sec
 - **Scope.** Used passenger cars that are not pre-registered, which is `offer_type = 'U'`, `vehicle_type = 'Car'` and `is_preregistered = False`, leaving 110,013 of the 118,382 rows (113,708 before the pre-registered filter). Preprocessing additionally drops the listings registered after the snapshot date and keeps only prices between 500 EUR and 2,000,000 EUR.
 - **Excluded as leakage.** `price_net` and `price_vat_rate` are derived from the target. `price_tax_deductible` and `price_negotiable` are seller-side listing options tied to the price rather than properties of the car.
 - **Excluded as identifiers or PII.** `id`, `vin`, `german_hsn_tsn`, `street`, `zip`, `city`, `latitude`, `longitude` and `seller_company_name`. The last is used only in hashed form, as the grouping key for the split.
-- **Splits.** Listings are deduplicated first, and every remaining `ES` listing (8,015 before deduplication) is then held out as a simulated new market for drift monitoring, never reaching training, validation or calibration. The remainder is split into train, validation, calibration and test grouped by seller, so that no seller appears in two splits. A purely random split would leak near-identical listings from the same dealer across splits, and no listing date exists, so a temporal split is not possible.
+- **Splits.** Listings are deduplicated first, and every remaining `ES` listing (8,015 in the raw file, 6,079 after the scope, date, price and deduplication rules) is then held out as a simulated new market for drift monitoring, never reaching training, validation or calibration. The remainder is split into train, validation, calibration and test grouped by seller, so that no seller appears in two splits. A purely random split would leak near-identical listings from the same dealer across splits, and no listing date exists, so a temporal split is not possible.
 - **Proportions and seed.** Pinned in `params.yaml`: 60 % train, 10 % validation, 10 % calibration and 20 % test of the non-`ES` listings, with seed `20251108`.
   The test share is 20 % because SC-04 only checks a segment once it holds 500 test rows, and below about 15 % Volvo and then Suzuki drop under that bar.
-- **Not yet fixed.** The realised split sizes, which follow once the preprocessing rules run on the real snapshot rather than on the synthetic fixture.
+- **Realised split sizes.** 105,405 listings survive preprocessing, of which 6,079 (5.8 %) are the `ES` holdout, leaving 99,326 to split across 28,435 seller groups.
+
+    | Set | Rows | Share of the 99,326 split | Configured |
+    |---|---|---|---|
+    | train | 61,180 | 61.6 % | 60 % |
+    | validation | 8,992 | 9.1 % | 10 % |
+    | calibration | 9,169 | 9.2 % | 10 % |
+    | test | 19,985 | 20.1 % | 20 % |
+
+    The shares only approximate the configured ratios because whole sellers are assigned at a time and the largest dealer alone holds 3,383 listings, 3.4 % of the pool.
+    The stage derives the deviation the group sizes allow and fails rather than writing a set that misses it, so an undersized calibration or test set cannot pass unnoticed.
+
+- **Supported makes.** 11 of the 25 makes reach the 300-listing threshold on the 99,326 split listings, covering 97,889 of them (98.6 %): BMW (34,360), Porsche (22,434), Mercedes-Benz (13,444), Audi (12,115), Alfa Romeo (6,285), Suzuki (3,849), Volvo (3,348), Honda (798), Hyundai (548), Aston Martin (360) and Volkswagen (348).
+  The list is computed by the `split` stage and written as `data/processed/supported_makes.json`, never hard-coded, because the API reads it from the model metadata.
+  The listings of the other makes stay in the split sets: the stage records the scope rather than enforcing it, so the threshold can be revisited without re-running the split.
+- **How these numbers were produced.** By the `split` stage on the real snapshot, with the preprocessing rules of the problem specification applied to it; the `preprocess` stage itself still passes every raw row through, so `dvc repro` reproduces these figures only once that stage implements them.
+  Until then the same run on the unfiltered raw rows gives an 8,015-row holdout and 13 supported makes, because the new, pre-registered and duplicate listings that the rules remove still carry BYD and Ford over the threshold.
 
 ## Dataset Creation
 

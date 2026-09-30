@@ -11,7 +11,7 @@ from tests.conftest import PII_COLUMNS
 
 from recommenditos import config
 from recommenditos.data.preprocess import hash_seller_group
-from recommenditos.data.split_data import SPLIT_NAMES, assign_split
+from recommenditos.data.split_data import SPLIT_NAMES, assign_split, ratio_tolerances
 from recommenditos.data.synthetic import (
     EDGE_CASE_ROWS,
     SNAPSHOT_DATE,
@@ -252,17 +252,19 @@ def test_a_different_seed_moves_sellers_between_sets(raw_frame, params):
 
 def test_the_split_ratios_are_roughly_honoured(raw_frame, params):
     groups = hash_seller_group(raw_frame)
-    assigned = assign_split(groups, params["split"]["ratios"], params["seed"])
+    ratios = params["split"]["ratios"]
+    assigned = assign_split(groups, ratios, params["seed"])
     shares = assigned.value_counts(normalize=True)
+    # The bound comes from the group sizes rather than from a round number.
+    # Whole sellers move at a time, so how far a share can honestly land from
+    # its ratio is a property of the data; `ratio_tolerances` derives it, and
+    # tests/test_split.py checks that it holds across seeds rather than only
+    # for the one params.yaml carries.
+    tolerances = ratio_tolerances(groups.value_counts(), ratios)
 
     for name in SPLIT_NAMES:
-        expected = params["split"]["ratios"][name]
-        # Relative, not absolute: an absolute tolerance of 0.10 against a
-        # ratio of 0.10 would accept an empty validation or calibration set.
-        # Whole sellers move at a time and sellers differ in size, so half the
-        # ratio is wide on purpose; issue #35 tightens it.
         assert shares[name] > 0
-        assert abs(shares[name] - expected) < expected / 2
+        assert abs(shares[name] - ratios[name]) <= tolerances[name]
 
 
 def test_the_split_ratios_in_params_sum_to_one(params):
