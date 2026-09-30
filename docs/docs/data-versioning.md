@@ -71,6 +71,14 @@ Never run them without `--local`: that would write the token into the committed 
 
 The MD5 of the raw file equals the checksum Zenodo publishes, so anyone can verify that our copy is the original.
 
+The `download` stage derives `data/raw/listings.parquet` from it, and that file keeps the same PII
+columns, because preprocessing needs `seller_company_name` and the location to build the split's
+group key before dropping them. It is cached and pushed like any other stage output (**[decided]**,
+EDN-34), so the remote holds the same personal data twice, in two formats. The alternatives were
+weighed there: keeping the Parquet local with `push: false` would have moved the pipeline's first
+artefact from pulled to locally regenerated, and stripping the PII inside `download` would have made
+the raw layer stop being a faithful copy of the published file.
+
 ## Raw data
 
 **[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md) as amended by EDN-25.

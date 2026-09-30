@@ -925,6 +925,38 @@ How to add an entry:
 - **In LaTeX:** no
 
 
+### EDN-34: The derived raw Parquet keeps its PII columns and is pushed like any other stage output
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Personal Data
+- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Decision:** `data/raw/listings.parquet`, the output of the `download` stage, keeps the seven PII columns of the published file and is cached and pushed to the DagsHub remote like any other stage output. No `push: false`, and no PII removal before preprocessing. Our public remote therefore holds the same personal data twice, once as the CSV of EDN-25 and once as this Parquet.
+- **Alternatives considered:**
+  - **Option A (chosen): push it, which is DVC's default for a stage output.**
+    Pros: nothing to build. The marginal exposure is close to nothing, because the identical data already sits on the same public remote as a CSV (EDN-25) and on Zenodo under the same licence, so anyone who wants those columns already has them. `dvc pull` stays sufficient for a complete working state, and the pipeline's first artefact is byte-identical for everyone because it is pulled rather than regenerated.
+    Cons: we hold a second artefact containing the same personal data under our own name. A deletion request, a licence question or a scope change then touches two artefacts instead of one. EDN-25's argument was that *the identical file* is already public, and a format we produced ourselves is not literally that file.
+  - **Option B: `push: false` on the output.** DVC keeps it in the local cache only and each person regenerates it from the CSV.
+    Pros: no second copy leaves the machine.
+    Cons: it moves the pipeline's first artefact from pulled to locally produced. Parquet writing is not guaranteed byte-stable across pyarrow versions, so a teammate on a different version would see every downstream stage rerun, which is exactly the reproducibility property NFR-06 asks for and that the skeleton was just measured to have.
+  - **Option C: drop the PII in `download` and build `seller_group_id` there.**
+    Pros: the Parquet every stage reads would carry no PII at all, so NFR-08 would hold from the first derived artefact rather than from the interim frame, and the file would still be pushed, so reproducibility would be unaffected.
+    Cons: the raw layer stops being a faithful copy of the published file, which is what `RAW_SCHEMA` and the raw expectation suite of #25 exist to describe; and the group-key hashing moves out of #34's first step into #33, so a ticket boundary shifts for a gain that does not change what is publicly reachable.
+  - **Option D: no Parquet at all, every stage reads the CSV.**
+    Cons: each run parses 548.6 MB of CSV and re-infers its dtypes, which is the cost the stage exists to remove.
+- **Rationale:** The question is marginal exposure, not storage: measured on the real file the CSV is 548.6 MB, the Parquet of all 75 columns is 215.3 MB, and the seven PII columns are 3.1 MB of it. Against a copy of the same data that is already public on our own remote and on Zenodo, none of the alternatives changes what a reader can reach; they only change what we have to build and what we risk. B risks the reproducibility we have just demonstrated, and C buys the same nothing in exposure terms while making the raw layer no longer raw. So the honest reading is that A costs the least and hides the least.
+
+  What A does cost is recorded rather than argued away: we become the publisher of that personal data in two artefacts instead of one, and EDN-25's "the identical file is already public" does not literally cover a format we produced ourselves. The entry exists so that a later decision to restrict the remote, or a request to remove the data, finds both artefacts named in one place.
+
+  NFR-08 is unaffected either way. It forbids PII in the processed data, the prediction log, the comparables and the model artefacts; the raw layer is none of those, and preprocessing removes the columns structurally, because `Schema.conform` selects only the columns the interim contract names.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI found the question in the first place, while reviewing the pipeline skeleton: the `download` stage's output had inherited EDN-25's acceptance without anyone noticing that EDN-25 had only ever weighed the CSV. Its first write-up estimated the Parquet at "roughly another 550 MB"; asked to explain the trade-off, it measured instead and reported 215.3 MB, of which the PII columns are 3.1 MB, which moved the argument off storage entirely. It also found, while explaining, a reproducibility flaw in its own earlier suggestion of `push: false` and withdrew it. It recommended C as the clean option and A as defensible; Lukas chose A as the cheapest of the two it stood behind. The modification is that the cost of A is written down here rather than treated as settled by EDN-25.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 and 2026-09-30: the question was raised in the review of PR #48, the sizes were measured against the Zenodo file, and the four options were laid out with the reproducibility catch in B; Lukas replied "mache die einfachste variante die du recommendest".
+- **Other evidence:** [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48).
+- **In LaTeX:** no
+
+
 ## Template
 
 ```markdown

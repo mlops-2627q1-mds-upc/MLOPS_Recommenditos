@@ -65,6 +65,10 @@ write_frame(frame, out, INTERIM_SCHEMA)  # conforms before writing
 `conform` selects the contract's columns in its order and casts them.
 Because it selects, a column the contract does not name cannot reach an artefact: the PII columns [NFR-08](specification.md) forbids are kept out structurally, not by every stage remembering to drop them.
 
+That guarantee starts at the interim frame, not before it.
+The raw layer deliberately keeps the published file's PII columns, because preprocessing hashes `seller_company_name` and the location into the split's group key before dropping them, and it is pushed to the remote like any other stage output (EDN-34).
+Our remote therefore holds the same personal data twice, as the CSV and as the Parquet derived from it.
+
 Both halves exist because Parquet preserves whatever dtype it is handed rather than normalising it.
 Without an explicit cast at each boundary the frames drift apart stage by stage, and the stage that notices is never the stage that caused it.
 
@@ -118,7 +122,7 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/raw/autoscout24_dataset_20251108.csv.dvc` is still a manual `dvc add` pointer. It is replaced by the `download` stage once that stage fetches the real file, as [Data versioning](data-versioning.md) describes. That stage will then also produce a Parquet copy of the raw data, PII included, on the DVC remote - a second copy of what EDN-25 accepted one of, and worth deciding on deliberately rather than by default.
+- `data/raw/autoscout24_dataset_20251108.csv.dvc` is still a manual `dvc add` pointer. It is replaced by the `download` stage once that stage fetches the real file, as [Data versioning](data-versioning.md) describes.
 - `data/processed/supported_makes.json` is written by `split` but read by nothing yet, so a change to the supported-make list reruns nothing. The stage that consumes it should declare it as a dependency.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases. A NumPy upgrade would therefore change `data/raw/listings.parquet` and invalidate `dvc.lock` for everyone. This disappears when the download stage starts fetching the real file.
