@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
 import yaml
 
 from recommenditos.config import METRICS_FILE, PARAMS_FILE, REPORTS_DIR
@@ -54,6 +55,33 @@ def _repo_artefacts_stay_untouched():
 
 def _fingerprint(path: Path) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+@pytest.fixture(autouse=True)
+def _req_marker_names_a_real_requirement(request):
+    """Fail a test whose `req` marker names an ID the requirements do not define.
+
+    A typo in a marker is invisible otherwise: the test passes, while the matrix
+    of NFR-07 counts the requirement as verified by nothing, so the coverage is
+    lost exactly where the evidence is supposed to come from.
+
+    The check sits on the test rather than on collection so that one typo fails
+    one test instead of the whole suite, and so the failure names the ID it
+    could not find. The matrix job in CI is the second net: it reads every
+    marker, including the ones on tests that never run.
+    """
+    markers = list(request.node.iter_markers(name=MARKER))
+    for marker in markers:
+        if not marker.args:
+            pytest.fail(f"@pytest.mark.{MARKER} needs at least one requirement ID")
+
+    named = tuple(str(argument) for marker in markers for argument in marker.args)
+    unknown = unknown_marker_ids(named)
+    if unknown:
+        pytest.fail(
+            f"the {MARKER} marker names {', '.join(unknown)}, which "
+            f"{REQUIREMENTS_DOC.name} does not define"
+        )
 
 
 @pytest.fixture(scope="session")

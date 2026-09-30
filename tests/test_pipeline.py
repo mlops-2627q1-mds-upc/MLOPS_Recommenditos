@@ -105,8 +105,12 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.req("NFR-06")
 def test_the_pipeline_runs_end_to_end_without_data_or_credentials(pipeline):
+    # No `req("NFR-06")` marker: NFR-06 is about `dvc repro` on a clean clone
+    # reproducing the same splits and metrics within a tolerance, and about every
+    # MLflow run recording its commit, data version and parameters. This asserts
+    # that two files exist. Its evidence is the manual re-run before each delivery
+    # that the specification names.
     assert pipeline["interim"].exists()
     assert pipeline["summary"].exists()
 
@@ -177,8 +181,10 @@ def test_a_model_is_written_for_every_variant(pipeline, params):
         assert model["feature_set"] == params["train"]["variants"][variant]["feature_set"]
 
 
-@pytest.mark.req("NFR-01")
 def test_the_gate_reports_every_success_criterion(pipeline, params):
+    # No `req("NFR-01")` marker: this asserts the shape of the metrics record, not
+    # the rule NFR-01 states, which is that a model missing a criterion is not
+    # released. The two tests below and the null-is-not-a-pass test carry that.
     for variant in params["train"]["variants"]:
         record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
         for criterion in evaluate.CRITERIA:
@@ -221,7 +227,12 @@ def test_the_gate_discriminates_rather_than_rejecting_everything(params):
     )
 
 
+@pytest.mark.req("NFR-01")
 def test_an_unmeasured_criterion_is_null_rather_than_a_pass(pipeline):
+    # NFR-01 is "only a model meeting every SC-01 to SC-06 is released", and SC-04
+    # to SC-06 have no thresholds until issue #39 lands. This is the test that
+    # keeps the word "every" honest in the meantime: an unmeasured criterion is
+    # never recorded as met, so it can never be the reason a model is released.
     record = json.loads((pipeline["metrics_dir"] / "b0.json").read_text())
     for criterion in ("sc04", "sc05", "sc06"):
         assert record[f"{criterion}_passed"] is None

@@ -1058,7 +1058,6 @@ How to add an entry:
 - **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the deleted pointer `data/raw/autoscout24_dataset_20251108.csv.dvc`; [Data versioning](../docs/docs/data-versioning.md), "Raw data" and "Never run `dvc gc` without `--all-commits`"; EDN-07, EDN-20, EDN-25, EDN-34, EDN-35.
 - **In LaTeX:** no
 
-
 ### EDN-37: The seller group key stays an unsalted hash, and the residual risk is disclosed
 
 - **Date:** 2026-09-30
@@ -1096,6 +1095,63 @@ How to add an entry:
 - **Assessment of the AI contribution:** The claim had been escalating rather than weakening: `preprocess.py` said "the hash is one-way", `schema.py` said "never reversible to the name", and the description of PR #56 called the rule airtight, none of which anybody had tested. An adversarial review of that PR built the dictionary from the published file and reported the two counts above, together with the timing and the observation that the truncation is irrelevant to a dictionary attack. It laid out the three options with the reproducibility cost of a pepper and the artefact-boundary cost of dropping the column, and recommended keeping the hash and correcting the claims. Lukas accepted that, and the reasoning that settled it is his: the split must stay reproducible without secrets, and the dealer identity is already recoverable by joining on the columns we publish, so the hash is a grouping key and nothing more.
 - **AI interaction evidence:** Claude Code session on 2026-09-30, reviewing PR #56 against the real snapshot: AI was asked to attack the stage's own claims, measured the inversion of all 30,717 group ids, reported that the one-wayness claim was false, and presented keeping the hash, peppering it and dropping the column as the three options; Lukas decided to keep the unsalted hash and to state the residual risk instead.
 - **Other evidence:** [`recommenditos/data/preprocess.py`](../recommenditos/data/preprocess.py) (`hash_seller_group`); [`recommenditos/schema.py`](../recommenditos/schema.py) (`seller_group_id`); [dataset card](../docs/docs/dataset-card.md); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #34](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/34); [PR #56](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/56).
+- **In LaTeX:** no
+
+
+### EDN-44: The traceability gate is milestone-scoped, and its expected-coverage set is a validated YAML file
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Testing Strategy, CI/CD
+- **Participants:** Lukas
+- **Decision:** NFR-07's requirement-to-test matrix is gated per milestone rather than over the whole table, and which requirement owes evidence when lives in `tools/expected_coverage.yaml`, a schema-validated file the generator checks, rather than in a `Due` column of the specification's tables. Milestone names are validated against M1 to M6 and the enforced set is read off that known order, never off the order the file lists them in.
+- **Alternatives considered:**
+  - **Option A (chosen): a small validated YAML file, gate enforced per milestone up to `current`.**
+    Pros: the due date of a requirement is a parameter of a CI gate, not a statement about the system, so it does not belong in a requirement document; the generator can enforce a strict schema (every documented requirement booked exactly once, no unknown ID, no unknown or out-of-order milestone) where a table cell cannot be checked at all; bumping `current` is a one-line, dated, reviewable diff; the file carries the reasoning per milestone in comments.
+    Cons: a second place to look; the gate is only as honest as the bookings, so a requirement can be deferred by moving one line, which is why the M3 membership and the verification route of every already-due requirement are pinned by a test.
+  - **Option B: a `Due` column in the specification's tables.**
+    Pros: everything in one document, visible next to the requirement it belongs to.
+    Cons: mixes a CI parameter into a document that is supposed to describe the system; `current` would still have needed a home in prose; the specification's tables are already the widest thing in the docs; nothing can validate a table cell, so a typo or a missing cell would be invisible.
+  - **Option C: no completeness gate at all, matrix published for a human to read.**
+    Pros: never a red build nobody can fix; zero maintenance.
+    Cons: leaves NFR-07's promise to a review that nothing reminds anyone to do, which is the state that let the matrix go unimplemented until this PR.
+  - **Option D: enforce completeness over the whole table from the start.**
+    Pros: no bookkeeping, no bookings to argue about.
+    Cons: before M4 there is no API, so fourteen of the sixteen functional requirements cannot have a test; the build would be red from the first commit until M6, and a gate that is always red stops being read.
+- **Rationale:** A gate is only useful if someone acts on it, which rules out D, and only trustworthy if something enforces it, which rules out C. Between A and B, the deciding argument is that the generator can refuse a malformed expected-coverage set and cannot refuse a malformed table cell: the file makes the gate tighten by itself, because a requirement added to the documents fails the build until someone decides when its evidence is due. The decision rests on two specification amendments, both recorded in this PR: NFR-07 said CI "does not enforce completeness" and now describes this gate, and the "Verified by" legend claimed **[automated]** means a test already carries the marker, which was false for fourteen of sixteen functional entries and is now described as the route to the evidence with the due date pointing at `tools/expected_coverage.yaml`. Neither amendment changes what the system must do; both make the documents describe what CI actually does. An adversarial review of the first implementation found three ways to drop a requirement out of the gate with a one-line edit, one of which - appending an out-of-order milestone block, because the enforced set was positional in the file - was not a reviewable statement at all; validating the names against M1 to M6 and reading the order off that closes it, and the other two are now pinned by a test so the argument for loosening the gate has to be written down.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI laid out A to D with the trade-offs and recommended A, and implemented it. An adversarial AI review of that implementation then found, by execution rather than by reading, that the gate could be loosened three ways without a reviewable statement, and that the enforced set was positional in the YAML. That finding is the modification: the validated milestone order and the tests that pin the gate's parameters were not in the first design and are the reason the decision is defensible as written.
+- **AI interaction evidence:** Claude Code sessions on 2026-09-30: the options were laid out and A implemented for issue #40; a second, adversarial review session reproduced each loosening route by running the generator against a modified file and reported the exit codes, and the fixes were then verified the same way.
+- **Other evidence:** [issue #40](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/40); [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `tools/expected_coverage.yaml`; `DUE_AT_M3` in `tests/test_requirement_matrix.py`.
+- **In LaTeX:** no
+
+### EDN-45: A `req` marker is verification only where the specification says a test is the evidence
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Testing Strategy
+- **Participants:** Lukas
+- **Decision:** The matrix reports four statuses, not two, and the specification's "Verified by" tag decides which one a `req` marker earns: a marker on an **[automated]** entry is *verified by a test*, a marker on a **[manual]** entry is *named by a test* and does not stand in for the drill its cell names. A marker on a **[manual]** entry whose cell names nothing does not satisfy the gate.
+- **Alternatives considered:**
+  - **Option A (chosen): the specification's tag decides, and "named by a test" is a status of its own.**
+    Pros: a fully checkable rule, no judgement in the tool; catches the real failure the review found, where NFR-06's determinism and MLflow provenance were reported as covered by a test whose whole body asserts that two files exist; closes the cheapest way to fake coverage, which was to tag an entry **[manual]**, leave its cell empty and put a marker on any test; makes the matrix state plainly that no status means a person agreed the evidence is enough.
+    Cons: one more concept for a reader; a marker on a **[manual]** entry with named evidence still satisfies the gate, so the distinction changes the report and not the build in that case.
+  - **Option B: keep one `covered` status, fix only the two wrong markers.**
+    Pros: smallest diff; the two specific lies are gone.
+    Cons: the mechanism that produced them stays, so the next marker on a **[manual]** entry reports as verified again; and the matrix keeps asserting something a tool cannot know.
+  - **Option C: require the specification cell to name the test, and count a marker only when the named test exists.**
+    Pros: the strongest claim of the three, and would also catch a marker on the wrong test.
+    Cons: most cells name a category and not a test ("API test"), so it would need every cell rewritten before the API exists; "does this cell name a test" is a judgement a parser cannot make without a heuristic, and a heuristic in the middle of the traceability evidence is worse than a coarser rule that is exact.
+  - **Option D: drop the automated/manual distinction from the gate and treat any marker as a claim needing human sign-off.**
+    Pros: honest about the tool's limits.
+    Cons: gives up the one thing the tool can check, and turns the gate back into a reminder.
+- **Rationale:** The matrix is what the report cites for NFR-07, so its worst failure mode is reporting a requirement as verified when nothing verified it, and that is exactly what happened: NFR-06 and NFR-01 were both green while their evidence was partly or wholly absent. A tool cannot read a test body and judge whether it verifies a criterion, so the honest move is to let the document that already says which evidence counts decide, and to say out loud in the generated table that a status is about the route being walked and not about a person agreeing it is enough. C would claim more than the documents can back today; B leaves the mechanism in place. The same reasoning is why the human review stays in NFR-07 rather than being replaced by this gate: NFR-01 still reads *verified by a test* while two of its six success criteria have no thresholds, and only a person reading the table can notice that.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** An adversarial AI review found the flaw and proved it by execution, naming the test whose body asserts that two files exist and the covering test whose own comment says four of the six criteria are still null. A second AI session generated A to D, recommended A over C on the grounds that C needs a heuristic, and implemented it. The modification is in the markers rather than the tool: AI's first instinct was to strip NFR-01's markers so the requirement reads as uncovered, which would have thrown away real evidence and turned the M3 gate red with nothing to fix; instead the marker moved onto the test that keeps SC-04 to SC-06 from ever counting as met, and the residual over-claim is stated in the pull request rather than hidden.
+- **AI interaction evidence:** Claude Code adversarial review of PR #51 on 2026-09-30, which reproduced the finding by running the generator and reading the covering tests; the follow-up session laid out A to D and verified each fix by re-running the reproduction.
+- **Other evidence:** [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `Entry.status` and `Entry.has_the_promised_evidence` in `tools/requirement_matrix.py`; the status table in `CONTRIBUTING.md`; [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) for the SC-04 to SC-06 thresholds.
 - **In LaTeX:** no
 
 
