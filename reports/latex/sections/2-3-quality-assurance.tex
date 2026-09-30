@@ -1,9 +1,16 @@
+% Milestone 3: energy efficiency, static analysis, model testing, data testing.
+% Owner: @michudud04. Everything below is a draft assembled from the
+% repository's own evidence so that its owner has a starting point, not finished
+% text. The \tbd right after the heading says so in the PDF as well, and `make
+% report-submit` counts it, so the draft cannot reach a submission unnoticed.
 \subsection{Milestone 3: Model Building -- Quality Assurance}
 \label{sec:m3}
 \guidance{
   \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
   The testing strategy for code, data and model is a typical M3 EDN entry.
 }
+
+\tbd{DRAFT, owner \texttt{@michudud04}. Every paragraph of this subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words. Energy (issue \#38), the expectation suites (issue \#25) and the model tests per success criterion (issues \#37, \#39) are not merged yet, so those parts are design plus placeholders.}
 
 \subsubsection{Energy efficiency awareness}
 \label{sec:m3-energy}
@@ -14,7 +21,27 @@
   Go beyond reporting a number: compare models or configurations by energy versus accuracy.
 }
 
-\tbd{energy measurements and what we concluded from them}
+Energy is a requirement rather than a report item.
+NFR-10 asks for three things: every training run records its emissions, training the chosen configuration takes at most 15 minutes on a laptop CPU without a hyperparameter search, and serving is reported as an average energy cost per answer.
+Training is measured with CodeCarbon around the fit call and logged to the same MLflow run as the accuracy of that run, so the two are always read together.
+
+Two decisions about how to measure are ours rather than the demo's.
+
+\emph{The ladder is compared on energy, not only on error.}
+Because the four variants of the experiment ladder differ in exactly one dimension at a time, the emissions figures answer a question the accuracy figures cannot: whether a rung earned its cost.
+The extended feature set is the case this was built for.
+It adds the four equipment lists as multi-hot columns, the history flags, four appearance columns and eight further technical columns, so it is strictly more expensive to build and to train than the basic set, and NFR-10's 15-minute budget is what it has to fit inside.
+If it buys no accuracy, it is dropped, and the decision rests on a measurement of both axes rather than on the accuracy alone.
+
+\emph{Serving energy is reported per answer and not per request.}
+CodeCarbon's sampling granularity does not match single-digit-millisecond events, and a per-request tracker would eat into NFR-02's 200\,ms latency budget, so the serving figure is derived as an average over the NFR-03 load test instead of measured per call.
+That is a deliberate loss of resolution, and it is written into the model card so that nobody reads the figure as something it is not.
+The same reasoning already constrains the design elsewhere: the serving image carries no GPU or deep-learning dependency, \texttt{shap} is kept out of it because importing the module alone pulls in 189\,MB of \texttt{numba} and \texttt{llvmlite} (EDN-11), and multilingual text embeddings were left off the experiment ladder because they conflict with a CPU-only image.
+
+The figures themselves do not exist yet:
+\tbd{emissions and energy per training run for \texttt{b0}, \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, from CodeCarbon through MLflow (issue \#38)}
+\tbd{the energy-versus-error comparison across the ladder, and what it decided about the extended feature set}
+\tbd{the training time of the chosen configuration against NFR-10's 15-minute budget, and the average energy per answer from the NFR-03 load test}
 
 \subsubsection{Static code analysis}
 \label{sec:m3-static-analysis}
@@ -25,7 +52,21 @@
   We run ruff through pre-commit and CI; the demo additionally enables Pylint rules in ruff (\texttt{PL}), which our config does not yet.
 }
 
-\tbd{static analysis tools, configuration and findings}
+Static analysis is ruff, as both linter and formatter, with the rule set \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import sorting and the Pylint-derived rules that cover the rubric's \enquote{Pylint or flake8}.
+The line length is 99, first-party imports are declared so that import order is deterministic, and the whole configuration lives in \texttt{pyproject.toml} rather than in a separate file per tool.
+On the commit this report was built from, \texttt{ruff format --check} reports 49 files already formatted and \texttt{ruff check} reports no findings.
+
+The property we cared about is that the three places it runs cannot disagree: a pre-commit hook locally, the same pre-commit configuration in CI, and \texttt{make lint} over the same files, so a green \texttt{make lint} means a green CI lint job rather than a different opinion.
+That is also why the configuration deliberately has no \texttt{include} key, which ruff does not apply to paths passed explicitly, as pre-commit does, and which would therefore make a local \texttt{ruff check} blind to files CI still lints.
+
+Two exclusions exist and both are justified in the configuration itself rather than left for a reader to wonder about.
+\texttt{reports/analysis/} is excluded because those scripts are the evidence behind EDN entries and are kept exactly as they were run; reformatting them would change what an entry points at.
+\texttt{PLR2004}, the magic-value rule, is ignored under \texttt{tests/} because asserting against a literal expected value is what an assertion is, while the rule earns its place in \texttt{recommenditos/}, where a bare threshold should get a name.
+
+Notebook quality is the gap.
+Pynblint is the tool the lab lists for it, it cannot be a project dependency because it pins \texttt{typer<0.13} and \texttt{ipython<9} against our own versions, and it therefore has to run isolated through \texttt{uvx}.
+It is not in CI yet, and \texttt{notebooks/} currently holds no notebook, so there is nothing for it to find today; wiring it in is issue \#41.
+\tbd{the Pynblint setup and its findings on the notebooks that exist by the delivery (issue \#41)}
 
 \subsubsection{Model testing}
 \label{sec:m3-model-testing}
@@ -36,7 +77,31 @@
   Optional extension listed by the demo repo: non-functional requirements (explainability with SHAP, fairness with AIF360, trustworthiness with TrustML).
 }
 
-\tbd{model tests and coverage}
+The suite is Pytest with coverage measured on every run.
+On the commit this report was built from it is 87 tests, green, in about 8 seconds, at 94\,\% statement and branch coverage of \texttt{recommenditos/}.
+Coverage measures branches rather than only statements, so a half-tested conditional does not count as covered, and nothing is excluded from measurement except the \texttt{if \_\_name\_\_ == "\_\_main\_\_"} entry points, which Pytest never executes.
+Two modules sit at 0\,\%, \texttt{plots.py} and \texttt{modeling/predict.py}, and both are Cookiecutter template stubs that nothing imports yet; they are counted rather than excluded, so the number does not flatter itself.
+There is deliberately no \texttt{--cov-fail-under}: NFR-07 asks for 80\,\% on a delivery commit, which is when the number is read and acted on, and a per-pull-request gate would block merges while the suite is still being built.
+
+Three things go beyond asserting a threshold.
+
+\emph{Tests carry the requirement they verify.}
+A test declares its requirements with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req("NFR-08")}, and the marker is what CI turns into a requirement-to-test matrix, so traceability is generated from the tests rather than maintained as a table that goes stale (NFR-07).
+Three requirements carry markers today, NFR-01, NFR-06 and NFR-08, across six tests, and the rest of the matrix arrives with issue \#40.
+
+\emph{The suite never runs the pipeline through DVC.}
+It calls the same stage functions in the same order against the generated synthetic fixture in a temporary directory, so it is hermetic and needs no credentials, no 548.6\,MB download and no network (EDN-33).
+Every edge case the pipeline rules exist for is guaranteed present in that fixture whatever the row count, so a test asserts against it rather than hoping the data contains it: a listing registered after the snapshot, a duplicate on the deduplication key, a Spanish listing, a make far below the support threshold, prices outside the training range at both ends, a new car, a pre-registered car, a transporter, a missing registration date, a private seller, and a used car whose flag says otherwise.
+The fixture also keeps the real make skew and gives each seller several listings, because a seller-grouped split on a flat distribution would be indistinguishable from a random one.
+
+\emph{One test exists because a test was wrong.}
+The fixture's first implementation built each edge-case row as a copy of one body row, which made most of them duplicates of it on the deduplication key and gave them all that row's country, so preprocessing would have deleted several of the cases the fixture exists to provide and diverted the rest into the Spanish holdout.
+The first round of tests could not see it, because they asserted that each case was present in the raw frame, which was true.
+The fix carries a test that asserts each case \emph{survives} the preprocessing rules instead, and the lesson, that a check has to sit where the value is consumed, is now in the working agreements.
+The same reasoning produced a second pair of tests around the quality gate: one asserts that the stub model does not pass it, and a second asserts that the gate still discriminates, because a gate that says no to everything would satisfy the first test.
+
+The model tests proper follow the train and evaluate stages: the six success criteria asserted per candidate model, invariance tests under small input perturbations, and the training-time check that the booster's own SHAP export matches \texttt{shap.TreeExplainer} exactly, which is what makes it safe to keep \texttt{shap} out of the serving image (EDN-11).
+\tbd{the model tests asserting SC-01 to SC-06, the invariance tests, and the test count and coverage on the delivery commit (issues \#37 and \#39)}
 
 \subsubsection{Data testing}
 \label{sec:m3-data-testing}
@@ -46,4 +111,21 @@
   The demo validates raw and clean data with Great Expectations as a DVC stage and publishes Data Docs.
 }
 
-\tbd{data validation strategy and expectations}
+Data validation is split into two layers on purpose, because structure and value answer different questions (EDN-31).
+A structural break is a bug in our code and must fail the stage that caused it; a value break is a change in the data and belongs in an expectation suite with a tolerance.
+
+The structural layer is \texttt{recommenditos/schema.py}: three frozen contracts fixing the column names, dtypes and nullability of the raw, interim and processed frames, with a \texttt{validate} that reports every problem at once with the offending row positions, and a \texttt{conform} that selects and casts before each write.
+It is hand-written rather than taken from a validation library, and that was decided on measurements rather than on documentation: a Parquet round trip silently turns an \texttt{object} string column into \texttt{str}, so a contract declaring \texttt{object} passes upstream and fails downstream, and Pandera does not check the datetime unit at all, so a \texttt{datetime64[ns]} declaration there would be documentation rather than a guarantee.
+It also stays out of the API image, which NFR-04 caps at 1\,GB and which already carries Pydantic for its own request schemas.
+Because \texttt{conform} selects only the contract's columns, the seven personal-data columns NFR-08 forbids cannot reach a processed artefact even if a stage forgets to drop them, and two tests assert that they do not.
+
+The value layer is Great Expectations, run as its own DVC stage over both the raw and the cleaned frame, with its bounds in \texttt{params.yaml} rather than in the suite code: mileage between 0 and 1,000,000\,km, and \texttt{registration\_date} at or before the reference date with a 0.99 tolerance on the raw frame and as a hard rule on the cleaned one, because preprocessing has dropped those rows by then (EDN-22).
+The tolerance is the point: a future scrape carrying many such rows is flagged rather than silently cleaned.
+The expectations are written against the issues the dataset card found, so each anticipates a specific known failure rather than a generic one: prices from 1\,EUR and mileage to 2,570,000\,km need range checks, four columns are entirely empty, and 15 rows carry no seller or location data at all.
+
+How the stage is wired differs from the demo's in the two ways \cref{sec:m2-data-versioning} describes, and both matter more than the tool choice: a failed expectation fails the pipeline instead of only being logged, and the uncached summary the stage writes is a dependency of \texttt{split}, so the gate is a node in the graph and its result is visible in the diff of any pull request that changes the data.
+The gap we have not closed is that \texttt{configure\_gx} still declares no outputs, which leaves it a disconnected node that DVC does not guarantee to run first; the demo has the same wart and \texttt{docs/docs/pipeline.md} names it as the fix owed by the Great Expectations ticket.
+
+The suites themselves are issue \#25 and not merged yet:
+\tbd{the expectation suites for the raw and cleaned frames, their expectation counts, and the first run's result from \texttt{reports/data-validation/summary.json} (issue \#25)}
+\tbd{the Great Expectations Data Docs, published or kept local}

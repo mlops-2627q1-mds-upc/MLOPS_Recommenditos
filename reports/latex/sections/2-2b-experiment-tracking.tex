@@ -2,6 +2,10 @@
 % so it appears as subsection 2.2's last sub-subsection.
 % Owner: @ulasawczuk. Split out of 2-2-reproducibility.tex so that the two
 % people writing about Milestone 2 each own one file and never conflict.
+% Everything below is a draft assembled from the repository's own evidence so
+% that its owner has a starting point, not finished text. The \tbd right after
+% the heading says so in the PDF as well, and `make report-submit` counts it,
+% so the draft cannot reach a submission unnoticed.
 
 \subsubsection{Experiment tracking}
 \label{sec:m2-experiment-tracking}
@@ -13,4 +17,33 @@
   Our own starting points: one experiment \texttt{recommenditos-price} (\texttt{train.mlflow\_experiment} in \texttt{params.yaml}), one run per variant of the experiment ladder (\texttt{b0}, \texttt{b1}, \texttt{lgbm-basic}, \texttt{lgbm-extended}), and the DagsHub repository of EDN-19 as tracking server.
 }
 
-\tbd{experiment tracking setup and results}
+\tbd{DRAFT, owner \texttt{@ulasawczuk}. This sub-subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words. The tracking code is issue \#37 and is not merged yet, so everything here except the design is still to be measured; the placeholders name each missing piece.}
+
+Experiments are tracked in MLflow with the team's DagsHub repository as the shared tracking server (EDN-19), which is also the DVC remote, so a run and the data version it was trained on live in the same place.
+Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reached from a developer machine only: nothing in the serving path depends on MLflow being up (EDN-08).
+
+There is exactly one experiment, \texttt{recommenditos-price}, and one run per rung of the experiment ladder.
+Both are configuration rather than code: \texttt{params.yaml} holds the experiment name as \texttt{train.\allowbreak mlflow\_experiment}, and the four variants as a \texttt{train.\allowbreak variants} mapping that \texttt{dvc.yaml} iterates with \texttt{foreach}.
+The ladder is B0, the median price per make, model and two-year age bucket, which is the baseline SC-03 measures against; B1, a Ridge regression on $\log(\mathrm{price})$ as an interpretable depreciation baseline; \texttt{lgbm-basic}, the main model on the basic feature set; and \texttt{lgbm-extended}, the same model on the extended set, whose only purpose is to measure what equipment, history flags and appearance columns are worth.
+Adding a rung is therefore a change to \texttt{params.yaml}, and \texttt{dvc params diff} says what changed between two commits.
+
+Three properties are meant to make the runs comparable and extensible rather than merely recorded, and they follow from decisions taken elsewhere in the project.
+
+\emph{A run is reproducible from the repository, not only from what it logged.}
+Each variant is its own DVC stage, \texttt{train@b0} to \texttt{train@lgbm-extended}, so \texttt{dvc.lock} pins the code, the input data and the exact parameter subset behind every run.
+Reproducing a run is \texttt{dvc repro train@<variant>} on the commit it belongs to, and the MLflow entry is the human-readable record of it rather than the only record.
+The demo declares neither \texttt{params} nor \texttt{metrics} on any stage and keeps its hyperparameters as Python constants, so a changed hyperparameter there reruns nothing (EDN-30).
+
+\emph{The comparison is a committed artefact, not only a server view.}
+The \texttt{evaluate} stage writes one JSON record per variant under \texttt{reports/metrics/} and a \texttt{metrics.json} summary, both uncached and therefore tracked by Git, so the comparison between variants is reviewable in a pull request and readable without an account on the tracking server.
+That is what lets the same numbers back the report, the model card and the promotion decision, which EDN-12 keeps in human hands.
+
+\emph{Energy sits next to accuracy in the same run.}
+Every training run logs its CodeCarbon measurement alongside its metrics (NFR-10), so the ladder answers whether a rung earned its energy and not only whether it was more accurate; that comparison is the subject of \cref{sec:m3-energy}.
+
+What is logged per run is the parameter subset the stage declares, the metrics of the problem specification (MdAPE as the primary metric, the shares within $\pm$10\,\% and $\pm$20\,\%, MAE in EUR, MAPE for comparability, and for the interval models the empirical coverage and the mean relative width), the emissions record, and the model artefact together with the feature-set name it was trained on.
+
+None of the runs exist yet, so the results are placeholders rather than numbers:
+\tbd{the run comparison table across \texttt{b0}, \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}: MdAPE, share within $\pm$20\,\%, MAE, training time and emissions per run, from \texttt{reports/metrics/} and MLflow once issue \#37 lands}
+\tbd{the URL of the \texttt{recommenditos-price} experiment on DagsHub, and a screenshot of its run comparison view}
+\tbd{what the ladder showed: whether the extended feature set earned its added complexity, and which variant was put forward for the gate}

@@ -1,5 +1,13 @@
+% Milestone 1: problem selection, requirements engineering, the two cards,
+% coordination and the cloud provider.
+% Owner: @kadameit. Everything below is a draft assembled from the repository's
+% own evidence so that its owner has a starting point, not finished text. The
+% \tbd right after the heading says so in the PDF as well, and `make
+% report-submit` counts it, so the draft cannot reach a submission unnoticed.
 \subsection{Milestone 1: Inception}
 \label{sec:m1}
+
+\tbd{DRAFT, owner \texttt{@kadameit}. Every paragraph of this subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words; the placeholders inside name what is still missing and where it comes from.}
 
 \subsubsection{Selection of problem and requirements engineering for ML}
 \label{sec:m1-requirements}
@@ -10,7 +18,28 @@
   Requirements and quality objectives are typical M1 EDN entries.
 }
 
-\tbd{problem selection and system requirements}
+\paragraph{How the problem was selected.}
+Four product ideas were on the table in the first sprint: the used-car price component, a route-safety model, a recommender and a grocery idea.
+The used-car price component won, and the reasoning behind that first choice is the one M1 decision not yet written up: \tbd{the project-choice rationale, from the EDN entry that project brief section~8 lists as outstanding}.
+What did settle the shape of the problem is recorded, and the data settled it: the AutoScout24 snapshot was the only candidate large and rich enough for the planned gradient-boosting model, with a citable licence and verifiable provenance (EDN-01), and its brand skew was turned into explicit scope rules instead of being hidden, namely used passenger cars only (EDN-04) and only makes with at least 300 listings, a list the pipeline computes rather than hard-codes (EDN-05).
+
+\paragraph{The requirements, and what is distinctive about them.}
+The component has 16 functional and 13 non-functional requirements, each with a MoSCoW priority and an acceptance criterion written as something a test can do rather than as an adjective, and each non-functional one declares its quality characteristic against ISO/IEC 25010 and the AI extension 25059, with the three that have no equivalent in either, reproducibility, energy efficiency and delivery, saying so instead of being forced into a category.
+Three properties go beyond writing requirements down.
+
+\emph{Two levels, one identifier space (EDN-27).}
+After the lecturer's feedback that the first version read as a specification, because it fixed endpoints, status codes and image tags, we split the page rather than soften the wording: \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{docs/docs/requirements.md}} states what must be true and for whom, design-free, and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{docs/docs/specification.md}} states how each one is realised, under the same \texttt{FR-xx} and \texttt{NFR-xx} IDs.
+A second vocabulary of user stories was tried and rejected because those IDs are what tests and EDN entries point at, and a design change now no longer looks like a requirements change.
+
+\emph{Requirements measured before they were committed to.}
+Three requirements changed because a measurement refuted what they claimed about the data.
+NFR-11, the drift-detection promise, was rewritten three times, the last because the Bonferroni construction makes the family-wise false-alarm rate equal to the significance level, so at the conventional 0.05 it was asking the detector to perform at its own theoretical bound with no margin; at the 0.005 we settled on, the control flags between 0 and 0.6 of 20 windows across three independent splits while the Spanish replay is still flagged in every trial (EDN-14, EDN-26, EDN-29).
+FR-01 gained two required fields because \texttt{body\_type} is filled in 100.000\,\% and \texttt{seller\_type} in 99.986\,\% of the training scope, so a model can never learn what their absence means (EDN-15), and NFR-05 traded an uptime percentage that a single unattended VM cannot honour for a 30-second recovery time plus a zero-downtime commitment for the graded presentation (EDN-10).
+Where a target still cannot be measured it carries a \textbf{[proposed]} marker instead of an invented number.
+
+\emph{Traceability as a build artefact.}
+A test declares the requirements it verifies with a \texttt{@pytest.\allowbreak mark.\allowbreak req} marker and CI turns the markers into a requirement-to-test matrix, so every requirement is traceable to the test that verifies it or explicitly marked as verified by hand (NFR-07).
+Three requirements carry markers today, NFR-01, NFR-06 and NFR-08, across six tests; the matrix itself is \tbd{the requirement-to-test matrix from CI (issue \#40), with the count of requirements covered automatically and by hand}.
 
 \subsubsection{Dataset card}
 \label{sec:m1-dataset-card}
@@ -20,7 +49,22 @@
   Follow the Hugging Face dataset card template \cite{hf-dataset-card}.
 }
 
-\tbd{main points of the dataset card and link to it in the repository}
+The dataset card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/dataset-card.md}{\texttt{docs/docs/dataset-card.md}}, written to the Hugging Face template \cite{hf-dataset-card}.
+It documents the AutoScout24 Car Listings Dataset (2025 snapshot), published on Zenodo under DOI \href{https://doi.org/10.5281/zenodo.17643343}{10.5281/zenodo.17643343}: 118,382 listings, 75 columns, one scrape dated 2025-11-08, prices in EUR, eight European markets, no splits provided.
+
+Two things about it are deliberate.
+
+\emph{Every figure was measured on the file, not copied from the publisher.}
+The publisher's description gives round numbers and was written with AI assistance, as the Zenodo record itself notes, so we profile the file ourselves instead, against the md5 Zenodo publishes.
+That profiling is what produced the scope rules: Germany alone is 38.5\,\% of the rows and BMW, Porsche, Mercedes-Benz and Audi together 82.9\,\%, four columns are empty, \texttt{vin} is 34.0\,\% filled and so cannot find the 6,347 duplicates a composite key does, and 164 listings are registered after the snapshot date and would have a negative age.
+
+\emph{The limitations are stated as consequences, not as caveats.}
+The card says what each issue forbids: the target is an asking price and never a transaction price; one snapshot with no per-listing date rules out temporal validation and any temporal split; the brand skew makes the data unfit for claims about the European used-car market as a whole; and a \texttt{False} in the condition flags means \enquote{not stated} and may never be read as a denial (EDN-23).
+It also records what we do with the personal data instead of claiming to have removed the problem, namely that re-hosting the raw file on a public remote makes the team a publisher of that data in its own right (EDN-20, EDN-25, EDN-34), and it reports both readings of the upstream licence rather than resolving a contradiction that does not affect this project (EDN-21).
+
+Of the 118,382 listings, 110,013 fall in the used-passenger-car scope and 97,889 remain in the training scope once the price and registration-date rules, deduplication, the Spanish holdout and the make filter have run.
+Those are split 60/10/10/20 grouped by seller with the seed \texttt{20251108}, both pinned in \texttt{params.yaml} (EDN-32); the test share is the binding constraint, because SC-04 only checks a segment once it holds 500 test rows.
+The realised sizes are \tbd{the train, validation, calibration, test and holdout row counts from \texttt{dvc.lock} once the preprocess and split stages run on the real snapshot (issues \#34 and \#35)}.
 
 \subsubsection{Model card}
 \label{sec:m1-model-card}
@@ -30,18 +74,51 @@
   Update it in the final report once the model has changed.
 }
 
-\tbd{main points of the model card and link to it in the repository}
+The model card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{\texttt{docs/docs/model-card.md}}, written to the Hugging Face annotated template \cite{hf-model-card, mitchell2019modelcards}.
+It describes a supervised regression on $\log(\mathrm{price})$ with LightGBM as the main model and CatBoost as the challenger, against the baselines B0 and B1 (EDN-02), and it states on its first page that no trained artefact exists yet, so that no reader mistakes a plan for a measurement.
+Three choices distinguish it from the template it follows.
+
+\emph{It owns the model and links for everything else.}
+Scope, features, metrics and success criteria live in the problem specification, the data facts in the dataset card and the qualities in the requirements, and the card carries a table of which page answers which question, so nothing is stated twice and nothing can drift apart.
+
+\emph{The harm is attributed to a party.}
+Instead of a generic bias paragraph the card asks who pays for a wrong answer: the seller acts on a single number about a single car, an estimate 10\,\% low costs them real money once and they have no way to notice, which is why a valuation ships an explanation (FR-08) rather than a bare number, while the buyer uses the interval as a sanity check, which is what SC-05 bounds.
+
+\emph{It names a gap in its own quality gate.}
+Volkswagen, Honda, Hyundai and Aston Martin clear the 300-listing support threshold and are therefore served, but a make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at a 20\,\% test share, and these four hold 348, 798, 548 and 360 listings, so for them the per-segment half of the gate is blind by construction and closing it is an open Milestone~3 task.
+The card's declared next update is the per-criterion results, the chosen hyperparameters, the artefact size, the training time and the CodeCarbon figures: \tbd{the measured SC-01 to SC-06 results and the training and artefact figures, from \texttt{metrics.json} and the MLflow runs (issues \#37 and \#39)}.
 
 \subsubsection{Project coordination and communication}
 \label{sec:m1-coordination}
 \guidance{
   \textbf{Template:} What tools have been selected, why, and how are they used?\\
   \textbf{Rubric (4 pts):} How effectively do our coordination and communication practices support collaboration and leave a useful trace of our progress?\\
-  Already in place (see \texttt{docs/docs/scrum/} and \texttt{CONTRIBUTING.md}): Scrum with GitHub Issues and a GitHub Projects board, Discord for async communication, a weekly sync in the Tuesday lab instead of a daily standup, a Definition of Done, working agreements and a sprint log, issue and PR templates.
+  Already in place (see \texttt{docs/docs/scrum/} and \texttt{CONTRIBUTING.md}): Scrum with GitHub Issues and a GitHub Projects board, Discord for async communication, a weekly sync in the Wednesday laboratory session instead of a daily standup, a Definition of Done, working agreements and a sprint log, issue and PR templates.
   Show the trace: board screenshot, sprint log, linked issues and PRs.
 }
 
-\tbd{coordination and communication tools and how we use them}
+We run Scrum on one-week sprints with GitHub Issues as the backlog, a GitHub Projects board (Backlog, To Do, In Progress, In Review, Done) as the sprint board, and Discord for everything asynchronous.
+The tools were chosen for one reason: the work, the discussion and the evidence should sit next to the code, so an issue, the branch that implements it, the pull request that reviews it and the commit that lands it are one chain, and only chat sits outside it.
+The process is written down in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}}: roles, board columns, a Definition of Done, working agreements and a sprint log.
+Four adaptations are ours rather than the course's.
+
+\emph{The ceremonies are held where the whole team is present.}
+There is no daily standup, because the Wednesday laboratory session is the only slot with everybody in one room, so planning, review and retrospective all happen there and the sprint runs Wednesday to Wednesday.
+The first two sprints ran Tuesday to Tuesday, which the sprint~1 retrospective found to be a mistake: the working agreements named a ceremony day that the laboratory schedule contradicts, so the boundary moves onto the session with sprint~3.
+
+\emph{Every ticket is filterable, and that was learned the hard way.}
+Each issue carries a milestone label \texttt{M1} to \texttt{M6}, an area label such as \texttt{area:data} or \texttt{area:report}, a GitHub milestone per delivery and an owner.
+Sprint~1 had none of this until its last day and closed six tickets without any of it, so the trace the course grades had to be reconstructed from the git history; giving a ticket its labels when it is written rather than when the sprint is reviewed is a sprint~1 action item.
+
+\emph{Approval is deliberately not what gates a merge.}
+Branch protection blocks direct pushes to \texttt{main} and squash merge is the only merge method enabled, so \texttt{main} carries exactly one commit per pull request.
+Passing checks gate the merge; a formal approval does not, because GitHub blocks self-approval and a pull request written with an agent runs under its author's own account, so requiring one would leave those pull requests unmergeable.
+A teammate still reads the change whenever one is free, and its author is responsible for its content whoever or whatever typed it.
+
+\emph{The trace is written into the repository, not left in chat.}
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{\texttt{docs/docs/scrum/sprints.md}} holds each sprint's goal, its planning notes with the assigned backlog, its review, its progress record and its retrospective, with every issue and pull request linked: sprint~1 closed 7 issues with 16 pull requests merged, and 34 engineering decisions are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
+The working agreements also carry a rule for coding agents, since the course grades how we use them: a ticket handed to an agent must have a local oracle, tests or \texttt{dvc repro} that tell it whether it is done, a ticket without one is done by a person, and an agent's claim decides nothing until it has been checked.
+\tbd{a screenshot of the project board at the end of sprint~2, placed in \texttt{reports/latex/figures/}}
 
 \subsubsection{Selection of the cloud provider}
 \label{sec:m1-cloud}
@@ -51,4 +128,14 @@
   Tie the choice to our requirements (model size, memory, cost, how long it has to run).
 }
 
-\tbd{chosen cloud provider and justification}
+We deploy on the FIB Virtech virtual machine the course provides: 4\,GB of memory, 20\,GB of disk, CPU only, free for one semester (EDN-17).
+Of the free options the course compares it is the only one both large enough and long enough: AWS and Azure give 750 hours a month for twelve months but cap the free instance at 1\,GB of memory, GCP at 0.6\,GB and Okteto at 3\,GB, while our stack is an API container, a store, Prometheus, Grafana and a scheduled drift job.
+Paying, or using a personal account with payment details for a semester project, buys nothing the grading rewards.
+
+The choice is tied to the requirements rather than asserted.
+NFR-04 is written for this machine and budgets it: the API container stays below 1\,GB resident, the drift job runs in its own scheduled container, Prometheus is capped by retention size, the logs by rotation, and 4\,GB of disk is kept free.
+That the drift job must be separate is a hard constraint and not a preference, because Alibi Detect 0.13 requires \texttt{numpy<2} and \texttt{pandas<3} and pulls in transformers, OpenCV and scikit-image, so it cannot share an environment with the API; its Business Source Licence 1.1 also permits only non-production use.
+NFR-12 keeps the choice reversible by requiring the system to start on a fresh machine with one documented command and to need no paid service at run time, so nothing in the serving path is specific to this provider, and no GPU appears anywhere, which is also why the model family was chosen (EDN-02) and why \texttt{shap} is kept out of the serving image (EDN-11).
+
+The cost is recorded with a date rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
+If that is still true at the Milestone~4a laboratory on 2026-10-21, we raise it with the teachers instead of planning further on it.

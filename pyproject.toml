@@ -49,6 +49,10 @@ dependencies = [
     "pytest",
     "pytest-cov",
     "python-dotenv",
+    # The `download` stage streams the raw file from Zenodo. It arrives with DVC
+    # anyway, but a direct import of a transitive dependency breaks the day that
+    # dependency changes, so it is declared here.
+    "requests",
     # params.yaml, read by every stage and by the tests that check dvc.yaml.
     "pyyaml",
     "ruff",
