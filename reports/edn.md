@@ -1154,6 +1154,39 @@ How to add an entry:
 - **Other evidence:** [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `Entry.status` and `Entry.has_the_promised_evidence` in `tools/requirement_matrix.py`; the status table in `CONTRIBUTING.md`; [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) for the SC-04 to SC-06 thresholds.
 - **In LaTeX:** no
 
+### EDN-46: DagsHub credentials live in two gitignored stores, and the token is entered twice
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Credential handling, developer onboarding
+- **Participants:** Lukas
+- **Decision:** A contributor's DagsHub token is stored twice, in two gitignored files: in `.env` as `MLFLOW_TRACKING_PASSWORD`, which MLflow reads from the environment, and in `.dvc/config.local` via `dvc remote modify origin --local password`, which is the only place DVC's HTTP remote reads a password from.
+  Nothing derives one store from the other, and `.env.template` deliberately does not list `DAGSHUB_USERNAME` or `DAGSHUB_USER_TOKEN`.
+  `recommenditos/config.py` loads `<repo>/.env` by name rather than searching upwards, so the credentials of a checkout are its own.
+- **Alternatives considered:**
+  - **Option A (chosen): two stores, the token pasted into each, and a template that lists only what the project reads.**
+    Pros: no machinery to maintain; both stores are already gitignored, so no token can reach a commit; each tool reads its credentials the way it documents; the template cannot mislead, because every variable in it is read and a test asserts that.
+    Cons: the token is entered twice, and the reader has to be told why or it looks like an oversight; the `dvc remote modify` form puts the token in shell history and in `ps`.
+  - **Option B: one source of truth in `.env`, plus a script that writes `.dvc/config.local` from it.**
+    Pros: one paste; one file to rotate.
+    Cons: a piece of project machinery whose whole job is to write a secret to disk on its own initiative, which is a worse thing to own than a second paste; another step that can fail or drift; nothing in the course requires it.
+  - **Option C: `.env` only, relying on an environment variable for DVC.**
+    Pros: would be the simplest of all, if it existed.
+    Cons: it does not. Measured rather than assumed: with `MLFLOW_*`, `DAGSHUB_USERNAME` and `DAGSHUB_USER_TOKEN` all exported, `dvc status -c` still fails with `configuration error - HTTP 'basic' authentication require both 'user' and 'password'`, and DVC 3.67.1's HTTP remote schema offers exactly `user`, `password` and `ask_password` and no environment route at all.
+  - **Option D: `ask_password true`, prompting instead of storing.**
+    Pros: nothing on disk; nothing in shell history.
+    Cons: `dvc_http` calls `getpass`, which needs a terminal, so it prompts on every `dvc pull` and breaks any unattended `dvc repro` or CI job. Documented as the better choice on a shared machine, not as our default.
+- **Rationale:** Option C would have been the right answer and is not available, which is what makes the double entry a property of DVC rather than a choice.
+  Between A and B, the property that matters is that no token can reach a commit, and both stores already have it; B buys one fewer paste at the price of owning a secret-writing script.
+  Listing `DAGSHUB_*` in the template was actively harmful: nothing reads those names, so filling them in configures nothing while reading as though it configured DVC, which is the confusion the getting-started page exists to prevent.
+  Scoping `.env` to the repository belongs to the same decision: a bare `load_dotenv()` searches upwards, so a clone nested under another checkout inherited that one's token and looked configured when it was not.
+- **AI involvement:** Information seeking, Alternative assessment, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI established by execution that DVC has no environment-variable route, which is the fact the whole decision rests on, and it wrote the two-store walkthrough. An adversarial review of that work, also by AI, then found three things the first pass had asserted rather than checked: that the `.env` scoping was not repository-local, so the review's own "fresh clone" verification had in fact been running on the parent checkout's credentials; that `mlflow.db` was neither gitignored nor prevented; and that the documented newcomer command printed a traceback where the page promised a message. All three were reproduced before being fixed. The modification is that the template lost the `DAGSHUB_*` block, which the first pass had defended as documentation, once the review showed nothing reads it.
+- **AI interaction evidence:** Claude Code sessions on 2026-09-30: the DVC environment-variable question was settled by running `dvc status -c` with and without the variables exported; the review findings were each reproduced before any fix, including a probe showing `find_dotenv` resolving to a `.env` three directories above a credential-free worktree.
+- **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-09 in [the specification](../docs/docs/specification.md).
+- **In LaTeX:** no
+
 
 ## Template
 

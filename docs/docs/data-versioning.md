@@ -13,6 +13,7 @@ We use DagsHub Storage as the DVC remote, configured over **HTTP** (not S3), as 
 The DagsHub repo is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>.
 It belongs to the `recommenditos` DagsHub organisation, which the team owns, so the remote does not depend on any one person's private account.
 It is connected through DagsHub's GitHub integration, not as a plain git mirror, which is why issues and pull requests show up on DagsHub and why it syncs by webhook instead of polling.
+The repository is public (EDN-20), so `dvc pull` works for any signed-in DagsHub account; `dvc push` needs write access on it, which @lukas2510 grants.
 
 The shared part of the configuration is committed in `.dvc/config`:
 
@@ -26,42 +27,23 @@ The shared part of the configuration is committed in `.dvc/config`:
 
 ### First-time setup
 
-1. Create a [DagsHub](https://dagshub.com) account and ask @lukas2510 to add you to the `recommenditos`
-   organisation with write access, otherwise `dvc push` is rejected.
-   The repository is public (EDN-20), so `dvc pull` works for any signed-in DagsHub user; only pushing needs membership.
-2. Install the project environment, which includes DVC:
+[Getting started](getting-started.md) walks a fresh clone through the whole path: the DagsHub token,
+`.env`, the `dvc remote modify --local` commands and the first `dvc pull`.
+It is not repeated here, so that there is one place to fix when it changes.
+Two DVC-specific points belong with the conventions rather than with the walkthrough.
 
-    ```bash
-    uv sync
-    ```
+**Never run `dvc remote modify` without `--local`.**
+With `--local` the credentials land in `.dvc/config.local`, which DVC's own `.dvc/.gitignore` keeps
+out of Git. Without it, they go into the committed `.dvc/config` and the next `git push` publishes
+your token.
 
-3. Copy your token from DagsHub (profile picture → **Settings → Tokens**) and store your credentials locally:
+**Raise the HTTP timeouts before you push a large file**, otherwise the upload fails with
+"Timeout on reading data from socket":
 
-    ```bash
-    uv run dvc remote modify origin --local user <your-dagshub-username>
-    uv run dvc remote modify origin --local password <your-dagshub-token>
-    ```
-
-4. Check that it works:
-
-    ```bash
-    uv run dvc pull
-    ```
-
-    This downloads the tracked data (see [Tracked data](#tracked-data)) into `data/`.
-    A 401 or 403 error means the username, the token or the collaborator access is wrong.
-
-5. If you will push large files, raise the HTTP timeouts, otherwise the upload fails with
-   "Timeout on reading data from socket":
-
-    ```bash
-    uv run dvc remote modify origin --local read_timeout 1800
-    uv run dvc remote modify origin --local connect_timeout 120
-    ```
-
-Credentials never go into a commit.
-The commands in step 3 write to `.dvc/config.local`, which DVC's own `.dvc/.gitignore` keeps out of Git.
-Never run them without `--local`: that would write the token into the committed `.dvc/config`.
+```bash
+uv run dvc remote modify origin --local read_timeout 1800
+uv run dvc remote modify origin --local connect_timeout 120
+```
 
 ## Tracked data
 
