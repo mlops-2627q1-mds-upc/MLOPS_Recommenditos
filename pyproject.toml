@@ -26,12 +26,19 @@ dependencies = [
     "notebook",
     "nbstripout",
     "numpy",
-    "pandas",
+    # pandas 3 or newer: the contract relies on its `str` dtype and on
+    # `astype("str")` preserving a missing value instead of writing "nan".
+    "pandas>=3",
     "pip",
     "pre-commit",
+    # Parquet is the interchange format between pipeline stages: it is typed, so
+    # a frame keeps its dtypes across a stage boundary instead of being re-inferred.
+    "pyarrow",
     "pytest",
     "pytest-cov",
     "python-dotenv",
+    # params.yaml, read by every stage and by the tests that check dvc.yaml.
+    "pyyaml",
     "ruff",
     "scikit-learn",
     "tqdm",

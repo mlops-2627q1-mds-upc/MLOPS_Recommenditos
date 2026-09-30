@@ -18,6 +18,11 @@ EXTERNAL_DATA_DIR = DATA_DIR / "external"
 
 MODELS_DIR = PROJ_ROOT / "models"
 
+# The pipeline's configuration (see params.yaml). Kept here rather than in
+# params.yaml itself so that no path in the project is machine-specific.
+PARAMS_FILE = PROJ_ROOT / "params.yaml"
+METRICS_FILE = PROJ_ROOT / "metrics.json"
+
 REPORTS_DIR = PROJ_ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 

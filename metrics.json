@@ -1,0 +1,30 @@
+{
+  "gate_passed": false,
+  "n_variants": 4,
+  "n_variants_passing": 0,
+  "deployable_variant": null,
+  "best_variant": "b0",
+  "best_mdape": 0.5403003190179646,
+  "variants": {
+    "b0": {
+      "mdape": 0.5403003190179646,
+      "within_20pct": 0.17726657645466848,
+      "gate_passed": false
+    },
+    "b1": {
+      "mdape": 0.5403003190179646,
+      "within_20pct": 0.17726657645466848,
+      "gate_passed": false
+    },
+    "lgbm-basic": {
+      "mdape": 0.5403003190179646,
+      "within_20pct": 0.17726657645466848,
+      "gate_passed": false
+    },
+    "lgbm-extended": {
+      "mdape": 0.5403003190179646,
+      "within_20pct": 0.17726657645466848,
+      "gate_passed": false
+    }
+  }
+}

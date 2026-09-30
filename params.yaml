@@ -1,0 +1,266 @@
+# Pipeline configuration, in one place.
+#
+# Every stage in dvc.yaml declares the keys it reads under `params:`, so a
+# change here reruns exactly the stages it affects and `dvc exp` can sweep it.
+# This is a deliberate deviation from the course demo, which keeps the same
+# settings as Python constants in `config.py` (EDN-30).
+#
+# Paths are NOT here. They live in `recommenditos/config.py`, derived from the
+# repository root, so nothing depends on a machine-specific absolute path.
+
+# Every stage that draws a random number takes this seed, so `dvc repro` on a
+# clean clone reproduces the same splits and metrics (NFR-06).
+seed: 20251108
+
+# The snapshot date of the raw file. Age is this date minus `registration_date`
+# in training, and the request date in serving (problem-spec section 4).
+# Listings registered after it are dropped (EDN-22).
+reference_date: "2025-11-08"
+
+download:
+  # STUB. The skeleton generates a synthetic stand-in of the raw file so that
+  # `dvc repro` is green on a clean clone with no credentials and no 548 MB
+  # download, which is what lets the stage tickets be built in parallel.
+  # Issue #33 implements `zenodo` and flips this key; because the value is a
+  # parameter it is recorded in `dvc.lock` and shows up in `dvc params diff`,
+  # so a pipeline still running on synthetic data cannot pass unnoticed.
+  source: synthetic
+  # Used only by `source: synthetic`.
+  rows: 20000
+  # Used only by `source: zenodo` (#33). The MD5 is the checksum Zenodo
+  # publishes and equals the one in data/raw/autoscout24_dataset_20251108.csv.dvc,
+  # so a silently changed upstream file fails loudly.
+  zenodo_record: "17643343"
+  filename: autoscout24_dataset_20251108.csv
+  md5: b23a122cc51baf7de39f449193ff0d28
+
+preprocess:
+  # Scope: used passenger cars only (EDN-04). `is_preregistered` rows are
+  # excluded even though the flag is unreliable (EDN-24).
+  offer_type: U
+  vehicle_type: Car
+  # Training price range in EUR. Below 500 the listings are placeholders and
+  # data-entry errors (the raw file starts at 1 EUR); above 2M they are
+  # collector cars the model has no support for.
+  price_min_eur: 500
+  price_max_eur: 2000000
+  # `vin` is only 34 % filled, so a VIN key cannot find the duplicates. This
+  # composite key finds about 6,347 of them in the raw file (dataset card).
+  dedup_key:
+    - make
+    - model
+    - model_version
+    - mileage_km_raw
+    - registration_date
+    - price
+    - power_kw
+  # Dropped before anything else is written, so no processed artefact, model or
+  # log can carry them (NFR-08). `seller_company_name` survives only as the
+  # hashed `seller_group_id`, which `split` groups by.
+  pii_columns:
+    - vin
+    - street
+    - zip
+    - city
+    - latitude
+    - longitude
+    - seller_company_name
+
+split:
+  # Held out whole as the new-market drift scenario for M6 (EDN-03). No row of
+  # this country may reach training, validation, calibration or test.
+  holdout_country: ES
+  # A make enters the supported list at this many listings, counted after the
+  # holdout is removed and before the split (EDN-05). The list is computed and
+  # written as an artefact, never hard-coded: the API reads it from the model
+  # metadata (specification FR-04).
+  min_listings_per_make: 300
+  # No seller appears in two sets: held-out dealers shift the feature
+  # distribution as much as a different country does (EDN-14), so a random
+  # split would leak a dealer into train and test and flatter every metric.
+  group_key: seller_group_id
+  # The test share is 20 % because SC-04 only checks a segment once it holds
+  # 500 test rows, and below about 15 % Volvo and then Suzuki fall under that
+  # bar (reports/analysis/make_support_results.txt). The remaining 80 % is split
+  # 60/10/10: validation for early stopping and tuning, calibration only for
+  # the conformal intervals of UC2 (problem-spec section 5).
+  ratios:
+    train: 0.60
+    validation: 0.10
+    calibration: 0.10
+    test: 0.20
+
+features:
+  # Column names are the raw ones, except `age_years`, which `build_features`
+  # derives as `reference_date` minus `registration_date`. Each set names the
+  # inputs; how a column becomes model columns (native categorical, multi-hot,
+  # parsed text) is the stage's business, not this file's.
+  sets:
+    # Experiment ladder step 3, the main model's inputs (problem-spec section 4).
+    basic:
+      - make
+      - model
+      - body_type
+      - age_years
+      - mileage_km_raw
+      - nr_prev_owners
+      - power_kw
+      - fuel_category
+      - transmission
+      - drive_train
+      - gears
+      - cylinders_volume_cc
+      - nr_seats
+      - nr_doors
+      - country_code
+      - seller_type
+    # Experiment ladder step 4: everything above, plus the columns whose worth
+    # the ladder is meant to measure.
+    extended:
+      - make
+      - model
+      - body_type
+      - age_years
+      - mileage_km_raw
+      - nr_prev_owners
+      - power_kw
+      - fuel_category
+      - transmission
+      - drive_train
+      - gears
+      - cylinders_volume_cc
+      - nr_seats
+      - nr_doors
+      - country_code
+      - seller_type
+      - equipment_comfort
+      - equipment_entertainment
+      - equipment_extra
+      - equipment_safety
+      - has_full_service_history
+      - non_smoking
+      - is_rental
+      - body_color
+      - paint_type
+      - upholstery
+      - upholstery_color
+      - model_version
+      - weight_kg
+      - cylinders
+      - electric_range_km
+      - envir_standard
+      - original_market
+  # The four equipment columns are Python-repr list strings, never null: an
+  # empty list is the literal "[]". They become multi-hot columns.
+  equipment_columns:
+    - equipment_comfort
+    - equipment_entertainment
+    - equipment_extra
+    - equipment_safety
+  # An equipment item becomes its own column only above this share of the
+  # training rows, so the matrix does not grow a tail of near-constant columns.
+  equipment_min_frequency: 0.01
+
+validate:
+  # Bounds the Great Expectations suites assert (#25). The price range lives
+  # under `preprocess`, because there it is a scope filter rather than a check.
+  mileage_min_km: 0
+  mileage_max_km: 1000000
+  # The raw suite asserts `registration_date <= reference_date` with this
+  # tolerance rather than as a hard rule, so a future scrape carrying many such
+  # rows is flagged instead of silently cleaned. The cleaned frame asserts it
+  # hard, because preprocessing has dropped them by then.
+  raw_mostly: 0.99
+
+train:
+  # One MLflow experiment; each variant below is one run in it (#37).
+  mlflow_experiment: recommenditos-price
+  # `dvc.yaml` iterates this mapping with `foreach`, so the stages are named
+  # `train@b0`, `train@lgbm-basic` and so on, and each declares only its own
+  # key under `params:`. Changing one variant therefore retrains that variant
+  # alone. Adding a model is a change to this file, not to the code.
+  variants:
+    # Ladder step 1: the sanity baseline SC-03 measures the main model against.
+    b0:
+      estimator: median_baseline
+      feature_set: basic
+      params:
+        age_bucket_years: 2
+    # Ladder step 2: the interpretable depreciation baseline.
+    b1:
+      estimator: ridge
+      feature_set: basic
+      params:
+        alpha: 1.0
+    # Ladder step 3: the main model.
+    lgbm-basic:
+      estimator: lightgbm
+      feature_set: basic
+      params:
+        learning_rate: 0.05
+        num_leaves: 63
+        n_estimators: 1000
+        early_stopping_rounds: 50
+    # Ladder step 4: what the extended features are worth.
+    lgbm-extended:
+      estimator: lightgbm
+      feature_set: extended
+      params:
+        learning_rate: 0.05
+        num_leaves: 63
+        n_estimators: 1000
+        early_stopping_rounds: 50
+
+evaluate:
+  # Reported for every candidate model (problem-spec section 6). Price buckets
+  # are reported too but never enter a criterion, because they condition on the
+  # target, which is unknown at prediction time.
+  segments:
+    - make
+    - country_code
+    - seller_type
+    - fuel_category
+    - age_bucket
+  # Lower edges in years; the last bucket is open ended.
+  age_bucket_edges: [0, 1, 3, 6, 10, 20]
+  # The model variant SC-03 compares against.
+  baseline_variant: b0
+  # The fields specification FR-01 requires of `/predict` (EDN-15). SC-06 masks
+  # every *other* field of the feature set, on its own and all at once, so this
+  # list is what decides which fields the criterion covers. The API reads the
+  # same list, so the two cannot disagree about what is optional.
+  required_input_fields:
+    - make
+    - model
+    - registration_date
+    - mileage_km_raw
+    - power_kw
+    - fuel_category
+    - transmission
+    - country_code
+    - body_type
+    - seller_type
+  # SC-01 to SC-06 of problem-spec section 8, as numbers the `evaluate` stage
+  # can check. NFR-01 gates deployment on all six, so each one is written to
+  # metrics.json with its measured value and a pass or fail.
+  success_criteria:
+    # SC-01: MdAPE at most 9 %.
+    sc01_mdape_max: 0.09
+    # SC-02: at least 85 % of predictions within +/-20 %.
+    sc02_within_20pct_min: 0.85
+    # SC-03: MdAPE at least 30 % below the baseline variant's.
+    sc03_mdape_improvement_over_baseline_min: 0.30
+    # SC-04: every segment with at least this many test rows stays at or below
+    # 15 % MdAPE. The exploratory run already found cars over 20 years at
+    # 15.3 %, so this is expected to fail first; that is the point of having it.
+    sc04_segment_mdape_max: 0.15
+    sc04_min_segment_rows: 500
+    # SC-05: the nominal 90 % intervals reach an empirical coverage in this
+    # band, for full inputs and for the partial-input scenario P1.
+    sc05_coverage_min: 0.88
+    sc05_coverage_max: 0.92
+    # SC-06: with each optional input masked on its own, and with all of them
+    # masked at once, MdAPE stays at or below this multiple of the full-input
+    # value. The optional fields are the ones specification FR-01 does not
+    # require (EDN-15).
+    sc06_masked_mdape_ratio_max: 1.5

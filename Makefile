@@ -4,7 +4,7 @@
 
 PROJECT_NAME = MLOPS_Recommenditos
 PYTHON_VERSION = 3.12
-PYTHON_INTERPRETER = python
+PYTHON_INTERPRETER = uv run python
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -62,10 +62,20 @@ create_environment:
 #################################################################################
 
 
-## Make dataset
-.PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) recommenditos/dataset.py
+## Run the DVC pipeline (see dvc.yaml)
+.PHONY: repro
+repro:
+	uv run dvc repro
+
+## Write the synthetic test fixture to data/fixture/ (tests do not need it)
+.PHONY: fixture
+fixture:
+	uv run python tests/fixtures/generate_fixture.py
+
+## Show the pipeline's metrics (the SC-01 to SC-06 gate of NFR-01)
+.PHONY: metrics
+metrics:
+	uv run dvc metrics show
 
 
 # initial (Milestones 1-3, max 15 pages) or final (Milestones 1-6, max 30 pages)

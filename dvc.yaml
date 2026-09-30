@@ -1,0 +1,202 @@
+# The pipeline. `dvc repro` runs it; commit the resulting dvc.lock.
+#
+# One module per stage (EDN-28), so a stage's `deps` name exactly the code that
+# stage runs and a change reruns the minimum. Every stage reads its inputs and
+# writes a schema-valid output against `recommenditos/schema.py`, which is the
+# contract the stage tickets code against instead of against each other.
+#
+# Hand-edited on purpose: `dvc stage add` rewrites the whole file, re-indents
+# every list and line-wraps long commands, which would destroy these comments.
+#
+# `params.yaml` is a deliberate deviation from the course demo, which keeps the
+# same settings in `config.py` (EDN-30). Because they are parameters, a change
+# to one reruns the stages that read it and `dvc exp` can sweep them.
+
+stages:
+  # ----------------------------------------------------------------------
+  # download: make the raw snapshot available as a typed Parquet file.
+  #
+  # `download.source` is `synthetic` while the skeleton stands, so this needs
+  # neither the 548 MB file nor DagsHub credentials. Issue #33 implements
+  # `zenodo`, asserts `download.md5` and takes over `data/raw/`, at which point
+  # data/raw/autoscout24_dataset_20251108.csv.dvc is replaced by this stage
+  # (see docs/docs/data-versioning.md, "Pipeline ownership").
+  # ----------------------------------------------------------------------
+  download:
+    cmd: python3 -m recommenditos.data.download_raw_dataset
+    deps:
+      - recommenditos/data/download_raw_dataset.py
+      - recommenditos/data/synthetic.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+    params:
+      - seed
+      - download
+    outs:
+      - data/raw/listings.parquet
+
+  # ----------------------------------------------------------------------
+  # preprocess: raw listings to the interim contract (#34).
+  # ----------------------------------------------------------------------
+  preprocess:
+    cmd: python3 -m recommenditos.data.preprocess
+    deps:
+      - recommenditos/data/preprocess.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - data/raw/listings.parquet
+    params:
+      - reference_date
+      - preprocess
+    outs:
+      - data/interim/listings.parquet
+
+  # ----------------------------------------------------------------------
+  # configure_gx: build the Great Expectations context and suites (#25).
+  #
+  # TODO(#25): give this stage an `outs` naming what it writes under `gx/`, and
+  # make `validate-data` depend on that path. Without one it is a disconnected
+  # node in the DAG - the wart the course demo has - so DVC does not guarantee
+  # it runs before `validate-data`.
+  # ----------------------------------------------------------------------
+  configure_gx:
+    cmd: python3 -m recommenditos.data.gx_context_configuration
+    deps:
+      - recommenditos/data/gx_context_configuration.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+
+  # ----------------------------------------------------------------------
+  # validate-data: the data gate (#25).
+  #
+  # Two things the course demo's equivalent does not do: a violation fails the
+  # stage rather than only being logged, and the stage writes a summary that
+  # `split` depends on, so the gate sits in the graph. The demo's stage has no
+  # `outs`, which makes it a leaf nothing depends on, so `dvc repro split`
+  # would walk straight past it.
+  # ----------------------------------------------------------------------
+  validate-data:
+    cmd: python3 -m recommenditos.data.validate_data
+    deps:
+      - recommenditos/data/validate_data.py
+      - recommenditos/data/gx_context_configuration.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - data/raw/listings.parquet
+      - data/interim/listings.parquet
+    params:
+      - validate
+    outs:
+      # Not cached, so the validation result is git-tracked and shows up in the
+      # diff of any pull request that changes the data.
+      - reports/data-validation/summary.json:
+          cache: false
+
+  # ----------------------------------------------------------------------
+  # split: hold Spain out (EDN-03), then split grouped by seller (EDN-14).
+  # ----------------------------------------------------------------------
+  split:
+    cmd: python3 -m recommenditos.data.split_data
+    deps:
+      - recommenditos/data/split_data.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - data/interim/listings.parquet
+      - reports/data-validation/summary.json
+    params:
+      - seed
+      - split
+    outs:
+      - data/processed/train.parquet
+      - data/processed/validation.parquet
+      - data/processed/calibration.parquet
+      - data/processed/test.parquet
+      - data/processed/holdout_es.parquet
+      - data/processed/supported_makes.json
+
+  # ----------------------------------------------------------------------
+  # features: one matrix per feature set, per split (#36).
+  #
+  # `foreach` over the mapping `features.sets`, so the stages are named
+  # `features@basic` and `features@extended` rather than `features@0`, and each
+  # declares only its own key under `params:`. Adding a feature set is a change
+  # to params.yaml alone.
+  # ----------------------------------------------------------------------
+  features:
+    foreach: ${features.sets}
+    do:
+      cmd: python3 -m recommenditos.data.build_features ${key}
+      deps:
+        - recommenditos/data/build_features.py
+        - recommenditos/data/split_data.py
+        - recommenditos/config.py
+        - recommenditos/schema.py
+        - recommenditos/pipeline.py
+        - data/processed/train.parquet
+        - data/processed/validation.parquet
+        - data/processed/calibration.parquet
+        - data/processed/test.parquet
+        - data/processed/holdout_es.parquet
+      params:
+        - reference_date
+        - features.sets.${key}
+        - features.equipment_columns
+        - features.equipment_min_frequency
+      outs:
+        - data/processed/features/${key}
+
+  # ----------------------------------------------------------------------
+  # train: the experiment ladder, one stage per variant (#37).
+  #
+  # `${item.feature_set}` resolves at parse time, so `train@lgbm-extended`
+  # depends on the extended matrix and `train@b0` on the basic one - DVC knows
+  # which feature stage each variant needs without being told twice.
+  # ----------------------------------------------------------------------
+  train:
+    foreach: ${train.variants}
+    do:
+      cmd: python3 -m recommenditos.modeling.train ${key}
+      deps:
+        - recommenditos/modeling/train.py
+        - recommenditos/config.py
+        - recommenditos/schema.py
+        - recommenditos/pipeline.py
+        - data/processed/features/${item.feature_set}
+      params:
+        - seed
+        - train.mlflow_experiment
+        - train.variants.${key}
+        - features.sets.${item.feature_set}
+      outs:
+        - models/${key}
+
+  # ----------------------------------------------------------------------
+  # evaluate: the metrics artefact and the SC-01 to SC-06 gate of NFR-01 (#39).
+  # ----------------------------------------------------------------------
+  evaluate:
+    cmd: python3 -m recommenditos.modeling.evaluate
+    deps:
+      - recommenditos/modeling/evaluate.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - data/processed/features
+      - models
+    params:
+      - features.sets
+      - train.variants
+      - evaluate
+    outs:
+      # The full per-variant record, which issue #39 extends with the
+      # per-segment table the report cites. Not a `metrics` entry: DVC renders
+      # one column per JSON leaf, and four variants times six criteria is not a
+      # table anyone can read.
+      - reports/metrics:
+          cache: false
+    metrics:
+      - metrics.json:
+          cache: false

@@ -29,7 +29,10 @@ A broader list of MLOps tools the teachers point to: <https://agate-tangerine-72
 ### DVC (M2)
 
 - Remote is DagsHub storage (100 GB free); connect the GitHub repo to DagsHub and pick the **HTTP** option for the DVC remote, not S3.
-- The pipeline lives in `dvc.yaml` with stages `download -> preprocess -> validate-data -> split -> train`, each declaring its code files as `deps` so code changes trigger a rerun.
+- The pipeline lives in `dvc.yaml` with six stages, `download`, `preprocess`, `configure_gx`, `validate-data`, `split` and `train`, each declaring its own module and `src/config.py` as `deps` so code changes trigger a rerun.
+  The chain is `download -> preprocess -> split -> train`: `configure_gx` and `validate-data` declare no `outs`, so `validate-data` is a leaf and `configure_gx` is a disconnected node that DVC does not guarantee to run first.
+- No stage declares `metrics` or `params`, and there is no `params.yaml`; hyperparameters are module-level constants in `train.py`. Both are things we deliberately do differently.
+- `validate-data` only logs how many expectations failed. It never fails the stage, so a `dvc repro` there can produce a model from data that never passed validation.
 - `dvc repro` runs it; commit the resulting `dvc.lock`.
 - `train` uses `foreach` to train several model variants from one stage definition.
 - A file already tracked by Git has to be removed with `git rm --cached` before `dvc add`.

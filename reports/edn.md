@@ -782,6 +782,8 @@ How to add an entry:
 - **Assessment of the AI contribution:** Asked whether the sprint plan matched the course demo repository, AI read the demo's file tree and its `dvc.yaml` rather than relying on the existing notes, and reported that the demo splits one module per stage while our repository still carried the flat template. It connected that to the parallelisation problem the sprint was being cut around, laid out the three options with the trade-offs above and recommended A. Lukas reviewed the comparison and chose A. The contribution was useful mainly because it checked the demo directly instead of arguing from the template's documentation.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 during sprint 2 planning: Lukas gave the demo repository's URL and asked whether the planned milestones and tickets fit it; AI fetched its tree and `dvc.yaml`, reported what to adopt and what we deliberately add, and presented the three layout options; Lukas chose the demo layout.
 - **Other evidence:** [sprint 2 planning notes](../docs/docs/scrum/sprints.md); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32); [references/course-demos.md](../references/course-demos.md); [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45).
+- **In LaTeX:** no
+
 ### EDN-29: The drift job runs at a significance level of 0.005, not 0.05
 
 - **Date:** 2026-09-29
@@ -819,6 +821,141 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session on 2026-09-29: after the scope correction AI reported that EDN-26's configuration measured 2.3 flagged control windows of 20 instead of 0.7, explained the Bonferroni coupling, ran `nfr11_alpha_sweep.py` over three splits and four significance levels, and recommended 0.005; Lukas replied "ohne team mache das was du recommendest".
 - **Other evidence:** [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_alpha_sweep.py`, `nfr11_alpha_sweep_results.json`, `nfr11_alpha_sweep_results.txt`, run of 2026-09-29); [EDN-26](#edn-26-nfr-11s-window-is-1000-requests-and-model-is-excluded-from-the-drift-comparison); [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date); [PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47).
 - **In LaTeX:** no
+
+### EDN-30: Pipeline configuration lives in `params.yaml`, not in `config.py`
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Project Structure, Reproducibility
+- **Participants:** @lukas2510
+- **Decision:** Everything configurable about the pipeline - the seed, the age reference date, the scope bounds, the split ratios, the feature sets, the model variants and the SC-01 to SC-06 thresholds - lives in `params.yaml` and is declared per stage under `params:` in `dvc.yaml`. Paths stay in `recommenditos/config.py`.
+- **Alternatives considered:**
+  - **Option A (chosen): a `params.yaml` declared per stage.**
+    Pros: `dvc repro` reruns exactly the stages a change affects, because DVC hashes the declared keys; `dvc params diff` shows what changed between two commits, which is evidence the report can cite; `dvc exp` becomes usable without a code change; and a value used by two stages cannot drift, because there is one copy of it.
+    Cons: one more file to keep in step with the code, and a parameter typo is caught at run time rather than by the interpreter.
+  - **Option B: Python constants in `config.py`, as the course demo does.**
+    Pros: it is exactly what the demo shows, so it needs no defending; typos are import errors; no YAML parsing.
+    Cons: DVC cannot see a constant, so a changed hyperparameter reruns nothing and `dvc repro` reports the pipeline as up to date while the code says otherwise - which is the opposite of what the milestone is graded on. `dvc exp` cannot sweep it, and the demo's own `config.py` also reads an absolute `ROOT` from `.env` and raises at import without one.
+  - **Option C: both, with `config.py` reading `params.yaml`.**
+    Pros: one import surface for the stages.
+    Cons: the indirection hides which stage reads which key, which is precisely the information `dvc.yaml` needs in order to rerun the minimum.
+- **Rationale:** The whole point of M2 is that a change reruns what it should and nothing else. Option B cannot deliver that for anything except code, and parameters are where most changes will happen once the stage tickets land. Paths were deliberately left out of `params.yaml`: they are not experiment variables, and deriving them from `__file__` keeps the project free of machine-specific absolute paths.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI read the demo repository's `dvc.yaml` and `config.py` directly rather than from our notes, reported that the demo declares neither `params` nor `metrics` on any stage, and measured the consequence in a throwaway DVC repository: with a coarse `params:` declaration a single changed hyperparameter retrained every variant, and with a per-item declaration it retrained one. Lukas reviewed the measurement and accepted the recommendation.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 while building the pipeline skeleton: AI built a scratch DVC repository, ran `dvc repro` and `dvc status` under both declaration styles, and pasted the outputs showing one stage rerunning instead of three.
+- **Other evidence:** [`params.yaml`](../params.yaml); [`dvc.yaml`](../dvc.yaml); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
+- **In LaTeX:** no
+
+### EDN-31: The processed-data contract is a hand-written `schema.py`, not Pandera
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility (shapes M3: Quality Assurance)
+- **Activity / Topic:** Data Validation, Testing Strategy
+- **Participants:** @lukas2510
+- **Decision:** `recommenditos/schema.py` holds the structural contract - column names, dtypes and nullability for the raw, interim and processed frames - as frozen dataclasses with a `validate` and a `conform` method, written by hand rather than with a validation library. Value rules stay in the Great Expectations suites. Every stage validates after reading and conforms before writing.
+- **Alternatives considered:**
+  - **Option A (chosen): a hand-written `schema.py`.**
+    Pros: no dependency, so the same module can later be imported by the API, which NFR-04 caps at 1 GB and which already has Pydantic for its own request schemas; we control the failure message, and it reports every problem at once with the offending row positions; and `conform` casts to the declared dtypes before each write, which is what stops Parquet's dtype drift between stages - a library that only validates cannot do that. Great Expectations already gives us a declarative vocabulary for value rules, so a second declarative framework would overlap it.
+    Cons: about 250 lines we own and test ourselves.
+  - **Option B: Pandera.**
+    Pros: battle-tested, declarative, less code to own, good lazy error reports as a tidy DataFrame.
+    Cons: a third validation system next to Great Expectations and Pydantic; it would travel into the API image; and it does not check the datetime unit at all, so a `datetime64[ns]` declaration would be documentation rather than a guarantee - exactly the failure this contract exists to prevent.
+  - **Option C: Great Expectations alone, with no structural contract in code.**
+    Pros: one tool, and Data Docs for free.
+    Cons: the contract would exist only in a generated `gx/` store whose config carries a fresh UUID per object on every run, so it is awkward to diff and keep honest in git. It also arrives too late: the stage tickets need something to code against in week one, and Great Expectations is a later ticket.
+- **Rationale:** Structure and value are different questions. A structural break is a bug in our code and should fail the stage that caused it; a value break is a change in the data and belongs in an expectation suite with a `mostly=` tolerance. Splitting them that way let the contract land before Great Expectations does, which is what unblocks the parallel work. The decisive technical point is `conform`: Parquet preserves whatever dtype it is handed rather than normalising it, so without an explicit cast at each boundary the frames drift apart and the stage that notices is never the stage that caused it. Because `conform` selects only the contract's columns, the PII columns NFR-08 forbids are kept out structurally rather than by every stage remembering to drop them.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI ran the compatibility experiments rather than arguing from documentation: it installed Pandera, Great Expectations and pyarrow against our pandas 3.0.6 and measured what survives a Parquet round trip, finding that an `object` string column silently becomes `str` across the boundary (so a schema declaring `object` passes upstream and fails downstream), that Pandera ignores the datetime unit entirely, and that the Great Expectations store regenerates with different UUIDs on every run. Those three measurements are what decided the option, and none of them was predictable from the documentation. Lukas was given the three options with these findings and chose A.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: AI ran the probes in a scratch environment, reported the before/after dtype table for the Parquet round trip and the sixteen declared-versus-actual datetime combinations Pandera accepts, and recommended the hand-written contract; Lukas chose it.
+- **Other evidence:** [`recommenditos/schema.py`](../recommenditos/schema.py); [`tests/test_schema.py`](../tests/test_schema.py); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
+- **In LaTeX:** no
+
+### EDN-32: Split proportions 60/10/10/20 and the project seed
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Evaluation Protocol
+- **Participants:** @lukas2510
+- **Decision:** The non-`ES` listings are split 60 % train, 10 % validation, 10 % calibration and 20 % test, grouped by `seller_group_id`, with the project seed `20251108` (the snapshot date). Both are pinned in `params.yaml`.
+- **Alternatives considered:**
+  - **Option A (chosen): 60/10/10/20.**
+    Pros: keeps the 20 % test share that the model card's SC-04 analysis and `reports/analysis/make_support_results.txt` already assume, so the published evidence stays true without a re-run. Calibration and validation get about 9,800 rows each, which is ample for conformal calibration and for early stopping.
+    Cons: the smallest training set of the three options, about 58,700 rows.
+  - **Option B: 70/10/10/10.**
+    Pros: the most training data.
+    Cons: halves the test set. `make_support_results.txt` gives the test share below which each supported make falls under SC-04's 500-row bar: Volvo at 14.9 % and Suzuki at 13.0 %. At a 10 % test share both drop out, so SC-04 would silently stop checking two of the eleven supported makes and the model card would have to be corrected.
+  - **Option C: 64/8/8/20.**
+    Pros: the same 20 % test share with slightly more training data.
+    Cons: a less round number to explain in the report, for about 3,900 extra training rows.
+- **Rationale:** The test share is the binding constraint, not the training share. SC-04 only checks a segment once it holds 500 test rows, so the proportions decide how many makes the quality gate actually covers, and the model card already states which four of the eleven supported makes fall short at 20 %. Choosing anything below about 15 % would quietly enlarge that set, which is the kind of change that is invisible until someone re-reads the analysis. The seed is the snapshot date rather than a random number so that it is recognisable in a log and obviously not tuned.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found the coupling the ticket did not mention: it read `make_support_results.txt`, noticed that its sensitivity table was computed at an assumed 20 % test share while the four-way split was still unpinned, and pointed out that pinning a smaller test share would invalidate a number already published in the model card. It laid out the three options against that constraint and recommended A. Lukas accepted.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: asked to pin the split, AI reported the per-make sensitivity thresholds from the committed analysis output and framed the three options around the 15 % floor they imply.
+- **Other evidence:** [`params.yaml`](../params.yaml); [reports/analysis/make_support_results.txt](analysis/make_support_results.txt); [dataset card](../docs/docs/dataset-card.md); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
+- **In LaTeX:** no
+
+### EDN-33: A generated synthetic fixture, and a `download.source` parameter so the skeleton runs without the raw file
+
+- **Date:** 2026-09-29
+- **Milestone:** M2: Reproducibility (shapes M3: Quality Assurance)
+- **Activity / Topic:** Testing Strategy, Data Acquisition
+- **Participants:** @lukas2510
+- **Decision:** `recommenditos/data/synthetic.py` generates a schema-valid stand-in for the raw snapshot from public catalogues and a seed, never by sampling the real file. The test suite builds every fixture from it, and the `download` stage produces it while `download.source` in `params.yaml` is `synthetic`, so `dvc repro` is green on a clean clone with no credentials and no 548 MB download.
+- **Alternatives considered:**
+  - **Option A (chosen): generate, and gate the source on a parameter.**
+    Pros: `pytest` and `dvc repro` both run with no data access, which is what lets four people build pipeline stages at the same time; no personal data is committed to Git, so NFR-08 is satisfied by construction rather than by a rule someone has to remember; every edge case the pipeline rules exist for is guaranteed present, so a stage test asserts rather than hopes; and because the source is a parameter it is recorded in `dvc.lock` and shows up in `dvc params diff`, so a pipeline still running on synthetic data cannot pass unnoticed.
+    Cons: the generator is code we maintain, and a pipeline on `main` can produce fabricated data until the download ticket lands.
+  - **Option B: sample the fixture from the real file and commit it.**
+    Pros: real distributions for free, and no generator to write.
+    Cons: the raw file carries PII (street, postcode, coordinates, seller company name). EDN-25 accepts that file living behind a DVC pointer on our remote, because the identical file is public on Zenodo under the same licence; a *committed sample* is a different thing, because it puts those rows in the Git history of a repository the whole cohort can read and cannot be removed later. `.gitignore` also excludes everything under `data/`, so it could not be committed without weakening that rule.
+  - **Option C: no fixture; `dvc repro` and the tests run on the real file.**
+    Pros: nothing is fabricated at any point.
+    Cons: every test and every `dvc repro` would need `dvc pull` of 548 MB and DagsHub access, so the working agreements' requirement that a ticket have a local oracle would hold for nobody until the download ticket lands - which is the bottleneck the whole sprint was cut to avoid.
+- **Rationale:** The two properties that matter are that nobody is blocked and that no personal data enters the Git history, and only a generated fixture gives both. Making the source a parameter rather than a hard-coded branch is what keeps the option honest: the choice is versioned in `dvc.lock`, it is visible in a params diff, and the stage refuses any other value with a `NotImplementedError` naming the ticket that implements it, so nobody can flip it early and silently get synthetic data. The fixture deliberately keeps the real make skew and gives each seller several listings, because a seller-grouped split on a flat distribution would be indistinguishable from a random one and the split ticket's central invariant would be untestable.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI framed the trade-off as the one between the team being unblocked and fabricated data reaching `main`, and proposed the parameter as the way to keep both, rather than presenting the synthetic stub as free. It also derived the fixture's edge-case list from the individual stage tickets so that each ticket's rule has something to act on, and pointed out the skew requirement that a naive uniform generator would have missed. Lukas reviewed the three options and accepted A.
+
+  The first implementation was wrong in a way worth recording, because it is the failure mode this project's working agreements warn about. Every edge-case row was built as a copy of one body row, which made most of them duplicates of it on the deduplication key and gave all of them that row's country. Preprocessing would therefore have deleted several of the cases the fixture exists to provide, and at the project's own seed the whole block inherited `ES` and would have been diverted into the holdout, so the train, validation, calibration and test frames that four tickets build against would have contained none of them. Nothing in the first round of tests could see it: they asserted that each case was present in the raw frame, which was true. A second agent, asked to attack the change rather than describe it, reproduced the fault, and the fix now carries a test that asserts each case *survives* the preprocessing rules rather than merely existing. The lesson is the one already in the working agreements: an agent's claim decides nothing until it is checked, and the check has to be at the point where the value is consumed.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: AI presented the three options with the parallel-work and PII consequences of each and recommended A; Lukas chose it. The generated distribution was then checked against the dataset card's published make and country shares.
+- **Other evidence:** [`recommenditos/data/synthetic.py`](../recommenditos/data/synthetic.py); [`tests/test_data.py`](../tests/test_data.py); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
+- **In LaTeX:** no
+
+
+### EDN-34: The derived raw Parquet keeps its PII columns and is pushed like any other stage output
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Data Versioning, Personal Data
+- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Decision:** `data/raw/listings.parquet`, the output of the `download` stage, keeps the seven PII columns of the published file and is cached and pushed to the DagsHub remote like any other stage output. No `push: false`, and no PII removal before preprocessing. Our public remote therefore holds the same personal data twice, once as the CSV of EDN-25 and once as this Parquet.
+- **Alternatives considered:**
+  - **Option A (chosen): push it, which is DVC's default for a stage output.**
+    Pros: nothing to build. The marginal exposure is close to nothing, because the identical data already sits on the same public remote as a CSV (EDN-25) and on Zenodo under the same licence, so anyone who wants those columns already has them. `dvc pull` stays sufficient for a complete working state, and the pipeline's first artefact is byte-identical for everyone because it is pulled rather than regenerated.
+    Cons: we hold a second artefact containing the same personal data under our own name. A deletion request, a licence question or a scope change then touches two artefacts instead of one. EDN-25's argument was that *the identical file* is already public, and a format we produced ourselves is not literally that file.
+  - **Option B: `push: false` on the output.** DVC keeps it in the local cache only and each person regenerates it from the CSV.
+    Pros: no second copy leaves the machine.
+    Cons: it moves the pipeline's first artefact from pulled to locally produced. Parquet writing is not guaranteed byte-stable across pyarrow versions, so a teammate on a different version would see every downstream stage rerun, which is exactly the reproducibility property NFR-06 asks for and that the skeleton was just measured to have.
+  - **Option C: drop the PII in `download` and build `seller_group_id` there.**
+    Pros: the Parquet every stage reads would carry no PII at all, so NFR-08 would hold from the first derived artefact rather than from the interim frame, and the file would still be pushed, so reproducibility would be unaffected.
+    Cons: the raw layer stops being a faithful copy of the published file, which is what `RAW_SCHEMA` and the raw expectation suite of #25 exist to describe; and the group-key hashing moves out of #34's first step into #33, so a ticket boundary shifts for a gain that does not change what is publicly reachable.
+  - **Option D: no Parquet at all, every stage reads the CSV.**
+    Cons: each run parses 548.6 MB of CSV and re-infers its dtypes, which is the cost the stage exists to remove.
+- **Rationale:** The question is marginal exposure, not storage: measured on the real file the CSV is 548.6 MB, the Parquet of all 75 columns is 215.3 MB, and the seven PII columns are 3.1 MB of it. Against a copy of the same data that is already public on our own remote and on Zenodo, none of the alternatives changes what a reader can reach; they only change what we have to build and what we risk. B risks the reproducibility we have just demonstrated, and C buys the same nothing in exposure terms while making the raw layer no longer raw. So the honest reading is that A costs the least and hides the least.
+
+  What A does cost is recorded rather than argued away: we become the publisher of that personal data in two artefacts instead of one, and EDN-25's "the identical file is already public" does not literally cover a format we produced ourselves. The entry exists so that a later decision to restrict the remote, or a request to remove the data, finds both artefacts named in one place.
+
+  NFR-08 is unaffected either way. It forbids PII in the processed data, the prediction log, the comparables and the model artefacts; the raw layer is none of those, and preprocessing removes the columns structurally, because `Schema.conform` selects only the columns the interim contract names.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI found the question in the first place, while reviewing the pipeline skeleton: the `download` stage's output had inherited EDN-25's acceptance without anyone noticing that EDN-25 had only ever weighed the CSV. Its first write-up estimated the Parquet at "roughly another 550 MB"; asked to explain the trade-off, it measured instead and reported 215.3 MB, of which the PII columns are 3.1 MB, which moved the argument off storage entirely. It also found, while explaining, a reproducibility flaw in its own earlier suggestion of `push: false` and withdrew it. It recommended C as the clean option and A as defensible; Lukas chose A as the cheapest of the two it stood behind. The modification is that the cost of A is written down here rather than treated as settled by EDN-25.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 and 2026-09-30: the question was raised in the review of PR #48, the sizes were measured against the Zenodo file, and the four options were laid out with the reproducibility catch in B; Lukas replied "mache die einfachste variante die du recommendest".
+- **Other evidence:** [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48).
+- **In LaTeX:** no
+
 
 ## Template
 

@@ -64,16 +64,32 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── docs               <- MkDocs project with the project documentation
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks, named `<number>-<initials>-<description>`
+├── dvc.yaml           <- The pipeline; see docs/docs/pipeline.md
+├── params.yaml        <- Everything the pipeline is configured by
+├── metrics.json       <- The SC-01 to SC-06 gate result, written by `evaluate`
 ├── pyproject.toml     <- Package metadata and tool configuration
 ├── references         <- Course material, data dictionaries and other references
-├── reports            <- Report and EDN (LaTeX), generated figures
+├── reports            <- Report and EDN (LaTeX), metrics, generated figures
 ├── tests              <- Pytest test suite
 └── recommenditos      <- Source code of the package
-    ├── config.py      <- Paths and configuration
-    ├── dataset.py     <- Data download and preparation
-    ├── features.py    <- Feature engineering
+    ├── config.py      <- Paths
+    ├── schema.py      <- The data contract every stage reads and writes against
+    ├── pipeline.py    <- Shared stage plumbing: params in, checked frames out
+    ├── data           <- One module per data stage of the pipeline
+    │   ├── download_raw_dataset.py    <- `download`
+    │   ├── preprocess.py              <- `preprocess`
+    │   ├── gx_context_configuration.py <- `configure_gx`
+    │   ├── validate_data.py           <- `validate-data`
+    │   ├── split_data.py              <- `split`
+    │   ├── build_features.py          <- `features`
+    │   └── synthetic.py               <- The generated test fixture
     ├── modeling
-    │   ├── train.py   <- Model training
+    │   ├── train.py   <- `train`
+    │   ├── evaluate.py <- `evaluate`
     │   └── predict.py <- Model inference
     └── plots.py       <- Visualizations
 ```
+
+One module per pipeline stage rather than the flat `dataset.py` / `features.py`
+of the template, so a stage's DVC dependencies name exactly the code it runs
+([EDN-28](reports/edn.md)).
