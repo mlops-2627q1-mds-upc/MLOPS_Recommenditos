@@ -1,3 +1,11 @@
+% Self-evaluation / retrospective. Only built into the final report
+% (report.tex inputs this file inside \iffinalreport), so it costs the initial
+% delivery no pages; it is drafted now so the team has something to react to.
+% Owner: the whole team, in the laboratory session. Everything below is a draft
+% assembled from the sprint records in docs/docs/scrum/sprints.md so that the
+% team has a starting point, not finished text. The \tbd right after the heading
+% says so in the PDF as well, and `make report-submit` counts it, so the draft
+% cannot reach a submission unnoticed.
 \section{Self-evaluation of the project (retrospective)}
 \label{sec:retrospective}
 \guidance{
@@ -7,11 +15,82 @@
   Explain which concepts we used from which other courses.
 }
 
+\tbd{DRAFT for the whole team to confirm and extend in the laboratory session. Everything below is assembled from the sprint records and retrospective notes in \texttt{docs/docs/scrum/sprints.md}, which cover sprint~1 and the start of sprint~2 only. It is a starting point for the retrospective, not its outcome: the team confirms, corrects and extends it together, and each member supplies their own part of \cref{sec:retro-courses}.}
+
 \subsection{Challenges, barriers and opportunities}
-\tbd{main challenges, barriers and opportunities}
+\label{sec:retro-challenges}
+
+\paragraph{The pipeline is sequential, and five people are not.}
+The single largest barrier was structural rather than technical.
+Download feeds preprocessing, which feeds validation, the split, the features, the training and the evaluation, so for as long as none of the contracts between the stages existed, only one person could work on the pipeline at a time.
+Sprint~1 showed what that costs: seven pull requests were open simultaneously, two of them with merge conflicts, and nothing could be built on the data contract while its own pull request was open.
+Sprint~2 was cut around the barrier instead of around the milestones, by landing the shared contracts first: one ticket delivered every DVC stage as a running stub, \texttt{params.yaml}, the schema contract and a synthetic fixture, and it unblocked eight tickets at once.
+The same cut gave each remaining ticket its own files, which is why one owner per file also became the rule for this report.
+
+\paragraph{Evidence that stops being true.}
+Several decisions were taken on measurements committed to the repository, and then a later scope decision changed the data under them.
+When we dropped the listings registered after the snapshot date, the committed analysis outputs behind two EDN entries no longer reproduced, and re-running them changed one requirement's configuration from passing to failing.
+Three successive written forms of the drift requirement were refuted by measurement in this way, the last because the detector's significance level and the requirement's false-alarm promise were the same number by construction and nobody had noticed.
+The opportunity in it is the one the course is about: a requirement that has been measured is worth more than one that has been agreed, and the cost of finding out late is a re-run rather than a rewrite.
+
+\paragraph{Contradictions between our own documents.}
+Three of them surfaced in review rather than in use: the requirements declared the raw data would never be re-hosted while the project brief still called that question open and the data-versioning page showed the opposite example; the requirements treated the deployment target as settled in eight places while the brief listed it as open; and the working agreements put a ceremony in a Tuesday laboratory session while every session in the schedule is a Wednesday.
+Each was a decision made by writing rather than by deciding.
+
+\paragraph{Premises nobody had checked.}
+Two decisions were reached on a premise that turned out to be false, both within the same week.
+The raw-data decision rested on the DagsHub repository being private, which it was not; anonymous access is refused for public and private repositories alike, so the observation behind it had no discriminating power.
+And the choice of which DagsHub repository to use was taken on measurements that were all correct, about a repository belonging to somebody who is not on the team.
+In both cases the check that settled it was one API call and was available before the decision rather than after it.
+
+\paragraph{An uneven distribution of work.}
+The sprint~1 retrospective records that almost every commit on \texttt{main} came from one person.
+The laboratory grade carries an individual factor based on contributions, so this matters beyond fairness, and the action item was that every teammate owns at least one pipeline stage and writes the report section for it, which is how both sprint~2 and this report are cut.
+\tbd{the team's own account of how the distribution developed over sprints~2 and~3, and whether the action item worked}
+
+\paragraph{External dependencies we do not control.}
+Nobody on the team has access to the virtual machine the deployment is designed for, and that has a dated trigger rather than an owner: if it is still true at the Milestone~4a laboratory, we raise it with the teachers.
+The dataset's licence contradicts itself on its own upstream record, and we chose to report both readings rather than wait for the author.
+The data itself is the standing limitation: four premium brands are 82.9\,\% of it, which is why the scope had to become an explicit rule and why part of the quality gate is blind to four of the eleven supported makes.
+
+\paragraph{Opportunities we took.}
+Holding a whole country out of training turned the monitoring milestone from a simulation into a measurement, because every held-out listing carries a real price.
+Making the data source a parameter meant a synthetic fixture could unblock five people without anyone being able to ship a model trained on fabricated data unnoticed.
+And writing the decisions down as they were taken, with their alternatives, meant the report can cite reasoning rather than reconstruct it.
+
+\tbd{the team's additions for Milestones 4 to 6: what the deployment, the packaging and the monitoring turned out to cost, and which of the risks above actually materialised}
 
 \subsection{Lessons learned and what we would do differently}
-\tbd{what we learned and would change}
+\label{sec:retro-lessons}
+
+\paragraph{Land the contracts before the work that depends on them.}
+The single change that made the project move was landing the schema, the parameters and the fixture as one ticket before anybody started on a stage.
+We would do that first next time rather than after a sprint of pull requests blocking each other.
+
+\paragraph{Measure a requirement before committing to it, not after.}
+Every requirement that made a claim about the data rather than about the system was wrong on first writing.
+Writing the acceptance criterion as something a script can run, and then running it, is what caught that; doing it after the requirement was agreed is what made it expensive.
+
+\paragraph{State the premise a decision rests on, and verify it.}
+Both decisions that had to be withdrawn were withdrawn for a premise, not for a measurement.
+The rule we now follow is to name the premise in the decision record and check it before recording, because the check is nearly always cheaper than the retraction.
+
+\paragraph{A check has to sit where the value is consumed.}
+The synthetic fixture's first version was wrong in a way its own tests could not see, because the tests asserted that each edge case existed in the raw frame while the stages consume them after preprocessing, which deleted most of them.
+Asserting that each case survives the rules, rather than that it exists, is the form of the test that has signal.
+This also became the rule for working with coding agents: a ticket handed to an agent needs a local oracle, and an agent's claim decides nothing until it has been checked at the point the value is used.
+
+\paragraph{Make the process trace a by-product of the work.}
+Labels, milestones and owners assigned when a ticket is written cost nothing; assigned at the sprint review they cost a reconstruction from the git history, and six tickets of sprint~1 never got them at all.
+The same applies to the ceremonies: holding them in the one session where the whole team is present is worth more than holding them on the day a document happened to name.
+
+\paragraph{Reserve shared identifiers centrally.}
+Two branches handed out the same EDN identifier, and since the report cites those identifiers they cannot be renumbered afterwards without breaking the citation.
+Reserving the number on \texttt{main} before opening the branch is one line of process for a class of merge conflict that cannot be resolved cheaply.
+
+\tbd{the team's additions after Milestones 4 to 6, and the one or two changes each member would make to how we worked}
 
 \subsection{Concepts from other courses}
-\tbd{concepts used and the courses they come from}
+\label{sec:retro-courses}
+
+\tbd{which concepts from which other Master courses each of us used, named per member. Nothing in the repository records this, so it has to come from the team: candidates to prompt the discussion are software engineering and testing, software architecture, statistics and statistical inference for the drift tests and the conformal intervals, machine learning for the model family and the evaluation protocol, data engineering for the pipeline, and project management for the Scrum process.}
