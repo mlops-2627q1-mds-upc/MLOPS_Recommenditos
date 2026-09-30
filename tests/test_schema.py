@@ -287,6 +287,20 @@ def test_conform_applies_the_declared_levels_rather_than_inferring_them():
     assert conformed["make"].cat.codes.tolist() == [3, 0]
 
 
+def test_conform_reorders_an_input_whose_levels_are_the_right_set_in_the_wrong_order():
+    # The dangerous case, because pandas will not do it: casting one categorical
+    # to another over the same *set* of levels keeps the order it had, so a
+    # frame that is merely mis-ordered would come back unchanged and still wrong.
+    frame = _levelled_frame("Volvo", "Audi")
+    frame["make"] = frame["make"].astype(pd.CategoricalDtype(tuple(reversed(LEVELS))))
+    assert frame["make"].cat.codes.tolist() == [0, 3]
+
+    conformed = LEVELLED.conform(frame)
+
+    assert tuple(conformed["make"].cat.categories) == LEVELS
+    assert conformed["make"].cat.codes.tolist() == [3, 0]
+
+
 def test_conform_corrects_an_input_that_is_already_categorical_over_other_levels():
     # A frame read back from Parquet arrives as a categorical already, and a
     # stale or hand-built one can carry the wrong levels; the cast has to correct
@@ -311,6 +325,12 @@ def test_a_value_outside_the_declared_levels_becomes_missing():
 # --------------------------------------------------------------------------
 # Features and targets
 # --------------------------------------------------------------------------
+
+
+def test_a_contract_lists_its_categoricals_levels_for_a_consumer_that_encodes_them_itself():
+    # What the `ridge` variant of the ladder needs: the level lists without
+    # having to know which of 164 columns are categorical.
+    assert LEVELLED.levels == {"make": LEVELS}
 
 
 def test_a_contract_separates_its_features_from_its_targets(params):

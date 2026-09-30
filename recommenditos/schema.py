@@ -126,7 +126,12 @@ class Schema:
 
     @property
     def levels(self) -> dict[str, tuple[str, ...]]:
-        """Every categorical column's levels, in the order their codes use."""
+        """Every categorical column's levels, in the order their codes use.
+
+        For a consumer that encodes the categoricals itself, such as the `ridge`
+        variant of the experiment ladder: it needs the level list without having
+        to know which of the contract's columns are categorical.
+        """
         return {column.name: column.levels for column in self.columns if column.levels is not None}
 
     @property
@@ -406,9 +411,14 @@ def _cast_levels(series: pd.Series, levels: "tuple[str, ...]") -> pd.Series:
         tuple(str(level) for level in series.dtype.categories) == levels
     ):
         return series
-    # Via `object`, because `where` on a categorical is restricted to its own
-    # levels and would raise on a value this contract is about to drop.
+    # Via `object` when the input is already categorical, because casting one
+    # categorical to another over the same *set* of levels is a no-op in pandas:
+    # it keeps the order it had, so a frame whose levels are merely in the wrong
+    # order would come back unchanged and still wrong. Going through the values
+    # makes the declared order the one that is applied.
     plain = series.astype("object") if isinstance(series.dtype, pd.CategoricalDtype) else series
+    # `where` first, so the cast never sees a value outside the declared levels:
+    # letting `astype` drop them is deprecated in pandas and due to start raising.
     return plain.where(plain.isin(levels)).astype(pd.CategoricalDtype(levels))
 
 
