@@ -206,6 +206,14 @@ validate:
 train:
   # One MLflow experiment; each variant below is one run in it (#37).
   mlflow_experiment: recommenditos-price
+  # Threads for the fit, pinned rather than left at LightGBM's default of "all
+  # cores". The trees came out identical across 1, 4 and 8 threads, but LightGBM
+  # writes the thread count into `booster.txt`, so a default would make the
+  # artefact's hash depend on the machine that ran `dvc repro` (NFR-06). 1
+  # because there is nothing to gain: the whole four-variant ladder fits in a few
+  # seconds at real scale against NFR-10's 15-minute budget, and one thread also
+  # removes the contention if the four `train@*` stages are ever run at once.
+  num_threads: 1
   # `dvc.yaml` iterates this mapping with `foreach`, so the stages are named
   # `train@b0`, `train@lgbm-basic` and so on, and each declares only its own
   # key under `params:`. Changing one variant therefore retrains that variant
@@ -223,6 +231,13 @@ train:
       feature_set: basic
       params:
         alpha: 1.0
+        # Levels below this many training rows share one "rare level" column
+        # instead of getting a coefficient each, and an unseen level at serving
+        # time is encoded as that column (EDN-18, EDN-50). An absolute row count
+        # rather than a share, so that what it means does not change as the
+        # training set grows. Only the `ridge` variant has this: the tree models
+        # handle a rare level natively (EDN-02).
+        min_category_rows: 30
     # Ladder step 3: the main model.
     lgbm-basic:
       estimator: lightgbm

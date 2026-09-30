@@ -88,7 +88,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
     ├── modeling
     │   ├── train.py   <- `train`
     │   ├── evaluate.py <- `evaluate`
-    │   └── predict.py <- Model inference
+    │   └── model.py   <- The estimators, and the load-and-predict seam
     └── plots.py       <- Visualizations
 ```
 
