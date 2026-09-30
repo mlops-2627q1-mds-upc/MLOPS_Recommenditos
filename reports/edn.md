@@ -964,7 +964,7 @@ How to add an entry:
 - **In LaTeX:** no
 
 
-### EDN-35: The seller group key stays an unsalted hash, and the residual risk is disclosed
+### EDN-37: The seller group key stays an unsalted hash, and the residual risk is disclosed
 
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance

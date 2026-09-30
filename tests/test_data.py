@@ -190,7 +190,7 @@ def test_the_equipment_lists_are_repr_strings_and_never_null(raw_frame):
 def test_the_group_key_is_stable_and_carries_no_plaintext_seller_name(raw_frame):
     # Stable, so two runs group the same way (NFR-06), and no value is a name.
     # Not that a name cannot be recovered from a value: the hash is unsalted, so
-    # the published source file inverts it, which EDN-35 accepts and discloses
+    # the published source file inverts it, which EDN-37 accepts and discloses
     # rather than the code pretending otherwise.
     hashed = hash_seller_group(raw_frame)
 

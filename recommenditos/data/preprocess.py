@@ -15,7 +15,7 @@ the `ES` holdout, which happens in `split`.
 `seller_company_name`, which no later stage can see: the interim contract does
 not name it. `split` then groups by the hash alone (`split.group_key`). It is
 the split's grouping key and not an anonymisation measure; the function's own
-docstring says what it protects and what it does not (EDN-35).
+docstring says what it protects and what it does not (EDN-37).
 """
 
 from collections.abc import Callable, Iterable
@@ -74,7 +74,7 @@ def hash_seller_group(frame: pd.DataFrame) -> pd.Series:
     own columns. A dictionary built from that file inverts all 17,141 dealer ids
     and all 13,576 private-seller ids in about 50 ms, and for a private seller
     that recovers `zip` and `city`, two of the columns `preprocess.pii_columns`
-    removes. EDN-35 keeps the hash unsalted and discloses that instead: a pepper
+    removes. EDN-37 keeps the hash unsalted and discloses that instead: a pepper
     would make the split irreproducible on a clean clone without the secret, and
     the dealer behind a listing is recoverable from the public file regardless by
     joining on make, model, price, mileage and registration date, which we do
