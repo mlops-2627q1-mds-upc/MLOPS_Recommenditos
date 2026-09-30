@@ -88,6 +88,12 @@ Three contracts are defined:
 Feature matrices depend on `features.sets` in `params.yaml`, so they come from `feature_schema(columns, name=...)` rather than from a constant.
 A feature set naming a column no stage produces fails there, with the offending name, instead of producing a matrix that is quietly missing a column.
 
+They also depend on the **data**, which a params-derived contract cannot express: which equipment items cleared the frequency threshold, and which levels each categorical has.
+So the `features` stage writes what it actually built as `feature_space.json` beside its matrices, and every stage that reads a matrix loads that rather than rebuilding it.
+A categorical carries its level list, because a code is a level's position: two frames over the same levels in a different order hold different numbers under the same dtype name.
+`Schema.conform` therefore casts to the **declared** levels rather than inferring them from the frame in front of it, which is what lets a stage encode a subset, a rebuilt frame or a one-row request and get the numbering the model was fitted on.
+`build_features.FeatureSpace.load(directory, name=...)` is the one entry point for a consumer that needs the contract, the vocabulary or a frame cast against them.
+
 Parameters
 ----------
 
@@ -129,8 +135,9 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/processed/supported_makes.json` is written by `split` but read by nothing yet.
-  The `features` stage already declares it as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics; what is still missing is the code that applies it.
+- `data/processed/supported_makes.json` is read by `features` but **not applied** by it yet.
+  The stage declares it as a dependency and reads it before the vocabulary is built, which is the only point at which the restriction could still decide the level set, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
+  What is still missing is the restriction itself, in all three of `features`, `train` and `evaluate` ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
   `split` deliberately records the scope instead of enforcing it: it stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no rows disappear without an artefact saying where they went.
   Four things the stages that turn a set into model input (#36, #37, #39) have to guarantee, none of them optional:
 

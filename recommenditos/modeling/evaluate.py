@@ -39,8 +39,8 @@ from recommenditos.config import (
     PROCESSED_DATA_DIR,
     REPORTS_DIR,
 )
+from recommenditos.data.build_features import FeatureSpace
 from recommenditos.pipeline import load_params, read_frame
-from recommenditos.schema import feature_schema
 
 #: Every criterion NFR-01 gates on. A variant is deployable only when all six
 #: pass, so a `None` here blocks the gate rather than being ignored.
@@ -107,15 +107,18 @@ def evaluate_gate(metrics: dict[str, float], baseline_mdape: float | None, crite
     }
 
 
-def _evaluate_variant(variant: str, params: dict, input_dir: Path, models_dir: Path) -> dict:
+def _evaluate_variant(variant: str, input_dir: Path, models_dir: Path) -> dict:
     model = json.loads((models_dir / variant / "model.json").read_text(encoding="utf-8"))
     feature_set = model["feature_set"]
-    schema = feature_schema(
-        params["features"]["sets"][feature_set], name=f"features-{feature_set}"
-    )
+    # The contract travels with the matrices, because the equipment multi-hot
+    # columns and the category levels are whatever the training rows decided.
+    # `FeatureSpace` because #39's masking sweep rebuilds a frame per masked
+    # field and has to cast it back against the same levels.
+    space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
+    schema = space.schema
     test = read_frame(input_dir / feature_set / "test.parquet", schema)
     # The stub model is a constant in log space; #37 replaces it with a fitted
-    # estimator and this becomes `model.predict(test[features])`.
+    # estimator and this becomes `model.predict(test[model["features"]])`.
     predicted = pd.Series(
         np.exp(np.full(len(test), model["constant_log_price"])), index=test.index
     )
@@ -145,7 +148,7 @@ def main(
     logger.warning("STUB: SC-04, SC-05 and SC-06 report null until issue #39 lands.")
 
     measured = {
-        variant: _evaluate_variant(variant, params, input_dir, models_dir)
+        variant: _evaluate_variant(variant, input_dir, models_dir)
         for variant in params["train"]["variants"]
     }
     baseline_mdape = measured.get(params["evaluate"]["baseline_variant"], {}).get("mdape")

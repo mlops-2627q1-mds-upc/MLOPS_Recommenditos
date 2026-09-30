@@ -142,12 +142,18 @@ stages:
   # declares only its own key under `params:`. Adding a feature set is a change
   # to params.yaml alone.
   #
-  # `supported_makes.json` is a dependency although `split` writes the rows of
-  # unsupported makes into the sets rather than dropping them: this stage is
-  # where the list is applied (see docs/docs/pipeline.md, "Known gaps"). Without
-  # the dependency, changing `split.min_listings_per_make` would rewrite the
-  # list and leave every matrix, model and metric downstream of it untouched,
-  # and `dvc.lock` would assert that stale artefacts are current.
+  # The stage's directory output also holds `feature_space.json`: the contract
+  # the matrices were written against and the vocabulary the training rows
+  # decided. It needs no `outs` entry of its own because it is inside that
+  # directory, and it must not get one - a matrix and the vocabulary that
+  # explains it have to be restored together or not at all.
+  #
+  # `supported_makes.json` is a dependency because the supported-make list bounds
+  # the feature space: `make`'s levels are the sorted unique training values, so
+  # a change to which makes the API serves changes the level set, and a matrix
+  # built against the old list has to be rebuilt rather than reused.
+  # What this stage owes the make list, and what `train` and `evaluate` owe it,
+  # is written down in docs/docs/pipeline.md under "Known gaps" (EDN-48).
   # ----------------------------------------------------------------------
   features:
     foreach: ${features.sets}
@@ -170,6 +176,8 @@ stages:
         - features.sets.${key}
         - features.equipment_columns
         - features.equipment_min_frequency
+        - features.model_version_tokens
+        - features.model_version_min_frequency
       outs:
         - data/processed/features/${key}
 
@@ -179,6 +187,15 @@ stages:
   # `${item.feature_set}` resolves at parse time, so `train@lgbm-extended`
   # depends on the extended matrix and `train@b0` on the basic one - DVC knows
   # which feature stage each variant needs without being told twice.
+  #
+  # It does not declare `features.sets`. The stage does not read it: the matrix's
+  # contract travels with the matrices, because the equipment columns and the
+  # category levels are whatever the training rows decided. Changing a feature set
+  # still retrains, through the directory dependency above - the `features` stage
+  # rewrites it first - so nothing is lost by not declaring a key nobody reads.
+  #
+  # `train.mlflow_experiment` is declared ahead of the read: issue #37 adds the
+  # MLflow tracking that uses it, and the stub deliberately does not.
   # ----------------------------------------------------------------------
   train:
     foreach: ${train.variants}
@@ -186,6 +203,7 @@ stages:
       cmd: python3 -m recommenditos.modeling.train ${key}
       deps:
         - recommenditos/modeling/train.py
+        - recommenditos/data/build_features.py
         - recommenditos/config.py
         - recommenditos/schema.py
         - recommenditos/pipeline.py
@@ -194,24 +212,27 @@ stages:
         - seed
         - train.mlflow_experiment
         - train.variants.${key}
-        - features.sets.${item.feature_set}
       outs:
         - models/${key}
 
   # ----------------------------------------------------------------------
   # evaluate: the metrics artefact and the SC-01 to SC-06 gate of NFR-01 (#39).
+  #
+  # Like `train`, it does not declare `features.sets`: it reads each matrix's
+  # contract from the artefact beside it, and it already depends on the whole
+  # features directory.
   # ----------------------------------------------------------------------
   evaluate:
     cmd: python3 -m recommenditos.modeling.evaluate
     deps:
       - recommenditos/modeling/evaluate.py
+      - recommenditos/data/build_features.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
       - data/processed/features
       - models
     params:
-      - features.sets
       - train.variants
       - evaluate
     outs:

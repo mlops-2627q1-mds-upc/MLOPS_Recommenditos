@@ -109,8 +109,8 @@ MAX_GROUP_SHARE = 0.05
 #:
 #: Without a cap the bound is unbounded: grouping by `country_code` derived a
 #: 101 pp allowance, which no realised share can miss. 0.15 is above the widest
-#: bound any pool the project runs on needs (the 1,862-row fixture pool asks
-#: 13.3 pp at `DISPERSION_SIGMAS`), so it never binds on a pool this project
+#: bound any pool the project runs on needs (the 1,865-row fixture pool asks
+#: 13.2 pp at `DISPERSION_SIGMAS`), so it never binds on a pool this project
 #: splits, and it stops the pathological cases from being vacuous.
 MAX_DISPERSION_BOUND = 0.15
 
@@ -126,8 +126,8 @@ MAX_DISPERSION_BOUND = 0.15
 #:
 #: It is chosen from a measured false-alarm budget instead: at most 1 seed in
 #: 1,000 may turn the stage red on a pool that satisfies `MAX_GROUP_SHARE`.
-#: Over 2,000 seeds the worst case is 4.25 sigma on the real snapshot, 4.00 on
-#: the 20,000-row fixture pool and 3.86 on the 1,862-row one, and the real
+#: Over 2,000 seeds the worst case is 4.25 sigma on the real snapshot, 4.19 on
+#: the 20,000-row fixture pool and 3.69 on the 1,865-row one, and the real
 #: snapshot's 99.9th percentile is 4.16. 5.0 clears every one of those 6,000
 #: trials, so the measured false-alarm rate is 0, with 0.75 sigma of margin
 #: above the worst observed. The previous 4.0 did not: seeds 1 to 400 already

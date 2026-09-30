@@ -31,8 +31,9 @@ from recommenditos.schema import (
     INTERIM_SCHEMA,
     PROCESSED_SCHEMA,
     RAW_SCHEMA,
+    TARGET_NAMES,
     SchemaError,
-    feature_schema,
+    load_feature_schema,
 )
 
 DVC_FILE = PROJ_ROOT / "dvc.yaml"
@@ -119,8 +120,11 @@ def test_every_stage_writes_a_contract_valid_frame(pipeline, params):
     INTERIM_SCHEMA.validate(pd.read_parquet(pipeline["interim"]))
     for name in (*SPLIT_NAMES, "holdout_es"):
         PROCESSED_SCHEMA.validate(pd.read_parquet(pipeline["processed"] / f"{name}.parquet"))
-    for feature_set, columns in params["features"]["sets"].items():
-        schema = feature_schema(columns, name=feature_set)
+    for feature_set in params["features"]["sets"]:
+        # Not `feature_schema` of the params list: the matrices carry the
+        # equipment multi-hot columns too, so the contract to check them against
+        # is the one their stage wrote beside them.
+        schema = load_feature_schema(pipeline["features"] / feature_set, name=feature_set)
         for name in (*SPLIT_NAMES, "holdout_es"):
             schema.validate(
                 pd.read_parquet(pipeline["features"] / feature_set / f"{name}.parquet")
@@ -168,6 +172,24 @@ def test_a_model_is_written_for_every_variant(pipeline, params):
         model = json.loads((pipeline["models"] / variant / "model.json").read_text())
         assert model["variant"] == variant
         assert model["feature_set"] == params["train"]["variants"][variant]["feature_set"]
+
+
+def test_the_model_artefact_never_lists_the_target_among_its_features(pipeline, params):
+    # `models/<variant>/model.json` is what #37 extends, what #39 reads and what
+    # the API loads, so a `features` list ending in `price, log_price` asserts
+    # that the target is an input. The matrix carries the label beside the
+    # inputs, so the artefact has to say where the boundary is; 164 entries is
+    # well past the point where anybody re-reads the list.
+    for variant in params["train"]["variants"]:
+        model = json.loads((pipeline["models"] / variant / "model.json").read_text())
+        schema = load_feature_schema(
+            pipeline["features"] / model["feature_set"], name=model["feature_set"]
+        )
+
+        assert set(model["features"]).isdisjoint(TARGET_NAMES), variant
+        assert model["targets"] == list(TARGET_NAMES), variant
+        # Together they are the matrix, so nothing is silently unaccounted for.
+        assert model["features"] + model["targets"] == list(schema.names), variant
 
 
 def test_the_gate_reports_every_success_criterion(pipeline, params):
@@ -348,6 +370,13 @@ def test_no_parameter_is_dead(dvc_stages, params):
                 # Declaring `split` covers `split.ratios.train`, and declaring
                 # `features.sets.basic` covers nothing above it.
                 declared.add(key)
+            if "${key}" in entry:
+                # Except the mapping a `foreach` iterates: it walks every key of
+                # it, so `features.sets.${key}` declares all of `features.sets`,
+                # spread over one stage per feature set. Without this, the only
+                # way to keep the mapping covered is a stage declaring the whole
+                # of it, which then reruns for a change to a set it does not use.
+                declared.add(entry.split(".${key}")[0])
 
     undeclared = sorted(
         key
