@@ -549,6 +549,11 @@ def test_b0_falls_back_from_bucket_to_make_to_global(
         (makes[1], models[1], 0.0, 8_000.0),
         # no age, so no bucket key at all
         (makes[0], models[0], None, 25_000.0),
+        # the same, for the make whose training rows include one without an age.
+        # That row must not have formed a bucket of its own keyed on the missing
+        # value: pandas matches a null merge key to a null merge key, so a
+        # `dropna=False` grouping would answer 9,000 here instead of B's median.
+        (makes[1], models[0], None, 8_000.0),
         # no make, so nothing above the global median
         (None, models[0], 1.0, 15_000.0),
     ]
@@ -666,9 +671,15 @@ def test_num_threads_is_pinned_from_params(
 def test_the_booster_is_saved_at_its_early_stopped_iteration(trained: dict):
     """The file is the model, so predict needs no iteration argument.
 
-    Without this, `booster.txt` would carry all `n_estimators` trees and every
-    consumer would have to remember to pass `num_iteration=best_iteration`; the
-    one that forgets gets a quietly overfitted prediction.
+    A consumer that had to remember `num_iteration=best_iteration` would sooner
+    or later forget, and get a quietly overfitted prediction.
+
+    Worth saying what this does and does not pin: removing the explicit
+    `num_iteration` from the save does not make it fail, because lightgbm 4.7
+    already truncates the booster when early stopping fires. It pins the
+    property, so it would catch a LightGBM that stopped truncating or a
+    configuration in which early stopping never fires - which the second
+    assertion is there to rule out for the fixture as it stands.
     """
     for variant in ("lgbm-basic", "lgbm-extended"):
         best = trained["models"][variant].metadata["training"]["best_iteration"]
@@ -752,6 +763,93 @@ def test_a_bundle_whose_two_halves_disagree_is_refused(tmp_path: Path, trained: 
 
     with pytest.raises(ModelError, match="disagree"):
         load_model(bundle)
+
+
+def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: dict):
+    """EDN-51's load-bearing half, which no prediction on this fixture can show.
+
+    scikit-learn's default is an indicator only for the features that were
+    missing *at fit time*. A column that happens to be complete in the training
+    split would then be mean-filled with no indicator the moment SC-06 masks it,
+    and the criterion would be measuring the model's own imputation rather than
+    the cost of the missing field. `features="all"` is what prevents that, and it
+    is invisible from the outside, so it is asserted on the fitted pipeline.
+    """
+    model = trained["models"]["b1"]
+    encoded = list(model.pipeline["encode"].get_feature_names_out())
+
+    # By the transformer's prefix, not by the word "missing": the categorical
+    # branch has a `__missing__` level of its own and would match that too.
+    indicators = {
+        name.removeprefix("numeric__missing__missingindicator_")
+        for name in encoded
+        if name.startswith("numeric__missing__")
+    }
+    assert indicators == set(model.numeric_columns)
+    # And the fill is there too, so the indicator is an addition rather than a
+    # replacement: dropping the filled copy would leave Ridge only the pattern.
+    filled = {
+        name.removeprefix("numeric__filled__")
+        for name in encoded
+        if name.startswith("numeric__filled__")
+    }
+    assert filled == set(model.numeric_columns)
+
+
+def test_a_numeric_feature_complete_in_training_still_gets_an_indicator(
+    matrices: dict, supported_makes: tuple[str, ...]
+):
+    """The case `features="all"` exists for, which the fixture does not produce.
+
+    Every numeric column of the synthetic fixture happens to have a missing value
+    in the training split, so the default `features="missing-only"` emits the same
+    set of indicators there and the test above cannot tell the two apart. This one
+    fills one column completely first, which is the situation on real data:
+    scikit-learn would then mean-fill it with no indicator the moment SC-06 masks
+    it, and the criterion would be measuring the model's own imputation.
+    """
+    data = train.read_matrices(matrices["features"], "basic", supported_makes)
+    complete = data.train.copy()
+    complete["power_kw"] = complete["power_kw"].fillna(complete["power_kw"].median())
+    assert complete["power_kw"].notna().all(), "the column has to be complete at fit time"
+
+    model = fit_variant(
+        "b1",
+        _variants()["b1"],
+        TrainingData(data.space, complete, data.validation, supported_makes),
+        seed=1,
+        num_threads=1,
+    )
+
+    assert "numeric__missing__missingindicator_power_kw" in set(
+        model.pipeline["encode"].get_feature_names_out()
+    )
+
+
+def test_a_refit_does_not_leave_the_previous_estimator_beside_the_new_one(
+    matrices: dict, tmp_path: Path, monkeypatch
+):
+    """A variant switched from one estimator to another must not keep both payloads.
+
+    `dvc repro` clears a stage's outputs first, but `train.main` is also run by
+    hand and by the tests, and a directory holding both a `booster.txt` and a
+    `pipeline.joblib` would hash differently depending on which fits a machine
+    happened to have run (NFR-06).
+    """
+    for name in REQUIRED_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    models = tmp_path / "models"
+
+    train.main("lgbm-basic", matrices["features"], models, PARAMS_FILE)
+    # The same output directory, under a variant that writes a different payload.
+    shutil.move(models / "lgbm-basic", models / "b1")
+    train.main("b1", matrices["features"], models, PARAMS_FILE)
+
+    assert {path.name for path in (models / "b1").iterdir()} == {
+        MODEL_FILE,
+        FEATURE_SPACE_FILE,
+        "pipeline.joblib",
+    }
 
 
 def test_a_payload_written_by_another_library_version_is_flagged(tmp_path: Path, trained: dict):

@@ -682,10 +682,17 @@ def _ridge_pipeline(
                     remainder="drop",
                 ),
             ),
-            # `lsqr`, not the default `auto`: `auto` picks a dense Cholesky when
-            # it can, which goes through BLAS, whose reduction order changes with
-            # the thread count. LSQR is scipy's iterative solver, runs
-            # single-threaded and is therefore the same on any machine (NFR-06).
+            # `lsqr`, not the default `auto`: `auto` picks a solver by the shape
+            # and sparsity of the matrix, and a dense one goes through BLAS,
+            # whose reduction order depends on the thread count. scipy's LSQR is
+            # iterative and single-threaded, so nothing about it can vary with
+            # the machine (NFR-06).
+            #
+            # Insurance documented by the libraries rather than a measured fix,
+            # and worth being exact about: the coefficients came out
+            # byte-identical across separate processes at 1 and 8 BLAS threads
+            # with `auto` as well, on this data. Keeping `lsqr` costs nothing and
+            # removes the dependency; it was not shown to be necessary here.
             ("ridge", Ridge(alpha=alpha, solver="lsqr")),
         ]
     )
@@ -781,9 +788,15 @@ class LightGBMModel(Model):
     def _save_payload(self, directory: Path) -> None:
         # LightGBM's own text format, not a pickle of the sklearn wrapper: it
         # survives a LightGBM upgrade, it is readable, and EDN-11's SHAP export
-        # needs a `Booster` rather than the wrapper. Saved at the early-stopped
-        # iteration, so the file *is* the model and predict needs no extra
-        # argument.
+        # needs a `Booster` rather than the wrapper.
+        #
+        # `num_iteration` is stated rather than left to default, and it is
+        # currently inert: lightgbm 4.7 already truncates the booster when early
+        # stopping fires, so the object holds exactly `best_iteration` trees and
+        # saving it with any bound writes the same file. Stated anyway, because
+        # the property the API depends on is that the file *is* the early-stopped
+        # model and needs no iteration argument at predict time, and that should
+        # not rest on a truncation nothing here asked for.
         self.booster.save_model(
             directory / _BOOSTER_FILE, num_iteration=self.metadata["training"]["best_iteration"]
         )

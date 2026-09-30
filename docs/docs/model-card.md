@@ -197,7 +197,21 @@ curl -X POST http://<host>/predict \
 
 The response carries the estimate in EUR, the model version, a request ID, any warnings and the explanation.
 Every endpoint is documented with a request and a response example in the OpenAPI schema at `/docs` (FR-16).
-To work with the artefact directly instead, clone the repository and run `dvc pull`; the exact command lands here with the first trained model.
+
+To work with the artefact directly instead, clone the repository, run `dvc pull` and load the bundle through its one seam:
+
+```python
+from recommenditos.modeling.model import load_model
+
+model = load_model(Path("models/lgbm-basic"))
+model.features  # the matrix columns the model consumes, in its own order
+model.predict_eur(frame)  # EUR, float64, one row in one row out, indexed like `frame`
+```
+
+`predict_eur` takes the feature matrix as it comes: it selects and casts what it needs, ignores extra columns such as `price`, and raises naming any column it needs and cannot find.
+A missing value is passed through unimputed and the estimator decides what to do with it (EDN-15); what "missing" means for a field whose domain already represents absence is fixed by EDN-23, so an omitted assertion flag is `False` and an omitted equipment list is empty.
+The frame handed in is never modified.
+`model.predict_log_price(frame)` is the log of the same number, which is what a future conformal step needs; `predict_interval_eur` is the reserved name for SC-05's intervals and does not exist yet.
 
 ## Training Details
 
@@ -258,17 +272,100 @@ The pipeline deliberately does not clean them: a value range is a data-quality r
 
 #### Training
 
+The `train` stage fits one variant of the [experiment ladder](project-brief.md#4-modelling-plan) per `dvc.yaml` stage, so `dvc repro train@lgbm-basic` retrains that variant alone.
+Every variant is fitted only on the makes the API serves: `split` records them in `data/processed/supported_makes.json` and `train` restricts its rows to them (EDN-48), so no make the API refuses with a 422 is in the model's own training data.
+
 - **Target:** `log(price)`, predictions transformed back with `exp`.
+  **No bias correction** is applied to the inverse transform (EDN-49).
+  `exp(E[log P | x])` is the conditional median, which is what every metric here reports, and a Duan smearing correction targets the mean instead: measured on the real snapshot it raises MdAPE for every variant.
 - **Validation set:** early stopping and hyperparameter tuning.
   **Calibration set:** UC2 interval calibration only, never tuning.
+- **The prediction is bounded to the training price range.**
+  `predict_eur` clips in log space before the exponential, to the observed minimum and maximum `price` of its own training rows, which are recorded in the bundle.
+  This is what makes the interface's "finite and strictly positive" true of the arithmetic rather than of a hope: `exp` overflows to `inf` above about 710 in log space and underflows to exactly `0.0` below -746, and an `inf` prediction would turn MdAPE into `nan` and pass the gate's comparison unnoticed.
+  The bound is a guard rail, not a calibration: with `preprocess.price_max_eur` at 2,000,000 the upper edge sits far above any plausible prediction, so a linear extrapolation into six figures is inside it.
+  Because the bound is recorded, the share of predictions sitting exactly on an edge can be reported instead of the clip hiding a pathology.
+
+##### Hyperparameters as trained
+
+All of these live in `params.yaml`, so a change reruns exactly the variant it affects.
+
+| Variant | Ladder step | Estimator | Feature set | Parameters |
+|---|---|---|---|---|
+| `b0` | 1 | median of `price` per (make, model, 2-year age band), falling back to the make median and then the global median | basic | `age_bucket_years: 2` |
+| `b1` | 2 | Ridge on `log(price)` | basic | `alpha: 1.0`, `min_category_rows: 30` |
+| `lgbm-basic` | 3 | LightGBM | basic | `learning_rate: 0.05`, `num_leaves: 63`, `n_estimators: 1000`, `early_stopping_rounds: 50` |
+| `lgbm-extended` | 4 | LightGBM | extended | as `lgbm-basic` |
+
+The settings that are **not** parameters are modelling choices rather than knobs a sweep should touch, and they are the same for both LightGBM variants: `objective="regression"` (squared error on log price, because the log transform already handles the multiplicative error structure) and `metric="l1"` with `first_metric_only=True` for early stopping.
+The absolute error in log space *is* the symmetric relative error, so the stopping point lines up with MdAPE, the metric the gate reads, rather than with a squared error nothing reports.
+`n_estimators: 1000` is a ceiling, not a count: early stopping on the validation split decides the real number, and the booster is saved at that iteration, so the file *is* the early-stopped model and no consumer has to remember an iteration argument.
+
+B1's encoding is two decisions that look, at a glance, like rules of this project being broken, and both are recorded.
+Its categoricals are **one-hot encoded**, which EDN-02 rules out for the tree models and which EDN-50 confines to B1: Ridge is linear, has no native categorical handling, and dropping the categoricals would leave the depreciation baseline unable to tell a Porsche from a Dacia.
+Its numerics are **mean-filled with a per-feature missingness indicator**, which EDN-51 argues is not imputation under EDN-15: with an indicator for every feature the encoding is information-preserving, so the fill is a numerically neutral placeholder rather than a guess at the value.
+`min_category_rows: 30` groups the levels below that many training rows into one shared column, which is also where an unseen level goes at serving time (EDN-18).
+
+##### Determinism
+
+- **Seed:** `params.yaml`'s project-wide `seed`, passed to LightGBM as `random_state` so `feature_fraction_seed`, `bagging_seed` and `data_random_seed` all derive from it.
+  Worth being exact about: with `feature_fraction` and `bagging_fraction` at their defaults of 1.0, **none of the four estimators consumes randomness at all** today.
+  The seed is recorded for provenance and to make a future subsampled configuration reproducible; it is inert as configured, so a test asserting that a different seed changes the result would fail.
+- **Threads:** `train.num_threads: 1`, never LightGBM's default of every core.
+  LightGBM writes the thread count into `booster.txt`, so a default would make the artefact's hash depend on the machine that ran `dvc repro`.
+  Nothing is lost by pinning it to 1, and it removes the contention if the four `train@*` stages are ever run at once.
+- **LightGBM:** `deterministic=True` and `force_row_wise=True`, so the histogram construction is not chosen by data size and thread count.
+  Documented insurance rather than a measured fix: the trees came out identical across 1, 4 and 8 threads with the flags off as well.
+- **Ridge:** `solver="lsqr"`, scipy's single-threaded iterative solver, rather than the default `auto`, which may pick a dense solver and go through BLAS, whose reduction order depends on the thread count.
+  Also insurance: the coefficients came out byte-identical across separate processes at 1 and 8 BLAS threads with `auto` too.
+- **B0:** group medians only, and a median is order-independent, so the result does not depend on the row order Parquet hands back.
+- What holds, and is asserted by `tests/test_model.py`: two fits of the same variant on the same rows give bit-identical predictions and a byte-identical payload file.
+  `model.json` is deliberately excluded, because it carries `trained_at` and the MLflow run id, which are provenance and cannot be stable.
+  What is **not** promised is bit-identical results across different LightGBM, scikit-learn or NumPy builds or across CPU architectures; NFR-06's "within 0.1 percentage points" is the promise that survives a toolchain change.
+
+##### What a trained variant writes
+
+`models/<variant>/`, one DVC-tracked directory per variant:
+
+| File | Contents |
+|---|---|
+| `model.json` | The record: the estimator, the feature and target lists separately, the hyperparameters as trained, the training row counts and price range, the supported makes, the library versions and the MLflow run id. |
+| `feature_space.json` | A copy of the `features` stage's own artefact: the contract the matrices were written against and the vocabulary the training rows decided. |
+| `booster.txt` | LightGBM variants: the native text format, saved at the early-stopped iteration. Not a pickle of the sklearn wrapper, because the text format survives a LightGBM upgrade, it is readable, and EDN-11's SHAP export needs a `Booster`. |
+| `pipeline.joblib` | `b1` only: the fitted scikit-learn pipeline. |
+| `lookup.parquet` | `b0` only: the whole model as one table a person can read, in EUR, with the row count behind each median. |
+
+The feature space travels *with* the model rather than being looked up beside the matrices, because the bundle is baked into the API image on its own (EDN-08) and a code is a level's position: a model that encoded a request against one level order and scored it against another would be wrong with no error anywhere.
+`recommenditos/modeling/model.py` is the only code that opens any of these files.
+
+##### Experiment tracking
+
+One MLflow experiment, `params.yaml`'s `train.mlflow_experiment` (`recommenditos-price`), and **one run per variant**, named after the variant.
+`train` creates the run and records its id in `model.json`; `evaluate` resumes that id and appends the test metrics and the gate verdict rather than opening a run of its own.
+That is deliberate: a run per DVC stage would scatter four variants over eight runs nothing joins, and the point of tracking is to be able to compare them.
+
+Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the model artefact under `model/`, the emissions of the fit (issue #38) and the test metrics with the six criteria.
+`train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
+
+Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-06 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
+The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
+
+```
+tags.git_commit = '<the full SHA of the run you want>'
+```
+
+with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.energy_kwh`.
+`tags.dvc_lock_md5` is the sharper filter where the lock file exists, because it identifies the data and parameters a run saw rather than the code alone.
+
+Training does **not** require credentials or a network.
+With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
+`RECOMMENDITOS_REQUIRE_TRACKING=1` turns any tracking failure into a failed stage, and that is the setting to use for the runs whose numbers are cited, so that a silent skip is not discovered while the report is being written.
 - **Intervals (UC2):** Conformalized Quantile Regression with MAPIE (1.x) on quantile LightGBM models, trained with random masking of optional fields so that partial inputs produce wider intervals.
   The coverage guarantee is marginal, that is on average over all inputs, not per missing-field pattern.
 - **Point model and missing fields [open]:** whether the point model needs the same random masking, or whether LightGBM's native missing handling suffices, is measured in Milestone 2 once the pipeline exists ([project brief](project-brief.md#4-modelling-plan)).
   Either way SC-06 bounds the outcome, and NFR-01's gate enforces it.
 - **Comparables:** a filtered lookup over the processed listings, matching make and model within 2 years of age and 25 % of mileage, **not** a learned nearest-neighbour model.
   The filters are never relaxed to fill the list ([specification](specification.md) FR-09).
-
-Hyperparameters, seeds and the chosen configuration are recorded here once the runs exist, and tracked in MLflow and `params.yaml`.
 
 #### Speeds, Sizes, Times
 
