@@ -403,9 +403,10 @@ class MedianBaselineModel(Model):
     Fitted on `price` rather than on `log_price` because the median commutes with
     a monotone transform, so `exp(median(log price))` and `median(price)` are the
     same number and the readable one is worth storing. The prediction path takes
-    the log of the stored median and `predict_eur` exponentiates it again, which
-    is a float round trip and therefore exact to within one unit in the last
-    place rather than bit-exact.
+    the log of the stored median and `predict_eur` exponentiates it again, so what
+    it returns equals the stored median to within floating-point rounding rather
+    than bit-exactly - which is why the hand-computed test compares with a
+    tolerance.
 
     The fallback chain is also what makes the baseline degrade gracefully under a
     partial request: a row whose key is absent - an unknown model, or no
@@ -427,7 +428,11 @@ class MedianBaselineModel(Model):
                 f"{self.feature_set!r} feature set does not carry {', '.join(missing)}"
             )
         self.lookup = lookup
-        self._width = float(metadata["params"]["age_bucket_years"])
+        # Through `_tuning`, so a loaded bundle's params block is checked on the
+        # way in and not only at fit time: this is the one estimator that reads a
+        # parameter at predict time, so a bundle carrying the wrong one would
+        # silently key a different age band than it was fitted with.
+        self._width = float(self._tuning(metadata)["age_bucket_years"])
         # Object keys on both sides of the merge and of the map. Parquet hands a
         # text column back as pandas 3's `str` dtype, and a `str` key does not
         # match an `object` key, so normalising here is what keeps a loaded model
@@ -561,12 +566,20 @@ def _tidy_lookup(lookup: pd.DataFrame) -> pd.DataFrame:
 
 
 def _missing_as_level(frame: pd.DataFrame) -> pd.DataFrame:
-    """Categoricals as strings, with absence as a level of its own.
+    """Categoricals as strings, with absence as a level under a name of its own.
 
-    A module-level function rather than a lambda because it is pickled with the
-    fitted pipeline. `OneHotEncoder` has no missing-value handling of its own, so
-    without this an absent value would fail the fit; with it, absence gets a
-    coefficient like any other level.
+    Not a workaround: `OneHotEncoder` has handled missing values since
+    scikit-learn 1.1 and would fit without this, making them a category called
+    `nan` - measured, for `category` dtype and for `object` holding `np.nan`,
+    `None` or `pd.NA` alike. Two reasons to name the level anyway. B1 exists to
+    be read, and `make___missing__` says what a coefficient is for where
+    `make_nan` reads like a defect. And the encoding then does not rest on a
+    library behaviour that arrived in a minor release and could change in
+    another, which for the one estimator whose job is to be a stable reference is
+    worth a five-line transformer.
+
+    A module-level function rather than a lambda, because it is pickled with the
+    fitted pipeline.
     """
     return frame.astype("object").where(frame.notna(), MISSING_LEVEL).astype("str")
 

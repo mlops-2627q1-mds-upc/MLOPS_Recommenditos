@@ -40,6 +40,7 @@ from recommenditos.data.build_features import FeatureSpace, Vocabulary, read_sup
 from recommenditos.modeling import train
 from recommenditos.modeling.model import (
     ESTIMATORS,
+    MISSING_LEVEL,
     MODEL_FILE,
     PREDICTION_NAME,
     MedianBaselineModel,
@@ -794,6 +795,20 @@ def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: 
         if name.startswith("numeric__filled__")
     }
     assert filled == set(model.numeric_columns)
+
+
+def test_the_ridge_carries_a_named_level_for_an_absent_categorical(trained: dict):
+    """B1 exists to be read, so the coefficient for absence needs a readable name.
+
+    `OneHotEncoder` would call it `nan`, which in a table of coefficients reads
+    like a defect rather than like "this listing did not say".
+    """
+    model = trained["models"]["b1"]
+    encoded = set(model.pipeline["encode"].get_feature_names_out())
+
+    named = {name for name in encoded if name.endswith(MISSING_LEVEL)}
+    assert named, f"no level named {MISSING_LEVEL!r} among {sorted(encoded)[:8]}"
+    assert not any(name.endswith("_nan") for name in encoded)
 
 
 def test_a_numeric_feature_complete_in_training_still_gets_an_indicator(
