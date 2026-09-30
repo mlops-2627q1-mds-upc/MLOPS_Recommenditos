@@ -19,7 +19,18 @@ dependencies = [
     "coverage",
     "dvc",
     "ipython",
+    # The `b1` pipeline is persisted with joblib rather than by hand: a fitted
+    # `ColumnTransformer` carries the category lists, the imputer means, the
+    # scaler statistics and the infrequent-level groupings, and none of that is
+    # worth re-serialising. It arrives with scikit-learn anyway, but a direct
+    # import of a transitive dependency breaks the day that dependency drops it.
+    "joblib",
     "jupyterlab",
+    # The main estimator of the ladder (EDN-02: native categorical handling, no
+    # one-hot). 4.5 or newer for `deterministic` and the sklearn-style
+    # `eval_X`/`eval_y` arguments that replace the deprecated `eval_set`;
+    # observed working on 4.7.0.
+    "lightgbm>=4.5",
     "loguru",
     "matplotlib",
     "mkdocs",
