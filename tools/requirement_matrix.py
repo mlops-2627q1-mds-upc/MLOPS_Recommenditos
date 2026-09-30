@@ -11,11 +11,13 @@ what joins them into one table the report can cite instead of a claim:
 * the test suite, where `@pytest.mark.req("FR-15", "NFR-01")` records what a
   test verifies.
 
-Three findings exit non-zero, because letting any of them pass destroys the
+Four findings exit non-zero, because letting any of them pass destroys the
 evidence quietly rather than loudly:
 
 * a marker naming an ID no requirement has - the coverage it was meant to record
   is lost, and the matrix would still look complete;
+* a marker naming nothing at all - it reads like a record of coverage and is
+  none, and a test that never runs hides it from the per-test check;
 * the two documents disagreeing about which IDs exist - the specification
   promises that no entry of it exists without a requirement behind it;
 * a requirement whose evidence is due (see tools/expected_coverage.yaml) and
@@ -24,6 +26,16 @@ evidence quietly rather than loudly:
 Completeness beyond that is not enforced here: before M4 there is no API, so most
 functional requirements cannot have evidence yet. They are reported as missing
 without failing the build until the milestone that owes them is enforced.
+
+What this module can and cannot assert is worth being exact about, because the
+report cites the table as evidence. It can check that the evidence a requirement's
+specification entry promises exists: a test carrying the ID where the entry says a
+test is the evidence, the named drill where it says a person is. It cannot read a
+test body and judge whether it verifies the criterion, so "verified by a test"
+means the promised route exists and is walked, not that a human agreed it is
+enough. That last judgement is the review NFR-07 asks for before each delivery,
+and it is why the statuses below keep a marker on a **[manual]** entry apart from
+verification instead of counting it as evidence the entry never promised.
 """
 
 import contextlib
@@ -39,9 +51,13 @@ import pytest
 import typer
 import yaml
 
-# Derived here rather than imported from `recommenditos.config`: the matrix is
-# repository metadata and has to build even when the package itself cannot be
-# imported, which is exactly the state a broken pull request is in.
+# Derived from this file's own location rather than imported from
+# `recommenditos.config`: the matrix is repository metadata about the checkout it
+# runs in, so it must build the same from any working directory, and `tools/`
+# stays independent of the package's runtime configuration. It is not independent
+# of the package itself - collecting the markers imports tests/conftest.py, which
+# imports `recommenditos`, so a package that cannot be imported fails this
+# generator too.
 PROJ_ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS_DOC = PROJ_ROOT / "docs" / "docs" / "requirements.md"
 SPECIFICATION_DOC = PROJ_ROOT / "docs" / "docs" / "specification.md"
@@ -57,13 +73,30 @@ MARKER = "req"
 AUTOMATED = "automated"
 MANUAL = "manual"
 
-#: What the matrix says about a requirement. `MISSING` is the only one the gate
-#: reacts to; `VERIFIED_BY_HAND` is a route to evidence, not a gap.
-COVERED = "covered"
-VERIFIED_BY_HAND = "by hand"
-MISSING = "missing"
+#: What the matrix says about a requirement.
+#:
+#: The specification decides what counts as evidence, so a `req` marker is only
+#: verification where the entry is tagged **[automated]**. On a **[manual]** entry
+#: the promised evidence is the drill the cell names, and a marker there says the
+#: test touches the requirement - useful to record, and not the thing that was
+#: promised. Collapsing the two, as an earlier version of this module did, let a
+#: test whose body asserts that two files exist report NFR-06's reproducibility
+#: and MLflow provenance as covered.
+VERIFIED_BY_TEST = "verified by a test"
+NAMED_BY_A_TEST = "named by a test"
+VERIFIED_BY_HAND = "verified by hand"
+MISSING = "verified by nothing"
 
-_ID_PATTERN = re.compile(r"(?:FR|NFR)-\d{2}")
+#: The lab's milestones in schedule order (references/MLOps-lab.md). The gate
+#: reads "enforced up to `current`" off this tuple and never off the order the
+#: YAML happens to list them in, so a block moved, renamed or appended in the file
+#: cannot move a requirement out of the gate.
+MILESTONES = ("M1", "M2", "M3", "M4", "M5", "M6")
+
+#: Two digits today, but an ID is not a two-digit thing: a pattern that insisted
+#: on exactly two would make FR-100 invisible to every check in this module, and a
+#: requirement nothing can see is worse than one nothing verifies.
+_ID_PATTERN = re.compile(r"(?:FR|NFR)-\d{2,}")
 
 #: The specification's tables are `ID | Realisation | Verified by`. The parser
 #: reads the verification tag by position, so a row of another shape is refused
@@ -96,11 +129,31 @@ class Entry:
 
     @property
     def status(self) -> str:
+        if self.tests and self.requirement.verification == AUTOMATED:
+            return VERIFIED_BY_TEST
         if self.tests:
-            return COVERED
+            return NAMED_BY_A_TEST
         if self.requirement.verification == MANUAL and self.requirement.evidence:
             return VERIFIED_BY_HAND
         return MISSING
+
+    @property
+    def has_the_promised_evidence(self) -> bool:
+        """Whether the evidence the specification entry promises actually exists.
+
+        This, not the status, is what the gate reads, because `NAMED_BY_A_TEST`
+        says nothing either way: a marker on a **[manual]** entry neither creates
+        the drill the cell names nor removes it. So the weaker state satisfies the
+        gate exactly when the manual route it sits on is named, and on its own -
+        a **[manual]** cell left empty with a marker slapped on some test - it does
+        not. Letting the marker alone satisfy the gate would reopen the cheapest
+        way to fake coverage there is.
+        """
+        if self.status == VERIFIED_BY_TEST:
+            return True
+        if self.requirement.verification == MANUAL:
+            return bool(self.requirement.evidence)
+        return False
 
 
 @dataclass(frozen=True)
@@ -113,10 +166,14 @@ class Matrix:
 
     def blocking(self) -> tuple[Entry, ...]:
         """The gaps that fail the build: due already, and verified by nothing."""
-        return tuple(entry for entry in self.entries if entry.enforced and entry.status == MISSING)
+        return tuple(
+            entry
+            for entry in self.entries
+            if entry.enforced and not entry.has_the_promised_evidence
+        )
 
     def counts(self) -> dict[str, int]:
-        counts = dict.fromkeys((COVERED, VERIFIED_BY_HAND, MISSING), 0)
+        counts = dict.fromkeys((VERIFIED_BY_TEST, NAMED_BY_A_TEST, VERIFIED_BY_HAND, MISSING), 0)
         for entry in self.entries:
             counts[entry.status] += 1
         return counts
@@ -195,12 +252,19 @@ class ExpectedCoverage:
     """When each requirement owes evidence, and which milestones CI enforces."""
 
     current: str
-    order: tuple[str, ...]
+    listed: tuple[str, ...]
     due: dict[str, str]
 
     @property
     def enforced_milestones(self) -> tuple[str, ...]:
-        return self.order[: self.order.index(self.current) + 1]
+        """Every milestone at or before `current`, by MILESTONES, not by file order.
+
+        Reading it off the file's own order made the gate depend on where a block
+        sits: a `- milestone: M2` block appended after M3 put everything booked to
+        it behind `current`, so it was never enforced. That is not a statement a
+        reviewer can read, whereas a wrong `current` or a moved requirement is.
+        """
+        return MILESTONES[: MILESTONES.index(self.current) + 1]
 
     def enforces(self, req_id: str) -> bool:
         return self.due[req_id] in self.enforced_milestones
@@ -219,13 +283,30 @@ def parse_expected_coverage(text: str, known_ids: set[str]) -> ExpectedCoverage:
             "the expected-coverage set needs a `current` milestone and a `milestones` list"
         )
 
-    order: list[str] = []
+    listed: list[str] = []
     due: dict[str, str] = {}
     for block in document["milestones"]:
+        if not isinstance(block, dict) or "milestone" not in block:
+            raise TraceabilityError(
+                "every entry of `milestones` needs a `milestone` name and its requirements"
+            )
         milestone = block["milestone"]
-        if milestone in order:
+        # A free-text name was the third way to drop a requirement out of the gate:
+        # nothing said which names exist or which comes first, so a typo or an
+        # invented milestone silently became a bucket that is never enforced.
+        if milestone not in MILESTONES:
+            raise TraceabilityError(
+                f"the expected-coverage set lists the milestone {milestone}, which is not "
+                f"one of {', '.join(MILESTONES)}"
+            )
+        if milestone in listed:
             raise TraceabilityError(f"the expected-coverage set lists {milestone} twice")
-        order.append(milestone)
+        if listed and MILESTONES.index(milestone) < MILESTONES.index(listed[-1]):
+            raise TraceabilityError(
+                f"the expected-coverage set lists {milestone} after {listed[-1]}; list the "
+                f"milestones in the order {', '.join(MILESTONES)}"
+            )
+        listed.append(milestone)
         for req_id in block.get("requirements") or []:
             if req_id in due:
                 raise TraceabilityError(
@@ -235,9 +316,9 @@ def parse_expected_coverage(text: str, known_ids: set[str]) -> ExpectedCoverage:
             due[req_id] = milestone
 
     current = document["current"]
-    if current not in order:
+    if current not in listed:
         raise TraceabilityError(
-            f"`current` is {current}, which is not one of the milestones {', '.join(order)}"
+            f"`current` is {current}, which is not one of the milestones {', '.join(listed)}"
         )
 
     unknown = sorted(set(due) - known_ids)
@@ -253,7 +334,7 @@ def parse_expected_coverage(text: str, known_ids: set[str]) -> ExpectedCoverage:
             "set; add it to the milestone whose work produces its evidence"
         )
 
-    return ExpectedCoverage(current=current, order=tuple(order), due=due)
+    return ExpectedCoverage(current=current, listed=tuple(listed), due=due)
 
 
 @lru_cache(maxsize=1)
@@ -281,19 +362,26 @@ class _MarkerCollector:
 
     def __init__(self) -> None:
         self.marked: dict[str, tuple[str, ...]] = {}
+        self.empty: list[str] = []
 
     def pytest_collection_modifyitems(self, items) -> None:
         for item in items:
-            ids = tuple(
-                dict.fromkeys(
-                    str(arg) for marker in item.iter_markers(name=MARKER) for arg in marker.args
-                )
-            )
-            if not ids:
-                continue
+            markers = list(item.iter_markers(name=MARKER))
+            ids = tuple(dict.fromkeys(str(arg) for marker in markers for arg in marker.args))
             # A parametrised test is one test in the matrix: twelve rows of the
             # same node ID with a different `[case]` suffix say nothing extra.
-            self.marked.setdefault(item.nodeid.partition("[")[0], ids)
+            test_id = item.nodeid.partition("[")[0]
+            if markers and not ids:
+                # Recorded rather than ignored. `@pytest.mark.req()` reads like a
+                # record of coverage and is none, and the per-test check in
+                # tests/conftest.py cannot see it on a test that never runs, so
+                # skipping it here left it caught by nothing at all.
+                if test_id not in self.empty:
+                    self.empty.append(test_id)
+                continue
+            if not ids:
+                continue
+            self.marked.setdefault(test_id, ids)
 
 
 def collect_req_markers(tests_dir: Path = TESTS_DIR) -> dict[str, tuple[str, ...]]:
@@ -305,13 +393,20 @@ def collect_req_markers(tests_dir: Path = TESTS_DIR) -> dict[str, tuple[str, ...
     """
     collector = _MarkerCollector()
     # The configuration and the root are passed explicitly, so the matrix builds
-    # the same from any working directory. `--no-cov` keeps pytest-cov from
-    # starting a second measurement on top of the one the test job reports, and
-    # nothing is cached because collecting is not a test run.
+    # the same from any working directory, and nothing is cached because collecting
+    # is not a test run.
+    #
+    # `-o addopts=` drops the project's own `addopts` for this run, which is what
+    # keeps a collection from pretending to be one. Inheriting them made the
+    # collect-only run rewrite `reports/junit.xml` as a `tests="0"` document, so
+    # building the matrix after `make test` destroyed the record of the 114 tests
+    # that had just passed. The reports belong to the real test run; this run
+    # produces none.
     arguments = [
         "--collect-only",
         "-q",
-        "--no-cov",
+        "-o",
+        "addopts=",
         "-p",
         "no:cacheprovider",
         "-c",
@@ -330,6 +425,12 @@ def collect_req_markers(tests_dir: Path = TESTS_DIR) -> dict[str, tuple[str, ...
         raise TraceabilityError(
             f"pytest could not collect the test suite (exit code {int(outcome)}):\n"
             f"{captured.getvalue()}"
+        )
+    if collector.empty:
+        raise TraceabilityError(
+            f"@pytest.mark.{MARKER} names no requirement ID in "
+            f"{', '.join(sorted(collector.empty))}; give it the IDs the test verifies "
+            "or take the marker off"
         )
     return collector.marked
 
@@ -411,22 +512,24 @@ def build_matrix(
 
 
 def _evidence_cell(entry: Entry) -> str:
-    """What verifies the requirement, or what the specification still owes.
+    """What verifies the requirement - and nothing else.
 
-    A missing automated entry shows the test the specification promises rather
-    than an empty cell, because that sentence is the ticket for whoever closes
-    the gap.
+    An earlier version printed the specification's promise here as
+    "expected: <sentence>", which put "expected: API test" in the Evidence column
+    of eleven of the sixteen functional requirements. A sentence naming a category
+    of test that nobody has written is not evidence, and a column that mixes it
+    with real evidence is exactly how a table of promises comes to read like a
+    table of records. Whoever closes the gap is pointed at the specification row
+    by the "Verified by" and "Due" columns, which is where the sentence lives.
     """
     requirement = entry.requirement
     by_hand = requirement.verification == MANUAL and requirement.evidence
+    parts = []
     if entry.tests:
-        tests = ", ".join(f"`{test}`" for test in entry.tests)
-        return f"{tests}; by hand: {requirement.evidence}" if by_hand else tests
+        parts.append(", ".join(f"`{test}`" for test in entry.tests))
     if by_hand:
-        return f"by hand: {requirement.evidence}"
-    if requirement.evidence:
-        return f"expected: {requirement.evidence}"
-    return "nothing"
+        parts.append(f"by hand: {requirement.evidence}")
+    return "; ".join(parts) if parts else "nothing yet"
 
 
 _PREAMBLE = """\
@@ -441,9 +544,15 @@ and the named evidence of `docs/docs/specification.md`, the `req` markers of the
 suite, and the milestone each requirement owes its evidence in, from
 `tools/expected_coverage.yaml`.
 
-- covered by a test: {covered}
+- verified by a test: {verified_by_test} - the entry is **[automated]** and a test carries its ID
+- named by a test: {named_by_a_test} - a test carries its ID, but the entry is **[manual]**, so the
+  evidence it promises is the drill its cell names and not that test
 - verified by hand, with named evidence: {by_hand}
 - verified by nothing: {missing}, of which {blocking} are already due
+
+None of these say a person agreed the evidence is enough. They say the route the
+specification promises exists and is walked as far as a tool can see, which is why
+NFR-07 still asks for a review of this table before each delivery.
 
 The gate stands at milestone {milestone}, so it enforces {enforced}. A requirement
 booked to one of those milestones and verified by nothing fails the build. A
@@ -458,7 +567,8 @@ def render_markdown(matrix: Matrix) -> str:
     blocking = matrix.blocking()
     sections = [
         _PREAMBLE.format(
-            covered=counts[COVERED],
+            verified_by_test=counts[VERIFIED_BY_TEST],
+            named_by_a_test=counts[NAMED_BY_A_TEST],
             by_hand=counts[VERIFIED_BY_HAND],
             missing=counts[MISSING],
             blocking=len(blocking),
@@ -473,10 +583,11 @@ def render_markdown(matrix: Matrix) -> str:
         sections.append(
             "\n".join(
                 [
-                    "## Verified by nothing, and already due",
+                    "## Missing the promised evidence, and already due",
                     "",
                     *(
-                        f"- {entry.requirement.id}, due {entry.requirement.milestone}"
+                        f"- {entry.requirement.id}, due {entry.requirement.milestone}, "
+                        f"{entry.status}"
                         for entry in blocking
                     ),
                 ]
@@ -530,6 +641,9 @@ def as_json(matrix: Matrix) -> dict:
                 "due": entry.requirement.milestone,
                 "enforced": entry.enforced,
                 "status": entry.status,
+                # Separate from the status so that whatever reads this next does
+                # not have to re-derive which statuses the gate accepts.
+                "has_the_promised_evidence": entry.has_the_promised_evidence,
                 "tests": list(entry.tests),
             }
             for entry in matrix.entries
@@ -570,14 +684,16 @@ def main(markdown_path: Path = MATRIX_MD, json_path: Path = MATRIX_JSON):
     blocking = matrix.blocking()
     if blocking:
         logger.error(
-            f"{len(blocking)} requirement(s) due by {matrix.milestone} are verified by "
-            f"nothing: {', '.join(entry.requirement.id for entry in blocking)}"
+            f"{len(blocking)} requirement(s) due by {matrix.milestone} do not have the "
+            "evidence their specification entry promises: "
+            f"{', '.join(entry.requirement.id for entry in blocking)}"
         )
         raise typer.Exit(1)
 
     counts = matrix.counts()
     logger.success(
-        f"{counts[COVERED]} requirement(s) covered by a test, "
+        f"{counts[VERIFIED_BY_TEST]} requirement(s) verified by a test, "
+        f"{counts[NAMED_BY_A_TEST]} named by a test, "
         f"{counts[VERIFIED_BY_HAND]} verified by hand, {counts[MISSING]} by nothing, "
         f"none of them due by {matrix.milestone}."
     )

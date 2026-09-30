@@ -12,9 +12,21 @@
 # requirement cannot enter the docs without someone deciding when it is due.
 #
 # What the gate can check is that a requirement has a route to evidence: a test
-# carrying its ID, or the named manual evidence of the specification's
-# "Verified by" column. It cannot check that a drill was actually run - that is
-# the review NFR-07 asks a person to do before each delivery.
+# carrying its ID where the specification says a test is the evidence, or the
+# named manual evidence of its "Verified by" cell where it says a person is. It
+# cannot check that a drill was actually run, and it cannot read a test body and
+# judge whether it verifies the criterion - that is the review NFR-07 asks a
+# person to do before each delivery.
+#
+# The milestone names are validated against M1 to M6 and the gate enforces every
+# milestone at or before `current` by that order, not by the order the blocks
+# happen to appear in here. A requirement is therefore moved out of the gate only
+# by moving it to a later milestone, which is a line a reviewer reads.
+#
+# A milestone here is the one whose work produces the *last* piece of the
+# requirement's evidence, not the practice its topic belongs to. A requirement
+# whose evidence is half M3 work and half M4 work is booked M4, because that is
+# when it can first be complete.
 
 current: M3
 
@@ -28,7 +40,6 @@ milestones:
       - NFR-06
       - NFR-07
       - NFR-08
-      - NFR-10
 
   - milestone: M4
     practice: Model deployment - the API
@@ -53,6 +64,13 @@ milestones:
       - NFR-02
       - NFR-03
       - NFR-09
+      # Energy efficiency is an M3 practice and the emissions half is M3 work
+      # (issue #38), but the specification's evidence for NFR-10 also names the
+      # energy-per-request figure from the NFR-03 load test, which needs the API.
+      # Booked M4 because that is the first milestone at which the entry can be
+      # complete; the emissions half still lands in M3 and the delivery review is
+      # what notices if it has not.
+      - NFR-10
 
   - milestone: M5
     practice: Model deployment - packaging and delivery
