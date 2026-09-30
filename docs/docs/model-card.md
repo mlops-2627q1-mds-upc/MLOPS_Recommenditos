@@ -317,11 +317,15 @@ Folding is not free and the value is the smallest one that still does the job: m
 - **Seed:** `params.yaml`'s project-wide `seed`, passed to LightGBM as `random_state` so `feature_fraction_seed`, `bagging_seed` and `data_random_seed` all derive from it.
   Worth being exact about: with `feature_fraction` and `bagging_fraction` at their defaults of 1.0, **none of the four estimators consumes randomness at all** today.
   The seed is recorded for provenance and to make a future subsampled configuration reproducible; it is inert as configured, so a test asserting that a different seed changes the result would fail.
-- **Threads:** `train.num_threads: 1`, never LightGBM's default of every core.
-  LightGBM writes the thread count into `booster.txt`, so a default would make the artefact's hash depend on the machine that ran `dvc repro`.
-  Nothing is lost by pinning it to 1, and it removes the contention if the four `train@*` stages are ever run at once.
+- **Threads:** `train.num_threads: 1`, never LightGBM's default of every core (EDN-53).
+  The trees are already thread-independent - identical at 1, 2, 4 and 8 threads - but LightGBM writes the count into `booster.txt`, so a default would make the artefact's hash depend on the machine that ran `dvc repro`.
+  1 rather than a larger pinned value because only 1 is a value every machine can honour.
+  This is a real trade and not a free one: measured on the real snapshot, `lgbm-extended` fits in a median 26.9 s at 1 thread against 14.3 s at 2 and 15.1 s at 4, so pinning costs about half the fit and the ladder takes 67 s where it might take 45 s.
+  That is far inside NFR-10's budget, which is what makes the trade cheap rather than costless.
+  On the 744-row test fixture the direction reverses and more threads are catastrophic (0.33 s at 1 thread against 28.6 s at 8), because OpenMP's overhead dominates a fit that small - and the suite fits every variant on that fixture.
 - **LightGBM:** `deterministic=True` and `force_row_wise=True`, so the histogram construction is not chosen by data size and thread count.
-  Documented insurance rather than a measured fix: the trees came out identical across 1, 4 and 8 threads with the flags off as well.
+  Documented insurance rather than a measured fix, and worth being exact about: with both flags **off** the trees are still identical across 1, 2, 4 and 8 threads, so the flags are not what makes the result thread-independent here.
+  They do change *which* trees are built, so they are not without consequence; they are simply not load-bearing for this property at this data size.
 - **Ridge:** `solver="lsqr"`, scipy's single-threaded iterative solver, rather than the default `auto`, which may pick a dense solver and go through BLAS, whose reduction order depends on the thread count.
   Also insurance: the coefficients came out byte-identical across separate processes at 1 and 8 BLAS threads with `auto` too.
 - **B0:** group medians only, and a median is order-independent, so the result does not depend on the row order Parquet hands back.

@@ -772,10 +772,13 @@ class LightGBMModel(Model):
             first_metric_only=True,
             # `deterministic` and `force_row_wise` together stop LightGBM from
             # choosing its histogram construction by data size and thread count.
-            # Documented insurance rather than a measured fix: at this data size
-            # the trees came out identical across 1, 4 and 8 threads with the
-            # flags off as well. They cost nothing and they are what keeps the
-            # promise if `num_threads` is ever raised.
+            # Documented insurance rather than a measured fix, and worth being
+            # exact about: with both flags off the trees are still identical
+            # across 1, 2, 4 and 8 threads, so they are not what makes the result
+            # thread-independent here. They do change which trees are built, so
+            # they are not free of consequence; they are kept because they are
+            # what LightGBM documents for this purpose and what would hold if
+            # `num_threads` were raised on data where it does matter (EDN-53).
             deterministic=True,
             force_row_wise=True,
             verbose=-1,

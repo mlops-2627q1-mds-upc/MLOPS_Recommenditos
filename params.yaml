@@ -207,12 +207,20 @@ train:
   # One MLflow experiment; each variant below is one run in it (#37).
   mlflow_experiment: recommenditos-price
   # Threads for the fit, pinned rather than left at LightGBM's default of "all
-  # cores". The trees came out identical across 1, 4 and 8 threads, but LightGBM
-  # writes the thread count into `booster.txt`, so a default would make the
-  # artefact's hash depend on the machine that ran `dvc repro` (NFR-06). 1
-  # because there is nothing to gain: the whole four-variant ladder fits in a few
-  # seconds at real scale against NFR-10's 15-minute budget, and one thread also
-  # removes the contention if the four `train@*` stages are ever run at once.
+  # cores". The trees are already thread-independent - identical at 1, 2, 4 and 8
+  # threads - but LightGBM writes the count into `booster.txt`, so a default would
+  # make the artefact's hash depend on the machine that ran `dvc repro` (NFR-06).
+  #
+  # 1 rather than a larger pinned value, because only 1 is a value every machine
+  # can honour: LightGBM silently uses what is available, so a 2-core runner asked
+  # for 4 writes a different file than an 8-core laptop. This is a real trade and
+  # not a free one (EDN-53): measured on the real snapshot, `lgbm-extended` fits
+  # in a median 26.9 s at 1 thread against 14.3 s at 2 and 15.1 s at 4, so
+  # pinning costs about half the fit. The four-variant ladder takes 67 s where it
+  # might take 45 s, which is far inside NFR-10's 15-minute budget - that is what
+  # makes the trade cheap, not that nothing is lost. On the 744-row test fixture
+  # the direction reverses and more threads are catastrophic (0.33 s at 1 thread,
+  # 28.6 s at 8), because OpenMP's overhead dominates a fit that small.
   num_threads: 1
   # `dvc.yaml` iterates this mapping with `foreach`, so the stages are named
   # `train@b0`, `train@lgbm-basic` and so on, and each declares only its own
