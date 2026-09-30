@@ -4,9 +4,11 @@
 file behind the pinned DOI and converts it; `synthetic` generates a stand-in, so
 the test suite and a clean clone still run with no network and no credentials.
 
-Because the source is a *parameter*, the choice is recorded in `dvc.lock` and
-shows up in `dvc params diff`; a pipeline running on synthetic data cannot pass
-unnoticed.
+Because the source is a *parameter*, the choice is recorded in `dvc.lock`, so a
+pipeline running on synthetic data cannot pass unnoticed: `dvc status` reports a
+workspace whose `download.source` disagrees with the lock the artefacts were
+built under. (Not `dvc params diff`, which compares the params files of two Git
+revisions rather than the lock against the workspace.)
 
 The downloaded CSV is not a stage output. DVC deletes a stage's outputs before it
 runs the stage, so declaring 548 MB as an `out` would re-download the file on
@@ -138,29 +140,39 @@ def _download(url: str, destination: Path) -> None:
     The bytes land in a `.part` file and are renamed only once the response has
     been read to the end, so an interrupted download cannot be mistaken for a
     cached copy on the next run - which would otherwise fail the MD5 check with
-    a message blaming Zenodo for our own half-written file.
+    a message blaming Zenodo for our own half-written file. A transfer that
+    fails takes its `.part` file with it, because nothing here resumes one and
+    half of 548 MB is only disk somebody has to go and find.
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
     partial = destination.with_name(destination.name + ".part")
     started = time.monotonic()
 
-    with requests.get(url, stream=True, timeout=_TIMEOUT_SECONDS) as response:
-        response.raise_for_status()
-        # Zenodo serves this file chunked and sends no `Content-Length`, which
-        # is also the reason EDN-25 rejected `dvc import-url`: its change
-        # detection wants a header this source does not send.
-        announced = response.headers.get("Content-Length")
-        size = f"{int(announced) / _BYTES_PER_MB:,.1f} MB" if announced else "size not announced"
-        logger.info(f"Downloading {url} ({size}) to {destination}.")
+    try:
+        with requests.get(url, stream=True, timeout=_TIMEOUT_SECONDS) as response:
+            response.raise_for_status()
+            # Zenodo serves this file chunked and sends no `Content-Length`,
+            # which is also the reason EDN-25 rejected `dvc import-url`: its
+            # change detection wants a header this source does not send.
+            announced = response.headers.get("Content-Length")
+            size = (
+                f"{int(announced) / _BYTES_PER_MB:,.1f} MB" if announced else "size not announced"
+            )
+            logger.info(f"Downloading {url} ({size}) to {destination}.")
 
-        written = 0
-        milestone = _PROGRESS_STEP_BYTES
-        with partial.open("wb") as handle:
-            for chunk in response.iter_content(chunk_size=_CHUNK_BYTES):
-                written += handle.write(chunk)
-                if written >= milestone:
-                    logger.info(f"  {written / _BYTES_PER_MB:,.0f} MB so far.")
-                    milestone += _PROGRESS_STEP_BYTES
+            written = 0
+            milestone = _PROGRESS_STEP_BYTES
+            with partial.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=_CHUNK_BYTES):
+                    written += handle.write(chunk)
+                    if written >= milestone:
+                        logger.info(f"  {written / _BYTES_PER_MB:,.0f} MB so far.")
+                        milestone += _PROGRESS_STEP_BYTES
+    except BaseException:
+        # `BaseException`, so that a Ctrl-C ten minutes into a download cleans up
+        # after itself as well as a dropped connection does.
+        partial.unlink(missing_ok=True)
+        raise
 
     partial.replace(destination)
     elapsed = time.monotonic() - started
@@ -170,7 +182,11 @@ def _download(url: str, destination: Path) -> None:
 
 
 def _md5(path: Path) -> str:
-    digest = hashlib.md5()
+    # `usedforsecurity=False` because this MD5 is the checksum Zenodo publishes,
+    # used to tell the pinned bytes from any other bytes. Without the flag the
+    # call raises on a FIPS-mode Python, which would make the stage unrunnable
+    # there for no reason.
+    digest = hashlib.md5(usedforsecurity=False)
     with path.open("rb") as handle:
         while chunk := handle.read(_CHUNK_BYTES):
             digest.update(chunk)

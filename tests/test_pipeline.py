@@ -262,9 +262,9 @@ def _params_override(tmp_path: Path, params: dict, **blocks) -> Path:
 
 
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
-    # The synthetic source, which is what keeps this suite runnable with no
-    # network and no credentials now that params.yaml pins `zenodo`. The real
-    # source is covered in test_download.py.
+    # The synthetic source, pinned here rather than inherited from params.yaml,
+    # so that the flip to `zenodo` (#57) does not turn this test into a 548 MB
+    # download. The real source is covered in test_download.py.
     output = tmp_path / "listings.parquet"
     download_raw_dataset.main(
         output,
@@ -287,13 +287,11 @@ def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
 
 
 def test_the_download_source_is_one_the_stage_implements(params):
-    # Not pinned to `synthetic`: issue #33 flips this to `zenodo`, and a
-    # tripwire that turns the suite red would just teach its author to edit a
-    # test. What must hold is that the value names a source the stage knows.
-    assert params["download"]["source"] in {
-        download_raw_dataset.SYNTHETIC,
-        download_raw_dataset.ZENODO,
-    }
+    # Not pinned to `synthetic`: issue #57 flips this to `zenodo` together with
+    # the lock refresh, and a tripwire that turns the suite red would just teach
+    # its author to edit a test. What must hold is that the value names a source
+    # the stage knows, which is what the stage exports `SOURCES` for.
+    assert params["download"]["source"] in download_raw_dataset.SOURCES
 
 
 def test_configure_gx_is_runnable():
