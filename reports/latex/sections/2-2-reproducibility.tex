@@ -1,3 +1,9 @@
+% Milestone 2a: project structure, code versioning and data versioning.
+% Owner: @W11W11W11. Experiment tracking is the last sub-subsection of this
+% Milestone and lives in sections/2-2b-experiment-tracking.tex, owned by
+% @ulasawczuk and input at the bottom of this file, so that the two people
+% writing about Milestone 2 never edit the same file.
+
 \subsection{Milestone 2: Model Building -- Reproducibility}
 \label{sec:m2}
 \guidance{
@@ -57,16 +63,10 @@ We also added \texttt{recommenditos/schema.py}, the structural contract for the 
 
 \tbd{data versioning narrative and the pipeline figure (\texttt{dvc dag -{}-md})}
 
-The pipeline is \texttt{download \textrightarrow{} preprocess \textrightarrow{} \{configure\_gx, validate-data\} \textrightarrow{} split \textrightarrow{} features \textrightarrow{} train \textrightarrow{} evaluate}, with \texttt{features} and \texttt{train} iterating a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position.
+% One \texttt group per stage: spaces inside a single \texttt group are rigid,
+% so the whole chain could not be broken across lines and ran into the margin.
+The pipeline is \texttt{download} \textrightarrow{} \texttt{preprocess} \textrightarrow{} \texttt{\{configure\_gx, validate-data\}} \textrightarrow{} \texttt{split} \textrightarrow{} \texttt{features} \textrightarrow{} \texttt{train} \textrightarrow{} \texttt{evaluate}, with \texttt{features} and \texttt{train} iterating a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position.
 Unlike the demo's, our \texttt{validate-data} stage fails the pipeline when an expectation fails instead of only logging the failure count.
 
-\subsubsection{Experiment tracking}
-\label{sec:m2-experiment-tracking}
-\guidance{
-  \textbf{Template:} e.g.\ MLflow.\\
-  \textbf{Rubric (5 pts):} How does our experiment tracking help us and others compare, understand, and extend our results?\\
-  The demo uses DagsHub as shared MLflow tracking server with credentials in \texttt{.env}.
-  Show what we log (parameters, metrics, artifacts, emissions) and a comparison of runs.
-}
-
-\tbd{experiment tracking setup and results}
+% Experiment tracking, owned by @ulasawczuk.
+\input{sections/2-2b-experiment-tracking}
