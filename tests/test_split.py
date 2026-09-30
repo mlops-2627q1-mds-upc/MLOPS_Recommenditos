@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-import yaml
+from tests.conftest import params_override
 
 from recommenditos.config import PARAMS_FILE
 from recommenditos.data import preprocess, split_data
@@ -45,7 +45,7 @@ SEED_SWEEP = range(1, 26)
 #: project's `MIN_SHARE_OF_RATIO`.
 #:
 #: The floor is a statement about a pool of the real snapshot's granularity.
-#: The fixture pool has 608 seller groups against the snapshot's 28,435, so its
+#: The fixture pool has 614 seller groups against the snapshot's 28,435, so its
 #: shares scatter far more: over 2,000 seeds the smallest share any set reaches
 #: is 0.478 of its ratio here against 0.820 on the snapshot
 #: (`reports/analysis/split_gate_results.txt`). Sweeping the project's 0.75 here
@@ -90,14 +90,6 @@ def sets(processed: Path) -> dict[str, pd.DataFrame]:
 def pool(interim: pd.DataFrame, params: dict) -> pd.DataFrame:
     """The rows the split divides: everything the holdout did not take."""
     return interim[interim["country_code"] != params["split"]["holdout_country"]]
-
-
-def _params_with(tmp_path: Path, params: dict, **split_keys) -> Path:
-    """A copy of params.yaml with some keys of the `split` block changed."""
-    changed = {**params, "split": {**params["split"], **split_keys}}
-    path = tmp_path / "params.yaml"
-    path.write_text(yaml.safe_dump(changed), encoding="utf-8")
-    return path
 
 
 # --------------------------------------------------------------------------
@@ -197,7 +189,7 @@ def test_the_fixtures_cross_border_sellers_are_counted_rather_than_hidden(
 
     crossing = cross_holdout_sellers(sets[HOLDOUT_NAME][key], split_groups)
 
-    assert len(crossing) == 81, (
+    assert len(crossing) == 91, (
         f"the fixture's cross-border seller count moved to {len(crossing)}; if the "
         f"generator or hash_seller_group changed, re-measure it, and if it reached 0 the "
         f"fixture no longer exercises this case at all"
@@ -317,7 +309,7 @@ def test_the_fixture_pool_is_big_enough_for_the_project_floor(
 ):
     # Every test above that runs the stage does so against the real params.yaml,
     # so the project's floor is genuinely exercised - but the margin here is
-    # thin, because 608 seller groups scatter far more than the snapshot's
+    # thin, because 614 seller groups scatter far more than the snapshot's
     # 28,435. This test exists so that shrinking the fixture fails with a
     # sentence that says what to do, instead of a gate error raised inside a
     # module-scoped fixture that every other test then reports as an error too.
@@ -365,7 +357,7 @@ def test_the_stage_itself_refuses_a_split_the_gate_rejects(
         split_data.main(
             interim_path,
             tmp_path / "processed",
-            _params_with(tmp_path, params, group_key="make"),
+            params_override(tmp_path, params, split={"group_key": "make"}),
         )
 
 
@@ -378,7 +370,9 @@ def test_a_rejected_split_writes_no_artefact_at_all(
     output = tmp_path / "processed"
 
     with pytest.raises(ValueError):
-        split_data.main(interim_path, output, _params_with(tmp_path, params, group_key="make"))
+        split_data.main(
+            interim_path, output, params_override(tmp_path, params, split={"group_key": "make"})
+        )
 
     written = sorted(path.name for path in output.glob("*")) if output.exists() else []
     assert not written, f"a rejected split left {written} behind"
@@ -728,7 +722,7 @@ def test_a_threshold_no_make_reaches_fails_instead_of_writing_an_empty_list(
         split_data.main(
             interim_path,
             tmp_path / "processed",
-            _params_with(tmp_path, params, min_listings_per_make=10**9),
+            params_override(tmp_path, params, split={"min_listings_per_make": 10**9}),
         )
 
 

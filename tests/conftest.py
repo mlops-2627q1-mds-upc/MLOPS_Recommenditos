@@ -12,8 +12,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
+import yaml
 
-from recommenditos.config import METRICS_FILE, PARAMS_FILE, REPORTS_DIR
+from recommenditos.config import METRICS_FILE, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.pipeline import load_params
 
@@ -34,6 +35,14 @@ PII_COLUMNS = (
 )
 
 
+#: Paths no test may create. MLflow resolves an unset tracking URI to
+#: `sqlite:///$PWD/mlflow.db` (or to `mlruns/` under MLFLOW_ALLOW_FILE_STORE), so
+#: a test that logs without setting one leaves a database in the repository root
+#: instead of failing. Both are gitignored, which means nothing else would ever
+#: point it out.
+FORBIDDEN_PATHS = (PROJ_ROOT / "mlflow.db", PROJ_ROOT / "mlruns")
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _repo_artefacts_stay_untouched():
     """Fail the suite if a test writes over the pipeline's own outputs.
@@ -45,11 +54,17 @@ def _repo_artefacts_stay_untouched():
     """
     watched = [METRICS_FILE, REPORTS_DIR / "data-validation" / "summary.json"]
     before = {path: _fingerprint(path) for path in watched}
+    already_there = [path for path in FORBIDDEN_PATHS if path.exists()]
 
     yield
 
     changed = sorted(str(path) for path in watched if _fingerprint(path) != before[path])
     assert not changed, f"the test suite wrote to {', '.join(changed)}"
+
+    appeared = sorted(
+        str(path) for path in FORBIDDEN_PATHS if path.exists() and path not in already_there
+    )
+    assert not appeared, f"the test suite left {', '.join(appeared)} in the repository"
 
 
 def _fingerprint(path: Path) -> str | None:
@@ -110,4 +125,19 @@ def raw_path(raw_frame: pd.DataFrame, tmp_path: Path) -> Path:
     path = tmp_path / "raw" / "listings.parquet"
     path.parent.mkdir(parents=True, exist_ok=True)
     raw_frame.to_parquet(path, index=False)
+    return path
+
+
+def params_override(tmp_path: Path, params: dict, **blocks) -> Path:
+    """A copy of params.yaml with some keys of some blocks changed.
+
+    Every stage takes its params file as an argument for exactly this reason: a
+    test can vary a parameter without monkeypatching anything, which is what lets
+    a stage test run the real `main` against a parameter set the project would
+    never ship. Shared here rather than per module, because more than one stage
+    needs it.
+    """
+    changed = {**params, **{key: {**params[key], **value} for key, value in blocks.items()}}
+    path = tmp_path / "params.yaml"
+    path.write_text(yaml.safe_dump(changed), encoding="utf-8")
     return path

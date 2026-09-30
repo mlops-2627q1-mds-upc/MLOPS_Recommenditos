@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from tests.conftest import PII_COLUMNS
+from tests.conftest import PII_COLUMNS, params_override
 import yaml
 
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
@@ -248,19 +248,6 @@ def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
 # --------------------------------------------------------------------------
 
 
-def _params_override(tmp_path: Path, params: dict, **blocks) -> Path:
-    """A copy of params.yaml with some keys of some blocks changed.
-
-    Every stage takes its params file as an argument for exactly this reason:
-    a test can vary a parameter without monkeypatching anything, which is what
-    the stage tickets need to test their rules against the fixture.
-    """
-    changed = {**params, **{key: {**params[key], **value} for key, value in blocks.items()}}
-    path = tmp_path / "params.yaml"
-    path.write_text(yaml.safe_dump(changed), encoding="utf-8")
-    return path
-
-
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
     # The synthetic source, pinned here rather than inherited from params.yaml,
     # so that the flip to `zenodo` (#57) does not turn this test into a 548 MB
@@ -268,7 +255,7 @@ def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
     output = tmp_path / "listings.parquet"
     download_raw_dataset.main(
         output,
-        _params_override(
+        params_override(
             tmp_path, params, download={"source": download_raw_dataset.SYNTHETIC, "rows": 60}
         ),
     )
@@ -282,7 +269,7 @@ def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
     with pytest.raises(NotImplementedError, match="kaggle"):
         download_raw_dataset.main(
             tmp_path / "listings.parquet",
-            _params_override(tmp_path, params, download={"source": "kaggle"}),
+            params_override(tmp_path, params, download={"source": "kaggle"}),
         )
 
 

@@ -82,42 +82,42 @@ The constants, against a sweep of 2,000 seeds per pool
     seeds tripping the floor at 0.75: 0 of 2,000
 
 --- synthetic fixture, 2,000 raw rows
-  pool 1,862 rows in 608 groups
+  pool 1,865 rows in 614 groups
   largest group 13 rows, 0.70% of the pool
   dispersion bounds at 5.0 sigma, capped at 15%:
-    train        13.29 pp
-    validation    8.14 pp
-    calibration   8.14 pp
-    test         10.85 pp
+    train        13.24 pp
+    validation    8.11 pp
+    calibration   8.11 pp
+    test         10.81 pp
   over 2,000 seeds:
-    worst sigma            3.855  (seed 602, validation at 16.27%)
-    sigma at quantile 0.5    1.330
-    sigma at quantile 0.9    2.119
-    sigma at quantile 0.99   2.898
-    sigma at quantile 0.999  3.723
-    smallest realised share as a fraction of its ratio: 0.478
+    worst sigma            3.686  (seed 1970, calibration at 15.98%)
+    sigma at quantile 0.5    1.336
+    sigma at quantile 0.9    2.132
+    sigma at quantile 0.99   2.925
+    sigma at quantile 0.999  3.653
+    smallest realised share as a fraction of its ratio: 0.499
     seeds tripping the dispersion rule at 5.0: 0 of 2,000
-    seeds tripping the floor at 0.75: 243 of 2,000
-  cross-border sellers: 81, holding 521 rows in all
+    seeds tripping the floor at 0.75: 228 of 2,000
+  cross-border sellers: 91, holding 604 rows in all
 
 --- synthetic fixture, 20,000 raw rows
-  pool 18,661 rows in 6,024 groups
+  pool 18,665 rows in 5,996 groups
   largest group 16 rows, 0.09% of the pool
   dispersion bounds at 5.0 sigma, capped at 15%:
     train         4.22 pp
-    validation    2.58 pp
-    calibration   2.58 pp
+    validation    2.59 pp
+    calibration   2.59 pp
     test          3.45 pp
   over 2,000 seeds:
-    worst sigma            4.003  (seed 1784, calibration at 7.93%)
-    sigma at quantile 0.5    1.328
-    sigma at quantile 0.9    2.225
-    sigma at quantile 0.99   3.003
-    sigma at quantile 0.999  3.589
-    smallest realised share as a fraction of its ratio: 0.793
+    worst sigma            4.190  (seed 1784, calibration at 7.83%)
+    sigma at quantile 0.5    1.351
+    sigma at quantile 0.9    2.263
+    sigma at quantile 0.99   2.983
+    sigma at quantile 0.999  3.610
+    smallest realised share as a fraction of its ratio: 0.783
     seeds tripping the dispersion rule at 5.0: 0 of 2,000
     seeds tripping the floor at 0.75: 0 of 2,000
-  cross-border sellers: 888, holding 5,889 rows in all
+  cross-border sellers: 898, holding 5,905 rows in all
 
 ==============================================================================
 Verdict
@@ -131,7 +131,7 @@ Verdict
   snapshot (0.820), and it rejects a set at 0.58 of its intended size, which the derived
   bound alone accepted.
 
-  On the 1,862-row fixture pool the smallest is 0.478, because 608 groups scatter far
-  more than 28,435, so the floor would fire there on 243 of 2,000 seeds. The floor is a
+  On the 1,865-row fixture pool the smallest is 0.499, because 614 groups
+  scatter far more than 28,435, so the floor would fire there on 228 of 2,000 seeds. The floor is a
   statement about a pool of the snapshot's granularity, and tests/test_split.py sweeps that
   pool against a looser floor, naming this measurement, rather than pretending otherwise.

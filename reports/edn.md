@@ -585,12 +585,17 @@ How to add an entry:
 > **Evidence corrected on 2026-09-29.** The decision said preprocessing drops "the 164 listings". 164 is the raw-file count;
 > preprocessing runs after scoping, so it removes 27 of them. The alternatives below already said 26, measured after deduplication.
 > The decision itself is unchanged.
+>
+> **Description corrected on 2026-09-30.** The decision described the 27 as what survives "the EDN-04 scope and the training price range".
+> The rule order implemented in issue #34 puts this rule above the price range, so the 27 survive the scope alone.
+> The number is the same either way, because all 27 are inside the range; only the description of how it was obtained was wrong.
+> The decision itself is unchanged.
 
 - **Date:** 2026-09-29
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Data Validation and Preprocessing
 - **Participants:** @lukas2510
-- **Decision:** Preprocessing drops every listing whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). There are 164 such listings in the raw file, of which **27** survive the EDN-04 scope and the training price range and so are the ones preprocessing actually removes; 26 remain if deduplication runs first, the difference being one duplicate row. The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
+- **Decision:** Preprocessing drops every listing whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). There are 164 such listings in the raw file, of which **27** survive the EDN-04 scope, the one rule the implemented order puts above this one, and so are the ones preprocessing actually removes; all 27 are inside the training price range, which runs after this rule, so the count is the same whichever of the two goes first; 26 remain if deduplication runs first, the difference being one duplicate row. The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
 - **Alternatives considered:**
   - **Option A (chosen): drop the rows.**
     Pros: 164 of 118,382 raw rows is 0.14 %, and only 26 of them survive the EDN-04 scope, so nothing measurable is lost; makes `age >= 0` a genuine invariant that the pipeline, the tests and the API contract can all rely on; no special case anywhere in the feature code.
@@ -1053,6 +1058,43 @@ How to add an entry:
 - **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the deleted pointer `data/raw/autoscout24_dataset_20251108.csv.dvc`; [Data versioning](../docs/docs/data-versioning.md), "Raw data" and "Never run `dvc gc` without `--all-commits`"; EDN-07, EDN-20, EDN-25, EDN-34, EDN-35.
 - **In LaTeX:** no
 
+### EDN-37: The seller group key stays an unsalted hash, and the residual risk is disclosed
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Data Validation and Preprocessing, Privacy
+- **Participants:** @lukas2510, deciding while reviewing PR #56.
+- **Decision:** `seller_group_id` stays what it is: an unsalted SHA-256 of the seller's company name, or of `country_code|zip|city` for a private seller, truncated to 16 hex characters.
+  No pepper and no surrogate id.
+  What changes is what we claim about it: it is the split's grouping key, it keeps the seller's name, street, zip and city out of every column of every artefact, and it is **not** an anonymisation measure.
+  The code, the interim contract and the dataset card say so, and no document describes the hash as one-way any more.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the hash unsalted and disclose what it does not protect.**
+    Pros: the split stays reproducible from a clean clone with no secret, which is what `pytest` and `dvc repro` depend on today; nothing to build; the claim we make becomes one that can be verified, namely that no PII column reaches an artefact.
+    Cons: an attacker who holds the published file can map every id back to the name or the location it came from, so for a private seller `zip` and `city` are recoverable from an artefact that is supposed to be free of them; we carry that statement in the dataset card rather than being able to say the ids are opaque.
+  - **Option B: key the hash with a secret pepper from the gitignored `.env`.**
+    Pros: the dictionary attack stops working; the ids become opaque to anyone without the secret, which is what the old wording already claimed.
+    Cons: the split's group assignment then depends on a secret that is not in the repository, so `dvc repro` on a clean clone produces a different split, `dvc.lock` stops matching for anyone who lacks the pepper, and every test that asserts a grouped split has to be given one. It also protects only against an attacker who does not already have the source file, which is a public download.
+  - **Option C: drop `seller_group_id` from the published artefacts and keep the grouping internal to `split`.**
+    Pros: the id would not leave the pipeline, so nothing published could be inverted at all.
+    Cons: `split` needs the key from `preprocess` because only `preprocess` sees `seller_company_name`, so the column has to cross an artefact boundary; and the key is the evidence for the property the split exists to have, so a test, a review or a drift analysis could no longer check that no seller appears in two sets.
+- **Rationale:** The measurement decided it.
+  A dictionary built from the file's own `seller_company_name`, `country_code`, `zip` and `city` columns inverts 17,141 of 17,141 dealer ids and 13,576 of 13,576 private-seller ids in about 50 ms, so the truncated digest offers no protection worth the name: a dictionary attack does not care how short the output is, and the private-seller key space is small enough to enumerate even without the file.
+  That is what makes option B's cost the deciding factor rather than its benefit.
+  A pepper would buy protection only against someone who does not hold a file that anyone can download from the pinned Zenodo DOI, and it would pay for it with the credential-free reproducibility the fixture, the test suite and `dvc repro` on a clean clone are built on (NFR-06).
+  The dealer behind a listing is in any case recoverable from the public file by joining on `make`, `model`, `price`, `mileage_km_raw` and `registration_date`, all of which our processed data publishes, so the group key is not the weakest link.
+
+  The `zip` and `city` recovery is accepted on the same ground, and named rather than argued away.
+  They are two of the seven columns `params.preprocess.pii_columns` removes, and for a private seller the group key is exactly their hash, so an artefact that has no location column still carries a value that a public file turns back into one.
+  We accept it because the same public file already holds those columns next to the listing itself, and because our own remote holds the raw file too (EDN-20, EDN-25), so the group key adds no exposure that is not already there.
+  It is written down so that the moment any of those premises changes - a non-public source, a private remote, a dataset we scrape ourselves - this entry is the place that says the hash was never the control.
+
+  NFR-08 keeps its teeth either way, because it governs columns: no PII column appears in the processed data, the prediction log, the comparables or the model artefacts, and `Schema.conform` enforces that structurally. What this entry corrects is the stronger claim the code and the contract had grown around it.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** The claim had been escalating rather than weakening: `preprocess.py` said "the hash is one-way", `schema.py` said "never reversible to the name", and the description of PR #56 called the rule airtight, none of which anybody had tested. An adversarial review of that PR built the dictionary from the published file and reported the two counts above, together with the timing and the observation that the truncation is irrelevant to a dictionary attack. It laid out the three options with the reproducibility cost of a pepper and the artefact-boundary cost of dropping the column, and recommended keeping the hash and correcting the claims. Lukas accepted that, and the reasoning that settled it is his: the split must stay reproducible without secrets, and the dealer identity is already recoverable by joining on the columns we publish, so the hash is a grouping key and nothing more.
+- **AI interaction evidence:** Claude Code session on 2026-09-30, reviewing PR #56 against the real snapshot: AI was asked to attack the stage's own claims, measured the inversion of all 30,717 group ids, reported that the one-wayness claim was false, and presented keeping the hash, peppering it and dropping the column as the three options; Lukas decided to keep the unsalted hash and to state the residual risk instead.
+- **Other evidence:** [`recommenditos/data/preprocess.py`](../recommenditos/data/preprocess.py) (`hash_seller_group`); [`recommenditos/schema.py`](../recommenditos/schema.py) (`seller_group_id`); [dataset card](../docs/docs/dataset-card.md); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #34](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/34); [PR #56](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/56).
 ### EDN-39: The split's size gate is four rules with an unconditional floor, not one bound derived from the realised data
 
 - **Date:** 2026-09-30
@@ -1066,7 +1108,7 @@ How to add an entry:
     Cons: measured unable to detect the failure it exists for. The bound takes `sum(n_i^2)` from the *realised* sizes, so it widens exactly when one dealer dominates and the split is least trustworthy. One group holding 12 % of a 10,000-row pool, dumped into validation, realises 20.8 % against a 10 % ratio and passes, because the bound has become 14.4 points. A call with three empty sets passes. A `group_key` naming `make` instead of the seller realises train at 38.7 % and passes against a 89.9-point bound, and `country_code` at 70.8 % against 101 points. Four sigma was also wrong in the other direction: the comment claimed 200 seeds reach at worst 3.5 sigma, but seeds 1 to 400 reach 3.92 and 2,000 seeds reach 4.25, so a routine `dvc exp` seed sweep would have turned the stage red on a sound split.
   - **Option B: a fixed percentage bound.** Rejected in the first implementation and still rejected.
     Pros: nothing about it can be widened by the data.
-    Cons: to hold on the 1,862-row synthetic fixture pool it would have to allow about 6.8 points, and that width accepts a calibration set at a third of its intended size on the real snapshot. One number cannot serve a 99,326-row pool with 28,435 groups and a 1,862-row one with 608.
+    Cons: to hold on the 1,865-row synthetic fixture pool it would have to allow about 6.8 points, and that width accepts a calibration set at a third of its intended size on the real snapshot. One number cannot serve a 99,326-row pool with 28,435 groups and a 1,865-row one with 614.
   - **Option C (chosen): keep the derived bound as a scatter check, cap it, and add an unconditional floor plus a declared concentration limit.**
     Pros: each rule catches what it is for, and the rule that catches an undersized set cannot be widened by any property of the realised data, because it is a fraction of the *configured* ratio. Concentration now fires the gate instead of widening it, which is what makes a mis-set `group_key` detectable at all. The cap stops the derived quantity from becoming vacuous. The failure message names the rule, so the reader is sent to the right cause. All three exploits above now fail, and the real snapshot's own split still passes with the sizes the dataset card states.
     Cons: four numbers to justify instead of one, and the floor is a statement about a pool of the real snapshot's granularity - on the much smaller fixture pool the shares scatter far more, so the seed-sweep test there sweeps a looser floor and says why. Three of the four rules are module constants rather than `params.yaml` entries, so they are not swept by `dvc exp`.
@@ -1100,7 +1142,7 @@ How to add an entry:
     Pros: the holdout would be seller-disjoint from the training sets, so an `ES` replay could not contain a dealer the model trained on, which is the property EDN-14's finding says matters.
     Cons: it changes what the holdout *is*. EDN-03 defines it as the `ES` listings and prices its cost as exactly those rows, so the artefact would gain non-`ES` rows that M6 replays as Spanish traffic, and its size would no longer be the 6,079 rows EDN-03 and the dataset card state. On the real snapshot it would also buy nothing: 0 sellers list both inside and outside `ES`, because `hash_seller_group` keys a dealer by its company name and no name occurs on both sides.
   - **Option B (chosen): keep the row selection, detect the conflict and report it with counts.**
-    Pros: EDN-03's definition of the holdout is untouched, and on the real snapshot the resolution costs nothing measurable. The violation becomes visible where it does occur rather than being silently excluded from the tests: the fixtures the tests run on have 81 such sellers at 2,000 rows and 888 at 20,000, and no test would have noticed, because both disjointness tests iterated the split names and skipped the holdout.
+    Pros: EDN-03's definition of the holdout is untouched, and on the real snapshot the resolution costs nothing measurable. The violation becomes visible where it does occur rather than being silently excluded from the tests: the fixtures the tests run on have 91 such sellers at 2,000 raw rows and 898 at 20,000, and no test would have noticed, because both disjointness tests iterated the split names and skipped the holdout.
     Cons: a weaker invariant than option A. The stage does not guarantee seller-disjointness across all five artefacts, only across the four split sets, and a future snapshot with cross-border dealer names would need this decision revisited rather than being handled automatically.
   - **Option C: leave it as it was, selected per row and unmentioned.**
     Cons: this is what the pull request did, and it is the reason the conflict went unnoticed. Two documented invariants cannot both hold, and nothing said which one wins or what it costs.
@@ -1109,7 +1151,7 @@ How to add an entry:
   What makes option B acceptable rather than a shrug is that the cost is now measured and visible. EDN-14's finding is that dealer-level shift is as large as country-level shift, so a replay containing dealers the model trained on understates drift and confounds both NFR-11's flagging and FR-15's retrain comparison. That is a real limitation of the synthetic fixture as a drift rehearsal, and it is now a reported number with a test pinning it, so if a future snapshot does grow cross-border dealer names the stage says so on every run instead of quietly violating the invariant.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** The adversarial review of PR #53 found the conflict, which the pull request never mentioned, and measured that it occurs 81 and 888 times in the two fixtures the tests run on while occurring 0 times on the real snapshot - the combination that explains why it was invisible. It also identified the mechanism, that both disjointness tests iterate the split names and therefore exclude the holdout by construction. It offered both resolutions and accepted either, provided the invariant became visible. Lukas chose the row selection, because EDN-03 owns the definition of the holdout and option A would have changed a figure already published for no gain on the real data.
+- **Assessment of the AI contribution:** The adversarial review of PR #53 found the conflict, which the pull request never mentioned, and measured that it occurs 91 and 898 times in the two fixtures the tests run on while occurring 0 times on the real snapshot - the combination that explains why it was invisible. It also identified the mechanism, that both disjointness tests iterate the split names and therefore exclude the holdout by construction. It offered both resolutions and accepted either, provided the invariant became visible. Lukas chose the row selection, because EDN-03 owns the definition of the holdout and option A would have changed a figure already published for no gain on the real data.
 - **AI interaction evidence:** Claude Code adversarial review of PR #53 on 2026-09-30, which measured the cross-border counts in both fixtures and on the real snapshot and named the conflict between EDN-03 and EDN-14.
 - **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py) (`cross_holdout_sellers`); [`tests/test_split.py`](../tests/test_split.py); [`reports/analysis/split_gate.py`](analysis/split_gate.py); [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
 - **In LaTeX:** no
@@ -1171,6 +1213,39 @@ How to add an entry:
 - **Other evidence:** [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `Entry.status` and `Entry.has_the_promised_evidence` in `tools/requirement_matrix.py`; the status table in `CONTRIBUTING.md`; [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) for the SC-04 to SC-06 thresholds.
 - **In LaTeX:** no
 
+### EDN-46: DagsHub credentials live in two gitignored stores, and the token is entered twice
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility
+- **Activity / Topic:** Credential handling, developer onboarding
+- **Participants:** Lukas
+- **Decision:** A contributor's DagsHub token is stored twice, in two gitignored files: in `.env` as `MLFLOW_TRACKING_PASSWORD`, which MLflow reads from the environment, and in `.dvc/config.local` via `dvc remote modify origin --local password`, which is the only place DVC's HTTP remote reads a password from.
+  Nothing derives one store from the other, and `.env.template` deliberately does not list `DAGSHUB_USERNAME` or `DAGSHUB_USER_TOKEN`.
+  `recommenditos/config.py` loads `<repo>/.env` by name rather than searching upwards, so the credentials of a checkout are its own.
+- **Alternatives considered:**
+  - **Option A (chosen): two stores, the token pasted into each, and a template that lists only what the project reads.**
+    Pros: no machinery to maintain; both stores are already gitignored, so no token can reach a commit; each tool reads its credentials the way it documents; the template cannot mislead, because every variable in it is read and a test asserts that.
+    Cons: the token is entered twice, and the reader has to be told why or it looks like an oversight; the `dvc remote modify` form puts the token in shell history and in `ps`.
+  - **Option B: one source of truth in `.env`, plus a script that writes `.dvc/config.local` from it.**
+    Pros: one paste; one file to rotate.
+    Cons: a piece of project machinery whose whole job is to write a secret to disk on its own initiative, which is a worse thing to own than a second paste; another step that can fail or drift; nothing in the course requires it.
+  - **Option C: `.env` only, relying on an environment variable for DVC.**
+    Pros: would be the simplest of all, if it existed.
+    Cons: it does not. Measured rather than assumed: with `MLFLOW_*`, `DAGSHUB_USERNAME` and `DAGSHUB_USER_TOKEN` all exported, `dvc status -c` still fails with `configuration error - HTTP 'basic' authentication require both 'user' and 'password'`, and DVC 3.67.1's HTTP remote schema offers exactly `user`, `password` and `ask_password` and no environment route at all.
+  - **Option D: `ask_password true`, prompting instead of storing.**
+    Pros: nothing on disk; nothing in shell history.
+    Cons: `dvc_http` calls `getpass`, which needs a terminal, so it prompts on every `dvc pull` and breaks any unattended `dvc repro` or CI job. Documented as the better choice on a shared machine, not as our default.
+- **Rationale:** Option C would have been the right answer and is not available, which is what makes the double entry a property of DVC rather than a choice.
+  Between A and B, the property that matters is that no token can reach a commit, and both stores already have it; B buys one fewer paste at the price of owning a secret-writing script.
+  Listing `DAGSHUB_*` in the template was actively harmful: nothing reads those names, so filling them in configures nothing while reading as though it configured DVC, which is the confusion the getting-started page exists to prevent.
+  Scoping `.env` to the repository belongs to the same decision: a bare `load_dotenv()` searches upwards, so a clone nested under another checkout inherited that one's token and looked configured when it was not.
+- **AI involvement:** Information seeking, Alternative assessment, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI established by execution that DVC has no environment-variable route, which is the fact the whole decision rests on, and it wrote the two-store walkthrough. An adversarial review of that work, also by AI, then found three things the first pass had asserted rather than checked: that the `.env` scoping was not repository-local, so the review's own "fresh clone" verification had in fact been running on the parent checkout's credentials; that `mlflow.db` was neither gitignored nor prevented; and that the documented newcomer command printed a traceback where the page promised a message. All three were reproduced before being fixed. The modification is that the template lost the `DAGSHUB_*` block, which the first pass had defended as documentation, once the review showed nothing reads it.
+- **AI interaction evidence:** Claude Code sessions on 2026-09-30: the DVC environment-variable question was settled by running `dvc status -c` with and without the variables exported; the review findings were each reproduced before any fix, including a probe showing `find_dotenv` resolving to a `.env` three directories above a credential-free worktree.
+- **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-09 in [the specification](../docs/docs/specification.md).
+- **In LaTeX:** no
+
 
 ### EDN-48: `split` records the supported-make list and stays a lossless partition; the downstream stages apply it
 
@@ -1197,7 +1272,7 @@ How to add an entry:
 
   What the chosen option owes, and what `docs/docs/pipeline.md` records under "Known gaps", is four guarantees from #36, #37 and #39, none of them optional: the filter applied to train, validation, calibration, test **and** the `ES` holdout; applied **before** any training-derived vocabulary or statistic is computed, since fitting on rows the API refuses puts unservable makes into the model's own inputs; `evaluate`'s per-make segments restricted to the listed makes; and a test asserting that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
 
-  Two stale claims are a consequence still to be applied: the comments in `recommenditos/schema.py` and `recommenditos/data/preprocess.py` that say the supported-make filter belongs to, or happens in, `split`. Both files are owned by issue #34, in flight as PR #56, so they are named here rather than edited across a merge boundary.
+  Two stale claims were a consequence of this decision, and are now applied: the comments in `recommenditos/schema.py` and `recommenditos/data/preprocess.py` said the supported-make filter belongs to, or happens in, `split`. Both now say that `split` computes the list and the stages building model input apply it.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found that the skeleton contained evidence for both readings and that the two documents behind them disagree, rather than implementing one and moving on: `schema.py` and `preprocess.py` place the filter in `split`, while problem-spec section 5 and EDN-05 place it at the API. It laid out the options with the irreversibility argument that decided it, and flagged the choice as an EDN candidate before acting on it. It also measured the consequences instead of asserting them, which is what produced the 0.08 pp share shift and the 5,979 of 6,079 holdout figure, and it corrected its own earlier framing that the out-of-scope rows would inflate the metrics once it checked the direction of the effect. Lukas confirmed option C.

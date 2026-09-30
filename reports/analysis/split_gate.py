@@ -41,7 +41,7 @@ import sys
 
 import pandas as pd
 
-from recommenditos.data.preprocess import hash_seller_group
+from recommenditos.data.preprocess import apply_row_rules, hash_seller_group
 from recommenditos.data.split_data import (
     DISPERSION_SIGMAS,
     MAX_DISPERSION_BOUND,
@@ -66,11 +66,32 @@ RATIOS = {"train": 0.60, "validation": 0.10, "calibration": 0.10, "test": 0.20}
 PROJECT_SEED = 20251108
 HOLDOUT_COUNTRY = "ES"
 MIN_LISTINGS_PER_MAKE = 300
-PRICE_MIN = 500
-PRICE_MAX = 2_000_000
-SNAPSHOT = pd.Timestamp("2025-11-08")
+
+# What `apply_row_rules` reads, so that the scope below is the pipeline's and not a
+# second copy of it. Only the keys that stage uses are here.
+ROW_RULE_PARAMS = {
+    "reference_date": "2025-11-08",
+    "preprocess": {
+        "offer_type": "U",
+        "vehicle_type": "Car",
+        "price_min_eur": 500,
+        "price_max_eur": 2_000_000,
+        "dedup_key": [
+            "make",
+            "model",
+            "model_version",
+            "mileage_km_raw",
+            "registration_date",
+            "price",
+            "power_kw",
+        ],
+    },
+}
 
 SCOPE_COLS = [
+    # `id` is what the deduplication rule sorts by to decide which copy of a duplicate
+    # survives, so it has to be read even though nothing below reports it.
+    "id",
     "make",
     "model",
     "model_version",
@@ -86,30 +107,18 @@ SCOPE_COLS = [
     "zip",
     "city",
 ]
-DEDUP_KEY = [
-    "make",
-    "model",
-    "model_version",
-    "mileage_km_raw",
-    "registration_date",
-    "price",
-    "power_kw",
-]
 
 
 def scope(frame):
-    """The rows `preprocess` leaves behind, with the split's grouping key."""
-    frame = frame[
-        (frame["offer_type"] == "U")
-        & (~frame["is_preregistered"].astype("boolean").fillna(False))
-        & (frame["vehicle_type"] == "Car")
-    ]
-    registered = pd.to_datetime(frame["registration_date"], errors="coerce")
-    frame = frame[~(registered > SNAPSHOT)]
-    frame = frame[(frame["price"] >= PRICE_MIN) & (frame["price"] <= PRICE_MAX)]
-    frame = frame.drop_duplicates(subset=DEDUP_KEY).copy()
-    frame["seller_group_id"] = hash_seller_group(frame)
-    return frame
+    """The rows `preprocess` leaves behind, with the split's grouping key.
+
+    `apply_row_rules` is the stage's own function, so the scope here cannot drift from
+    the pipeline's the way a reimplementation of the four rules would.
+    """
+    kept, _funnel = apply_row_rules(frame, ROW_RULE_PARAMS)
+    kept = kept.copy()
+    kept["seller_group_id"] = hash_seller_group(kept)
+    return kept
 
 
 def sweep(group_sizes, seeds):
@@ -281,16 +290,17 @@ def main():
         "  snapshot, and the two synthetic fixtures the tests use."
     )
 
+    # Each pool's shape is kept, so the verdict below states the measured numbers
+    # instead of hard-coding ones that go stale whenever the generator changes.
+    shapes = {"real": (int(group_sizes.sum()), len(group_sizes))}
     all_sweeps = [report_pool("real snapshot", group_sizes, seeds)]
     for rows in (2000, 20000):
         fixture = scope(generate_raw_listings(rows))
         fixture_pool = fixture[fixture["country_code"] != HOLDOUT_COUNTRY]
+        fixture_sizes = fixture_pool["seller_group_id"].value_counts()
+        shapes[rows] = (int(fixture_sizes.sum()), len(fixture_sizes))
         all_sweeps.append(
-            report_pool(
-                f"synthetic fixture, {rows:,} raw rows",
-                fixture_pool["seller_group_id"].value_counts(),
-                seeds,
-            )
+            report_pool(f"synthetic fixture, {rows:,} raw rows", fixture_sizes, seeds)
         )
         fixture_crossing = cross_holdout_sellers(
             fixture[fixture["country_code"] == HOLDOUT_COUNTRY]["seller_group_id"],
@@ -324,9 +334,11 @@ def main():
         f" on the real\n  snapshot ({real:.3f}), and it rejects a set at 0.58 of its intended"
         f" size, which the derived\n  bound alone accepted."
     )
+    small_rows, small_groups = shapes[2000]
     print(
-        f"\n  On the 1,862-row fixture pool the smallest is {small:.3f}, because 608 groups"
-        f" scatter far\n  more than 28,435, so the floor would fire there on"
+        f"\n  On the {small_rows:,}-row fixture pool the smallest is {small:.3f}, because"
+        f" {small_groups:,} groups\n  scatter far more than {shapes['real'][1]:,}, so the floor"
+        f" would fire there on"
         f" {int((all_sweeps[1]['least'] < MIN_SHARE_OF_RATIO).sum())} of {SEEDS:,} seeds. The"
         f" floor is a\n  statement about a pool of the snapshot's granularity, and"
         f" tests/test_split.py sweeps that\n  pool against a looser floor, naming this"

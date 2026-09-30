@@ -1,0 +1,16 @@
+raw file: 118,382 listings
+  registered after 2025-11-08: 164
+  latest registration date: 2026-11-01
+  duplicates on the 7-column key: 6,347
+  is_used = False while offer_type = U: 18,446 of 114,127
+
+row funnel, each rule applied to what the rule above it left:
+  as read                             118,382
+  used passenger cars                 110,013     -8,369
+  registered by the reference date    109,986        -27
+  price in the training range         109,911        -75
+  deduplicated                        105,405     -4,506
+
+interim frame: 105,405 listings, 37 columns, 30,368 seller groups, valid against the 'interim' contract
+  of which country_code = ES (the EDN-03 holdout): 6,079
+  40 raw columns dropped, PII among them: ['city', 'latitude', 'longitude', 'seller_company_name', 'street', 'vin', 'zip']

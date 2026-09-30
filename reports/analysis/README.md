@@ -67,6 +67,16 @@ listings, against SC-04's segment size, which only checks a segment once it hold
 It reports which supported makes therefore never reach the quality gate.
 `make_support_results.txt` is the output of the run cited in the model card (2026-09-29).
 
+## The preprocess row funnel (dataset card, issue #34)
+
+`preprocess_funnel.py` reports how many listings each row rule of the `preprocess` stage removes
+from the real snapshot, because the pipeline only ever logs the funnel for the data it was run on,
+which is the synthetic stand-in while `download.source` is `synthetic`.
+Unlike the scripts above it calls the stage's own steps - the group key and PII drop, the row rules
+and the target - instead of re-implementing any of them, so its numbers cannot drift from what the
+pipeline does.
+`preprocess_funnel_results.txt` is the output of the run cited in the dataset card (2026-09-30).
+
 Run them against the raw dataset, which is not in the repo (NFR-08; EDN-35 for where it does live).
 Use the `download` stage's own cache rather than a second 548 MB copy: `uv run dvc repro download`
 with `download.source: zenodo` puts the pinned file there, verified against `download.md5`, and
@@ -78,6 +88,7 @@ CSV="$ROOT/data/external/autoscout24_dataset_20251108.csv"
 python reports/analysis/nfr11_check.py "$CSV"
 python reports/analysis/fillrates.py "$CSV"
 python reports/analysis/make_support.py "$CSV"
+uv run python reports/analysis/preprocess_funnel.py "$CSV"
 PYTHONPATH=reports/analysis python reports/analysis/nfr11_model_excluded.py "$CSV"
 PYTHONPATH=reports/analysis python reports/analysis/nfr11_alpha_sweep.py "$CSV"
 
