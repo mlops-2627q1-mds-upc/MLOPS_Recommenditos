@@ -125,6 +125,12 @@ stages:
   # `features@basic` and `features@extended` rather than `features@0`, and each
   # declares only its own key under `params:`. Adding a feature set is a change
   # to params.yaml alone.
+  #
+  # The stage's directory output also holds `feature_space.json`: the contract
+  # the matrices were written against and the vocabulary the training rows
+  # decided. It needs no `outs` entry of its own because it is inside that
+  # directory, and it must not get one - a matrix and the vocabulary that
+  # explains it have to be restored together or not at all.
   # ----------------------------------------------------------------------
   features:
     foreach: ${features.sets}
@@ -146,6 +152,8 @@ stages:
         - features.sets.${key}
         - features.equipment_columns
         - features.equipment_min_frequency
+        - features.model_version_tokens
+        - features.model_version_min_frequency
       outs:
         - data/processed/features/${key}
 

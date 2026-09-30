@@ -32,7 +32,7 @@ from recommenditos.schema import (
     PROCESSED_SCHEMA,
     RAW_SCHEMA,
     SchemaError,
-    feature_schema,
+    load_feature_schema,
 )
 
 DVC_FILE = PROJ_ROOT / "dvc.yaml"
@@ -115,8 +115,11 @@ def test_every_stage_writes_a_contract_valid_frame(pipeline, params):
     INTERIM_SCHEMA.validate(pd.read_parquet(pipeline["interim"]))
     for name in (*SPLIT_NAMES, "holdout_es"):
         PROCESSED_SCHEMA.validate(pd.read_parquet(pipeline["processed"] / f"{name}.parquet"))
-    for feature_set, columns in params["features"]["sets"].items():
-        schema = feature_schema(columns, name=feature_set)
+    for feature_set in params["features"]["sets"]:
+        # Not `feature_schema` of the params list: the matrices carry the
+        # equipment multi-hot columns too, so the contract to check them against
+        # is the one their stage wrote beside them.
+        schema = load_feature_schema(pipeline["features"] / feature_set, name=feature_set)
         for name in (*SPLIT_NAMES, "holdout_es"):
             schema.validate(
                 pd.read_parquet(pipeline["features"] / feature_set / f"{name}.parquet")

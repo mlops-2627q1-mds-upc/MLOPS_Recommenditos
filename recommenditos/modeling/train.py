@@ -24,7 +24,7 @@ import typer
 
 from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
 from recommenditos.pipeline import load_params, read_frame
-from recommenditos.schema import feature_schema
+from recommenditos.schema import load_feature_schema
 
 app = typer.Typer()
 
@@ -39,9 +39,11 @@ def main(
     params = load_params(params_path)
     settings = params["train"]["variants"][variant]
     feature_set = settings["feature_set"]
-    schema = feature_schema(
-        params["features"]["sets"][feature_set], name=f"features-{feature_set}"
-    )
+    # The matrix's columns depend on the data - the equipment multi-hot columns
+    # and the category levels are whatever the training rows decided - so the
+    # contract travels with the matrices instead of being rebuilt from
+    # params.yaml here.
+    schema = load_feature_schema(input_dir / feature_set, name=f"features-{feature_set}")
 
     train = read_frame(input_dir / feature_set / "train.parquet", schema)
 

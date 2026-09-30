@@ -72,11 +72,15 @@ As time passes, served cars therefore get older than anything seen in training a
 Added on top of the basic set, to measure what they are worth:
 
 - Equipment: the four equipment lists (`equipment_comfort`, `equipment_entertainment`, `equipment_extra`, `equipment_safety`) as multi-hot features.
+  An item becomes its own column only above `features.equipment_min_frequency` of the training rows, which keeps 133 of the 150 items in the snapshot.
+  The vocabulary is decided by the training rows alone and versioned as an artefact, so the same columns are built for every split and for a request.
 - History flags: `has_full_service_history`, `non_smoking`, `is_rental`.
   These are one-sided: a `True` is an assertion by the seller, a `False` only means the assertion is absent, not that the opposite holds.
   They therefore enter the model as plain "asserted" indicators and are never read as a denial ([EDN-23](#decision-records)); the dataset card documents the same.
 - Appearance: `body_color`, `paint_type`, `upholstery`, `upholstery_color`.
-- Further technical data: `model_version` (normalised), `weight_kg`, `cylinders`, `electric_range_km`, `envir_standard`, `original_market`.
+- Further technical data: `model_version` (normalised), `weight_kg` (parsed out of its text form, `'1,945 kg'`), `cylinders`, `electric_range_km`, `envir_standard`, `original_market`.
+  `model_version` is free text with 82,203 distinct values over the scoped listings, so normalising means: fold case and accents, collapse the separators, keep the leading `features.model_version_tokens` tokens, and keep only the levels above `features.model_version_min_frequency` of the training rows.
+  At the configured values that is 280 levels covering 86 % of the training rows; the rest of the column is missing, which is how any unknown value is treated ([EDN-15](#decision-records)).
 
 ### Excluded columns
 
@@ -93,7 +97,7 @@ Added on top of the basic set, to measure what they are worth:
 | `price_currency`, `offer_type`, `is_new`, `vehicle_type` | Constant after scoping. |
 | `is_used` | Contradicts `offer_type`: False in 18,108 of the 113,708 rows scoped by `offer_type` and `vehicle_type`, so it is not a usable negative. |
 | `is_preregistered` | Defines the scope filter (EDN-04), so it cannot also be a feature. |
-| `mileage_km`, `power_hp`, `body_color_original`, `primary_fuel` | Duplicate another column (as text, other unit, free-text variant or finer fuel label). |
+| `mileage_km`, `power_hp`, `body_color_original`, `primary_fuel`, `seller_is_dealer` | Duplicate another column (as text, other unit, free-text variant, finer fuel label or, for `seller_is_dealer`, exactly `seller_type`). |
 | `production_year`, `electric_range_city_km`, fuel consumption and CO2 columns | Sparse (0.5-39 % filled) and rarely known by users. |
 
 ## 5. Evaluation protocol

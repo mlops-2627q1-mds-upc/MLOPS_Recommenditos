@@ -40,7 +40,7 @@ from recommenditos.config import (
     REPORTS_DIR,
 )
 from recommenditos.pipeline import load_params, read_frame
-from recommenditos.schema import feature_schema
+from recommenditos.schema import load_feature_schema
 
 #: Every criterion NFR-01 gates on. A variant is deployable only when all six
 #: pass, so a `None` here blocks the gate rather than being ignored.
@@ -107,12 +107,12 @@ def evaluate_gate(metrics: dict[str, float], baseline_mdape: float | None, crite
     }
 
 
-def _evaluate_variant(variant: str, params: dict, input_dir: Path, models_dir: Path) -> dict:
+def _evaluate_variant(variant: str, input_dir: Path, models_dir: Path) -> dict:
     model = json.loads((models_dir / variant / "model.json").read_text(encoding="utf-8"))
     feature_set = model["feature_set"]
-    schema = feature_schema(
-        params["features"]["sets"][feature_set], name=f"features-{feature_set}"
-    )
+    # The contract travels with the matrices, because the equipment multi-hot
+    # columns and the category levels are whatever the training rows decided.
+    schema = load_feature_schema(input_dir / feature_set, name=f"features-{feature_set}")
     test = read_frame(input_dir / feature_set / "test.parquet", schema)
     # The stub model is a constant in log space; #37 replaces it with a fitted
     # estimator and this becomes `model.predict(test[features])`.
@@ -145,7 +145,7 @@ def main(
     logger.warning("STUB: SC-04, SC-05 and SC-06 report null until issue #39 lands.")
 
     measured = {
-        variant: _evaluate_variant(variant, params, input_dir, models_dir)
+        variant: _evaluate_variant(variant, input_dir, models_dir)
         for variant in params["train"]["variants"]
     }
     baseline_mdape = measured.get(params["evaluate"]["baseline_variant"], {}).get("mdape")

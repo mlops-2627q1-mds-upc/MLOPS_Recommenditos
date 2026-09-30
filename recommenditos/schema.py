@@ -25,7 +25,9 @@ normalising it, so without an explicit cast at each boundary the frames drift
 apart stage by stage.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
+import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -77,6 +79,25 @@ class Schema:
     def renamed(self, name: str) -> "Schema":
         """The same columns under a different contract name."""
         return replace(self, name=name)
+
+    def to_dicts(self) -> list[dict]:
+        """This contract as plain JSON-serialisable rows.
+
+        A contract whose columns depend on the data cannot be a constant in this
+        module, so the stage that builds it writes it out and the stages that
+        read its artefacts load it back. `from_dicts` is the other half.
+        """
+        return [asdict(column) for column in self.columns]
+
+    @classmethod
+    def from_dicts(cls, rows: "list[dict]", *, name: str) -> "Schema":
+        """A contract from what `to_dicts` wrote.
+
+        `Column(**row)` rather than a field-by-field read: a row that has lost a
+        field, or gained one, fails here naming it instead of producing a
+        contract that silently checks less than it should.
+        """
+        return cls(name=name, columns=tuple(Column(**row) for row in rows))
 
     def select(self, names: "list[str] | tuple[str, ...]", *, name: str) -> "Schema":
         """A sub-contract over `names`, in the order given."""
@@ -430,6 +451,11 @@ PROCESSED_SCHEMA = INTERIM_SCHEMA.renamed("processed")
 # rather than a constant. `age_years` is the one column the stage derives from
 # a raw column rather than passing through; the equipment multi-hot columns are
 # data-dependent, so the stage adds them with `Schema.extend`.
+#
+# `feature_schema` is therefore only the catalogue's view of a feature set: the
+# columns params.yaml names, before the stage reshapes them. What the stage
+# actually wrote is in the artefact below, and that is what a stage reading a
+# matrix must validate against.
 # --------------------------------------------------------------------------
 DERIVED_COLUMNS: tuple[Column, ...] = (
     Column(
@@ -458,6 +484,23 @@ def feature_schema(feature_columns: "list[str] | tuple[str, ...]", *, name: str)
         )
     selected = _FEATURE_CATALOGUE.select(feature_columns, name=name)
     return selected.extend(_TARGET_COLUMNS, name=name)
+
+
+#: The artefact `build_features` writes beside each feature set's matrices.
+#:
+#: It carries the contract those matrices were written against, plus the
+#: vocabulary the training rows decided (which equipment items got a column,
+#: which levels each categorical has). Both are data-dependent, so neither can
+#: live in this module - but a stage that reads a matrix must still code against
+#: the contract rather than against `build_features`, and this file is how the
+#: contract reaches it.
+FEATURE_SPACE_FILE = "feature_space.json"
+
+
+def load_feature_schema(directory: Path, *, name: str) -> Schema:
+    """The contract of the feature matrices in `directory`, as their stage wrote it."""
+    space = json.loads((directory / FEATURE_SPACE_FILE).read_text(encoding="utf-8"))
+    return Schema.from_dicts(space["schema"], name=name)
 
 
 #: Every schema a stage can validate against, by the name it is known by.
