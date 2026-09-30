@@ -12,7 +12,9 @@ revisions rather than the lock against the workspace.)
 
 The downloaded CSV is not a stage output. DVC deletes a stage's outputs before it
 runs the stage, so declaring 548 MB as an `out` would re-download the file on
-every `dvc repro download`. It is kept under `data/external/` as a local cache
+every `dvc repro download`; the shapes that keep it, a `dep` or a `persist: true,
+cache: false` out, hash those 548 MB on every `dvc status` instead. EDN-35 weighs
+all three. It is kept under `data/external/` as a local cache
 instead - gitignored like everything in `data/` - and `download.md5` is what
 pins it: the stage refuses to read bytes that hash to anything else. So a
 changed upstream file fails the stage rather than quietly retraining the model,
