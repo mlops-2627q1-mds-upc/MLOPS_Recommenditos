@@ -13,9 +13,16 @@ uv run dvc repro          # or: make repro
 uv run dvc metrics show   # or: make metrics
 ```
 
-`dvc repro` needs no credentials and no download while `download.source` in `params.yaml` is `synthetic`.
-That is deliberate: the stage tickets are built in parallel, and each one needs a local oracle it can run without waiting for the 548 MB raw file or for DagsHub access.
-Once the download stage is implemented, the parameter flips to `zenodo` and the pipeline runs on the real snapshot.
+`download.source` in `params.yaml` is `synthetic`, so `dvc repro` builds the pipeline from a generated stand-in and needs neither the network nor DagsHub access.
+Setting it to `zenodo` swaps in the real snapshot: the `download` stage fetches the pinned Zenodo file itself, checks it against `download.md5` and converts it to Parquet.
+**[decided]**, not yet done: `zenodo` becomes the default together with the `dvc.lock` refresh and the `dvc push` at the end of the stage chain ([#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57)), because one consolidation records one real end-to-end run instead of four half-real ones.
+
+Because the source is a parameter, `dvc.lock` records which one every artefact was built from, so a run on synthetic data cannot pass unnoticed: `dvc status` reports a workspace whose `download.source` disagrees with the lock.
+`dvc params diff` does not show this, because it compares the params files of two Git revisions rather than the lock against the workspace.
+
+What `download.source: zenodo` costs, measured on the real file: about 1 GB of RAM (peak RSS 929 MB, because the frame is read and validated whole) and about 1 GB of disk, being the 548 MB CSV cached in `data/external/`, the 215 MB Parquet and another 215 MB for its copy in the DVC cache.
+The stage takes about 90 s with a cold cache and about 66 s with a warm one, because the CSV is downloaded once and reused from there, so a rerun costs a 25-second re-read rather than a download (see [Data versioning](data-versioning.md)).
+CI never runs the stage; the test suite covers it against fixtures instead.
 
 The tests never run the pipeline through DVC.
 They call the same stage functions in the same order against a synthetic fixture in a temporary directory, so `pytest` stays fast and hermetic:
@@ -67,7 +74,7 @@ Because it selects, a column the contract does not name cannot reach an artefact
 
 That guarantee starts at the interim frame, not before it.
 The raw layer deliberately keeps the published file's PII columns, because preprocessing hashes `seller_company_name` and the location into the split's group key before dropping them, and it is pushed to the remote like any other stage output (EDN-34).
-Our remote therefore holds the same personal data twice, as the CSV and as the Parquet derived from it.
+While `download.source` is `synthetic` the pushed Parquet is the generated stand-in and holds no real personal data; from the flip in [#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57) onward it holds the published file's, which is the exposure EDN-34 weighed.
 
 Both halves exist because Parquet preserves whatever dtype it is handed rather than normalising it.
 Without an explicit cast at each boundary the frames drift apart stage by stage, and the stage that notices is never the stage that caused it.
@@ -113,7 +120,7 @@ Working on a stage
 3. If your stage changes a column's type or replaces a column with something derived from it, say so on the schema rather than editing `schema.py`: `schema.with_dtype("weight_kg", "float64")` for a parsed column, `schema.drop([...]).extend([...])` for the equipment multi-hot columns. That keeps the change inside your module.
 4. Every stage takes its parameters file as an argument, so a test can vary a parameter without patching anything.
 5. Add tests to `tests/test_data.py` or `tests/test_model.py` against the fixture. Mark the requirement IDs a test verifies with `@pytest.mark.req("NFR-08")`.
-6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`.
+6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`. `dvc repro` runs on the synthetic stand-in, so it needs no credentials and downloads nothing; switch `download.source` to `zenodo` only when you mean to pay the budget above.
 
 `dvc.yaml` is hand-edited on purpose.
 `dvc stage add` rewrites the whole file, re-indents every list and line-wraps long commands, which would destroy the comments that explain why each stage is wired the way it is.
@@ -122,7 +129,6 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/raw/autoscout24_dataset_20251108.csv.dvc` is still a manual `dvc add` pointer. It is replaced by the `download` stage once that stage fetches the real file, as [Data versioning](data-versioning.md) describes.
 - `data/processed/supported_makes.json` is written by `split` but read by nothing yet.
   The `features` stage already declares it as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics; what is still missing is the code that applies it.
   `split` deliberately records the scope instead of enforcing it: it stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no rows disappear without an artefact saying where they went.
@@ -139,6 +145,7 @@ Known gaps
     Of the 6,079 holdout rows, 5,979 are a supported make and 100 are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04.
     The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
     The problem is a different one: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter.
+- A stage's `deps` and `params` cannot be conditional, so `download` declares both sources' inputs whichever one is selected. Under `download.source: zenodo`, editing `recommenditos/data/synthetic.py` or `download.rows` therefore reruns the stage as a 25-second re-read of the cached CSV that produces an identical Parquet. Dropping either would be worse, because a synthetic run would then not notice that its own generator or row count changed.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
-- The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases. A NumPy upgrade would therefore change `data/raw/listings.parquet` and invalidate `dvc.lock` for everyone. This disappears when the download stage starts fetching the real file.
-- The stage bodies are stubs. Each module's docstring names the issue that implements it and what that issue still owes.
+- Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what `download.source: synthetic` generates. `zenodo` is pinned harder but not all the way: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. Within one toolchain version the write is byte-stable, which is what NFR-06 is measured against.
+- The stage bodies after `download` are stubs. Each module's docstring names the issue that implements it and what that issue still owes.

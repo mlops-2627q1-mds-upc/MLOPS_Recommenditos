@@ -105,8 +105,12 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.req("NFR-06")
 def test_the_pipeline_runs_end_to_end_without_data_or_credentials(pipeline):
+    # No `req("NFR-06")` marker: NFR-06 is about `dvc repro` on a clean clone
+    # reproducing the same splits and metrics within a tolerance, and about every
+    # MLflow run recording its commit, data version and parameters. This asserts
+    # that two files exist. Its evidence is the manual re-run before each delivery
+    # that the specification names.
     assert pipeline["interim"].exists()
     assert pipeline["summary"].exists()
 
@@ -166,8 +170,10 @@ def test_a_model_is_written_for_every_variant(pipeline, params):
         assert model["feature_set"] == params["train"]["variants"][variant]["feature_set"]
 
 
-@pytest.mark.req("NFR-01")
 def test_the_gate_reports_every_success_criterion(pipeline, params):
+    # No `req("NFR-01")` marker: this asserts the shape of the metrics record, not
+    # the rule NFR-01 states, which is that a model missing a criterion is not
+    # released. The two tests below and the null-is-not-a-pass test carry that.
     for variant in params["train"]["variants"]:
         record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
         for criterion in evaluate.CRITERIA:
@@ -210,7 +216,12 @@ def test_the_gate_discriminates_rather_than_rejecting_everything(params):
     )
 
 
+@pytest.mark.req("NFR-01")
 def test_an_unmeasured_criterion_is_null_rather_than_a_pass(pipeline):
+    # NFR-01 is "only a model meeting every SC-01 to SC-06 is released", and SC-04
+    # to SC-06 have no thresholds until issue #39 lands. This is the test that
+    # keeps the word "every" honest in the meantime: an unmeasured criterion is
+    # never recorded as met, so it can never be the reason a model is released.
     record = json.loads((pipeline["metrics_dir"] / "b0.json").read_text())
     for criterion in ("sc04", "sc05", "sc06"):
         assert record[f"{criterion}_passed"] is None
@@ -251,31 +262,36 @@ def _params_override(tmp_path: Path, params: dict, **blocks) -> Path:
 
 
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
-
+    # The synthetic source, pinned here rather than inherited from params.yaml,
+    # so that the flip to `zenodo` (#57) does not turn this test into a 548 MB
+    # download. The real source is covered in test_download.py.
     output = tmp_path / "listings.parquet"
-    download_raw_dataset.main(output, _params_override(tmp_path, params, download={"rows": 60}))
+    download_raw_dataset.main(
+        output,
+        _params_override(
+            tmp_path, params, download={"source": download_raw_dataset.SYNTHETIC, "rows": 60}
+        ),
+    )
 
     RAW_SCHEMA.validate(pd.read_parquet(output))
 
 
 def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
-    # `zenodo` is issue #33's. Failing loudly beats silently producing
-    # synthetic data when someone flips the parameter early.
-    with pytest.raises(NotImplementedError, match="zenodo"):
+    # Failing loudly beats silently producing synthetic data when someone
+    # mistypes the parameter or names a source nobody has implemented.
+    with pytest.raises(NotImplementedError, match="kaggle"):
         download_raw_dataset.main(
             tmp_path / "listings.parquet",
-            _params_override(tmp_path, params, download={"source": "zenodo"}),
+            _params_override(tmp_path, params, download={"source": "kaggle"}),
         )
 
 
 def test_the_download_source_is_one_the_stage_implements(params):
-    # Not pinned to `synthetic`: issue #33 flips this to `zenodo`, and a
-    # tripwire that turns the suite red would just teach its author to edit a
-    # test. What must hold is that the value names a source the stage knows.
-    assert params["download"]["source"] in {
-        download_raw_dataset.SYNTHETIC,
-        download_raw_dataset.ZENODO,
-    }
+    # Not pinned to `synthetic`: issue #57 flips this to `zenodo` together with
+    # the lock refresh, and a tripwire that turns the suite red would just teach
+    # its author to edit a test. What must hold is that the value names a source
+    # the stage knows, which is what the stage exports `SOURCES` for.
+    assert params["download"]["source"] in download_raw_dataset.SOURCES
 
 
 def test_configure_gx_is_runnable():
