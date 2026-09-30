@@ -312,6 +312,29 @@ def test_every_set_clears_the_floor_and_the_dispersion_bound(
     assert int(group_sizes.max()) / total <= MAX_GROUP_SHARE
 
 
+def test_the_fixture_pool_is_big_enough_for_the_project_floor(
+    sets: dict[str, pd.DataFrame], params: dict
+):
+    # Every test above that runs the stage does so against the real params.yaml,
+    # so the project's floor is genuinely exercised - but the margin here is
+    # thin, because 608 seller groups scatter far more than the snapshot's
+    # 28,435. This test exists so that shrinking the fixture fails with a
+    # sentence that says what to do, instead of a gate error raised inside a
+    # module-scoped fixture that every other test then reports as an error too.
+    ratios = params["split"]["ratios"]
+    sizes = {name: len(sets[name]) for name in SPLIT_NAMES}
+    total = sum(sizes.values())
+    worst = min(sizes[name] / total / ratios[name] for name in SPLIT_NAMES)
+
+    assert worst >= MIN_SHARE_OF_RATIO, (
+        f"the fixture's worst set is at {worst:.3f} of its ratio, under the project floor of "
+        f"{MIN_SHARE_OF_RATIO}. The fixture or the preprocessing rules shrank its pool. Either "
+        f"raise FIXTURE_ROWS in tests/conftest.py, or, if the pool is now genuinely too "
+        f"granular for the project floor, run reports/analysis/split_gate.py and decide the "
+        f"floor from that measurement rather than loosening it to fit."
+    )
+
+
 def test_the_gate_holds_for_every_seed_and_not_only_for_ours(pool: pd.DataFrame, params: dict):
     # The gate has to be a statement about the stage, not about the one seed
     # params.yaml carries, or the next `dvc exp` sweep turns it red.
