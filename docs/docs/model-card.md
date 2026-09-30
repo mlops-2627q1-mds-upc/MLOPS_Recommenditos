@@ -22,9 +22,9 @@ Recommenditos estimates what a used passenger car would be **asked for** on a Eu
 Given a description of a car it returns a point estimate of the listing price (UC1), and for a partial description a price interval with comparable listings (UC2).
 It is the model behind the project's API.
 
-**Status: draft, no trained artefact yet.**
-This is the initial model card, written in Milestone 1 before a model exists, so everything about training and results is a plan rather than a measurement.
-It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the placeholder results are replaced with measured values after Milestone 2 (first trained model) and Milestone 3 (model tests asserting each `SC-xx`).
+**Status: the four ladder variants train and the three measurable success criteria pass; nothing is released.**
+The training procedure and the point metrics below are measured; SC-04 to SC-06 have no measurement yet, so NFR-01's gate blocks, and the serving sections (latency, image size, explanations, intervals) are still a plan.
+It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the remaining placeholders are replaced as the `evaluate` stage's criteria and the API land.
 Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 
 This card owns the trained model.

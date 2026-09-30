@@ -645,6 +645,40 @@ def test_the_payload_of_a_refit_is_byte_identical(
         assert digests[0] == digests[1], variant
 
 
+def test_a_budget_early_stopping_never_reaches_is_recorded_as_the_trees_it_built(
+    tmp_path: Path, matrices: dict, params: dict, monkeypatch
+):
+    """`best_iteration_` is 0 when early stopping never fired, and 0 means no trees.
+
+    Not a corner case: on the real snapshot `lgbm-basic` used all 1,000 trees and
+    `lgbm-extended` stopped at 996, so the budget is what binds there and this is
+    the branch that run takes. The fixture always early-stops, so the budget is
+    lowered here to reach it.
+    """
+    for name in REQUIRED_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    variants = {
+        **params["train"]["variants"],
+        "lgbm-basic": {
+            **params["train"]["variants"]["lgbm-basic"],
+            "params": {
+                **params["train"]["variants"]["lgbm-basic"]["params"],
+                "n_estimators": 3,
+            },
+        },
+    }
+    overridden = params_override(tmp_path, params, train={**params["train"], "variants": variants})
+
+    train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+
+    record = json.loads(
+        (tmp_path / "models" / "lgbm-basic" / MODEL_FILE).read_text(encoding="utf-8")
+    )
+    assert record["training"]["best_iteration"] == 3
+    booster = lightgbm.Booster(model_file=str(tmp_path / "models" / "lgbm-basic" / "booster.txt"))
+    assert booster.num_trees() == 3
+
+
 def test_num_threads_is_pinned_from_params(
     tmp_path: Path, matrices: dict, params: dict, monkeypatch
 ):
