@@ -30,6 +30,10 @@ jobs:
             code:
               - "recommenditos/**"
               - "tests/**"
+              # `tests/conftest.py` imports `tools.requirement_matrix` at module
+              # level and 27 tests exercise it, so a change under `tools/` can
+              # break or fix the test job.
+              - "tools/**"
               - "pyproject.toml"
               - "uv.lock"
               # The pipeline definition and its parameters are code: the tests
@@ -82,6 +86,59 @@ jobs:
             echo '## Test coverage'
             uv run coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
+      # Uploaded even when pytest failed, because that is when the JUnit XML is
+      # worth reading: it names the failing tests without scrolling the log.
+      - name: Publish the test and coverage reports
+        uses: actions/upload-artifact@v7
+        if: always() && needs.changes.outputs.code == 'true'
+        with:
+          name: test-reports
+          path: |
+            reports/junit.xml
+            reports/coverage.xml
+
+  # NFR-07 promises that every requirement is traceable to the test that
+  # verifies it or is marked as verified by hand, and that CI builds the matrix
+  # that proves it. The gate is milestone-scoped: see tools/expected_coverage.yaml.
+  #
+  # No paths filter, unlike every other job here. What NFR-07 promises is the
+  # matrix in the job summary of the CI run on the *delivery commit*, and nobody
+  # can predict which paths that commit touches: a promotion is a `dvc.lock`
+  # change, a delivery is often only `reports/latex/**`, and a filter that misses
+  # either produces no matrix at all on exactly the commit the report cites. The
+  # job costs a `uv sync` and a collect-only pytest run, with no data and no
+  # credentials, which is cheap enough that always running it beats a filter that
+  # can silently make the evidence absent.
+  traceability:
+    name: Requirement matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      # Writes the matrix first and fails afterwards, so the two steps below
+      # still publish the table that explains why the job is red.
+      - name: Build the requirement-to-test matrix
+        run: uv run python -m tools.requirement_matrix
+      - name: Publish the matrix to the job summary
+        if: always()
+        run: |
+          if [ -f reports/requirement-matrix.md ]; then
+            cat reports/requirement-matrix.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## The requirement matrix could not be built, see the job log.' \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: requirement-matrix
+          path: |
+            reports/requirement-matrix.md
+            reports/requirement-matrix.json
 
   docs:
     name: Build docs
