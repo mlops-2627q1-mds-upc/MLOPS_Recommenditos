@@ -5,6 +5,14 @@
 !/data/**/*.dvc
 !/data/**/.gitignore
 
+# MLflow's local stores. Ours is the DagsHub tracking server, so neither of these
+# belongs in a commit - but an unset MLFLOW_TRACKING_URI resolves to
+# `sqlite:///$PWD/mlflow.db` since mlflow 3.16, and `mlruns/` is what the file
+# store writes, so one notebook cell that logs before
+# `recommenditos.tracking.tracked_run` drops either into the repository root.
+mlflow.db
+mlruns/
+
 # PDFs and Word files are not tracked (e.g. lab/course material, generated reports).
 # Their Markdown conversions live in references/.
 *.pdf
