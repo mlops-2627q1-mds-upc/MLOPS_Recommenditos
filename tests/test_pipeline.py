@@ -390,8 +390,8 @@ def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
 
 def test_download_writes_a_contract_valid_raw_frame(tmp_path, params):
     # The synthetic source, pinned here rather than inherited from params.yaml,
-    # so that the flip to `zenodo` (#57) does not turn this test into a 548 MB
-    # download. The real source is covered in test_download.py.
+    # which names the real snapshot, so that this test is not a 548 MB download.
+    # The real source is covered in test_download.py.
     output = tmp_path / "listings.parquet"
     download_raw_dataset.main(
         output,
@@ -414,8 +414,8 @@ def test_download_refuses_a_source_it_does_not_implement(tmp_path, params):
 
 
 def test_the_download_source_is_one_the_stage_implements(params):
-    # Not pinned to `synthetic`: issue #57 flips this to `zenodo` together with
-    # the lock refresh, and a tripwire that turns the suite red would just teach
+    # Not pinned to either value: the project's source has already changed once,
+    # and a tripwire that turns the suite red on the next change would just teach
     # its author to edit a test. What must hold is that the value names a source
     # the stage knows, which is what the stage exports `SOURCES` for.
     assert params["download"]["source"] in download_raw_dataset.SOURCES

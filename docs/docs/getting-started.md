@@ -80,7 +80,7 @@ uv run dvc pull
 
 This downloads every artefact `dvc.lock` references into `data/` and `models/`: the raw Parquet the `download` stage writes, the interim and processed frames, the feature matrices and the models.
 How big that is depends on what the lock records, so read what `dvc pull` prints rather than expecting a number.
-While `download.source` is `synthetic` it is a few megabytes; on the real snapshot the raw Parquet alone is 215 MB.
+The lock records the real snapshot, so the raw Parquet alone is 215 MB.
 
 The 548 MB source CSV is **not** among them.
 The `download` stage fetches that from its pinned Zenodo DOI into `data/external/`, where it is a gitignored local cache rather than something on our remote, so no `dvc pull` brings it down (see [Data versioning](data-versioning.md)).

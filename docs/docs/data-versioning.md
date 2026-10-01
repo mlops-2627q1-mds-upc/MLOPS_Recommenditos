@@ -56,12 +56,9 @@ There is no manual `dvc add` pointer left.
 | `data/interim/`, `data/processed/`, `models/` | the stages that declare them as outputs | DVC cache, pushed |
 | `reports/data-validation/summary.json`, `reports/metrics/`, `metrics.json` | `validate-data` and `evaluate` | `cache: false`, so Git, and they show up in a pull request's diff |
 
-What the committed `dvc.lock` names for `data/raw/listings.parquet` today is the synthetic stand-in of 1,569,290 bytes, because `download.source` is still `synthetic` (see [Raw data](#raw-data)).
-That is what the remote holds, and it carries no real personal data.
-
-**[decided]**, EDN-34, not yet in effect: once [#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57) flips the source and refreshes the lock, the same path holds the real snapshot, 215.3 MB and 118,382 rows, cached and pushed like any other stage output.
+What the committed `dvc.lock` names for `data/raw/listings.parquet` is the real snapshot, 215,309,993 bytes over 118,382 rows, cached and pushed like any other stage output (**[decided]**, EDN-34).
 It keeps the PII columns of the published file, because preprocessing needs `seller_company_name` and the location to build the split's group key before dropping them.
-From that point the remote holds that personal data in the Parquet, even though we no longer re-host the CSV.
+So the remote holds that personal data in the Parquet, even though we no longer re-host the CSV.
 The alternatives were weighed in EDN-34: keeping the Parquet local with `push: false` would have moved the pipeline's first artefact from pulled to locally regenerated, and stripping the PII inside `download` would have made the raw layer stop being a faithful copy of the published file.
 
 ## Raw data
@@ -79,8 +76,9 @@ than a manual step beside it:
 | Pinned by | `download.md5` in `params.yaml`, `b23a122cc51baf7de39f449193ff0d28`, which is the checksum Zenodo publishes |
 | Kept at | `data/external/autoscout24_dataset_20251108.csv`, a local cache: gitignored, not tracked, not pushed |
 
-`download.source` is `synthetic` by default today, so a plain `dvc repro` fetches nothing.
-`params.yaml` says why and [#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57) is the ticket that flips it.
+`download.source` is `zenodo`, so the stage is the acquisition.
+A clean clone fetches nothing all the same: `dvc pull` brings the derived Parquet down and leaves the stage up to date, so the CSV is only fetched by someone who reruns `download` itself.
+Setting the parameter to `synthetic` generates a stand-in instead, which is what lets the test suite and a clone without credentials run.
 
 The CSV is neither a `dep` nor an `out` of the stage (**[decided]**, EDN-35).
 DVC deletes a stage's outputs before running it, so a plain `out` would re-download 548 MB on every `dvc repro download`, and a `dep` would make every `dvc status` hash 548 MB before it can answer.

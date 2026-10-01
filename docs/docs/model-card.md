@@ -57,7 +57,7 @@ The same trained booster serves the point estimate, its explanation and, through
 - **Version:** none yet.
   From the first release on, the served version is the one `dvc.lock` on `main` points to, reported by `GET /health` and verified in CI ([specification](specification.md) FR-12, EDN-08).
 - **Status:** `lgbm-basic` is the candidate, not released.
-  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is accepted (EDN-62), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 has no measurement until the UC2 conformal intervals exist. NFR-01's gate therefore blocks, and the numbers below come from a verification run rather than from a tracked pipeline run (issue #57).
+  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is accepted (EDN-62), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 has no measurement until the UC2 conformal intervals exist. NFR-01's gate therefore blocks. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
 
 ### Model Sources
 
@@ -366,21 +366,27 @@ One MLflow experiment, `params.yaml`'s `train.mlflow_experiment` (`recommenditos
 `train` creates the run and records its id in `model.json`; `evaluate` resumes that id and appends the test metrics and the gate verdict rather than opening a run of its own.
 That is deliberate: a run per DVC stage would scatter four variants over eight runs nothing joins, and the point of tracking is to be able to compare them.
 
-Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the model artefact under `model/`, the emissions of the fit (issue #38) and the test metrics with the six criteria.
+Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the model artefact under `model/` and the test metrics with the six criteria.
+The emissions of the fit are not among them yet; they arrive with issue #38.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
 
 Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-06 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
+The ladder this card reports is four runs of the `recommenditos-price` experiment, one per variant, produced by the `dvc repro` whose lock is committed.
 The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
 
 ```
 tags.git_commit = '<the full SHA of the run you want>'
 ```
 
-with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.energy_kwh`.
-`tags.dvc_lock_md5` is a digest of the committed `dvc.lock`, and it is **not** a filter to trust yet.
-The lock in Git is still the one the pipeline skeleton wrote: it names two of the four variants, has no `b0` or `b1`, and its `train` stage depends on a 2.5 KB `train.py` that fitted nothing.
-So the tag currently identifies a pipeline no run here ran, and two runs sharing it say nothing about sharing their inputs.
-Issue #57 refreshes the lock once for the whole chain, and from then on the tag means what its name says - the data and parameters a run saw, rather than the code alone.
+with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.fit_seconds`.
+That filter is what picks one chain out of the experiment: the four runs of a `dvc repro` share one commit, and a run from another commit is a different pipeline.
+Two things about it are worth knowing before the filter is believed, both measured on this ladder rather than assumed:
+
+- **`tags.dvc_lock_md5` is not a chain filter**, although its name reads like one. It is the digest of `dvc.lock` as it stood when that one stage ran, and `dvc repro` rewrites the lock after **each** stage, so the four runs of one chain carry four different digests. What it identifies is a stage's inputs, not a ladder; what groups a ladder is the commit.
+- **`tags.git_dirty` is `true` for this ladder**, and correctly so: `params.yaml` held the flip to `download.source: zenodo` and `dvc.lock` was being rewritten while the stages ran, which is unavoidable for the run that produces the lock. The commit the tag names is therefore the one *before* the lock landed, and the run is reproducible from the commit that follows it.
+
+The experiment also holds runs that are **not** pipeline runs: the test suite trains the same four variants on the synthetic fixture, and it logs to this experiment whenever a `.env` is present, under the same four run names.
+Their metrics are an order of magnitude worse and they carry a different commit, but nothing in the run itself says "fixture", so read the commit before quoting a number.
 
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
@@ -399,7 +405,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 
 | Property | Target | Measured |
 |---|---|---|
-| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **17.8 s** for the candidate `lgbm-basic`, 43 s for `lgbm-extended`, 67 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot |
+| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **8.6 s** for the candidate `lgbm-basic`, 21.5 s for `lgbm-extended`, 31.6 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot. Read as an order of magnitude and not a benchmark: these are the fits of the tracked run, and an earlier run of the same code on the same machine took about twice as long because it shared the CPU with other work |
 | Model artefact on disk | no target | 6.3 MB (`booster.txt`) for the candidate, 6.8 MB for `lgbm-extended`, plus 92 KB of metadata and feature space |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
@@ -423,8 +429,8 @@ A model is released only if it meets all six ([requirements](requirements.md#2-n
 
 The criteria are defined in the [problem specification](problem-spec.md#8-success-criteria) (EDN-06, with SC-06 added by EDN-15).
 Both LightGBM variants are shown, because the choice between them is what the criteria decided: **`lgbm-basic` is the candidate this card puts forward** (EDN-62), not the variant with the lower pooled MdAPE.
-The numbers come from the verification run described under [the ladder](#the-experiment-ladder-as-measured).
-It is a **verification run, not a release**: it was not tracked in MLflow and its `dvc.lock` is not the one on `main`, which issue #57 produces.
+The numbers come from the pipeline run described under [the ladder](#the-experiment-ladder-as-measured), which is the one the committed `dvc.lock` records and the one the four MLflow runs hold.
+It is a **measured candidate, not a release**: the gate blocks, so nothing is promoted, and promotion is a human decision in any case (EDN-12).
 
 | ID | Criterion | Target | `lgbm-basic` (the candidate) | `lgbm-extended` |
 |----|-----------|--------|------------------------------|-----------------|
@@ -475,22 +481,23 @@ The price buckets are deliberately not part of this statement: their profile is 
 #### The experiment ladder, as measured
 
 One run of the whole chain on the real snapshot (`download.source: zenodo`, 118,382 raw listings, 105,405 after the scope and deduplication funnel), fitted on the 11 supported makes: 60,378 training rows, 8,859 validation rows and 19,665 of the 19,985 test rows.
+It is the run the committed `dvc.lock` records, so `dvc pull` reproduces these artefacts exactly, and it is tracked: one MLflow run per variant, found with the `tags.git_commit` filter under [Experiment tracking](#experiment-tracking).
 Every number is from the test split, at `train.num_threads: 1`, and MdAPE is the primary metric.
 The bold figures are the lowest of the ladder; they are not the candidate, which SC-06 decided against them (EDN-62).
 
 | Variant | Ladder step | Features | MdAPE | Within 20 % | Validation L1 (log price) | Trees | Fit time | Payload |
 |---|---|---|---|---|---|---|---|---|
-| `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.7 s | 19 KB |
-| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 5.2 s | 19 KB |
-| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.83 % | 89.7 % | 0.1005 | 1,000 | 17.8 s | 6.3 MB |
-| `lgbm-extended` | 4 | 162 | **6.32 %** | **90.4 %** | 0.0974 | 996 | 43.1 s | 6.8 MB |
+| `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.1 s | 19 KB |
+| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 1.4 s | 19 KB |
+| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.83 % | 89.7 % | 0.1005 | 1,000 | 8.6 s | 6.3 MB |
+| `lgbm-extended` | 4 | 162 | **6.32 %** | **90.4 %** | 0.0974 | 996 | 21.5 s | 6.8 MB |
 
 What the ladder says, and what it does not:
 
 - **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.51 pp** of MdAPE on a fully described car, and it is **1.76 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.01 % against 8.25 %, from the SC-06 sweep). It also costs 146 extra columns, 2.4x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
 - B0 reproduces the exploratory reference run below almost exactly (12.16 % against 11.9 %), and `lgbm-basic` likewise (6.83 % against 6.7 %), which is the cross-check that the pipeline is measuring what the notebook measured.
 - **`n_estimators: 1000` is binding, not a ceiling.** `lgbm-basic` used all 1,000 trees and `lgbm-extended` stopped at 996, so early stopping never fired on real data and both models were still improving when they ran out of budget. The hyperparameters are therefore *untuned*, in the specific sense that the one that matters most is set too low; raising it is a `params.yaml` change and a sweep, and it is the first thing to try before tuning anything else.
-- The whole four-variant ladder trains in **67 seconds**, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning.
+- The whole four-variant ladder trains in **31.6 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth two orders of magnitude of slack and not one second of precision: an earlier run of the same code on the same machine measured about twice this, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
 
 #### Reference values
 
@@ -528,12 +535,12 @@ Explanations are part of the product, not an afterthought: every valuation ships
 
 ## Environmental Impact
 
-Measured with CodeCarbon from Milestone 3 and logged to MLflow next to the accuracy of each run (NFR-10).
+Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (NFR-10), which issue #38 implements; the tracked runs carry their fit time but no emissions figure yet.
 
 | | |
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
-| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured: 17.8 s for the candidate `lgbm-basic`, 67 s for the whole ladder. |
+| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run: 8.6 s of fitting for the candidate `lgbm-basic`, 31.6 s for the whole ladder. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | _TBD, per training run from CodeCarbon._ |

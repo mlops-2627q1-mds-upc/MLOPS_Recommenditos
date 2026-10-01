@@ -6,8 +6,8 @@ what makes the exact counts below meaningful rather than brittle: they are 3,
 1, 2 and 1 at 30 rows and at 2,000.
 
 The real snapshot's funnel is measured by `reports/analysis/preprocess_funnel.py`
-and its committed output, because the pipeline itself runs on the synthetic
-stand-in while `download.source` is `synthetic` (#57 flips it).
+and its committed output, so that the report can cite it without reading a
+pipeline log; the pipeline logs the same funnel for whatever data it ran on.
 """
 
 import numpy as np
