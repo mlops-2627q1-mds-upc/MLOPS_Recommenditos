@@ -141,17 +141,35 @@ A model is good enough to deploy when it meets all of the following on the test 
 | SC-01 | MdAPE ≤ 9 %. |
 | SC-02 | At least 85 % of predictions within ±20 % of the asking price. |
 | SC-03 | MdAPE at least 30 % lower than baseline B0. |
-| SC-04 | Every segment of section 6 with at least 500 test rows (price buckets excluded) has MdAPE ≤ 15 %. |
-| SC-05 | Nominal 90 % intervals reach an empirical coverage between 88 % and 92 %, both for full inputs and for the partial-input scenario P1 (only make, model, registration date and mileage given). |
+| SC-04 | Every **level** of every segment of section 6 with at least 500 test rows (price buckets excluded) has MdAPE ≤ 15 %. |
+| SC-05 | Nominal 90 % intervals reach an empirical coverage between 88 % and 92 %, both for full inputs and for the partial-input scenario P1. |
 | SC-06 | With each optional input field masked on its own, and with all of them masked at once, the point model's MdAPE stays at or below 1.5 times its full-input MdAPE. |
 
+**P1** is the partial-input scenario SC-05 and [FR-02](specification.md) both refer to: only `make`, `model`, `registration_date` and `mileage_km_raw` are given, and every other input field is absent.
+It is stated here as a named field list because two requirements and one criterion depend on it.
+
+SC-04 is a statement about a **level** (`make=BMW`) rather than about a segmenting variable, since `make` as a whole holds every test row.
+A level that represents the absence of a *required* input field is reported with its metrics but excluded from the criterion, because FR-01 refuses such a request with a 422, so the level cannot occur at serving time at all: it is a data-quality finding the expectation suites own, not a population the deployed component can be asked about.
+When no level reaches the row minimum, SC-04 is reported as **not measured** rather than as met.
+"Every level satisfies P" is vacuously true over an empty set, and reporting that as a pass would claim a check nobody ran.
+
+SC-05 depends on the UC2 conformal intervals, which are built after the first delivery.
+Until they exist, the `evaluate` stage reports SC-05 as not measured, which **blocks** [NFR-01](requirements.md)'s gate rather than passing it: no model is deployable before the intervals are calibrated and their coverage checked.
+The metrics artefact reports separately how many candidates meet every criterion that *could* be measured, so the outstanding criterion is visible as such instead of reading as a model that failed.
+
 SC-06 covers what SC-04 and SC-05 do not: the point estimate for a request that leaves an optional field out, which the API explicitly allows ([specification](specification.md) FR-01).
-The optional fields are the ones FR-01 does not require, and "masked" means the field is passed to the model as missing, exactly as the API passes it.
+The optional fields are the **input fields** of the evaluated model's feature set that FR-01 does not require, which is 6 fields for the basic set and 23 for the extended one.
+An input field is matched to the feature column or columns derived from it, so `registration_date` is a required input even though the model consumes the derived `age_years`, and one equipment input field covers every multi-hot column built from it.
+Without that matching the criterion would mask `age_years`, the most important feature in the model, as if it were optional.
+"Masked" means the field carries what the API sends when it is omitted, and what that is per field is fixed by [EDN-23](#decision-records) rather than being one missing value for everything: an omitted assertion flag is `False`, an omitted equipment list is empty, and everything else is absent.
+That the two are the same operation is a constraint on the API rather than an assumption: the request model defaults an omitted equipment list to `[]` ([specification](specification.md) FR-01), so what SC-06 masks is what a caller omitting the field actually sends.
 The criterion is relative to the model's own full-input MdAPE, like SC-03 is relative to the baseline, because there is no reference value for it yet and inventing an absolute threshold would be guesswork.
 Which mechanism keeps it (native missing handling or random masking during training, as planned for the interval models) is left to the modelling plan; SC-06 only fixes the observable outcome.
 
 SC-04's per-segment breakdown (including country and seller type) also serves as a basic fairness check across market segments.
 Classification-oriented fairness metrics (e.g. AIF360's demographic parity) do not directly apply to this regression task; per-segment error parity is the task-appropriate equivalent.
+The disparity is the spread of MdAPE across the levels of a segment, and the fairness statement is that no qualifying level exceeds SC-04's bound.
+Price buckets are not part of that statement: they condition on the target, so their U-shaped error profile is a regression-to-the-mean artefact rather than a finding about a market.
 
 ### Reference values
 
@@ -167,6 +185,8 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-03: the exploratory LightGBM is 44 % better than B0.
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   This is a known risk for the basic feature set; the extended features or a scope change for classic cars must close it.
+  The pipeline has since measured the segment at 17.12 % for the candidate model, and it has ruled the extended features out as the remedy: they make this segment marginally worse while improving the pooled figure.
+  SC-04 is therefore recorded as missed rather than worked around, and the threshold stays where it is ([EDN-62](#decision-records)); see the [model card](model-card.md#results).
 - SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
   The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,889 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
 
@@ -182,3 +202,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-22: drop listings registered after the reference date.
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion despite the unreliable flag.
+- EDN-58: an unmeasured criterion blocks the gate rather than passing it.
+- EDN-59: SC-06 masks input fields rather than feature columns.
+- EDN-60: which segments SC-04 may gate on is enforced in code.
+- EDN-62: `lgbm-basic` is the candidate, and SC-04's miss on cars over 20 years is accepted.

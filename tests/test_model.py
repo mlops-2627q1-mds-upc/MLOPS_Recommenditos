@@ -22,9 +22,11 @@ Issue #39 owns everything below the `--- the SC gate (#39)` marker at the end an
 builds on these fixtures rather than refitting.
 """
 
+from fractions import Fraction
 import json
 from pathlib import Path
 import shutil
+from statistics import median
 
 import lightgbm
 from loguru import logger
@@ -38,6 +40,41 @@ from recommenditos.config import PARAMS_FILE
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, Vocabulary, read_supported_makes
 from recommenditos.modeling import train
+from recommenditos.modeling.evaluate import (
+    ALL_OPTIONAL_FIELDS,
+    CRITERIA,
+    EXCLUDED_ABSENT_REQUIRED_FIELD,
+    EXCLUDED_TARGET_CONDITIONED,
+    EXCLUDED_TOO_FEW_ROWS,
+    INTERVAL_METHOD,
+    INVALID_SEGMENT_LEVEL,
+    MISSING_SEGMENT_LEVEL,
+    P1_SCENARIO,
+    TARGET_CONDITIONED_SEGMENTS,
+    GateInput,
+    bucket_labels,
+    bucket_levels,
+    check_make_levels_are_served,
+    criterion_segments,
+    evaluate_gate,
+    evaluate_sc04,
+    evaluate_sc05,
+    evaluate_sc06,
+    gate_blocked_by,
+    gate_passed,
+    gate_summary,
+    input_field_columns,
+    interval_metrics,
+    masking_sweep,
+    optional_input_fields,
+    point_metrics,
+    sc05_scenarios,
+    sc06_scenarios,
+    segment_level_column,
+    segment_levels,
+    segment_rows,
+)
+from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
     ESTIMATORS,
     MISSING_LEVEL,
@@ -1573,3 +1610,1163 @@ def _frame_of(schema: Schema, template: pd.DataFrame, rows: list[tuple]) -> pd.D
 
 
 # --- the SC gate (#39)
+#
+# Issue #39's half of this module: the metric layer, the per-segment breakdown,
+# the masking sweep and the SC-01 to SC-06 gate. It builds on the session
+# fixtures above rather than refitting, because a LightGBM refit per test would
+# be the slowest thing in the suite, and its own fixtures are `gate_`-prefixed so
+# the two halves cannot collide.
+#
+# Every hand-computed expected value below is checked twice: against the literal
+# from the design, and against `_rational_metrics`, an independent implementation
+# in exact rational arithmetic with no floating point in it at all. A mistake in
+# the implementation would have to be repeated identically in both to pass.
+
+
+# --------------------------------------------------------------------------
+# The metric layer: hand-computed values
+# --------------------------------------------------------------------------
+
+
+def _rational_metrics(actual: "list[float]", predicted: "list[float]") -> dict:
+    """The five metrics of problem-spec section 6 in exact rational arithmetic.
+
+    Written from the definitions rather than from `point_metrics`, and using
+    `Fraction` so that no result is a rounded one. This is the second opinion
+    every case below is measured against.
+    """
+    errors = [abs(Fraction(p) - Fraction(a)) for a, p in zip(actual, predicted, strict=True)]
+    relative = [error / abs(Fraction(a)) for a, error in zip(actual, errors, strict=True)]
+    rows = len(relative)
+    return {
+        "mdape": median(relative),
+        "within_10pct": Fraction(sum(1 for each in relative if each <= Fraction(1, 10)), rows),
+        "within_20pct": Fraction(sum(1 for each in relative if each <= Fraction(1, 5)), rows),
+        "mae_eur": sum(errors, Fraction(0)) / rows,
+        "mape": sum(relative, Fraction(0)) / rows,
+    }
+
+
+def _assert_point_metrics(actual: "list[float]", predicted: "list[float]", expected: dict) -> None:
+    """`point_metrics` agrees with the hand-computed literals and with exact arithmetic.
+
+    `pytest.approx` rather than `==`, because two of the expected values are not
+    representable in binary floating point (case A's MAPE comes out as
+    0.11000000000000001 and case B's MdAPE as 0.15000000000000002). It still pins
+    what the cases exist to pin: a lower-middle median convention would give 0.10
+    for case B, which `approx(0.15)` rejects.
+    """
+    measured = point_metrics(
+        pd.Series(actual, dtype="float64"), pd.Series(predicted, dtype="float64")
+    )
+    assert measured == pytest.approx(expected)
+    assert measured == pytest.approx(
+        {name: float(value) for name, value in _rational_metrics(actual, predicted).items()}
+    )
+
+
+def test_point_metrics_over_an_odd_number_of_rows():
+    # The general case. Errors 10 %, 10 %, 0 %, 15 %, 20 %.
+    _assert_point_metrics(
+        [10000, 20000, 30000, 40000, 50000],
+        [11000, 18000, 30000, 46000, 40000],
+        {
+            "mdape": 0.10,
+            "within_10pct": 0.6,
+            "within_20pct": 1.0,
+            "mae_eur": 3800.0,
+            "mape": 0.11,
+        },
+    )
+
+
+def test_the_median_of_an_even_number_of_rows_is_the_mean_of_the_middle_two():
+    # Errors 5 %, 10 %, 20 %, 40 %, so the median is (10 + 20) / 2 and not 10.
+    # Pinned because pandas' convention is the one the reported MdAPE uses, and a
+    # "fix" to a lower-middle convention would quietly lower every number in the
+    # report by half a row's worth of error.
+    _assert_point_metrics(
+        [10000, 10000, 10000, 10000],
+        [10500, 11000, 12000, 14000],
+        {
+            "mdape": 0.15,
+            "within_10pct": 0.5,
+            "within_20pct": 0.75,
+            "mae_eur": 1875.0,
+            "mape": 0.1875,
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("predicted", "expected"),
+    [
+        (11000, {"mdape": 0.10, "within_10pct": 1.0, "within_20pct": 1.0, "mape": 0.10}),
+        (12000, {"mdape": 0.20, "within_10pct": 0.0, "within_20pct": 1.0, "mape": 0.20}),
+    ],
+)
+def test_a_band_counts_an_error_exactly_on_its_edge(predicted, expected):
+    # "Within +/-20 %" includes 20 % itself, which is what SC-02's 85 % is a share
+    # of. Both edges, so neither can be made exclusive without failing.
+    _assert_point_metrics([10000], [predicted], {**expected, "mae_eur": abs(predicted - 10000.0)})
+
+
+@pytest.mark.parametrize(
+    ("actual", "predicted", "mdape"),
+    [(10000, 20000, 1.0), (20000, 10000, 0.5)],
+)
+def test_the_percentage_error_is_relative_to_the_price_not_the_prediction(
+    actual, predicted, mdape
+):
+    # The same 10,000 EUR miss, two different percentage errors. This is the test
+    # that fails if the denominator is ever "improved" into the prediction or into
+    # a symmetric mean of the two, which would make the reported MdAPE
+    # incomparable with the reference values of problem-spec section 8.
+    _assert_point_metrics(
+        [actual],
+        [predicted],
+        {
+            "mdape": mdape,
+            "within_10pct": 0.0,
+            "within_20pct": 0.0,
+            "mae_eur": 10000.0,
+            "mape": mdape,
+        },
+    )
+
+
+def test_a_single_row_is_measured_rather_than_refused():
+    # Mathematically fine and statistically meaningless, which is what SC-04's row
+    # minimum exists for. The segment table carries `n` on every row so a reader
+    # can see which is which.
+    _assert_point_metrics(
+        [30000],
+        [24000],
+        {
+            "mdape": 0.20,
+            "within_10pct": 0.0,
+            "within_20pct": 1.0,
+            "mae_eur": 6000.0,
+            "mape": 0.20,
+        },
+    )
+
+
+# --------------------------------------------------------------------------
+# The metric layer: the four guards
+# --------------------------------------------------------------------------
+
+
+def test_metrics_over_an_empty_set_are_refused():
+    empty = pd.Series([], dtype="float64")
+    with pytest.raises(ValueError, match="empty set"):
+        point_metrics(empty, empty)
+
+
+def test_a_price_of_zero_is_refused_and_says_where():
+    with pytest.raises(ValueError, match=r"price of 0.*\[1\]"):
+        point_metrics(
+            pd.Series([10000.0, 0.0], dtype="float64"), pd.Series([9000.0, 10.0], dtype="float64")
+        )
+
+
+def test_a_nan_prediction_raises_rather_than_being_skipped_by_the_median():
+    actual = pd.Series([10000.0] * 10)
+    predicted = pd.Series([10500.0] * 5 + [float("nan")] * 5)
+
+    # What the unguarded arithmetic does, asserted rather than described in a
+    # comment: `median` and `mean` skip the NaN rows while the band share counts
+    # them, so a model that failed on half its rows reports an unchanged primary
+    # metric beside a halved share. That is the reason the guard exists.
+    relative = (predicted - actual).abs() / actual.abs()
+    assert float(relative.median()) == 0.05
+    assert float((relative <= 0.20).mean()) == 0.5
+
+    with pytest.raises(ValueError, match="5 of 10 prediction"):
+        point_metrics(actual, predicted)
+
+
+def test_a_misaligned_index_raises_rather_than_being_aligned_into_nan():
+    actual = pd.Series([10000.0] * 10, index=range(10))
+    predicted = pd.Series([10500.0] * 10, index=range(5, 15))
+
+    # Again the unguarded behaviour, asserted: pandas aligns the two into the
+    # union of their indices, so the median is taken over the five overlapping
+    # rows and the band share divides by fifteen. No error anywhere.
+    relative = (predicted - actual).abs() / actual.abs()
+    assert len(relative) == 15
+    assert float(relative.median()) == 0.05
+    assert float((relative <= 0.20).mean()) == pytest.approx(1 / 3)
+
+    with pytest.raises(ValueError, match="indexed differently"):
+        point_metrics(actual, predicted)
+
+
+def test_a_missing_actual_price_raises():
+    # The same failure on the other side. `point_metrics` is also what the drift
+    # job will use, on data no range filter has seen.
+    with pytest.raises(ValueError, match="actual price"):
+        point_metrics(
+            pd.Series([10000.0, float("nan")]), pd.Series([10500.0, 10500.0], dtype="float64")
+        )
+
+
+# --------------------------------------------------------------------------
+# Age buckets, derived from the edges
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("age", "expected"),
+    [
+        (0.0, "0-1"),
+        (0.999, "0-1"),
+        (1.0, "1-3"),
+        (2.999, "1-3"),
+        (3.0, "3-6"),
+        (5.999, "3-6"),
+        (6.0, "6-10"),
+        (9.999, "6-10"),
+        (10.0, "10-20"),
+        (19.999, "10-20"),
+        (20.0, "over 20"),
+        (45.0, "over 20"),
+        (float("nan"), MISSING_SEGMENT_LEVEL),
+        (-0.5, INVALID_SEGMENT_LEVEL),
+    ],
+)
+def test_an_age_bucket_is_left_closed_and_names_both_absences(age, expected, params):
+    # The project's own edges, so the test fails if they move without the labels.
+    # The last two rows are the levels that keep a data-quality defect visible: a
+    # null `registration_date` and a listing registered after the reference date
+    # are different findings, and folding a negative age into the youngest bucket
+    # would hide the second one (EDN-22 removes it in `preprocess`).
+    levels = bucket_levels(
+        pd.Series([age], dtype="float64"), params["evaluate"]["age_bucket_edges"]
+    )
+    assert list(levels) == [expected]
+
+
+def test_the_bucket_labels_are_generated_from_the_edges():
+    # The test that fails if the labels are ever written out as a constant: these
+    # edges are not the project's, and the labels have to follow them.
+    assert bucket_labels([0, 2, 5]) == ["0-2", "2-5", "over 5"]
+    assert list(bucket_levels(pd.Series([0.0, 1.9, 2.0, 4.9, 5.0, 99.0]), [0, 2, 5])) == [
+        "0-2",
+        "0-2",
+        "2-5",
+        "2-5",
+        "over 5",
+        "over 5",
+    ]
+
+
+def test_a_level_label_is_never_a_float_nan_among_strings():
+    # Measured on pandas 3: `astype("str")` on a categorical holding a null
+    # leaves `['Dealer', 'PrivateSeller', nan]`, which raises `TypeError` as soon
+    # as anything sorts or groups the levels. The explicit fill is why the
+    # segment table can be sorted at all.
+    seller = pd.Series(pd.Categorical(["Dealer", "PrivateSeller", None]))
+    with pytest.raises(TypeError, match="not supported between"):
+        sorted(seller.astype("str").unique())
+
+    assert sorted(segment_levels(seller).unique()) == [
+        MISSING_SEGMENT_LEVEL,
+        "Dealer",
+        "PrivateSeller",
+    ]
+
+
+# --------------------------------------------------------------------------
+# SC-04: which levels count, and what happens when none do
+# --------------------------------------------------------------------------
+
+#: Ten rows in two makes: six at a 5 % error and four at 30 %. One frame, three
+#: row minimums, and together they prove the criterion discriminates in both
+#: directions and blocks when it cannot be measured at all.
+_SC04_ACTUAL = [10000.0] * 10
+_SC04_PREDICTED = [10500.0] * 6 + [13000.0] * 4
+_SC04_MAKES = ["A"] * 6 + ["B"] * 4
+
+
+@pytest.fixture
+def gate_criteria(params) -> dict:
+    return dict(params["evaluate"]["success_criteria"])
+
+
+def _sc04_rows(min_rows: int) -> "list[dict]":
+    return segment_rows(
+        {"make": pd.Series(_SC04_MAKES, dtype="str")},
+        pd.Series(_SC04_ACTUAL, dtype="float64"),
+        pd.Series(_SC04_PREDICTED, dtype="float64"),
+        variant="hand-built",
+        min_rows=min_rows,
+    )
+
+
+@pytest.mark.req("NFR-01")
+def test_sc04_fails_on_the_worst_level_that_is_large_enough_to_judge(gate_criteria):
+    # Both makes qualify at a minimum of 3, so the criterion is decided by the
+    # worse of them: 30 % against the 15 % bound.
+    verdict = evaluate_sc04(_sc04_rows(3), gate_criteria, segments=("make",))
+
+    assert verdict["sc04_measured"] == pytest.approx(0.30)
+    assert verdict["sc04_passed"] is False
+    assert verdict["sc04_n_qualifying"] == 2
+    assert verdict["sc04_worst_segment"]["level"] == "B"
+    assert verdict["sc04_worst_segment"]["n"] == 4
+
+
+@pytest.mark.req("NFR-01")
+def test_sc04_passes_when_the_only_qualifying_level_is_good_enough(gate_criteria):
+    # The same frame at a minimum of 5: make B has four rows and drops out, so the
+    # criterion is 5 % and passes. The pair of tests is what shows the verdict
+    # follows the measurement rather than the code always saying one thing.
+    verdict = evaluate_sc04(_sc04_rows(5), gate_criteria, segments=("make",))
+
+    assert verdict["sc04_measured"] == pytest.approx(0.05)
+    assert verdict["sc04_passed"] is True
+    assert verdict["sc04_n_qualifying"] == 1
+
+
+@pytest.mark.req("NFR-01")
+def test_sc04_is_not_measured_rather_than_vacuously_met_when_no_level_qualifies(gate_criteria):
+    # "Every level satisfies P" is vacuously true over an empty set. Reporting
+    # that as a pass would say the model had been checked where it had not been,
+    # so the criterion reports `None`, which blocks the gate.
+    verdict = evaluate_sc04(_sc04_rows(20), gate_criteria, segments=("make",))
+
+    assert verdict["sc04_measured"] is None
+    assert verdict["sc04_passed"] is None
+    assert verdict["sc04_n_segment_levels"] == 2
+    assert verdict["sc04_n_qualifying"] == 0
+    assert "make=A at 6" in verdict["sc04_note"]
+
+
+@pytest.mark.req("NFR-01")
+def test_the_sc04_row_minimum_is_inclusive(gate_criteria):
+    # Make B has exactly four rows, so at a minimum of four it counts. `n <
+    # min_rows` against `n <= min_rows` is invisible on any other frame, and the
+    # difference is whether "at least 500 test rows" means 500 or 501.
+    assert _SC04_MAKES.count("B") == 4
+    qualifying = {row["level"]: row["counts_toward_sc04"] for row in _sc04_rows(4)}
+
+    assert qualifying == {"A": True, "B": True}
+
+
+@pytest.mark.req("NFR-01")
+@pytest.mark.parametrize(("mdape", "passed"), [(0.1499, True), (0.15, True), (0.1500001, False)])
+def test_the_sc04_mdape_bound_is_inclusive(mdape, passed, gate_criteria):
+    # A level exactly on the 15 % bound passes. Asserted on a hand-built row so
+    # the value is the literal rather than one a division produced.
+    rows = [
+        {
+            "variant": "hand-built",
+            "segment": "make",
+            "level": "BMW",
+            "n": 600,
+            "mdape": mdape,
+            "counts_toward_sc04": True,
+            "excluded_because": "",
+        }
+    ]
+
+    assert evaluate_sc04(rows, gate_criteria, segments=("make",))["sc04_passed"] is passed
+
+
+def test_a_level_below_the_minimum_is_reported_with_its_row_count(gate_criteria):
+    # Not dropped: a reader of the fairness section has to be able to see that a
+    # make had four test rows rather than infer it from an absence.
+    rows = {row["level"]: row for row in _sc04_rows(5)}
+
+    assert rows["B"]["n"] == 4
+    assert rows["B"]["counts_toward_sc04"] is False
+    assert rows["B"]["excluded_because"] == EXCLUDED_TOO_FEW_ROWS
+    assert rows["B"]["mdape"] == pytest.approx(0.30)
+
+
+def test_the_absence_of_a_required_field_is_reported_and_excluded_whatever_its_size():
+    # FR-01 refuses a request that omits a required field with a 422, so a
+    # `"(missing)"` level cannot occur at serving time at all: it is a
+    # data-quality defect the Great Expectations suite owns, not a population the
+    # deployed API can be asked about. Excluded even at 600 rows, which is well
+    # past the 500-row bar, so the rule is the reason rather than the size.
+    levels = [MISSING_SEGMENT_LEVEL] * 600 + ["Dealer"] * 600
+    rows = segment_rows(
+        {"seller_type": pd.Series(levels, dtype="str")},
+        pd.Series([10000.0] * 1200, dtype="float64"),
+        pd.Series([10500.0] * 1200, dtype="float64"),
+        variant="hand-built",
+        min_rows=500,
+    )
+    by_level = {row["level"]: row for row in rows}
+
+    assert by_level[MISSING_SEGMENT_LEVEL]["n"] == 600
+    assert by_level[MISSING_SEGMENT_LEVEL]["counts_toward_sc04"] is False
+    assert by_level[MISSING_SEGMENT_LEVEL]["excluded_because"] == EXCLUDED_ABSENT_REQUIRED_FIELD
+    assert by_level["Dealer"]["counts_toward_sc04"] is True
+
+
+def test_a_target_conditioned_segment_cannot_become_a_criterion(params):
+    # The guard that makes the exclusion structural rather than a convention
+    # somebody has to remember: adding `price_bucket` to `evaluate.segments`
+    # fails the stage instead of silently gating on the target.
+    #
+    # Matching the reason and not only the segment name: `price_bucket` is cut
+    # from `price`, which FR-01 does not require either, so the guard below it
+    # raises a message that also names the segment. A mutation removing *this*
+    # guard therefore survived a test that matched the name alone.
+    with pytest.raises(ValueError, match=r"price_bucket.*condition on the price"):
+        criterion_segments(
+            {
+                **params,
+                "evaluate": {
+                    **params["evaluate"],
+                    "segments": [*params["evaluate"]["segments"], "price_bucket"],
+                },
+            }
+        )
+
+
+def test_a_segment_over_an_optional_input_field_is_refused(params):
+    # The `"(missing)"` exclusion above is only correct while every segment is a
+    # required input field. For an optional one, absence is a case the API
+    # answers, so excluding it would hide exactly the rows worth looking at.
+    with pytest.raises(ValueError, match="nr_prev_owners"):
+        criterion_segments(
+            {
+                **params,
+                "evaluate": {
+                    **params["evaluate"],
+                    "segments": [*params["evaluate"]["segments"], "nr_prev_owners"],
+                },
+            }
+        )
+
+
+def test_a_price_bucket_row_is_reported_and_cannot_count(params):
+    # Reported with its metrics, and marked. The exclusion is read off the
+    # segment's own name, so no caller can build a price-bucket row that counts.
+    rows = segment_rows(
+        {
+            "price_bucket": bucket_levels(
+                pd.Series([1000.0] * 600, dtype="float64"),
+                params["evaluate"]["price_bucket_edges"],
+            )
+        },
+        pd.Series([1000.0] * 600, dtype="float64"),
+        pd.Series([1050.0] * 600, dtype="float64"),
+        variant="hand-built",
+        min_rows=500,
+    )
+
+    assert [row["level"] for row in rows] == ["0-5000"]
+    assert rows[0]["n"] == 600
+    assert rows[0]["mdape"] == pytest.approx(0.05)
+    assert rows[0]["counts_toward_sc04"] is False
+    assert rows[0]["excluded_because"] == EXCLUDED_TARGET_CONDITIONED
+
+
+def test_sc04_refuses_rows_from_a_segment_it_may_not_gate(gate_criteria):
+    # The second half of the same guarantee: even handed a price-bucket row
+    # directly, the criterion refuses rather than ignoring it, so a future caller
+    # cannot leak one in by concatenating the two tables.
+    rows = segment_rows(
+        {"price_bucket": pd.Series(["0-5000"] * 600, dtype="str")},
+        pd.Series([1000.0] * 600, dtype="float64"),
+        pd.Series([1050.0] * 600, dtype="float64"),
+        variant="hand-built",
+        min_rows=500,
+    )
+    with pytest.raises(ValueError, match="price_bucket"):
+        evaluate_sc04(rows, gate_criteria, segments=("make",))
+
+
+def test_every_segment_partitions_the_rows_and_no_level_is_empty(trained, test_frames, params):
+    # Two properties at once, both of which a level built over zero rows would
+    # break. `point_metrics` refuses an empty set, so a breakdown that could
+    # produce one would fail the stage on a rare level. It cannot: the levels are
+    # plain strings and `groupby` yields only the ones that occur. The row counts
+    # summing to the frame length is the other half: no row is counted twice and
+    # none is dropped.
+    frame = test_frames["basic"]
+    model = trained["models"]["lgbm-basic"]
+    rows = segment_rows(
+        {name: segment_level_column(frame, name, params) for name in criterion_segments(params)},
+        frame["price"],
+        model.predict_eur(frame),
+        variant="lgbm-basic",
+        min_rows=50,
+    )
+
+    assert rows, "the fixture has to produce segment rows"
+    assert all(row["n"] >= 1 for row in rows)
+    for segment in criterion_segments(params):
+        counted = sum(row["n"] for row in rows if row["segment"] == segment)
+        assert counted == len(frame), segment
+
+
+def test_a_test_set_with_no_supported_make_is_refused_rather_than_predicted(
+    trained, matrices, tmp_path
+):
+    # Refused where the population is decided, so the message names the
+    # population. `predict_eur` answers an empty frame since #62, so the stage
+    # would otherwise run on to `point_metrics` and fail about an empty set,
+    # which says nothing about why the set is empty. Reachable only when the test
+    # split and the model's make list come from different `split` runs, which is
+    # exactly what the message says.
+    models = tmp_path / "models"
+    shutil.copytree(trained["dir"], models)
+    record = json.loads((models / "b0" / MODEL_FILE).read_text())
+    record["training"]["supported_makes"] = ["Trabant"]
+    (models / "b0" / MODEL_FILE).write_text(json.dumps(record), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="no test row is one of the 1 make"):
+        evaluate_main(
+            matrices["features"], models, tmp_path / "metrics", tmp_path / "metrics.json"
+        )
+
+
+def test_a_per_make_level_the_api_would_reject_is_refused():
+    # EDN-48's third obligation. Without this the report would print an error
+    # figure for a make FR-04 answers with a 422, which is worse than printing
+    # nothing, and the restriction upstream would be an intention rather than a
+    # checked property.
+    rows = [{"segment": "make", "level": name} for name in ("BMW", "Trabant")]
+    check_make_levels_are_served(rows[:1], supported=("BMW", "Audi"), variant="lgbm-basic")
+    with pytest.raises(ValueError, match="Trabant"):
+        check_make_levels_are_served(rows, supported=("BMW", "Audi"), variant="lgbm-basic")
+
+
+def test_the_segments_of_the_real_params_are_all_required_input_fields(params):
+    # The project's own configuration passes both guards, so neither is a rule
+    # nobody could satisfy.
+    assert criterion_segments(params) == tuple(params["evaluate"]["segments"])
+    assert TARGET_CONDITIONED_SEGMENTS.isdisjoint(criterion_segments(params))
+
+
+# --------------------------------------------------------------------------
+# What an input field is, and what its absence looks like
+# --------------------------------------------------------------------------
+
+# No `req("FR-01")` marker on the SC-06 tests below, deliberately. The
+# specification names two pieces of evidence for FR-01 - "API test per required
+# field ...; the model test for SC-06" - and only the second exists. The matrix
+# of NFR-07 has no notion of partial coverage, so a marker here would read as
+# "verified by a test" and satisfy FR-01's M4 gate before the API tests that
+# reject a request missing a required field are written. These tests *are* half of
+# that evidence, and the marker belongs on them once the other half lands.
+
+
+#: The optional fields of the basic set, which EDN-15 fixes at six: everything
+#: FR-01 does not require. `age_years` must not be among them - FR-01 requires
+#: `registration_date` and the model consumes the derived column - and that is
+#: the whole reason `evaluate.input_field_to_feature` exists.
+_BASIC_OPTIONAL_FIELDS = (
+    "cylinders_volume_cc",
+    "drive_train",
+    "gears",
+    "nr_doors",
+    "nr_prev_owners",
+    "nr_seats",
+)
+
+
+def test_the_optional_fields_of_the_basic_set_are_the_six_of_edn15(trained, params):
+    fields = input_field_columns(trained["models"]["lgbm-basic"], params)
+
+    assert optional_input_fields(fields, params) == _BASIC_OPTIONAL_FIELDS
+    # The trap this mapping exists for: a naive difference over feature columns
+    # would make `age_years` the seventh optional field and mask the single most
+    # important feature in the model.
+    assert "age_years" not in fields
+    assert fields["registration_date"] == ("age_years",)
+
+
+def test_an_equipment_field_covers_every_multi_hot_column_it_produced(trained, params):
+    model = trained["models"]["lgbm-extended"]
+    fields = input_field_columns(model, params)
+    vocabulary = model.space.vocabulary
+
+    assert vocabulary.equipment, "the extended fixture has to hold equipment columns"
+    for source, items in vocabulary.equipment.items():
+        assert len(fields[source]) == len(items), source
+    # One request cannot leave out a single equipment item, so the sweep masks the
+    # field: 23 scenarios rather than one per multi-hot column.
+    assert len(optional_input_fields(fields, params)) == 23
+
+
+def test_every_feature_column_is_claimed_by_exactly_one_input_field(trained, params):
+    for variant in VARIANTS:
+        model = trained["models"][variant]
+        claimed = [
+            column for columns in input_field_columns(model, params).values() for column in columns
+        ]
+
+        assert sorted(claimed) == sorted(model.features), variant
+        assert len(claimed) == len(set(claimed)), variant
+
+
+def test_a_required_field_the_model_has_no_column_for_is_refused(trained, params):
+    # The required list and the trained model would then disagree about what a
+    # valuation needs, and SC-06 would silently treat a required field as absent.
+    with pytest.raises(ValueError, match="sunroof"):
+        input_field_columns(
+            trained["models"]["b0"],
+            {
+                **params,
+                "evaluate": {
+                    **params["evaluate"],
+                    "required_input_fields": [
+                        *params["evaluate"]["required_input_fields"],
+                        "sunroof",
+                    ],
+                },
+            },
+        )
+
+
+def test_a_derived_mapping_that_names_a_column_the_model_consumes_is_refused(trained, params):
+    # `{"make": "age_years"}` would let the input field `make` claim both its own
+    # column and the derived one, so masking `make` would mask two unrelated
+    # fields at once.
+    with pytest.raises(ValueError, match="make"):
+        input_field_columns(
+            trained["models"]["b0"],
+            {
+                **params,
+                "evaluate": {
+                    **params["evaluate"],
+                    "input_field_to_feature": {"make": "age_years"},
+                },
+            },
+        )
+
+
+def test_a_column_claimed_by_two_input_fields_is_refused(trained, params):
+    # A mapping that points at a column an equipment field already produced.
+    model = trained["models"]["lgbm-extended"]
+    equipment_column = input_field_columns(model, params)["equipment_comfort"][0]
+
+    with pytest.raises(ValueError, match=equipment_column):
+        input_field_columns(
+            model,
+            {
+                **params,
+                "evaluate": {
+                    **params["evaluate"],
+                    "input_field_to_feature": {
+                        **params["evaluate"]["input_field_to_feature"],
+                        "sunroof": equipment_column,
+                    },
+                },
+            },
+        )
+
+
+# What an omitted field becomes is `Model.mask_absent`, asserted where it lives
+# by `test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is` above: the
+# per-dtype rule, the `np.nan` trap it exists to prevent, and that it does not
+# mutate the caller's frame. The sweep below calls it rather than carrying a
+# second rule, so there is one answer to what masking a field means and the
+# tests for it are in one place.
+
+
+# --------------------------------------------------------------------------
+# SC-06: a model that degrades when a field is left out
+# --------------------------------------------------------------------------
+
+
+class _DegradingModel:
+    """A model honouring the seam that predicts worse when one field is absent.
+
+    The fixture cannot demonstrate SC-06 on its own: the synthetic generator
+    derives price from a formula that ignores the optional columns, so every
+    single-field ratio measured on it came out within 0.6 % of 1.0 whatever the
+    criterion did, and a fitted model there would pass at any threshold. This
+    stub puts a known amount of degradation in one named field instead, so the
+    expected ratio is arithmetic rather than a property of the data.
+
+    It reads `price` from the frame it is handed, which no real model may do. That
+    is what makes the resulting MdAPE exact: `price * factor` has an absolute
+    percentage error of `factor - 1` on every row.
+    """
+
+    def __init__(self, real: Model, *, field: str, present: float, absent: float) -> None:
+        self.variant = f"degrading-{field}"
+        self.features = real.features
+        self.input_schema = real.input_schema
+        self.space = real.space
+        # Borrowed rather than reimplemented: the stub has the real model's
+        # features, schema and vocabulary, so a second expansion of a field into
+        # its columns, or a second answer to what an omitted field is, could only
+        # be a second answer to the same question.
+        self.columns_of = real.columns_of
+        self.mask_absent = real.mask_absent
+        self._field = field
+        self._present = present
+        self._absent = absent
+
+    def predict_eur(self, frame: pd.DataFrame) -> pd.Series:
+        factor = self._absent if frame[self._field].isna().all() else self._present
+        return pd.Series(frame["price"] * factor, index=frame.index, name=PREDICTION_NAME)
+
+
+def _sweep_of(model, frame: pd.DataFrame, params: dict) -> "list[dict]":
+    fields = input_field_columns(model, params)
+    optional = optional_input_fields(fields, params)
+    full = point_metrics(frame["price"], model.predict_eur(frame))["mdape"]
+    return masking_sweep(model, frame, sc06_scenarios(fields, optional, params), full_mdape=full)
+
+
+@pytest.mark.req("NFR-01")
+def test_sc06_fails_and_names_the_field_a_model_degrades_on(
+    trained, test_frames, params, gate_criteria
+):
+    # 5 % error with every field given, 20 % with `gears` left out, so the ratio
+    # is 4.0 against the 1.5 bound.
+    model = _DegradingModel(
+        trained["models"]["lgbm-basic"], field="gears", present=1.05, absent=1.20
+    )
+    verdict = evaluate_sc06(_sweep_of(model, test_frames["basic"], params), gate_criteria)
+
+    assert verdict["sc06_measured"] == pytest.approx(4.0)
+    assert verdict["sc06_passed"] is False
+    # The all-at-once scenario masks `gears` too, so it ties at 4.0; `max` keeps
+    # the first of the two and the named field is the more useful of them.
+    assert verdict["sc06_worst_field"] == "gears"
+    assert verdict["sc06_n_scenarios"] == len(_BASIC_OPTIONAL_FIELDS) + 1
+
+
+@pytest.mark.req("NFR-01")
+def test_sc06_passes_a_model_that_degrades_within_the_bound(
+    trained, test_frames, params, gate_criteria
+):
+    # The same machinery, 10 % against 14 %: a ratio of 1.4, which passes. The
+    # pair is what shows the criterion follows the measurement.
+    model = _DegradingModel(
+        trained["models"]["lgbm-basic"], field="gears", present=1.10, absent=1.14
+    )
+    verdict = evaluate_sc06(_sweep_of(model, test_frames["basic"], params), gate_criteria)
+
+    assert verdict["sc06_measured"] == pytest.approx(1.4)
+    assert verdict["sc06_passed"] is True
+
+
+def test_a_field_the_model_ignores_moves_nothing(trained, test_frames, params, gate_criteria):
+    # B0 keys on make, model and an age bucket and ignores the rest, so masking
+    # any optional field leaves its prediction unchanged. Worth pinning: a ratio
+    # of exactly 1.0 across the sweep is the correct answer for that estimator
+    # and not a sweep that silently failed to mask anything.
+    sweep = _sweep_of(trained["models"]["b0"], test_frames["basic"], params)
+
+    assert [row["field"] for row in sweep] == [*_BASIC_OPTIONAL_FIELDS, ALL_OPTIONAL_FIELDS]
+    assert [row["mdape_ratio"] for row in sweep] == pytest.approx([1.0] * len(sweep))
+    assert evaluate_sc06(sweep, gate_criteria)["sc06_passed"] is True
+
+
+def _sweep_row(ratio: float, *, criterion: str = "sc06", field: str = "gears") -> dict:
+    return {
+        "variant": "hand-built",
+        "criterion": criterion,
+        "field": field,
+        "n_columns_masked": 1,
+        "mdape": 0.1 * ratio,
+        "mdape_ratio": ratio,
+    }
+
+
+@pytest.mark.parametrize(("ratio", "passed"), [(1.4999, True), (1.5, True), (1.5000001, False)])
+def test_the_sc06_bound_is_inclusive(ratio, passed, gate_criteria):
+    # Asserted on an exact ratio rather than on one computed from two MdAPEs,
+    # because `0.15 / 0.10` is 1.4999999999999998 in binary floating point and
+    # would make the boundary look tested when it was not.
+    assert evaluate_sc06([_sweep_row(ratio)], gate_criteria)["sc06_passed"] is passed
+
+
+def test_sc06_is_not_measured_when_the_feature_set_leaves_nothing_optional(trained, gate_criteria):
+    # A feature set of required fields only. No scenario is built, not even the
+    # all-at-once one, which would otherwise be a call that masked nothing and
+    # reported a ratio of 1.0 as if the criterion had been checked.
+    params = _project_params()
+    fields = input_field_columns(trained["models"]["b0"], params)
+    assert sc06_scenarios(fields, (), params) == ()
+
+    verdict = evaluate_sc06([], gate_criteria)
+
+    assert verdict["sc06_measured"] is None
+    assert verdict["sc06_passed"] is None
+    assert "nothing to mask" in verdict["sc06_note"]
+
+
+def test_p1_can_never_reach_sc06(gate_criteria):
+    # P1 leaves out required fields, so its inflation is a large number about a
+    # request FR-01 refuses. Built by a different function and refused here, so
+    # the separation is structural rather than a matter of remembering.
+    with pytest.raises(ValueError, match="required input field"):
+        evaluate_sc06([_sweep_row(3.0, criterion="sc05", field=P1_SCENARIO)], gate_criteria)
+
+
+def test_p1_masks_every_field_it_does_not_name(trained, params):
+    model = trained["models"]["lgbm-basic"]
+    fields = input_field_columns(model, params)
+    given = params["evaluate"]["sc05_p1_fields"]
+
+    scenarios = sc05_scenarios(fields, params)
+
+    assert len(scenarios) == 1
+    assert scenarios[0].criterion == "sc05"
+    # The scenario names request fields; what they expand to is the seam's answer,
+    # so the assertion goes through `columns_of` rather than re-deriving it.
+    masked = {column for field in scenarios[0].fields for column in model.columns_of(field)}
+    for field in given:
+        assert masked.isdisjoint(fields[field]), field
+    assert masked == set(model.features) - {column for field in given for column in fields[field]}
+    assert scenarios[0].n_columns == len(masked)
+
+
+def test_p1_over_a_field_the_feature_set_does_not_have_is_refused(trained, params):
+    with pytest.raises(ValueError, match="paint_type"):
+        sc05_scenarios(
+            input_field_columns(trained["models"]["lgbm-basic"], params),
+            {
+                **params,
+                "evaluate": {
+                    **params["evaluate"],
+                    "sc05_p1_fields": [*params["evaluate"]["sc05_p1_fields"], "paint_type"],
+                },
+            },
+        )
+
+
+def test_a_sweep_against_a_perfect_model_is_refused(trained, test_frames, params):
+    # A median error of 0 means the model reproduces at least half the test prices
+    # exactly, which is a leak or a test set built from training rows. Failing
+    # loudly beats dividing by it.
+    perfect = _DegradingModel(
+        trained["models"]["lgbm-basic"], field="gears", present=1.0, absent=1.0
+    )
+    with pytest.raises(ValueError, match="no denominator"):
+        _sweep_of(perfect, test_frames["basic"], params)
+
+
+# --------------------------------------------------------------------------
+# SC-05: unmeasurable today, and measured when a model can
+# --------------------------------------------------------------------------
+
+
+#: The two factors the stub interval is built from. An interval of
+#: `[0.99, 1.01] * price` contains the price; one of `[1.50, 1.60] * price` sits
+#: entirely above it, so the coverage of a frame is exactly the share of rows
+#: given the first.
+_INSIDE, _OUTSIDE = (0.99, 1.01), (1.50, 1.60)
+
+
+class _IntervalModel(_DegradingModel):
+    """A model that does expose `predict_interval_eur`, so the measured branch runs.
+
+    The coverage is produced by construction rather than by fitting anything: the
+    first `inside_rows` rows get an interval around the price and the rest get one
+    above it, so the measured coverage is `inside_rows / len(frame)` exactly.
+    """
+
+    def __init__(self, real: Model, *, inside_rows: int) -> None:
+        # Barely wrong on purpose: an exactly perfect point prediction would leave
+        # SC-06's ratio without a denominator, which `masking_sweep` refuses.
+        super().__init__(real, field="gears", present=1.0001, absent=1.0001)
+        self._inside_rows = inside_rows
+
+    def predict_interval_eur(self, frame: pd.DataFrame, coverage: float = 0.90) -> pd.DataFrame:
+        inside = np.arange(len(frame)) < self._inside_rows
+        price = frame["price"].to_numpy()
+        return pd.DataFrame(
+            {
+                "lower_eur": np.where(inside, price * _INSIDE[0], price * _OUTSIDE[0]),
+                "upper_eur": np.where(inside, price * _INSIDE[1], price * _OUTSIDE[1]),
+            },
+            index=frame.index,
+        )
+
+
+@pytest.mark.req("NFR-01")
+def test_sc05_is_not_measured_while_no_model_exposes_an_interval(
+    trained, test_frames, gate_criteria
+):
+    # The state of the first delivery, and the reason NFR-01's gate cannot be met
+    # by any model yet. Reported as a structured status so a reader can tell "not
+    # measured" from "measured and failed" without parsing English.
+    for variant in VARIANTS:
+        model = trained["models"][variant]
+        assert not hasattr(model, INTERVAL_METHOD), variant
+        assert interval_metrics(model, {"full": test_frames[model.feature_set]}) is None, variant
+
+    verdict = evaluate_sc05(None, gate_criteria)
+
+    assert verdict["sc05_measured"] is None
+    assert verdict["sc05_passed"] is None
+    assert verdict["sc05_status"] == "not_measured"
+    assert verdict["sc05_capability_checked"] == INTERVAL_METHOD
+    assert INTERVAL_METHOD in verdict["sc05_reason"]
+
+
+def test_interval_coverage_is_the_share_of_prices_inside_the_interval(trained, test_frames):
+    # The capability branch, exercised with a stub that has the method, which is
+    # what makes the `hasattr` check a seam rather than a dead branch: when UC2
+    # lands, the criterion starts being measured without an edit to the stage.
+    frame = test_frames["basic"]
+    rows = len(frame)
+    # Enough rows outside the interval that a coverage of 1.0 could not pass by
+    # accident, and a count rather than a share so the expected value is exact.
+    missed = 37
+    inside_rows = rows - missed
+    model = _IntervalModel(trained["models"]["lgbm-basic"], inside_rows=inside_rows)
+
+    measured = interval_metrics(model, {"full": frame})
+
+    assert rows > missed, "the fixture has to hold more rows than the interval misses"
+    assert measured["full"]["coverage"] == pytest.approx(inside_rows / rows)
+    # The width is relative to the prediction, which is `price * 1.0001`.
+    expected_width = (
+        inside_rows * (_INSIDE[1] - _INSIDE[0])
+        + (rows - inside_rows) * (_OUTSIDE[1] - _OUTSIDE[0])
+    ) / (rows * 1.0001)
+    assert measured["full"]["mean_relative_width"] == pytest.approx(expected_width)
+
+
+@pytest.mark.parametrize(
+    ("coverage", "passed"),
+    [(0.8799, False), (0.88, True), (0.90, True), (0.92, True), (0.9201, False)],
+)
+def test_the_sc05_coverage_band_is_inclusive_at_both_edges(coverage, passed, gate_criteria):
+    # Exact coverages rather than ones a stub's row count produced, so both edges
+    # of the 88 % to 92 % band are tested where they are rather than near them.
+    verdict = evaluate_sc05({"full": {"coverage": coverage}}, gate_criteria)
+
+    assert verdict["sc05_passed"] is passed
+    assert verdict["sc05_measured"] == coverage
+    assert verdict["sc05_status"] == "measured"
+    assert verdict["sc05_worst_scenario"] == "full"
+
+
+def test_sc05_needs_both_scenarios_inside_the_band(gate_criteria):
+    # The criterion names full inputs *and* P1, so one scenario outside the band
+    # fails it, and the value reported is the one that carried the verdict.
+    verdict = evaluate_sc05(
+        {"full": {"coverage": 0.90}, P1_SCENARIO: {"coverage": 0.70}}, gate_criteria
+    )
+
+    assert verdict["sc05_passed"] is False
+    assert verdict["sc05_measured"] == 0.70
+    assert verdict["sc05_worst_scenario"] == P1_SCENARIO
+
+
+# --------------------------------------------------------------------------
+# The gate
+# --------------------------------------------------------------------------
+
+#: The exploratory reference values of problem-spec section 8, and a model that
+#: misses every criterion. Shared by the tests below so a change to one shows up
+#: in both directions at once.
+_GOOD_METRICS = {"mdape": 0.067, "within_20pct": 0.906}
+_BAD_METRICS = {"mdape": 0.547, "within_20pct": 0.161}
+
+
+def _gate_input(
+    metrics: dict, *, baseline: "float | None", mdape: float, ratio: float
+) -> GateInput:
+    """A gate input whose SC-04 and SC-06 halves are as good or as bad as `metrics`."""
+    return GateInput(
+        metrics=metrics,
+        baseline_mdape=baseline,
+        segments=[
+            {
+                "variant": "hand-built",
+                "segment": "make",
+                "level": "BMW",
+                "n": 600,
+                "mdape": mdape,
+                "counts_toward_sc04": True,
+                "excluded_because": "",
+            }
+        ],
+        criterion_segments=("make",),
+        sweep=[_sweep_row(ratio)],
+        intervals=None,
+    )
+
+
+@pytest.mark.req("NFR-01")
+def test_the_gate_flips_every_measured_criterion_together(gate_criteria):
+    # The test that tells a working gate from one that says no to everything: the
+    # five criteria that can be measured today all pass on the good measurement
+    # and all fail on the bad one.
+    passed = evaluate_gate(
+        _gate_input(_GOOD_METRICS, baseline=0.119, mdape=0.10, ratio=1.2), gate_criteria
+    )
+    failed = evaluate_gate(
+        _gate_input(_BAD_METRICS, baseline=0.119, mdape=0.40, ratio=3.0), gate_criteria
+    )
+    measurable = ("sc01", "sc02", "sc03", "sc04", "sc06")
+
+    assert [passed[f"{name}_passed"] for name in measurable] == [True] * len(measurable)
+    assert [failed[f"{name}_passed"] for name in measurable] == [False] * len(measurable)
+
+
+@pytest.mark.req("NFR-01")
+def test_an_unmeasured_criterion_blocks_the_gate_rather_than_passing_it(gate_criteria):
+    # NFR-01's word is "every". A model meeting all five criteria that can be
+    # measured is still not deployable while the sixth has no measurement, and
+    # `gate_blocked_by` says which of the two it is.
+    record = evaluate_gate(
+        _gate_input(_GOOD_METRICS, baseline=0.119, mdape=0.10, ratio=1.2), gate_criteria
+    )
+
+    assert record["sc05_passed"] is None
+    assert gate_passed(record) is False
+    assert gate_blocked_by(record) == "sc05 unmeasured"
+
+
+@pytest.mark.req("NFR-01")
+def test_gate_blocked_by_tells_a_miss_apart_from_a_non_measurement(gate_criteria):
+    record = evaluate_gate(
+        _gate_input(_BAD_METRICS, baseline=0.119, mdape=0.40, ratio=3.0), gate_criteria
+    )
+
+    assert gate_blocked_by(record) == "sc01,sc02,sc03,sc04,sc06 failed; sc05 unmeasured"
+
+
+@pytest.mark.req("NFR-01")
+def test_the_baseline_compared_against_itself_does_not_pass_sc03(gate_criteria):
+    # An improvement of exactly 0 over the baseline is not a 30 % improvement, so
+    # B0 fails SC-03 against itself. Worth pinning, because reading that as a
+    # missing measurement would turn a real failure into a `None`.
+    record = evaluate_gate(
+        _gate_input(
+            {"mdape": 0.119, "within_20pct": 0.709}, baseline=0.119, mdape=0.10, ratio=1.0
+        ),
+        gate_criteria,
+    )
+
+    assert record["sc03_measured"] == 0.0
+    assert record["sc03_passed"] is False
+
+
+@pytest.mark.req("NFR-01")
+@pytest.mark.parametrize("baseline", [None, 0.0])
+def test_sc03_is_not_measured_without_a_baseline_to_improve_on(baseline, gate_criteria):
+    # Two ways there is no improvement to compute. A missing baseline variant is
+    # the obvious one; a baseline MdAPE of exactly 0 is the other, and it has to
+    # be told apart from a missing one rather than divided by: nothing is 30 %
+    # better than a perfect baseline, so the criterion is unmeasurable rather
+    # than failed. `not baseline` would conflate the two, and dropping the check
+    # raises `ZeroDivisionError` from inside the gate.
+    record = evaluate_gate(
+        _gate_input(_GOOD_METRICS, baseline=baseline, mdape=0.10, ratio=1.2), gate_criteria
+    )
+
+    assert record["sc03_measured"] is None
+    assert record["sc03_passed"] is None
+    assert gate_passed(record) is False
+    assert "sc03" in gate_blocked_by(record)
+
+
+@pytest.mark.req("NFR-01")
+def test_a_record_that_decides_nothing_for_a_criterion_is_refused():
+    # `gate_passed` is `all(...)` over the six, so a criterion simply absent would
+    # raise `KeyError` instead of blocking. This is the machine-checked version of
+    # what the CRITERIA comment says.
+    decided = {f"{name}_passed": True for name in CRITERIA}
+    assert gate_passed(decided) is True
+    assert gate_blocked_by(decided) == ""
+
+    for name in CRITERIA:
+        with pytest.raises(KeyError):
+            gate_passed({key: value for key, value in decided.items() if key != f"{name}_passed"})
+
+
+@pytest.mark.req("NFR-01")
+def test_a_criterion_added_to_the_list_without_a_measurement_fails_the_stage(
+    monkeypatch, gate_criteria
+):
+    # The failure the check above guards against in practice: a seventh criterion
+    # is added to `CRITERIA` and nobody measures it. Without the check the record
+    # would simply not carry it, `gate_passed` would raise `KeyError` from inside
+    # the stage, and the traceback would name a dictionary rather than the
+    # criterion nobody implemented.
+    monkeypatch.setattr("recommenditos.modeling.evaluate.CRITERIA", (*CRITERIA, "sc07"))
+
+    with pytest.raises(ValueError, match="decides nothing for sc07"):
+        evaluate_gate(
+            _gate_input(_GOOD_METRICS, baseline=0.119, mdape=0.10, ratio=1.2), gate_criteria
+        )
+
+
+def _variant_record(name: str, mdape: float, **verdicts) -> dict:
+    """One variant's record as `gate_summary` reads it: MdAPE plus the six verdicts."""
+    decided = {f"{each}_passed": True for each in CRITERIA} | verdicts
+    record = {"variant": name, "mdape": mdape, "within_20pct": 0.9, **decided}
+    return {
+        **record,
+        "gate_passed": gate_passed(record),
+        "gate_blocked_by": gate_blocked_by(record),
+    }
+
+
+@pytest.mark.req("NFR-01")
+def test_the_metrics_file_puts_forward_the_best_variant_that_met_every_criterion():
+    # `best_variant` is the lowest MdAPE overall and `deployable_variant` the
+    # lowest among those that passed, and the two are different leaves precisely
+    # because they are different questions: the first is what a reader looks for,
+    # the second is what NFR-01 gates on.
+    summary = gate_summary(
+        {
+            "b0": _variant_record("b0", 0.12, sc01_passed=False),
+            "lgbm-basic": _variant_record("lgbm-basic", 0.068),
+            "lgbm-extended": _variant_record("lgbm-extended", 0.063, sc04_passed=False),
+        }
+    )
+
+    assert summary["gate_passed"] is True
+    assert summary["n_variants_passing"] == 1
+    assert summary["deployable_variant"] == "lgbm-basic"
+    assert summary["best_variant"] == "lgbm-extended"
+    assert summary["best_mdape"] == 0.063
+    assert summary["criteria_not_measured"] == ""
+    assert summary["variants"]["lgbm-extended"]["gate_blocked_by"] == "sc04 failed"
+
+
+@pytest.mark.req("NFR-01")
+def test_the_metrics_file_counts_the_variants_only_a_missing_measurement_blocks():
+    # `n_variants_passing_measurable` counts the variants where nothing that
+    # *could* be measured failed, which is not the same as the gate: with SC-05
+    # unmeasurable, `n_variants_passing` says 0 for a reason that has nothing to
+    # do with the models, and this says how close they are. A variant that also
+    # failed a measured criterion must not be counted.
+    summary = gate_summary(
+        {
+            "b0": _variant_record("b0", 0.12, sc01_passed=False, sc05_passed=None),
+            "lgbm-basic": _variant_record("lgbm-basic", 0.068, sc05_passed=None),
+            "lgbm-extended": _variant_record("lgbm-extended", 0.063, sc05_passed=None),
+        }
+    )
+
+    assert summary["gate_passed"] is False
+    assert summary["n_variants_passing"] == 0
+    assert summary["n_variants_passing_measurable"] == 2
+    assert summary["deployable_variant"] is None
+    assert summary["criteria_not_measured"] == "sc05"
+
+
+@pytest.mark.req("NFR-01")
+def test_a_verdict_that_is_truthy_without_being_a_bool_is_refused(gate_criteria):
+    # Not a hypothetical: a numpy scalar's comparison returns `np.bool_`, which is
+    # truthy, prints as `True` and `is not True`. `point_metrics` converts to
+    # `float` so the stage cannot produce one today, and this is the check that
+    # says so if that ever stops being the case.
+    numpy_metrics = {"mdape": np.float64(0.067), "within_20pct": np.float64(0.906)}
+    assert (numpy_metrics["mdape"] <= 0.09) is not True
+
+    with pytest.raises(ValueError, match="True, False or None"):
+        evaluate_gate(
+            _gate_input(numpy_metrics, baseline=0.119, mdape=0.10, ratio=1.2), gate_criteria
+        )

@@ -230,51 +230,108 @@ def test_the_gate_reports_every_success_criterion(pipeline, params):
 
 @pytest.mark.req("NFR-01")
 def test_a_model_that_misses_the_criteria_does_not_pass_the_gate(pipeline):
-    # SC-04 to SC-06 have no measurement until issue #39 lands, and a criterion
-    # that was not measured is never a pass, so nothing can be released yet
-    # whatever the fitted estimators score. NFR-01's word is "every", and this is
-    # what keeps it honest; the test below checks that the implemented criteria
-    # still discriminate rather than the gate simply refusing everything.
+    # SC-05 has no measurement until the UC2 intervals exist, and a criterion that
+    # was not measured is never a pass, so nothing can be released yet whatever
+    # the fitted estimators score. NFR-01's word is "every", and this is what
+    # keeps it honest.
+    #
+    # That the gate discriminates rather than simply refusing everything is
+    # asserted in tests/test_model.py::test_the_gate_flips_every_measured_criterion_together,
+    # which drives the same reference values through all five measurable criteria
+    # instead of the three this file used to cover.
     summary = json.loads(pipeline["summary"].read_text())
     assert summary["gate_passed"] is False
     assert summary["n_variants_passing"] == 0
     # Nothing is put forward for deployment while nothing passes.
     assert summary["deployable_variant"] is None
+    # And the artefact says which criteria are outstanding, so a reader can tell
+    # "0 of 4" caused by the model from "0 of 4" caused by a missing measurement.
+    # Both here: SC-05 needs the UC2 intervals, and on 2,000 fixture rows no
+    # segment level reaches the 500-row bar SC-04 needs, so the criterion is not
+    # measured either. On a real run only SC-05 is outstanding; the test below
+    # lowers the bar so SC-04 produces a verdict on the fixture too.
+    assert summary["criteria_not_measured"] == "sc04,sc05"
 
 
 @pytest.mark.req("NFR-01")
-def test_the_gate_discriminates_rather_than_rejecting_everything(params):
-    # The test above cannot tell a working gate from one that says no to
-    # everything, because SC-04 to SC-06 are null until issue #39 lands. This
-    # one checks the criteria that are implemented actually distinguish.
+def test_sc05_is_the_one_criterion_no_model_can_be_measured_against_yet(pipeline, params):
+    # Narrowed to SC-05 deliberately: SC-04 and SC-06 are measured now, and a test
+    # asserting they are `None` would be satisfied by an implementation that
+    # returned `None` unconditionally.
+    for variant in params["train"]["variants"]:
+        record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
+        assert record["sc05_passed"] is None, variant
+        assert record["sc05_status"] == "not_measured", variant
+        assert record["sc06_passed"] is not None, variant
+
+
+@pytest.mark.req("NFR-01")
+def test_sc04_is_measured_as_soon_as_a_segment_level_is_large_enough(pipeline, params, tmp_path):
+    # On the 2,000-row fixture no segment level reaches the project's 500-row bar,
+    # so SC-04 is `None` there whatever the code does - which means a test that
+    # only asserted that would pass against `return None`. This run lowers the bar
+    # instead, so the fixture produces a real verdict.
+    #
+    # The counts come from the fixture's own split, so they move with
+    # `FIXTURE_ROWS` and `params["seed"]`; the assertion is on the shape and on
+    # the largest levels rather than on the whole list.
     criteria = params["evaluate"]["success_criteria"]
-    good = {"mdape": 0.067, "within_20pct": 0.906}
-    bad = {"mdape": 0.547, "within_20pct": 0.161}
-
-    passed = evaluate.evaluate_gate(good, baseline_mdape=0.119, criteria=criteria)
-    failed = evaluate.evaluate_gate(bad, baseline_mdape=0.119, criteria=criteria)
-
-    assert (passed["sc01_passed"], passed["sc02_passed"], passed["sc03_passed"]) == (
-        True,
-        True,
-        True,
+    evaluate.main(
+        pipeline["features"],
+        pipeline["models"],
+        tmp_path / "metrics",
+        tmp_path / "metrics.json",
+        params_override(
+            tmp_path,
+            params,
+            evaluate={"success_criteria": {**criteria, "sc04_min_segment_rows": 50}},
+        ),
     )
-    assert (failed["sc01_passed"], failed["sc02_passed"], failed["sc03_passed"]) == (
-        False,
-        False,
-        False,
+    record = json.loads((tmp_path / "metrics" / "b0.json").read_text())
+    qualifying = [row for row in record["segments"] if row["counts_toward_sc04"]]
+
+    assert record["sc04_measured"] is not None
+    assert record["sc04_passed"] in (True, False)
+    assert record["sc04_n_qualifying"] == len(qualifying) > 0
+    assert record["sc04_min_segment_rows"] == 50
+    assert record["sc04_worst_segment"]["mdape"] == record["sc04_measured"]
+    assert all(row["n"] >= 50 for row in qualifying)
+
+
+def test_the_report_tables_carry_the_columns_the_report_is_written_against(pipeline):
+    # The header of each CSV, asserted as a line rather than through pandas, which
+    # reads by name and would not notice a reordering. A LaTeX table and a
+    # spreadsheet both read these files positionally as often as by name, so the
+    # order is part of what the report is written against.
+    segments = (pipeline["metrics_dir"] / evaluate.SEGMENTS_FILE).read_text().splitlines()
+    masked = (pipeline["metrics_dir"] / evaluate.MASKED_INPUTS_FILE).read_text().splitlines()
+
+    assert segments[0] == (
+        "variant,segment,level,n,mdape,within_10pct,within_20pct,mae_eur,mape,"
+        "counts_toward_sc04,excluded_because"
+    )
+    assert masked[0] == (
+        "variant,criterion,field,n_columns_masked,mdape,mdape_ratio,threshold,passed"
     )
 
 
-@pytest.mark.req("NFR-01")
-def test_an_unmeasured_criterion_is_null_rather_than_a_pass(pipeline):
-    # NFR-01 is "only a model meeting every SC-01 to SC-06 is released", and SC-04
-    # to SC-06 have no thresholds until issue #39 lands. This is the test that
-    # keeps the word "every" honest in the meantime: an unmeasured criterion is
-    # never recorded as met, so it can never be the reason a model is released.
-    record = json.loads((pipeline["metrics_dir"] / "b0.json").read_text())
-    for criterion in ("sc04", "sc05", "sc06"):
-        assert record[f"{criterion}_passed"] is None
+def test_the_report_tables_carry_every_variant_and_exclude_the_price_buckets(pipeline, params):
+    # The two CSVs the report and its LaTeX tables read. The price buckets have to
+    # be *present* and excluded rather than absent, because the report cites them
+    # as the diagnostic that shows why they may not gate.
+    segments = pd.read_csv(pipeline["metrics_dir"] / evaluate.SEGMENTS_FILE)
+    masked = pd.read_csv(pipeline["metrics_dir"] / evaluate.MASKED_INPUTS_FILE)
+    variants = list(params["train"]["variants"])
+
+    assert list(segments["variant"].unique()) == variants
+    assert list(masked["variant"].unique()) == variants
+    price_buckets = segments[segments["segment"] == "price_bucket"]
+    assert not price_buckets.empty
+    assert not price_buckets["counts_toward_sc04"].any()
+    assert (price_buckets["excluded_because"] == evaluate.EXCLUDED_TARGET_CONDITIONED).all()
+    # Every variant's sweep ends in the all-at-once scenario and carries P1.
+    assert (masked["field"] == evaluate.ALL_OPTIONAL_FIELDS).sum() == len(variants)
+    assert (masked["criterion"] == "sc05").sum() == len(variants)
 
 
 def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
