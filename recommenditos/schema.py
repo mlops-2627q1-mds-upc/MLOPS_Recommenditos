@@ -473,7 +473,7 @@ RAW_SCHEMA = Schema(
         Column("weight_kg", "str", True, "Kerb weight as text, e.g. '1,945 kg'. Parsed later."),
         Column("has_particle_filter", "bool", False, "Particle filter fitted."),
         Column("fuel_category", "str", True, "Coarse fuel type."),
-        Column("primary_fuel", "str", True, "Excluded: finer-grained fuel_category."),
+        Column("primary_fuel", "str", True, "Excluded: overlaps fuel_category, half filled."),
         Column(
             "electric_range_km", "float64", True, "Electric range; applies to some drivetrains."
         ),

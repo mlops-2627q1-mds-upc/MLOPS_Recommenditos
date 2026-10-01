@@ -1,8 +1,6 @@
 """The gate that runs Pynblint over every notebook, against the documented policy.
 
-Pynblint on its own cannot fail a build: it exits 0 whatever it finds, it reads
-its settings from any environment variable that happens to share a name with
-one, and it has no notion of which of its rules we decided to enforce. Each of
+docs/docs/notebooks.md says why Pynblint cannot gate a build on its own. Each of
 those gaps would turn a finding into a green build without anyone noticing, so
 each has a test here.
 
@@ -21,6 +19,7 @@ import sys
 import pytest
 from tools import notebook_lint
 from tools.notebook_lint import (
+    KEEP_OUTPUT_RULE,
     PROJECT_RULE,
     PolicyError,
     check_policy,
@@ -48,8 +47,14 @@ Notebooks
 Prose after the table is not part of it.
 """
 
-#: What the fake registry reports as installed: exactly the rules POLICY classifies.
-INSTALLED = ["missing-closing-MD-text", "non-executed-notebook", "empty-cells", "cell-too-long"]
+#: What the fake registry reports as installed, slug to level: exactly the rules
+#: POLICY classifies, plus nothing else.
+INSTALLED = {
+    "missing-closing-MD-text": "notebook",
+    "non-executed-notebook": "notebook",
+    "empty-cells": "cell",
+    "cell-too-long": "cell",
+}
 
 NOTEBOOK = "notebooks/1.0-lh-x.ipynb"
 
@@ -115,11 +120,14 @@ class FakeTools:
     """Plays git and Pynblint for `main`, and records how it was called."""
 
     notebooks: tuple[str, ...] = (NOTEBOOK,)
-    rules: tuple[str, ...] = tuple(INSTALLED)
-    report: dict = field(default_factory=lambda: CLEAN)
+    rules: dict = field(default_factory=lambda: INSTALLED)
+    report: dict | None = field(default_factory=lambda: CLEAN)
     returncode: int = 0
     writes_report: bool = True
     git_missing: bool = False
+    git_returncode: int = 0
+    registry_returncode: int = 0
+    registry_stdout: str | None = None
     calls: list = field(default_factory=list)
 
     def __call__(self, command, **options):
@@ -127,13 +135,21 @@ class FakeTools:
         if command[0] == "git":
             if self.git_missing:
                 raise FileNotFoundError(2, "No such file or directory", "git")
-            return completed(command, stdout="".join(f"{path}\0" for path in self.notebooks))
+            listed = "".join(f"{path}\0" for path in self.notebooks)
+            return completed(command, self.git_returncode, listed, "fatal: not a git repository")
         if command[1] == "-c":
-            registry = {"version": "0.1.6", "rules": list(self.rules)}
-            return completed(command, stdout=json.dumps(registry))
+            registry = json.dumps({"version": "0.1.6", "rules": self.rules})
+            stdout = registry if self.registry_stdout is None else self.registry_stdout
+            return completed(command, self.registry_returncode, stdout, "ImportError: boom")
         if self.writes_report:
+            # Like Pynblint, report nothing for a rule the command excludes.
+            excluded = set(json.loads(command[command.index("--exclude") + 1]))
+            report = self.report
+            if isinstance(report, dict) and "lints" in report:
+                lints = [lint for lint in report["lints"] if lint["slug"] not in excluded]
+                report = {**report, "lints": lints}
             output = Path(command[command.index("--output") + 1])
-            output.write_text(json.dumps(self.report), encoding="utf-8")
+            output.write_text(json.dumps(report), encoding="utf-8")
         return completed(
             command,
             returncode=self.returncode,
@@ -189,8 +205,26 @@ ROW = "| `empty-cells` | enforced | No leftover cells. |"
         (POLICY.replace("| `empty-cells` |", "| empty-cells |"), "backticks"),
         # No table at all must not read as "no rule is enforced".
         ("Notebooks\n=========\n\nNo table here.\n", "found no rule table"),
+        # With two tables the gate would read one and the page would show both.
+        (POLICY + "\n| Rule | Decision | Reason |\n|---|---|---|\n" + ROW + "\n", "2 rule tables"),
+        # A cell lost or added shifts the decision into the reason, or the reverse.
+        (POLICY.replace(ROW, "| `empty-cells` | enforced |"), "2 cells"),
+        # A header with no rows is a table that decides nothing.
+        ("| Rule | Decision | Reason |\n|---|---|---|\n\nText.\n", "no rows"),
+        # A table that excludes every rule passes every notebook, and says it checked them.
+        (POLICY.replace("| enforced |", "| excluded |"), "enforces no rule"),
     ],
-    ids=["missing reason", "duplicate rule", "unknown decision", "bare slug", "no table"],
+    ids=[
+        "missing reason",
+        "duplicate rule",
+        "unknown decision",
+        "bare slug",
+        "no table",
+        "second table",
+        "missing cell",
+        "empty table",
+        "nothing enforced",
+    ],
 )
 def test_a_policy_table_the_gate_could_misread_is_refused(table, match):
     with pytest.raises(PolicyError, match=match):
@@ -209,7 +243,6 @@ def test_the_repositorys_policy_table_enforces_rules_and_gives_every_exclusion_a
     )
     assert policy.enforced
     assert policy.excluded
-    assert all(reason.strip() for reason in policy.excluded.values())
 
 
 # --------------------------------------------------------------------------
@@ -231,8 +264,8 @@ def test_a_rule_the_installed_pynblint_does_not_have_is_refused():
     policy = parse_policy(
         POLICY.replace("| `cell-too-long` |", "| `long-multiline-python-comment` |")
     )
-    installed = [*INSTALLED, "long_multiline_python_comment"]
-    installed.remove("cell-too-long")
+    installed = {**INSTALLED, "long_multiline_python_comment": "cell"}
+    del installed["cell-too-long"]
     with pytest.raises(PolicyError) as refused:
         check_policy(installed, policy)
     assert "long-multiline-python-comment" in str(refused.value)
@@ -242,7 +275,18 @@ def test_a_rule_the_installed_pynblint_does_not_have_is_refused():
 def test_a_rule_the_policy_does_not_classify_is_refused():
     """A new Pynblint brings new rules, and none of them may run undecided."""
     with pytest.raises(PolicyError, match="notebook-has-no-tests"):
-        check_policy([*INSTALLED, "notebook-has-no-tests"], parse_policy(POLICY))
+        check_policy({**INSTALLED, "notebook-has-no-tests": "notebook"}, parse_policy(POLICY))
+
+
+def test_an_enforced_repository_rule_is_refused_because_it_never_runs():
+    """Pynblint runs its repository rules only on a directory, and the gate gives it
+    one notebook file at a time, so an enforced repository rule would be reported
+    as checked while nothing checks it."""
+    policy = parse_policy(
+        POLICY.replace(ROW, f"{ROW}\n| `duplicate-notebook-filename` | enforced | Unique. |")
+    )
+    with pytest.raises(PolicyError, match="duplicate-notebook-filename is a repository rule"):
+        check_policy({**INSTALLED, "duplicate-notebook-filename": "path"}, policy)
 
 
 # --------------------------------------------------------------------------
@@ -282,7 +326,6 @@ def test_the_exclusions_reach_pynblint_as_a_json_array_and_it_runs_unattended(tm
         "non-linear-execution",
     ]
     assert options[options.index("--output") + 1] == str(output)
-    assert output.suffix == ".json"
     assert "--yes" in options
     assert "--quiet" in options
 
@@ -291,7 +334,6 @@ def test_pynblint_never_sees_the_callers_environment_or_working_directory(tmp_pa
     """Also a `.pynblint` file in the working directory configures it, so it runs
     in an empty temporary directory, and with the cleaned environment, every time."""
     root = repository(tmp_path)
-    (root / ".pynblint").write_text('EXCLUDE=["empty-cells"]\n', encoding="utf-8")
     tools = FakeTools()
     notebook_lint.main(root, run=tools, environ={"PATH": "/usr/bin", "INCLUDE": "/usr/include"})
 
@@ -338,7 +380,7 @@ def test_a_clean_run_passes_and_says_what_it_checked(tmp_path, capsys):
     assert notebook_lint.main(root, run=FakeTools(), environ={}) == 0
 
     summary = (
-        "1 notebook checked with Pynblint 0.1.6: 3 rules and the project rule enforced, "
+        "1 notebook checked with Pynblint 0.1.6: 3 rules and 2 project rules enforced, "
         "1 rule excluded (see docs/docs/notebooks.md), 0 findings"
     )
     assert summary in capsys.readouterr().out
@@ -349,11 +391,83 @@ def test_a_clean_run_passes_and_says_what_it_checked(tmp_path, capsys):
         "pynblint": "0.1.6",
         "notebooks": [NOTEBOOK],
         "enforced": ["empty-cells", "missing-closing-MD-text", "cell-too-long"],
-        "project_rule": PROJECT_RULE,
+        "project_rules": [PROJECT_RULE, KEEP_OUTPUT_RULE],
         "excluded": {"non-executed-notebook": "nbstripout clears every execution count."},
         "findings": [],
         "passed": True,
     }
+
+
+def test_the_policys_exclusions_reach_pynblint_and_switch_those_rules_off(tmp_path):
+    """The fake drops what `--exclude` names, as Pynblint does, so a gate that
+    passed no exclusions, or the wrong ones, would fail this notebook."""
+    excluded_only = {
+        **FINDINGS,
+        "lints": [{**FINDINGS["lints"][0], "slug": "non-executed-notebook"}],
+    }
+    root = repository(tmp_path)
+    tools = FakeTools(report=excluded_only)
+    assert notebook_lint.main(root, run=tools, environ={}) == 0
+    command, _ = tools.pynblint_calls()[-1]
+    assert json.loads(command[command.index("--exclude") + 1]) == ["non-executed-notebook"]
+
+
+def test_a_finding_on_a_notebook_whose_cells_cannot_be_read_is_still_reported(tmp_path):
+    """Pynblint reads nbformat 3 notebooks, whose cells sit under `worksheets`; the
+    gate reads cells only to quote their first lines, so it quotes nothing then
+    rather than crashing on the notebook Pynblint has just linted."""
+    version_3 = json.dumps({"worksheets": [{"cells": []}], "metadata": {}, "nbformat": 3})
+    root = repository(tmp_path, {NOTEBOOK: version_3})
+    assert notebook_lint.main(root, run=FakeTools(report=FINDINGS), environ={}) == 1
+    cells = [finding["cells"] for finding in reports(root)[1]["findings"]]
+    assert cells == [[], [{"index": 3, "first_line": ""}], [{"index": 2, "first_line": ""}]]
+
+
+def test_a_notebook_whose_suffix_is_not_lowercase_fails_the_project_rule_only(tmp_path):
+    """Pynblint treats a file that does not end in `.ipynb` as a zip archive and
+    crashes on it, so such a notebook gets the project rule's finding and no run."""
+    upper = "notebooks/1.0-lh-x.IPYNB"
+    root = repository(tmp_path, {upper: notebook_json("x = 1")})
+    tools = FakeTools(notebooks=(upper,))
+    assert notebook_lint.main(root, run=tools, environ={}) == 1
+    assert [(f["notebook"], f["rule"]) for f in reports(root)[1]["findings"]] == [
+        (upper, PROJECT_RULE)
+    ]
+    assert len(tools.pynblint_calls()) == 1  # the registry only
+
+
+def keep_output_notebook(*, notebook=None, cell=None, tags=()) -> str:
+    """A notebook with one code cell, flagged the ways nbstripout reads as "keep"."""
+    content = json.loads(notebook_json("x = 1"))
+    content["metadata"].update(notebook or {})
+    content["cells"][1]["metadata"].update(cell or {})
+    if tags:
+        content["cells"][1]["metadata"]["tags"] = list(tags)
+    return json.dumps(content)
+
+
+@pytest.mark.parametrize(
+    ("content", "cells"),
+    [
+        (keep_output_notebook(notebook={"keep_output": True}), []),
+        (keep_output_notebook(cell={"keep_output": True}), [{"index": 1, "first_line": "x = 1"}]),
+        (keep_output_notebook(cell={"init_cell": True}), [{"index": 1, "first_line": "x = 1"}]),
+        (keep_output_notebook(tags=["keep_output"]), [{"index": 1, "first_line": "x = 1"}]),
+    ],
+    ids=["notebook metadata", "cell metadata", "init cell", "cell tag"],
+)
+def test_a_notebook_that_tells_nbstripout_to_keep_outputs_fails(tmp_path, content, cells):
+    """nbstripout commits the outputs of whatever carries these flags, and an output
+    of this dataset can hold personal data, so the gate refuses them all."""
+    root = repository(tmp_path, {NOTEBOOK: content})
+    assert notebook_lint.main(root, run=FakeTools(), environ={}) == 1
+    findings = reports(root)[1]["findings"]
+    assert [(f["rule"], f["cells"]) for f in findings] == [(KEEP_OUTPUT_RULE, cells)]
+
+
+def test_flags_that_keep_nothing_are_no_finding(tmp_path):
+    root = repository(tmp_path, {NOTEBOOK: keep_output_notebook(cell={"keep_output": False})})
+    assert notebook_lint.main(root, run=FakeTools(), environ={}) == 0
 
 
 def test_a_repository_without_notebooks_passes_and_says_so(tmp_path, capsys):
@@ -380,9 +494,25 @@ def test_a_notebook_outside_notebooks_fails_the_project_rule(tmp_path):
         (FakeTools(returncode=1), "exit code 1"),
         (FakeTools(writes_report=False), "wrote no report"),
         (FakeTools(git_missing=True), "git"),
-        (FakeTools(rules=(*INSTALLED, "notebook-has-no-tests")), "notebook-has-no-tests"),
+        (FakeTools(git_returncode=128), "not a git repository"),
+        (FakeTools(registry_returncode=1), "ImportError"),
+        (FakeTools(registry_stdout="Warning: something\n{}"), "JSONDecodeError"),
+        (FakeTools(report={"notebook_metadata": {}}), "KeyError"),
+        (
+            FakeTools(rules={**INSTALLED, "notebook-has-no-tests": "notebook"}),
+            "notebook-has-no-tests",
+        ),
     ],
-    ids=["pynblint crashed", "pynblint wrote no report", "git is missing", "policy out of date"],
+    ids=[
+        "pynblint crashed",
+        "pynblint wrote no report",
+        "git is missing",
+        "git failed",
+        "registry failed",
+        "registry answered garbage",
+        "report of another shape",
+        "policy out of date",
+    ],
 )
 def test_a_run_that_cannot_be_trusted_exits_two_and_is_never_a_pass(tmp_path, tools, reason):
     """A crash with an empty findings list would read exactly like a clean run.
@@ -437,6 +567,7 @@ def test_the_gate_lints_exactly_the_notebooks_git_would_commit(tmp_path):
     files = {
         ".gitignore": "scratch/\n",
         "notebooks/1.0-lh-untracked.ipynb": "{}",
+        "notebooks/2.0-lh-upper.IPYNB": "{}",
         "reports/1.0-lh-staged.ipynb": "{}",
         "notebooks/1.0-lh-deleted.ipynb": "{}",
         "scratch/1.0-lh-ignored.ipynb": "{}",
@@ -448,5 +579,6 @@ def test_the_gate_lints_exactly_the_notebooks_git_would_commit(tmp_path):
 
     assert notebook_lint.candidate_notebooks(tmp_path, subprocess.run) == [
         "notebooks/1.0-lh-untracked.ipynb",
+        "notebooks/2.0-lh-upper.IPYNB",
         "reports/1.0-lh-staged.ipynb",
     ]

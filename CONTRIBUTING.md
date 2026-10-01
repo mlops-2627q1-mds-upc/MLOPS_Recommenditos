@@ -51,6 +51,9 @@ make notebook-lint  # Pynblint over every notebook, in its own environment
 
 `make notebook-lint` is exactly what CI's `Notebook lint (Pynblint)` job runs, and the rules it enforces are the table in [docs/docs/notebooks.md](docs/docs/notebooks.md#pynblint-rules).
 
+When a pull request changes a notebook, or code a notebook imports, also run `make notebook-run`.
+It runs every notebook top to bottom on the real data, which CI cannot do because it needs the 548 MB source CSV, and the profiling notebook fails it when a dataset card figure no longer reproduces.
+
 `make test` prints a coverage table; CI puts the same table in the summary of its test job.
 There is no coverage gate on a PR, so a number below 80 % does not fail anything.
 NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.

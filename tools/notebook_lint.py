@@ -14,13 +14,15 @@ that keep it from doing so:
   than a copy of it that could drift, and refuses to run unless the table
   classifies exactly the rules the installed Pynblint has.
 
-It adds one rule of its own, the project rule: every notebook lives directly in
-`notebooks/` and is named after the convention the README gives.
+It adds two rules of its own: every notebook lives directly in `notebooks/` and
+is named after the convention the README gives, and no notebook carries the flags
+that make nbstripout keep, and so commit, its outputs.
 
 The exit code is 0 when nothing was found, 1 for findings, and 2 when the run
-cannot be trusted: the table is malformed or out of date, git is missing, or
-Pynblint crashed or wrote no report. Both reports are written before it exits,
-so CI publishes them whatever the outcome.
+cannot be trusted: the table is malformed or out of date, git failed, Pynblint
+crashed or wrote no report, or anything else went wrong that the gate did not
+expect. Both reports are written before it exits, so CI publishes them whatever
+the outcome, and a report from an earlier run never stands in for this one.
 
 It runs in the environment of tools/pynblint-env, which holds Pynblint and its
 pins and none of the project's dependencies, so it uses the standard library
@@ -38,6 +40,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import traceback
 
 # Derived from this file's location, so the gate lints the checkout it belongs to
 # from any working directory. The other paths are relative to that root, so that
@@ -53,18 +56,29 @@ EXCLUDED = "excluded"
 #: The project's own rule. Pynblint checks a notebook's name only for a default
 #: title and for non-portable characters, and never where the notebook lives.
 PROJECT_RULE = "notebook-location-or-name"
-PROJECT_RULE_TEXT = (
-    "every notebook lives directly in `notebooks/` and is named "
-    "`<number>.<version>-<initials>-<description>.ipynb`"
-)
 # In backticks, because the job summary is Markdown and would drop `<number>`
 # and the rest as unknown HTML tags.
+_CONVENTION = "`<number>.<version>-<initials>-<description>.ipynb`"
+PROJECT_RULE_TEXT = f"every notebook lives directly in `notebooks/` and is named {_CONVENTION}"
 PROJECT_RULE_ADVICE = (
-    "Move the notebook directly into `notebooks/` and name it "
-    "`<number>.<version>-<initials>-<description>.ipynb` in lowercase, "
+    f"Move the notebook directly into `notebooks/` and name it {_CONVENTION} in lowercase, "
     "e.g. `1.0-lh-dataset-card-profiling.ipynb`."
 )
 NOTEBOOKS_DIR = "notebooks"
+NOTEBOOK_SUFFIX = ".ipynb"
+
+#: The second of the project's rules. nbstripout keeps every output of a notebook
+#: whose metadata sets `keep_output`, and a cell's when the cell's metadata sets
+#: `keep_output` or `init_cell` or its tags hold `keep_output`; it then commits
+#: them, and an output of this dataset can hold personal data.
+KEEP_OUTPUT_RULE = "notebook-keeps-outputs"
+KEEP_OUTPUT_TEXT = "no notebook or cell sets the `keep_output` or `init_cell` flags of nbstripout"
+KEEP_OUTPUT_ADVICE = (
+    "Remove `keep_output` from the notebook's metadata, and `keep_output` and `init_cell` "
+    "from the cells' metadata and tags: nbstripout commits the outputs of whatever "
+    "carries them."
+)
+PROJECT_RULES = {PROJECT_RULE: PROJECT_RULE_TEXT, KEEP_OUTPUT_RULE: KEEP_OUTPUT_TEXT}
 NOTEBOOK_NAME = re.compile(r"[0-9]+\.[0-9]+-[a-z]+-[a-z0-9]+(?:-[a-z0-9]+)*\.ipynb")
 
 #: What Python, git and Pynblint need to start and to read text, on Linux, macOS
@@ -88,22 +102,31 @@ KEPT_VARIABLES = frozenset(
 )
 
 #: Run by the tool environment's interpreter: the installed version, and every
-#: rule Pynblint registers when nothing is excluded. Read from the registry rather
-#: than from a list kept here, so that a rule a new release adds reaches the
-#: policy check instead of running unclassified.
+#: rule Pynblint registers when nothing is excluded, with the level it runs at.
+#: Read from the registry rather than from a list kept here, so that a rule a new
+#: release adds reaches the policy check instead of running unclassified.
 REGISTRY_SCRIPT = """\
 import json
 from importlib.metadata import version
 from pynblint import lint_register, loader
 loader.load_core_modules()
-rules = (
-    lint_register.enabled_notebook_level_lints
-    + lint_register.enabled_cell_level_lints
-    + lint_register.enabled_project_level_lints
-    + lint_register.enabled_path_level_lints
-)
-print(json.dumps({"version": version("pynblint"), "rules": [rule.slug for rule in rules]}))
+levels = {
+    "notebook": lint_register.enabled_notebook_level_lints,
+    "cell": lint_register.enabled_cell_level_lints,
+    "project": lint_register.enabled_project_level_lints,
+    "path": lint_register.enabled_path_level_lints,
+}
+rules = {rule.slug: level for level, lints in levels.items() for rule in lints}
+print(json.dumps({"version": version("pynblint"), "rules": rules}))
 """
+
+#: The levels Pynblint runs only when it is given a whole directory. The gate
+#: gives it one notebook file at a time, so a rule at these levels never runs.
+REPOSITORY_LEVELS = frozenset({"project", "path"})
+
+#: Generous for a linter that takes about a second per notebook, and short of the
+#: six hours a hung CI job would otherwise hold a runner for.
+TIMEOUT_SECONDS = 300
 
 #: How long the first line of a cell may get in a report before it is cut.
 FIRST_LINE_LENGTH = 80
@@ -114,6 +137,16 @@ _SLUG_CELL = re.compile(r"`([A-Za-z0-9_-]+)`")
 _POLICY_CELLS = 3
 
 Run = Callable[..., subprocess.CompletedProcess]
+
+#: How every subprocess runs: output captured as text, no stdin to wait on, and
+#: a deadline. The exit code is checked by the caller, which knows what it means.
+_QUIET = {
+    "capture_output": True,
+    "encoding": "utf-8",
+    "stdin": subprocess.DEVNULL,
+    "timeout": TIMEOUT_SECONDS,
+    "check": False,
+}
 
 
 class PolicyError(Exception):
@@ -208,26 +241,34 @@ def parse_policy(text: str) -> Policy:
         rules[slug[1]] = (decision, reason)
     if not rules:
         raise PolicyError("the rule table has no rows")
-    return Policy(rules)
+    policy = Policy(rules)
+    if not policy.enforced:
+        raise PolicyError("the rule table enforces no rule, so the gate would pass anything")
+    return policy
 
 
-def check_policy(installed: Iterable[str], policy: Policy) -> None:
+def check_policy(installed: Mapping[str, str], policy: Policy) -> None:
     """Refuse a table that does not classify exactly the installed rules.
 
-    A slug Pynblint does not have is a typo, or a rule a release removed: as an
-    exclusion Pynblint ignores it silently, so the rule meant to be off runs,
-    and as an enforced rule nothing checks it. A rule the table does not name is
-    new in the installed release, and would run without anyone having decided to
-    enforce it.
+    `installed` maps each rule's slug to the level it runs at. A slug Pynblint
+    does not have is a typo, or a rule a release removed: as an exclusion
+    Pynblint ignores it silently, so the rule meant to be off runs, and as an
+    enforced rule nothing checks it. A rule the table does not name is new in the
+    installed release, and would run without anyone having decided to enforce it.
+    An enforced repository rule would be reported as checked and never run.
     """
-    installed = set(installed)
-    unknown = sorted(set(policy.rules) - installed)
-    unclassified = sorted(installed - set(policy.rules))
+    unknown = sorted(set(policy.rules) - set(installed))
+    unclassified = sorted(set(installed) - set(policy.rules))
+    never_run = [slug for slug in policy.enforced if installed.get(slug) in REPOSITORY_LEVELS]
     problems = []
     if unknown:
         problems.append(f"it lists {', '.join(unknown)}, which Pynblint does not have")
     if unclassified:
         problems.append(f"it does not classify {', '.join(unclassified)}; add a row for each")
+    problems += [
+        f"{slug} is a repository rule, which never runs on a single notebook; exclude it"
+        for slug in never_run
+    ]
     if problems:
         raise PolicyError(
             f"the rule table does not match the installed Pynblint: {'; '.join(problems)}"
@@ -247,21 +288,14 @@ def clean_environment(environ: Mapping[str, str]) -> dict[str, str]:
     return {**kept, "PYTHONUTF8": "1"}
 
 
-def installed_rules(run: Run, env: dict[str, str]) -> tuple[str, list[str]]:
-    """The installed Pynblint's version and the slug of every rule it has.
+def installed_rules(run: Run, env: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """The installed Pynblint's version, and the level of every rule it has.
 
     In an empty working directory, because importing Pynblint already reads a
     `.pynblint` file there, whose exclusions would hide rules from the registry.
     """
     with tempfile.TemporaryDirectory() as scratch:
-        answer = run(
-            [sys.executable, "-c", REGISTRY_SCRIPT],
-            cwd=scratch,
-            env=env,
-            capture_output=True,
-            encoding="utf-8",
-            check=False,
-        )
+        answer = run([sys.executable, "-c", REGISTRY_SCRIPT], cwd=scratch, env=env, **_QUIET)
     if answer.returncode != 0:
         raise ToolError(
             f"could not read the installed Pynblint's rules (exit code {answer.returncode}):\n"
@@ -276,11 +310,12 @@ def candidate_notebooks(root: Path, run: Run) -> list[str]:
 
     Untracked ones too, so a new notebook is linted before its first commit;
     not gitignored ones, which are not part of the repository, and not a tracked
-    file that was deleted from the disk.
+    file that was deleted from the disk. The suffix is matched in any case, so a
+    `.IPYNB` reaches the project rule instead of being skipped.
     """
     command = ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others"]
-    command += ["--exclude-standard", "--", "*.ipynb"]
-    answer = run(command, capture_output=True, encoding="utf-8", check=False)
+    command += ["--exclude-standard", "--", ":(icase)*.ipynb"]
+    answer = run(command, **_QUIET)
     if answer.returncode != 0:
         raise ToolError(
             f"git could not list the notebooks (exit code {answer.returncode}):\n{answer.stderr}"
@@ -329,14 +364,8 @@ def lint_one(
     """
     with tempfile.TemporaryDirectory() as scratch:
         output = Path(scratch) / "pynblint.json"
-        answer = run(
-            pynblint_command(root / notebook, excluded, output),
-            cwd=scratch,
-            env=env,
-            capture_output=True,
-            encoding="utf-8",
-            check=False,
-        )
+        command = pynblint_command(root / notebook, excluded, output)
+        answer = run(command, cwd=scratch, env=env, **_QUIET)
         if answer.returncode != 0:
             raise ToolError(
                 f"Pynblint failed on {notebook} (exit code {answer.returncode}):\n{answer.stderr}"
@@ -345,15 +374,14 @@ def lint_one(
             raise ToolError(f"Pynblint exited 0 on {notebook} but wrote no report")
         report = json.loads(output.read_text(encoding="utf-8"))
 
-    notebook_cells = json.loads((root / notebook).read_text(encoding="utf-8"))["cells"]
-    sources = ["".join(cell.get("source", "")) for cell in notebook_cells]
+    sources = cell_sources(read_notebook(root / notebook))
     return [
         Finding(
             notebook=notebook,
             rule=lint["slug"],
             recommendation=lint["recommendation"],
             cells=tuple(
-                (cell["index"], _first_line(sources[cell["index"]]))
+                (cell["index"], _first_line(sources, cell["index"]))
                 for cell in lint.get("cells", [])
             ),
         )
@@ -361,7 +389,44 @@ def lint_one(
     ]
 
 
-def _first_line(source: str) -> str:
+def read_notebook(path: Path) -> dict:
+    """The notebook's JSON, for the project's rules and for quoting cells.
+
+    Best effort: Pynblint lints the file itself, and a notebook it reads but this
+    does not, such as one in the nbformat 3 layout, gets Pynblint's findings
+    without the quotes rather than failing the run.
+    """
+    try:
+        content = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return content if isinstance(content, dict) else {}
+
+
+def cell_sources(content: dict) -> list[str]:
+    return ["".join(cell.get("source", "")) for cell in content.get("cells", [])]
+
+
+def keeps_outputs(notebook: str, content: dict) -> Finding | None:
+    """A finding when nbstripout would keep any of the notebook's outputs."""
+    sources = cell_sources(content)
+    cells = tuple(
+        (index, _first_line(sources, index))
+        for index, cell in enumerate(content.get("cells", []))
+        if _keeps_output(cell.get("metadata", {}))
+    )
+    if content.get("metadata", {}).get("keep_output") or cells:
+        return Finding(notebook, KEEP_OUTPUT_RULE, KEEP_OUTPUT_ADVICE, cells)
+    return None
+
+
+def _keeps_output(metadata: dict) -> bool:
+    tags = metadata.get("tags", [])
+    return bool(metadata.get("keep_output") or metadata.get("init_cell") or "keep_output" in tags)
+
+
+def _first_line(sources: list[str], index: int) -> str:
+    source = sources[index] if 0 <= index < len(sources) else ""
     line = next((line.strip() for line in source.splitlines() if line.strip()), "")
     return line if len(line) <= FIRST_LINE_LENGTH else f"{line[: FIRST_LINE_LENGTH - 3]}..."
 
@@ -378,8 +443,9 @@ def _counted(count: int, noun: str) -> str:
 def summary(result: Result) -> str:
     return (
         f"{_counted(len(result.notebooks), 'notebook')} checked with Pynblint "
-        f"{result.pynblint}: {_counted(len(result.policy.enforced), 'rule')} and the project "
-        f"rule enforced, {_counted(len(result.policy.excluded), 'rule')} excluded "
+        f"{result.pynblint}: {_counted(len(result.policy.enforced), 'rule')} and "
+        f"{_counted(len(PROJECT_RULES), 'project rule')} enforced, "
+        f"{_counted(len(result.policy.excluded), 'rule')} excluded "
         f"(see {POLICY_DOC.as_posix()}), {_counted(len(result.findings), 'finding')}"
     )
 
@@ -419,11 +485,12 @@ def render_markdown(result: Result) -> str:
         ]
     if result.notebooks:
         lines += ["### Notebooks", "", *(f"- `{path}`" for path in result.notebooks), ""]
-    enforced = ", ".join(f"`{slug}`" for slug in result.policy.enforced)
     lines += [
         "### Enforced",
         "",
-        f"{enforced}, and the project rule `{PROJECT_RULE}`: {PROJECT_RULE_TEXT}.",
+        ", ".join(f"`{slug}`" for slug in result.policy.enforced) + ", and the project's rules:",
+        "",
+        *(f"- `{slug}`: {text}." for slug, text in PROJECT_RULES.items()),
         "",
         "<details><summary>Excluded rules and why</summary>",
         "",
@@ -441,7 +508,7 @@ def as_json(result: Result) -> dict:
         "pynblint": result.pynblint,
         "notebooks": result.notebooks,
         "enforced": result.policy.enforced,
-        "project_rule": PROJECT_RULE,
+        "project_rules": list(PROJECT_RULES),
         "excluded": result.policy.excluded,
         "findings": [
             {
@@ -490,12 +557,22 @@ def main(
         for notebook in notebooks:
             if not follows_project_rule(notebook):
                 findings.append(Finding(notebook, PROJECT_RULE, PROJECT_RULE_ADVICE))
-            findings += lint_one(root, notebook, policy.excluded, run, env)
+            if keeping := keeps_outputs(notebook, read_notebook(root / notebook)):
+                findings.append(keeping)
+            # Pynblint reads any other suffix as a zip archive and crashes on it.
+            if notebook.endswith(NOTEBOOK_SUFFIX):
+                findings += lint_one(root, notebook, policy.excluded, run, env)
     except PolicyError as error:
         return _cannot_run(root, f"{POLICY_DOC.as_posix()}: {error}")
     # An OSError names its own file: the policy page, a notebook, or git itself.
     except (OSError, ToolError) as error:
         return _cannot_run(root, str(error))
+    # Anything else is an answer the gate did not expect, such as a report of
+    # another shape from a new Pynblint. Exit 1 would read as "findings", so it is
+    # an untrustworthy run like the others, with the traceback for whoever fixes it.
+    except Exception as error:  # noqa: BLE001
+        traceback.print_exc()
+        return _cannot_run(root, f"unexpected {type(error).__name__}: {error}")
 
     result = Result(version, notebooks, policy, findings)
     _write_reports(root, render_markdown(result), as_json(result))

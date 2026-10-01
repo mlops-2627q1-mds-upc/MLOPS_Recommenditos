@@ -71,6 +71,8 @@ jobs:
   notebook-lint:
     name: Notebook lint (Pynblint)
     runs-on: ubuntu-latest
+    # It takes seconds; a hang would otherwise hold the runner for six hours.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.1.0

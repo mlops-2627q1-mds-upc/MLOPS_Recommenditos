@@ -109,7 +109,7 @@ The report describes this check as part of the data decisions.
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** about 7 % of all rows have the exact listing price in `description` (6.8 % matched as a whole number; a plain substring match gives 6.9 %, because it also counts a price that is only part of a longer number, see the [profiling notebook](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/notebooks/1.0-lh-dataset-card-profiling.ipynb)).
-  How many contain any currency amount depends entirely on the pattern used (29 % for a currency token next to digits, 39 to 44 % for separator-formatted numbers depending on how the number is bounded), so we do not quote a single figure for it.
+  How many contain any currency amount depends entirely on the pattern used (33.7 % for a currency token directly before or after a digit, as the profiling notebook matches it, 39 to 44 % for separator-formatted numbers depending on how the number is bounded), so we do not quote a single figure for it.
   Strip currency and number patterns before any text feature.
 - **Duplicates:** `vin` is only 34 % filled, so VIN-based deduplication is not enough.
   A key on make, model, version, mileage, registration date, price and power finds 6,347 duplicate rows.
