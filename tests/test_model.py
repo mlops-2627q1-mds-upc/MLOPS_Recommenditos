@@ -2704,7 +2704,13 @@ def test_a_criterion_added_to_the_list_without_a_measurement_fails_the_stage(
 def _variant_record(name: str, mdape: float, **verdicts) -> dict:
     """One variant's record as `gate_summary` reads it: MdAPE plus the six verdicts."""
     decided = {f"{each}_passed": True for each in CRITERIA} | verdicts
-    record = {"variant": name, "mdape": mdape, "within_20pct": 0.9, **decided}
+    record = {
+        "variant": name,
+        "estimator": "lightgbm",
+        "mdape": mdape,
+        "within_20pct": 0.9,
+        **decided,
+    }
     return {
         **record,
         "gate_passed": gate_passed(record),
@@ -2723,7 +2729,8 @@ def test_the_metrics_file_puts_forward_the_best_variant_that_met_every_criterion
             "b0": _variant_record("b0", 0.12, sc01_passed=False),
             "lgbm-basic": _variant_record("lgbm-basic", 0.068),
             "lgbm-extended": _variant_record("lgbm-extended", 0.063, sc04_passed=False),
-        }
+        },
+        data_source="zenodo",
     )
 
     assert summary["gate_passed"] is True
@@ -2747,7 +2754,8 @@ def test_the_metrics_file_counts_the_variants_only_a_missing_measurement_blocks(
             "b0": _variant_record("b0", 0.12, sc01_passed=False, sc05_passed=None),
             "lgbm-basic": _variant_record("lgbm-basic", 0.068, sc05_passed=None),
             "lgbm-extended": _variant_record("lgbm-extended", 0.063, sc05_passed=None),
-        }
+        },
+        data_source="zenodo",
     )
 
     assert summary["gate_passed"] is False

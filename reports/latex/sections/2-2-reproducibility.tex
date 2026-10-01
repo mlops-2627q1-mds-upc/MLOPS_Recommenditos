@@ -113,9 +113,11 @@ Each stage lists only the \texttt{params.yaml} keys it reads, and the \texttt{fo
 That was measured rather than assumed: in a scratch repository a coarse declaration retrained every variant and a per-item declaration retrained one (EDN-30).
 
 \emph{The pipeline and the test suite both run on a clean clone with no credentials.}
-The module \texttt{recommenditos/\allowbreak data/\allowbreak synthetic.py} generates a schema-valid stand-in for the raw snapshot from public catalogues and a seed, and the \texttt{download} stage produces it while \texttt{download.source} is \texttt{synthetic}, so \texttt{dvc repro} is green without the 548.6\,MB file and without DagsHub access (EDN-33).
+The module \texttt{recommenditos/\allowbreak data/\allowbreak synthetic.py} generates a schema-valid stand-in for the raw snapshot from public catalogues and a seed, and the \texttt{download} stage produces it when \texttt{download.source} is set to \texttt{synthetic}, so \texttt{dvc repro} is green without the 548.6\,MB file and without DagsHub access (EDN-33).
 It is generated and never sampled: a committed sample of real listings would put personal data into the Git history of a repository the whole cohort can read, which a DVC pointer does not (NFR-08).
-Making the source a parameter rather than a hard-coded branch is what keeps that honest, because the value is recorded in \texttt{dvc.lock} and shows up in \texttt{dvc params diff}, so a pipeline still running on synthetic data cannot pass unnoticed, and the stage refuses any other value with an error naming the ticket that implements it.
+The project's own value is \texttt{zenodo} and the committed \texttt{dvc.lock} records that run, so a clean clone gets the real artefacts from \texttt{dvc pull} with every stage up to date, and the stand-in is what somebody without credentials falls back to.
+Making the source a parameter rather than a hard-coded branch is what keeps that honest: the value is recorded in \texttt{dvc.lock}, so \texttt{dvc status} reports a workspace that disagrees with the lock, and \texttt{evaluate} writes the resolved value into \texttt{metrics.json}, so a metric cannot be read without the data behind it.
+\texttt{dvc params diff} does not show it, because it compares the params files of two Git revisions rather than the lock against the workspace; EDN-33 records that correction rather than quietly dropping the claim.
 
 \emph{The stages code against a contract, not against each other.}
 \texttt{recommenditos/schema.py} declares three frozen contracts, \texttt{RAW\_SCHEMA}, \texttt{INTERIM\_SCHEMA} and \texttt{PROCESSED\_SCHEMA}, each fixing column names, dtypes and nullability, and every stage validates after reading and conforms before writing (EDN-31).
@@ -123,14 +125,15 @@ Parquet preserves whatever dtype it is handed rather than normalising it, so wit
 Because \texttt{conform} selects the contract's columns, a column the contract does not name cannot reach an artefact, which is how the PII columns NFR-08 forbids are kept out structurally instead of by every stage remembering to drop them.
 
 What we accepted rather than solved is written down too.
-The raw file is tracked with \texttt{dvc add} and pushed to our remote (EDN-25, amending EDN-07), because \texttt{dvc import-url} derives its change detection from an \texttt{ETag} or \texttt{Content-MD5} header that the Zenodo URL does not send, so the mechanism we had planned was never verifiable against this source.
-Its md5 equals the checksum Zenodo publishes, so anyone can check that our copy is the original.
+The raw CSV is fetched by the \texttt{download} stage from the pinned Zenodo DOI and kept as a gitignored local cache, so we neither track nor re-host the published file (EDN-36, retiring the \texttt{dvc add} pointer of EDN-25, which had in turn replaced the \texttt{dvc import-url} of EDN-07).
+\texttt{import-url} was never an option against this source: it derives its change detection from an \texttt{ETag} or \texttt{Content-MD5} header that the Zenodo URL does not send.
+What pins the bytes instead is \texttt{download.md5}, which equals the checksum Zenodo publishes, so anyone can check that our copy is the original and the stage refuses to read bytes that hash to anything else.
 The remote is public (EDN-20) and the derived raw Parquet keeps the seven personal-data columns and is pushed like any other stage output (EDN-34), so our remote holds the same personal data twice.
 That decision was taken on a measurement, not on an estimate: the CSV is 548.6\,MB, the Parquet of all 75 columns 215.3\,MB, and the seven columns 3.1\,MB of it, against data that is already public on the same remote and on Zenodo, so none of the alternatives changed what a reader can reach and two of them cost reproducibility or made the raw layer no longer raw.
 The entry exists so that a later decision to restrict the remote, or a request to remove the data, finds both artefacts named in one place.
 
 Reproducibility itself is asserted by a test rather than by the documentation: NFR-06 is marked on a test that runs every stage end to end in a temporary directory with no data and no credentials, and further tests check that each stage's output satisfies its contract, that the split loses no row, that no seller appears in two sets and that every Spanish listing and no other lands in the holdout.
-The remaining known gaps are named in \texttt{docs/docs/pipeline.md} rather than left to be discovered: \texttt{configure\_gx} still declares no outputs and is therefore a disconnected node in the graph, the same wart the demo has, and \texttt{supported\_makes.json} is written by \texttt{split} but not yet declared as a dependency by anything that reads it.
+The remaining known gaps are named in \texttt{docs/docs/pipeline.md} rather than left to be discovered: \texttt{configure\_gx} still declares no outputs and is therefore a disconnected node in the graph, the same wart the demo has, and \texttt{supported\_makes.json} is declared as a dependency by every stage that reads it but is still not applied by \texttt{features}, so each categorical's levels are decided by all the training rows rather than by the supported makes alone (EDN-48).
 
 % Experiment tracking, owned by @ulasawczuk.
 \input{sections/2-2b-experiment-tracking}

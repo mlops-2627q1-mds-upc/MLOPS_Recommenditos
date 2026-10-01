@@ -1,10 +1,10 @@
 {
   "raw": {
     "passed": true,
-    "rows": 20000
+    "rows": 118382
   },
   "interim": {
     "passed": true,
-    "rows": 20000
+    "rows": 105405
   }
 }

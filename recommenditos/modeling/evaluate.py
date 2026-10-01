@@ -13,13 +13,18 @@ Three outputs:
 - `metrics.json`, the DVC `metrics` file: the gate verdict NFR-01 reads, plus
   the headline numbers of each variant. Deliberately narrow, because
   `dvc metrics show` flattens nested JSON into one column per leaf. This shape
-  has 24 leaves, 8 plus 4 per variant, of which it renders the ones that are not
-  null - 23 while no variant is deployable - and that is already past the width a
+  has 29 leaves, 9 plus 5 per variant, of which it renders the ones that are not
+  null - 28 while no variant is deployable - and that is already past the width a
   plain terminal table keeps, so read it with `dvc metrics show --md`. Anything
   more per variant belongs in the per-variant record below. `dvc metrics diff` is
   long-format and lists only the leaves that changed, which is what compares two
   model versions across a merge and is the promotion reviewer's checklist under
   EDN-12; there a null renders as `-`, so a leaf becoming non-null is visible.
+  Two of those leaves are not measurements: `data_source` is the resolved
+  `download.source` and each variant's `estimator` is the model actually fitted.
+  They cost five columns so that nobody can read a number off this file without
+  seeing what produced it - a stub on generated data once wrote the same MdAPE
+  under all four variant names here, and the artefact said nothing about it.
 - `reports/metrics/<variant>.json`, the full record per variant: every criterion
   with its measured value, the per-segment table and the masking sweep.
 - `reports/metrics/segments.csv` and `reports/metrics/masked-inputs.csv`, the
@@ -939,8 +944,10 @@ def _evaluate_variant(
     record = {
         "variant": variant,
         # What actually produced these numbers, so a committed metrics file
-        # cannot be read as a result of something it was not.
+        # cannot be read as a result of something it was not: the estimator that
+        # was fitted, and the data source `download` resolved to.
         "estimator": model.estimator,
+        "data_source": params["download"]["source"],
         "feature_set": feature_set,
         "n_test_rows": len(test),
         "mlflow_run_id": model.metadata["mlflow"]["run_id"],
@@ -1045,15 +1052,18 @@ def _segment_table(records: "dict[str, dict]", segments: "tuple[str, ...]") -> "
     )
 
 
-def gate_summary(records: "dict[str, dict]") -> dict:
+def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
     """`metrics.json`: the verdict NFR-01 reads, and the headline of each variant.
 
     Every leaf here is a column of `dvc metrics show` and a candidate row of
     `dvc metrics diff`, so the shape is the promotion reviewer's checklist under
-    EDN-12 rather than an arbitrary summary, and it is kept to 24 leaves.
+    EDN-12 rather than an arbitrary summary, and it is kept to 29 leaves.
     `dvc metrics show` omits a null leaf rather than showing it empty, so
     `deployable_variant` appears as a column only once a variant is deployable;
     `dvc metrics diff` renders it as `-` and shows the transition.
+
+    `data_source` is required rather than defaulted, because a default would be
+    the one value that could silently misdescribe a run.
     """
     passing = [name for name, record in records.items() if record["gate_passed"]]
     # Variants where nothing that could be measured failed. The leaf that makes
@@ -1089,13 +1099,20 @@ def gate_summary(records: "dict[str, dict]") -> dict:
         "n_variants_passing": len(passing),
         "n_variants_passing_measurable": len(measurable),
         "criteria_not_measured": ",".join(outstanding),
+        # Which data every number below was measured on, so `dvc metrics show`
+        # alone tells a real result from one produced on the generated stand-in.
+        "data_source": data_source,
         "deployable_variant": None if deployable is None else deployable["variant"],
         "best_variant": best["variant"],
         "best_mdape": best["mdape"],
-        # Four leaves per variant, so `dvc metrics show --md` stays a table a
+        # Five leaves per variant, so `dvc metrics show --md` stays a table a
         # person can read and every row of `dvc metrics diff` says something.
+        # `estimator` is one of them for the same reason `data_source` is above:
+        # the variant *name* says which rung of the ladder was meant, and only
+        # this says which model answered for it.
         "variants": {
             name: {
+                "estimator": record["estimator"],
                 "mdape": record["mdape"],
                 "within_20pct": record["within_20pct"],
                 "gate_passed": record["gate_passed"],
@@ -1175,10 +1192,11 @@ def main(
         [row for record in records.values() for row in record["masked_inputs"]],
         _MASKED_INPUT_FIELDS,
     )
-    summary = gate_summary(records)
+    summary = gate_summary(records, data_source=params["download"]["source"])
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     logger.success(
-        f"Gate: {summary['n_variants_passing']}/{summary['n_variants']} variants pass; "
+        f"Gate on {summary['data_source']} data: "
+        f"{summary['n_variants_passing']}/{summary['n_variants']} variants pass; "
         f"{summary['n_variants_passing_measurable']} meet every criterion that could be "
         f"measured (outstanding: {summary['criteria_not_measured'] or 'none'})."
     )

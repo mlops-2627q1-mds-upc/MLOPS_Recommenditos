@@ -13,16 +13,23 @@ uv run dvc repro          # or: make repro
 uv run dvc metrics show   # or: make metrics
 ```
 
-`download.source` in `params.yaml` is `synthetic`, so `dvc repro` builds the pipeline from a generated stand-in and needs neither the network nor DagsHub access.
-Setting it to `zenodo` swaps in the real snapshot: the `download` stage fetches the pinned Zenodo file itself, checks it against `download.md5` and converts it to Parquet.
-**[decided]**, not yet done: `zenodo` becomes the default together with the `dvc.lock` refresh and the `dvc push` at the end of the stage chain ([#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57)), because one consolidation records one real end-to-end run instead of four half-real ones.
+`download.source` in `params.yaml` is `zenodo`, so `dvc repro` builds the pipeline from the real snapshot: the `download` stage fetches the pinned Zenodo file itself, checks it against `download.md5` and converts it to Parquet.
+The committed `dvc.lock` records that run, and `dvc pull` gets every artefact it names, so a clean clone has the whole pipeline up to date without running a stage.
+Setting the parameter back to `synthetic` swaps in a generated stand-in, which needs neither the network nor DagsHub access; that is what the test suite uses and what a contributor without credentials can still run.
 
 Because the source is a parameter, `dvc.lock` records which one every artefact was built from, so a run on synthetic data cannot pass unnoticed: `dvc status` reports a workspace whose `download.source` disagrees with the lock.
 `dvc params diff` does not show this, because it compares the params files of two Git revisions rather than the lock against the workspace.
+`metrics.json` carries the resolved value as its `data_source` leaf, so a number read off `dvc metrics show` says which data it was measured on and no stand-in result can be quoted as a model result.
 
 What `download.source: zenodo` costs, measured on the real file: about 1 GB of RAM (peak RSS 929 MB, because the frame is read and validated whole) and about 1 GB of disk, being the 548 MB CSV cached in `data/external/`, the 215 MB Parquet and another 215 MB for its copy in the DVC cache.
 The stage takes about 90 s with a cold cache and about 66 s with a warm one, because the CSV is downloaded once and reused from there, so a rerun costs a 25-second re-read rather than a download (see [Data versioning](data-versioning.md)).
+A clean clone pays none of that, because `dvc pull` brings the Parquet down and the stage is already up to date.
 CI never runs the stage; the test suite covers it against fixtures instead.
+
+That is measured, not assumed, and it is the drill NFR-06 names.
+On a scratch clone of this commit, `dvc pull` fetched 34 files and added 32, and `dvc repro` then reported all twelve stages as `didn't change, skipping` and finished with `Data and pipelines are up to date.`
+`configure_gx` is skipped along with the rest, although it declares no `outs`: its `deps` and its lock entry are enough for DVC to answer, so the missing output costs ordering guarantees (see [Known gaps](#known-gaps)) and not an unconditional rerun.
+Nothing came from Zenodo: the clone has no `data/external/` directory at all, and its `metrics.json` and `data/raw/listings.parquet` are byte-identical to the ones this repository produced.
 
 The tests never run the pipeline through DVC.
 They call the same stage functions in the same order against a synthetic fixture in a temporary directory, so `pytest` stays fast and hermetic:
@@ -49,7 +56,8 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 
 `features` and `evaluate` have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
 Its text model needs no feature engineering, and it asserts its metric threshold inside `tests/test_model.py` instead of producing a metrics artefact, which is not enough for the gate [NFR-01](specification.md) describes.
-`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 24 leaves (23 of them rendered while `deployable_variant` is null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
+`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 29 leaves (28 of them rendered while `deployable_variant` is null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
+Five of those leaves are not measurements but provenance - `data_source` and each variant's `estimator` - because a number is only readable as a result once the file says which data produced it and which model answered.
 `dvc metrics diff` is long-format and lists only the leaves that changed, which is what compares two model versions across a merge.
 
 Two stages iterate a mapping in `params.yaml` with `foreach`, so they are named after the item rather than its position: `features@basic`, `train@lgbm-extended`.
@@ -76,7 +84,7 @@ Because it selects, a column the contract does not name cannot reach an artefact
 
 That guarantee starts at the interim frame, not before it.
 The raw layer deliberately keeps the published file's PII columns, because preprocessing hashes `seller_company_name` and the location into the split's group key before dropping them, and it is pushed to the remote like any other stage output (EDN-34).
-While `download.source` is `synthetic` the pushed Parquet is the generated stand-in and holds no real personal data; from the flip in [#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57) onward it holds the published file's, which is the exposure EDN-34 weighed.
+The pushed Parquet therefore holds the published file's personal data, which is the exposure EDN-34 weighed.
 
 Both halves exist because Parquet preserves whatever dtype it is handed rather than normalising it.
 Without an explicit cast at each boundary the frames drift apart stage by stage, and the stage that notices is never the stage that caused it.
@@ -128,7 +136,7 @@ Working on a stage
 3. If your stage changes a column's type or replaces a column with something derived from it, say so on the schema rather than editing `schema.py`: `schema.with_dtype("weight_kg", "float64")` for a parsed column, `schema.drop([...]).extend([...])` for the equipment multi-hot columns. That keeps the change inside your module.
 4. Every stage takes its parameters file as an argument, so a test can vary a parameter without patching anything.
 5. Add tests against the fixture: a module of its own once the stage is more than a stub, as `preprocess` has `tests/test_preprocess.py`, otherwise `tests/test_data.py` or `tests/test_model.py`. Mark the requirement IDs a test verifies with `@pytest.mark.req("NFR-08")`.
-6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`. `dvc repro` runs on the synthetic stand-in, so it needs no credentials and downloads nothing; switch `download.source` to `zenodo` only when you mean to pay the budget above.
+6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`. `dvc repro` runs on the real snapshot, so run `dvc pull` first and the stages your change does not touch stay up to date; a stage you do touch pays the budget above. Set `download.source` to `synthetic` while iterating if you have no credentials, and set it back before you commit a lock, because a lock built from the stand-in is not the one the project ships.
 
 `dvc.yaml` is hand-edited on purpose.
 `dvc stage add` rewrites the whole file, re-indents every list and line-wraps long commands, which would destroy the comments that explain why each stage is wired the way it is.
@@ -160,5 +168,5 @@ Known gaps
     The problem is a different one: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter.
 - A stage's `deps` and `params` cannot be conditional, so `download` declares both sources' inputs whichever one is selected. Under `download.source: zenodo`, editing `recommenditos/data/synthetic.py` or `download.rows` therefore reruns the stage as a 25-second re-read of the cached CSV that produces an identical Parquet. Dropping either would be worse, because a synthetic run would then not notice that its own generator or row count changed.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
-- Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what `download.source: synthetic` generates. `zenodo` is pinned harder but not all the way: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. Within one toolchain version the write is byte-stable, which is what NFR-06 is measured against.
+- Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The project's own source, `zenodo`, is pinned hard on the input and not all the way on the output: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. The `synthetic` source is reproducible within a fixed toolchain too, but it depends on one thing more: NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what it generates. Within one toolchain version both writes are byte-stable, which is what NFR-06 is measured against, and `dvc pull` sidesteps the question entirely for everyone who does not rerun the stage.
 - `configure_gx` and `validate-data` are still stubs: `validate-data` enforces the structural contract from `recommenditos/schema.py` and the value expectations of issue #25 are not built yet. Each module's docstring names the issue that implements it and what that issue still owes.

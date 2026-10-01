@@ -81,7 +81,7 @@ dataset card (2026-09-30).
 
 `preprocess_funnel.py` reports how many listings each row rule of the `preprocess` stage removes
 from the real snapshot, because the pipeline only ever logs the funnel for the data it was run on,
-which is the synthetic stand-in while `download.source` is `synthetic`.
+and a committed artefact is what the report can cite instead of a log line somebody has to have kept.
 Unlike the scripts above it calls the stage's own steps - the group key and PII drop, the row rules
 and the target - instead of re-implementing any of them, so its numbers cannot drift from what the
 pipeline does.

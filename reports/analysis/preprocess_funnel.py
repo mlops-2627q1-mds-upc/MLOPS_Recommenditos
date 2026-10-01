@@ -1,9 +1,9 @@
 """The `preprocess` row funnel on the real snapshot (issue #34).
 
 Question: how many listings does each row rule of the `preprocess` stage remove from the
-published AutoScout24 file? The report cites the funnel, and the pipeline itself only ever logs
-it for whatever data it was run on, which is the synthetic stand-in while `download.source` is
-`synthetic` (#57 flips it).
+published AutoScout24 file? The report cites the funnel, and the pipeline only ever logs it for
+whatever data it was run on, so this script is what pins the real snapshot's figures to a
+committed artefact rather than to a log line somebody has to have kept.
 
 It calls the stage's own functions instead of re-implementing any of its steps, so these numbers
 cannot drift from what the pipeline does. The rule order is the one issue #34 fixes and is load-bearing:
