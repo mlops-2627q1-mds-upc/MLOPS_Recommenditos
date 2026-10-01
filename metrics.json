@@ -2,29 +2,40 @@
   "gate_passed": false,
   "n_variants": 4,
   "n_variants_passing": 0,
+  "n_variants_passing_measurable": 0,
+  "criteria_not_measured": "sc05",
+  "data_source": "zenodo",
   "deployable_variant": null,
-  "best_variant": "b0",
-  "best_mdape": 0.5403003190179646,
+  "best_variant": "lgbm-extended",
+  "best_mdape": 0.06318484175102226,
   "variants": {
     "b0": {
-      "mdape": 0.5403003190179646,
-      "within_20pct": 0.17726657645466848,
-      "gate_passed": false
+      "estimator": "median_baseline",
+      "mdape": 0.12162162162162182,
+      "within_20pct": 0.705161454360539,
+      "gate_passed": false,
+      "gate_blocked_by": "sc01,sc02,sc03,sc04 failed; sc05 unmeasured"
     },
     "b1": {
-      "mdape": 0.5403003190179646,
-      "within_20pct": 0.17726657645466848,
-      "gate_passed": false
+      "estimator": "ridge",
+      "mdape": 0.0951563754861866,
+      "within_20pct": 0.8029494024917366,
+      "gate_passed": false,
+      "gate_blocked_by": "sc01,sc02,sc03,sc04 failed; sc05 unmeasured"
     },
     "lgbm-basic": {
-      "mdape": 0.5403003190179646,
-      "within_20pct": 0.17726657645466848,
-      "gate_passed": false
+      "estimator": "lightgbm",
+      "mdape": 0.0682736453954665,
+      "within_20pct": 0.8968217645563183,
+      "gate_passed": false,
+      "gate_blocked_by": "sc04 failed; sc05 unmeasured"
     },
     "lgbm-extended": {
-      "mdape": 0.5403003190179646,
-      "within_20pct": 0.17726657645466848,
-      "gate_passed": false
+      "estimator": "lightgbm",
+      "mdape": 0.06318484175102226,
+      "within_20pct": 0.9040427154843631,
+      "gate_passed": false,
+      "gate_blocked_by": "sc04,sc06 failed; sc05 unmeasured"
     }
   }
 }
