@@ -215,7 +215,9 @@ model.mask_absent(frame, ["equipment_comfort"])  # the frame with that field not
 An empty frame gives an empty Series, because one row in one row out has to hold at no rows too.
 A missing value is passed through unimputed and the estimator decides what to do with it (EDN-15).
 What "missing" means for a field whose domain already represents absence is not left to the caller: `mask_absent` is the one implementation of it, and it is the one the API, SC-06's masking sweep and the tests all go through.
-An omitted assertion flag is `False`, which is all the source can mean (EDN-23); an omitted equipment list is **absent throughout**, which is not the same as an empty one, because an empty list asserts the car has none of those items (EDN-61).
+An omitted assertion flag is `False`, which is all the source can mean (EDN-23), and an omitted equipment list is the **empty** list, so every item of it is `False` too.
+That second one is a decision rather than a reading of the data, and a distributional one: the raw field is always a list, so across the 105,405 scoped listings there is not one null in any of the four equipment fields, while the literal `[]` is 5.2 % to 8.0 % of them per field.
+"Empty" is therefore a state the model was fitted on and "absent" is one it never saw (EDN-61).
 The frame handed in is never modified.
 `model.predict_log_price(frame)` is the log of the same number, which is what a future conformal step needs; `predict_interval_eur` is the reserved name for SC-05's intervals and does not exist yet.
 

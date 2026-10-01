@@ -507,36 +507,40 @@ def test_predict_eur_does_not_raise_with_every_optional_field_absent(
 def test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is(
     trained: dict, test_frames: dict
 ):
-    """Four dtypes, four different values, and three of the wrong ones are silent.
+    """Four dtypes, three different values, and the wrong one is silent.
 
-    The helper exists because both plausible one-liners get half of it right.
-    `np.nan` everywhere is refused for the three assertion flags, which are
-    non-nullable, so a caller notices - and passes for the equipment columns,
-    which are nullable, so the right answer arrives there by accident. `False`
-    everywhere is the reverse and worse: it asserts an empty equipment list, and
-    in a numeric column it is `0.0`, a mileage of zero kilometres that nothing
-    anywhere reports.
-
-    Nothing would report the equipment case either. Measured on the real
-    snapshot's `lgbm-extended`, masking `equipment_comfort` as absent gives
-    6.8982 % MdAPE and masking it as an empty list 6.8975 %, so no metric this
-    project has can tell the two apart (EDN-61).
+    The helper exists because `frame[column] = np.nan`, the one-liner anyone
+    reaches for, is wrong twice and loud once. The three assertion flags are
+    non-nullable, so a float64 NaN fails the contract's null check and the caller
+    finds out. An equipment column is nullable, so the same assignment upcasts to
+    float64, survives `conform` and comes back as `pd.NA` - the field arrives as
+    absent where EDN-61 says it is empty, and nothing says a word about it. No
+    metric would either: on the real snapshot the two rules give **bit-identical**
+    predictions on all 19,665 test rows, for each of the four equipment fields and
+    for all 23 optional fields at once. That equivalence is a property of the tree
+    models rather than of this method, which is why the rule is fixed here on what
+    the states mean instead of on a measurement that cannot separate them.
     """
     model = trained["models"]["lgbm-extended"]
     frame = test_frames[model.feature_set]
     before = frame.copy(deep=True)
     equipment = model.columns_of("equipment_comfort")
     assert len(equipment) > 1, "the field has to expand, or this test proves nothing"
+    assert frame[list(equipment)].notna().all().all(), (
+        "the training domain has no null equipment column, so neither may the fixture"
+    )
 
     masked = model.mask_absent(
         frame, ["equipment_comfort", "has_full_service_history", "body_color", "weight_kg"]
     )
 
-    # A list nobody sent is not an empty list: every item is null, never `False`.
+    # An omitted list is an empty list: every item `False`, and never null, which
+    # is a state no training row of either scale contains.
     assert str(masked[equipment[0]].dtype) == "boolean"
-    assert masked[list(equipment)].isna().all().all()
-    # An unticked checkbox is `False`, which is all EDN-23 leaves it able to mean,
-    # and the contract refuses a null there.
+    assert masked[list(equipment)].notna().all().all()
+    assert not masked[list(equipment)].any().any()
+    # An unticked checkbox is `False` too, which is all EDN-23 leaves it able to
+    # mean, and the contract refuses a null there.
     assert masked["has_full_service_history"].notna().all()
     assert not masked["has_full_service_history"].any()
     # Null over the contract's own levels, so `_align` gives the missing code
@@ -558,6 +562,12 @@ def test_masking_a_field_the_model_does_not_consume_is_refused(trained: dict):
 
     SC-06's ratio is against the full-input MdAPE, so a field that masked nothing
     reports a ratio of exactly 1.0 and reads as a criterion that passed.
+
+    The third case is the seam's boundary rather than a typo: `registration_date`
+    is a real request field, and the matrix carries the derived `age_years`
+    instead. `columns_of` knows the feature space and not the request, so it
+    refuses - a caller holding a request field applies `evaluate`'s rename first
+    (#39), and the API does the same at M4.
     """
     model = trained["models"]["b1"]
 
@@ -566,32 +576,46 @@ def test_masking_a_field_the_model_does_not_consume_is_refused(trained: dict):
         model.columns_of("equipment_comfort")
     with pytest.raises(ModelError, match="no_such_field"):
         model.mask_absent(pd.DataFrame(), ["no_such_field"])
+    with pytest.raises(ModelError, match="registration_date"):
+        model.columns_of("registration_date")
+    assert "age_years" in model.features, "which is what the matrix carries instead"
 
 
-def test_align_turns_every_boolean_column_into_a_float(trained: dict, test_frames: dict):
-    """The half of `_align` that is not `conform`, and it is load-bearing.
+def test_align_returns_only_float64_and_category_columns(trained: dict, test_frames: dict):
+    """`_align`'s output dtypes are the contract `_predict_log_price` is written against.
 
-    An estimator here consumes a float array. `pd.NA` in a nullable `boolean`
-    column has no float to become without saying which, and `False` would turn
-    "the list was not given" into "the car has none of these" (EDN-61). So the
-    conversion is what makes an absent equipment list reach the estimator as the
-    missing value it is, and it is asserted on the dtype because a column with no
-    gap survives either way.
+    An estimator subclass receives this frame and nothing else, so "every column is
+    float64 or category" is what it may assume - and the `bool` and nullable
+    `boolean` columns of the contract are the only ones that would otherwise break
+    it.
+
+    Worth being exact about what this does and does not pin, because the
+    difference is the whole reason the assertion is on the dtype. Removing the
+    cast changes **no prediction anywhere** today: measured on the real snapshot,
+    all four variants predict bit-identically without it, a Ridge fitted on
+    `extended` fits and predicts bit-identically without it, and so does
+    `lgbm-extended` on a frame with `pd.NA` actually present in an equipment
+    column. LightGBM accepts either dtype, and scikit-learn's `MissingIndicator`
+    refuses a `bool` column only when it is handed one on its own - inside the
+    `ColumnTransformer` it receives a mixed frame, which `check_array` has already
+    made float64.
+
+    So this is a contract assertion, not a regression test for a bug anyone has
+    seen, and the cast is insurance of the same kind as `deterministic=True` and
+    `solver="lsqr"` (EDN-53). It is stated rather than removed because the
+    property a new estimator depends on should not rest on two libraries
+    independently choosing to be tolerant.
     """
     model = trained["models"]["lgbm-extended"]
     equipment = model.columns_of("equipment_comfort")
-    flags = [
-        name for name in ("has_full_service_history", "non_smoking") if name in model.features
-    ]
-    assert flags, "the extended set has to carry the assertion flags"
-    masked = model.mask_absent(test_frames[model.feature_set], ["equipment_comfort"])
+    flags = [name for name in model.features if model.input_schema.column(name).dtype == "bool"]
+    assert flags, "the extended set has to carry non-nullable boolean columns"
+    assert equipment, "and the multi-hot nullable ones"
 
-    aligned = model._align(masked)
+    aligned = model._align(test_frames[model.feature_set])
 
+    assert {str(aligned[name].dtype) for name in aligned.columns} <= {"float64", "category"}
     assert {str(aligned[name].dtype) for name in (*equipment, *flags)} == {"float64"}
-    assert aligned[equipment[0]].isna().all()
-    # The flags stay the two values they had, as numbers rather than as NaN.
-    assert set(np.unique(aligned[flags[0]])) <= {0.0, 1.0}
 
 
 def test_align_passes_missing_values_through_unimputed(
@@ -1518,9 +1542,9 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
         column = schema.column(name)
         if name not in required:
             # An unticked checkbox is `False` and the absence of evidence
-            # (EDN-23); an equipment list nobody sent is not an empty one, so it
-            # is `None` and reaches the estimator as missing (EDN-61).
-            row[name] = False if column.dtype == "bool" else None
+            # (EDN-23); an equipment list nobody sent is an empty one, so every
+            # item of it is `False` too (EDN-61). Everything else is `None`.
+            row[name] = False if column.dtype in {"bool", "boolean"} else None
         elif column.levels is not None:
             row[name] = str(frame[name].dropna().iloc[0])
         else:

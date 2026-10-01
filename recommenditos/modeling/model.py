@@ -274,14 +274,30 @@ class Model:
         return tuple(name for name in self.features if name not in self.input_schema.levels)
 
     def columns_of(self, field: str) -> tuple[str, ...]:
-        """The matrix columns one request field became, in the model's own order.
+        """The matrix columns one **feature** field became, in the model's own order.
 
         One column for almost every field, and one per kept item for an equipment
         list: `equipment_comfort` is not a matrix column at all, it is the
-        multi-hot columns the vocabulary derived from it. SC-06 masks *fields* and
-        the API receives *fields*, so the expansion is here rather than derived
-        twice - two derivations of it are two answers to "what did masking
+        multi-hot columns the vocabulary derived from it. SC-06 masks fields and
+        the API receives fields, so the expansion lives here rather than being
+        derived twice - two derivations of it are two answers to "what did masking
         `equipment_comfort` mask".
+
+        **The boundary, which is deliberate.** `field` is a name in the feature
+        space, not a name in a request. `columns_of("registration_date")` raises,
+        because the matrix carries the derived `age_years` and this seam knows
+        only the matrix. The request-field-to-feature rename is a product concept,
+        and it belongs to the stage that has a view on requests: issue #39 adds it
+        to params.yaml as `evaluate.input_field_to_feature`. A model reaching into
+        an `evaluate` parameter to learn it would be the layering inverted.
+
+        A caller that starts from a *request* field therefore composes the two:
+        apply the rename, then call this. `evaluate`'s masking sweep is the worked
+        example once #39 lands. The API meets exactly the same thing - a request
+        carries `registration_date` where the matrix carries `age_years` - so the
+        M4 ticket composes the rename with this method rather than growing a
+        second expansion of its own, which is the whole point of there being one
+        `columns_of`.
         """
         items = self.space.vocabulary.equipment.get(field)
         candidates = (
@@ -301,28 +317,28 @@ class Model:
 
         The single implementation of "the caller did not send this", for SC-06's
         masking sweep, the API's partial-request path and the tests alike. It is
-        shared because the value is not interchangeable across dtypes and three of
-        the four ways of getting it wrong are silent:
+        shared because no one value is right for all four dtypes:
 
         - a `bool` assertion flag becomes `False`. A tick is evidence and an empty
           box is the absence of it, which is all the source can mean (EDN-23), and
           the contract makes those three columns non-nullable to say so.
-        - a nullable `boolean` equipment column becomes `pd.NA`, because an
-          omitted equipment *list* is not an empty one: an empty list is every
-          item `False` and asserts the car has none of them (EDN-61).
+        - a nullable `boolean` equipment column becomes `False` as well, because
+          an omitted equipment list is an **empty** list. The raw field is always
+          a list and `"[]"` when empty: measured over the 105,405 scoped listings
+          there is not one null in any of the four, while the literal `"[]"` is
+          5.2 % to 8.0 % of them per field. So empty is a state the model was
+          fitted on and absent is one it never saw (EDN-61).
         - a categorical becomes null over the contract's own levels, so `_align`
           produces the missing code rather than a level of its own.
         - a number becomes NaN.
 
-        The two one-liners this replaces each get half of it right and neither is
-        caught. `frame[column] = np.nan` is refused for the flags, because a
-        float64 NaN in a non-nullable `bool` column fails the contract's null
-        check - but a nullable `boolean` column upcasts to float64, survives
-        `conform` and arrives as `pd.NA`, so the right answer for equipment comes
-        out by accident and the wrong one for the flags is what you notice.
-        `frame[column] = False` is the reverse, and worse: it asserts an empty
-        equipment list, and in a numeric column it becomes `0.0`, which is a
-        mileage of zero kilometres and nothing anywhere will say so.
+        The one-liner this replaces is `frame[column] = np.nan`, which is wrong
+        twice over and loudly only once. For the three flags it is refused, because
+        a float64 NaN in a non-nullable `bool` column fails the contract's null
+        check, so a caller notices. For an equipment column it is not: the column
+        upcasts to float64, survives `conform`, and `astype("boolean")` turns it
+        back into `pd.NA` - so the field arrives as absent rather than empty, which
+        is the one thing this method exists to decide, and nothing says a word.
 
         `frame` is not mutated.
         """
@@ -333,7 +349,7 @@ class Model:
                 if column.dtype == "bool":
                     masked[name] = False
                 elif column.dtype == "boolean":
-                    masked[name] = pd.array([pd.NA] * len(masked), dtype="boolean")
+                    masked[name] = pd.array([False] * len(masked), dtype="boolean")
                 elif column.levels is not None:
                     masked[name] = pd.Categorical([None] * len(masked), categories=column.levels)
                 else:
@@ -355,9 +371,12 @@ class Model:
         what to do with it (EDN-15). What "missing" means for a column whose
         domain already represents absence is not the caller's to guess:
         `mask_absent` is the one implementation of it, and an omitted field that
-        does not go through it is the defect EDN-61 records. The three assertion
-        flags are non-nullable in the contract, so passing `None` for one of them
-        fails here rather than quietly becoming a third state (EDN-23).
+        does not go through it is the defect EDN-61 records. An omitted assertion
+        flag is `False`, and the contract makes those three columns non-nullable,
+        so passing `None` for one of them fails here rather than quietly becoming
+        a third state (EDN-23). An omitted equipment list is `False` throughout
+        too, because it is an *empty* list and that is a state the training rows
+        contain (EDN-61).
         """
         aligned = self._align(frame)
         if aligned.empty:
@@ -404,12 +423,25 @@ class Model:
         frame happened to arrive in.
 
         What is left afterwards is the second half only: the contract's `bool`
-        and nullable `boolean` columns become float64. Load-bearing for the
-        nullable ones, which is every equipment column: an estimator here
-        consumes a float array, and `pd.NA` in a `boolean` column has no float to
-        become without saying which - `False` would turn "the list was not given"
-        into "the car has none of these" (EDN-61), and dropping the row is not on
-        offer. NaN is the only value that says neither.
+        and nullable `boolean` columns become float64, so that every column of the
+        returned frame is float64 or category. That is the dtype contract
+        `_predict_log_price` is written against, and the reason it is stated here
+        is that it is the only thing a new estimator may assume about its input.
+
+        Worth being exact, because the docstring previously called this
+        load-bearing and it is not: removing the cast changes **no prediction
+        anywhere** today. Measured on the real snapshot, all four variants predict
+        bit-identically without it, a Ridge fitted on `extended` fits and predicts
+        bit-identically without it, and so does `lgbm-extended` on a frame with
+        `pd.NA` actually present in an equipment column. LightGBM accepts either
+        dtype; scikit-learn's `MissingIndicator` refuses `bool` only when handed
+        a `bool`-only frame, and inside the `ColumnTransformer` it gets a mixed
+        one that `check_array` has already made float64.
+
+        So this is insurance of the same kind as `deterministic=True` and
+        `solver="lsqr"` (EDN-53), kept because a property a future estimator will
+        depend on should not rest on two libraries independently choosing to be
+        tolerant - not because anything here would fail without it.
         """
         aligned = self.input_schema.conform(frame)
         for name in aligned.columns:
