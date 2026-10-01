@@ -8,8 +8,10 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-toml
+      # --enforce-all: without it the hook checks only files staged for addition,
+      # so CI's run over every file would check nothing at all.
       - id: check-added-large-files
-        args: ["--maxkb=1000"]
+        args: ["--maxkb=1000", "--enforce-all"]
       - id: check-merge-conflict
       - id: mixed-line-ending
 

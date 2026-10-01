@@ -15,4 +15,6 @@ Closes #
 ## Test plan
 - [ ] `make lint` passes
 - [ ] `make test` passes
+- [ ] `make notebook-lint` passes
+- [ ] `make notebook-run` passes (only if a notebook, or code a notebook imports, changed)
 - [ ] Manually verified with <how>

@@ -17,6 +17,9 @@
 \usepackage{lmodern}
 \usepackage[english]{babel}
 \usepackage{microtype}
+% `--` inside \texttt stays two hyphens instead of the en dash the T1 ligature makes,
+% so command-line options such as `ruff format --check` print as typed.
+\DisableLigatures[-]{encoding=T1,family=tt*}
 \usepackage[a4paper, margin=2.5cm, headheight=14pt]{geometry}
 \usepackage{graphicx}
 \graphicspath{{figures/}{../figures/}}

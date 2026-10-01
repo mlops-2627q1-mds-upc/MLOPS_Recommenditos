@@ -101,7 +101,7 @@ Added on top of the basic set, to measure what they are worth:
 | `price_currency`, `offer_type`, `is_new`, `vehicle_type` | Constant after scoping. |
 | `is_used` | Contradicts `offer_type`: False in 18,108 of the 113,708 rows scoped by `offer_type` and `vehicle_type`, so it is not a usable negative. |
 | `is_preregistered` | Defines the scope filter (EDN-04), so it cannot also be a feature. |
-| `mileage_km`, `power_hp`, `body_color_original`, `primary_fuel`, `seller_is_dealer` | Duplicate another column (as text, other unit, free-text variant, finer fuel label or, for `seller_is_dealer`, exactly `seller_type`). |
+| `mileage_km`, `power_hp`, `body_color_original`, `primary_fuel`, `seller_is_dealer` | Duplicate or overlap another column (as text, other unit, free-text variant, a fuel grade that overlaps `fuel_category` and is only half filled or, for `seller_is_dealer`, exactly `seller_type`). |
 | `production_year`, `electric_range_city_km`, fuel consumption and CO2 columns | Sparse (0.5-39 % filled) and rarely known by users. |
 
 ## 5. Evaluation protocol
