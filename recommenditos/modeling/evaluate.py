@@ -15,6 +15,16 @@ Two outputs:
   every criterion with its measured value. This is a plain tracked output, and
   it is where issue #39's per-segment table for the report belongs.
 
+The stage reports on the test rows the API would answer, which is the makes the
+model was fitted on (EDN-48). It takes that list out of the model's own metadata
+rather than reading `supported_makes.json` again, so the evaluated population is
+by construction the trained population.
+
+Each variant's metrics are appended to the MLflow run `train@<variant>` created,
+rather than logged to a run of this stage's own. One run per variant then holds
+the hyperparameters, the artefact, the energy figures and the verdict, which is
+what makes the four comparable in one table.
+
 STUB. The point metrics of problem-spec section 6 are computed for real; the
 criteria that need machinery no stage has yet report `null` rather than a
 fabricated pass, so a reader can tell a missing measurement from a met one.
@@ -28,7 +38,6 @@ import json
 from pathlib import Path
 
 from loguru import logger
-import numpy as np
 import pandas as pd
 import typer
 
@@ -40,7 +49,9 @@ from recommenditos.config import (
     REPORTS_DIR,
 )
 from recommenditos.data.build_features import FeatureSpace
+from recommenditos.modeling.model import Model, load_model
 from recommenditos.pipeline import load_params, read_frame
+from recommenditos.tracking import resume_run
 
 #: Every criterion NFR-01 gates on. A variant is deployable only when all six
 #: pass, so a `None` here blocks the gate rather than being ignored.
@@ -108,30 +119,44 @@ def evaluate_gate(metrics: dict[str, float], baseline_mdape: float | None, crite
 
 
 def _evaluate_variant(variant: str, input_dir: Path, models_dir: Path) -> dict:
-    model = json.loads((models_dir / variant / "model.json").read_text(encoding="utf-8"))
-    feature_set = model["feature_set"]
+    model = load_model(models_dir / variant)
+    feature_set = model.feature_set
     # The contract travels with the matrices, because the equipment multi-hot
     # columns and the category levels are whatever the training rows decided.
     # `FeatureSpace` because #39's masking sweep rebuilds a frame per masked
     # field and has to cast it back against the same levels.
     space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
-    schema = space.schema
-    test = read_frame(input_dir / feature_set / "test.parquet", schema)
-    # The stub model is a constant in log space; #37 replaces it with a fitted
-    # estimator and this becomes `model.predict(test[model["features"]])`.
-    predicted = pd.Series(
-        np.exp(np.full(len(test), model["constant_log_price"])), index=test.index
-    )
+    test = read_frame(input_dir / feature_set / "test.parquet", space.schema)
+    test = _supported_only(test, model)
     return {
         "variant": variant,
         # What actually produced these numbers, so a committed metrics file
-        # cannot be read as a result while it is still only the stub's.
-        "estimator": model["estimator"],
-        "planned_estimator": model["planned_estimator"],
+        # cannot be read as a result of something it was not.
+        "estimator": model.estimator,
         "feature_set": feature_set,
         "n_test_rows": len(test),
-        **point_metrics(test["price"], predicted),
+        "mlflow_run_id": model.metadata["mlflow"]["run_id"],
+        **point_metrics(test["price"], model.predict_eur(test)),
     }
+
+
+def _supported_only(test: pd.DataFrame, model: Model) -> pd.DataFrame:
+    """The test rows the API would answer, which is the population to report on.
+
+    Taken from the model's own metadata rather than from `supported_makes.json`,
+    so the evaluated population is by construction the one the model was fitted
+    on (EDN-48) and the two cannot be read from different `split` runs.
+
+    TODO(#39): the per-make segments of SC-04 need the same restriction, or the
+    criterion reports a segment the API answers with a 422.
+    """
+    supported = model.metadata["training"]["supported_makes"]
+    kept = test[test["make"].isin(supported)]
+    logger.info(
+        f"{model.variant}: {len(kept):,} of {len(test):,} test rows are one of the "
+        f"{len(supported)} supported make(s)."
+    )
+    return kept
 
 
 @app.command()
@@ -160,6 +185,23 @@ def main(
         path = metrics_dir / f"{variant}.json"
         path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         logger.info(f"{variant}: MdAPE {record['mdape'] * _PERCENT:.1f} % -> {path}.")
+        # Appended to the run `train@<variant>` opened, not a run of its own, so
+        # the experiment holds one run per variant carrying its hyperparameters,
+        # its artefact and its verdict. A context manager per variant because
+        # this stage covers all four in one process, and a run left open would
+        # collect the next variant's metrics.
+        with resume_run(record["mlflow_run_id"]) as run:
+            run.log_metrics(
+                {
+                    "mdape": record["mdape"],
+                    "within_10pct": record["within_10pct"],
+                    "within_20pct": record["within_20pct"],
+                    "mae_eur": record["mae_eur"],
+                    "mape": record["mape"],
+                    **{f"{each}_measured": record[f"{each}_measured"] for each in CRITERIA},
+                }
+            )
+            run.set_tags({"gate_passed": str(all(record[f"{c}_passed"] for c in CRITERIA))})
         # Three numbers per variant, so `dvc metrics show` stays a table a
         # person can read and `dvc metrics diff` says something useful.
         headline[variant] = {

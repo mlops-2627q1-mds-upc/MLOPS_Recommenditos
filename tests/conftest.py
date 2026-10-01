@@ -14,7 +14,7 @@ import pytest
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
 import yaml
 
-from recommenditos.config import METRICS_FILE, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
+from recommenditos.config import METRICS_FILE, MODELS_DIR, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.pipeline import load_params
 
@@ -54,12 +54,19 @@ def _repo_artefacts_stay_untouched():
     """
     watched = [METRICS_FILE, REPORTS_DIR / "data-validation" / "summary.json"]
     before = {path: _fingerprint(path) for path in watched}
+    models_before = _listing(MODELS_DIR)
     already_there = [path for path in FORBIDDEN_PATHS if path.exists()]
 
     yield
 
     changed = sorted(str(path) for path in watched if _fingerprint(path) != before[path])
     assert not changed, f"the test suite wrote to {', '.join(changed)}"
+
+    # By listing rather than by content: `models/` is a directory of directories
+    # and what matters is that a test did not train into it. Its bundles are
+    # DVC-cached, so a stray one would not show up in `git status` either - the
+    # symptom would be `dvc status` reporting a model nobody had pushed.
+    assert _listing(MODELS_DIR) == models_before, f"the test suite trained into {MODELS_DIR}"
 
     appeared = sorted(
         str(path) for path in FORBIDDEN_PATHS if path.exists() and path not in already_there
@@ -69,6 +76,13 @@ def _repo_artefacts_stay_untouched():
 
 def _fingerprint(path: Path) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def _listing(directory: Path) -> list[str]:
+    """Every file under `directory`, relative to it, sorted."""
+    if not directory.exists():
+        return []
+    return sorted(str(path.relative_to(directory)) for path in directory.rglob("*"))
 
 
 @pytest.fixture(autouse=True)

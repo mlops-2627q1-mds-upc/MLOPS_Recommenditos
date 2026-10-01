@@ -206,6 +206,25 @@ validate:
 train:
   # One MLflow experiment; each variant below is one run in it (#37).
   mlflow_experiment: recommenditos-price
+  # Threads for the fit, pinned rather than left at LightGBM's default of "all
+  # cores". The trees are already thread-independent - identical at 1, 2, 4 and 8
+  # threads - but LightGBM writes the count into `booster.txt`, so a default would
+  # make the artefact's hash depend on the machine that ran `dvc repro` (NFR-06).
+  #
+  # 1 rather than a larger pinned value, because only 1 is a value every machine
+  # can honour: LightGBM silently uses what is available, so a 2-core runner asked
+  # for 4 writes a different file than an 8-core laptop.
+  #
+  # What that costs, and against what (EDN-53). Against a *pinned* 2 or 4 it is a
+  # real trade: measured on the real snapshot, `lgbm-extended` fits in a median
+  # 18.3 s at 1 thread against 12.2 s at 4. Against the default this replaces -
+  # every core, 8 on the machine measured - it is a gain: 18.3 s against 29.2 s,
+  # and 7.1 s against 17.7 s for `lgbm-basic`. It is also by far the steadiest
+  # value: three fits at 1 thread land within a second of each other, three at 8
+  # span 26 s. The same reversal is sharper on the 744-row fixture the suite uses
+  # (0.33 s at 1 thread, 28.6 s at 8), because OpenMP's overhead dominates
+  # whenever there is little work per thread.
+  num_threads: 1
   # `dvc.yaml` iterates this mapping with `foreach`, so the stages are named
   # `train@b0`, `train@lgbm-basic` and so on, and each declares only its own
   # key under `params:`. Changing one variant therefore retrains that variant
@@ -223,6 +242,24 @@ train:
       feature_set: basic
       params:
         alpha: 1.0
+        # Levels below this many training rows share one "rare level" column
+        # instead of getting a coefficient each, and an unseen level at serving
+        # time is encoded as that column where there is one (EDN-18, EDN-50). An
+        # absolute row count rather than a share, so that what it means does not
+        # change as the training set grows. Only the `ridge` variant has this: the
+        # tree models handle a rare level natively (EDN-02).
+        #
+        # 5 rather than a larger value, measured on the real snapshot (60,378
+        # training rows, MdAPE on the test split): no folding at all gives 503
+        # encoded columns and 9.48 %, 5 gives 404 and 9.52 %, 30 gives 294 and
+        # 9.71 %, 100 gives 187 and 10.61 %. So folding is not free. What 5 buys
+        # for those 0.04 pp is that a level seen in a handful of rows does not get
+        # a coefficient fitted on them - 47 of the 100 levels it folds are `model`
+        # values seen exactly once. It is not a boundary: an infrequent group
+        # already exists at 2, and at 5 only `model` and `fuel_category` have one
+        # at all, so the other six categoricals encode an unseen value as all
+        # zeros (EDN-50 has the per-column measurement).
+        min_category_rows: 5
     # Ladder step 3: the main model.
     lgbm-basic:
       estimator: lightgbm

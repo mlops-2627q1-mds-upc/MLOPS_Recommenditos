@@ -194,8 +194,9 @@ stages:
   # still retrains, through the directory dependency above - the `features` stage
   # rewrites it first - so nothing is lost by not declaring a key nobody reads.
   #
-  # `train.mlflow_experiment` is declared ahead of the read: issue #37 adds the
-  # MLflow tracking that uses it, and the stub deliberately does not.
+  # `supported_makes.json` is a dependency because the stage applies it: the
+  # variant is fitted on the makes the API serves and no others (EDN-48), so a
+  # change to which makes those are is a change to the model's training rows.
   # ----------------------------------------------------------------------
   train:
     foreach: ${train.variants}
@@ -203,14 +204,18 @@ stages:
       cmd: python3 -m recommenditos.modeling.train ${key}
       deps:
         - recommenditos/modeling/train.py
+        - recommenditos/modeling/model.py
+        - recommenditos/tracking.py
         - recommenditos/data/build_features.py
         - recommenditos/config.py
         - recommenditos/schema.py
         - recommenditos/pipeline.py
         - data/processed/features/${item.feature_set}
+        - data/processed/supported_makes.json
       params:
         - seed
         - train.mlflow_experiment
+        - train.num_threads
         - train.variants.${key}
       outs:
         - models/${key}
@@ -226,6 +231,8 @@ stages:
     cmd: python3 -m recommenditos.modeling.evaluate
     deps:
       - recommenditos/modeling/evaluate.py
+      - recommenditos/modeling/model.py
+      - recommenditos/tracking.py
       - recommenditos/data/build_features.py
       - recommenditos/config.py
       - recommenditos/schema.py

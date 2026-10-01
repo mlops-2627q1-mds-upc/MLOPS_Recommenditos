@@ -135,18 +135,22 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/processed/supported_makes.json` is read by `features` but **not applied** by it yet.
-  The stage declares it as a dependency and reads it before the vocabulary is built, which is the only point at which the restriction could still decide the level set, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
-  What is still missing is the restriction itself, in all three of `features`, `train` and `evaluate` ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+- `data/processed/supported_makes.json` is applied by `train` and by `evaluate`'s pooled metrics, and **not yet** by `features` ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
   `split` deliberately records the scope instead of enforcing it: it stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no rows disappear without an artefact saying where they went.
+  `features` declares the artefact as a dependency and reads it before the vocabulary is built, which is the only point at which the restriction could still decide the level set, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
   Four things the stages that turn a set into model input (#36, #37, #39) have to guarantee, none of them optional:
 
     1. The filter is applied to train, validation, calibration, test **and** the `ES` holdout.
        The holdout is the one people forget, and it is the set NFR-11 and FR-15 rest on.
+       **Train and validation: done** (`train`). **Test: done** for the pooled metrics (`evaluate`). **Calibration and holdout: open**, and they belong to the tickets that first read those sets - the conformal intervals of UC2 and the M6 replay.
     2. The filter is applied **before** any training-derived vocabulary or statistic is computed - the equipment multi-hot columns, a category encoding, a mean, a quantile.
        Fitting on rows the API will refuse puts makes the product cannot serve into the model's own inputs.
+       **Open, and it is `features`' obligation**: the equipment thresholds and every category's levels are still decided by all the training rows, so `make` has more levels than there are supported makes.
+       `train`'s restriction covers the model's own rows but not the vocabulary that encodes them, and the gap is visible in the stage log, which reports the level count against the supported count.
     3. `evaluate`'s per-make segments are restricted to the listed makes, or SC-04 reports a segment the API answers with a 422.
+       **Open**, and it belongs to #39, which adds the segments; the pooled metrics are already restricted, and `evaluate` takes the make list out of the model's own metadata so the evaluated population is by construction the trained one.
     4. A test asserts that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
+       **Done** for the two that are applied: `tests/test_model.py::test_the_model_is_fitted_on_the_supported_makes_only` and `tests/test_pipeline.py::test_the_reported_population_is_the_served_population`, both of which first assert that the fixture holds an unsupported make, so neither can pass by the filter being unnecessary.
 
     Measured on the real snapshot: the filter moves every realised share by at most 0.08 pp (99,326 rows to 97,889), so it does not disturb the split proportions.
     Of the 6,079 holdout rows, 5,979 are a supported make and 100 are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04.

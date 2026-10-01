@@ -192,6 +192,31 @@ def test_the_model_artefact_never_lists_the_target_among_its_features(pipeline, 
         assert model["features"] + model["targets"] == list(schema.names), variant
 
 
+def test_the_reported_population_is_the_served_population(pipeline, params):
+    # EDN-48: the model is fitted on the makes the API answers, so the metrics
+    # have to be computed over those rows and no others. Otherwise the numbers
+    # describe a population the product does not serve and cannot be compared
+    # with the reference values of problem-spec section 8, which are all
+    # post-filter. Asserted here rather than in tests/test_model.py because it is
+    # a property of the two stages agreeing, not of one model.
+    supported = {
+        entry["make"]
+        for entry in json.loads((pipeline["processed"] / "supported_makes.json").read_text())[
+            "supported_makes"
+        ]
+    }
+    for variant in params["train"]["variants"]:
+        model = json.loads((pipeline["models"] / variant / "model.json").read_text())
+        record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
+        test = pd.read_parquet(pipeline["features"] / model["feature_set"] / "test.parquet")
+        expected = int(test["make"].isin(supported).sum())
+        assert 0 < expected < len(test), (
+            "the fixture has to hold both supported and unsupported makes, "
+            "or this test cannot fail"
+        )
+        assert record["n_test_rows"] == expected, variant
+
+
 def test_the_gate_reports_every_success_criterion(pipeline, params):
     # No `req("NFR-01")` marker: this asserts the shape of the metrics record, not
     # the rule NFR-01 states, which is that a model missing a criterion is not
@@ -205,8 +230,11 @@ def test_the_gate_reports_every_success_criterion(pipeline, params):
 
 @pytest.mark.req("NFR-01")
 def test_a_model_that_misses_the_criteria_does_not_pass_the_gate(pipeline):
-    # The stub trains a constant predictor, so the gate must say no. A gate
-    # that passes a model this bad would be worse than no gate.
+    # SC-04 to SC-06 have no measurement until issue #39 lands, and a criterion
+    # that was not measured is never a pass, so nothing can be released yet
+    # whatever the fitted estimators score. NFR-01's word is "every", and this is
+    # what keeps it honest; the test below checks that the implemented criteria
+    # still discriminate rather than the gate simply refusing everything.
     summary = json.loads(pipeline["summary"].read_text())
     assert summary["gate_passed"] is False
     assert summary["n_variants_passing"] == 0

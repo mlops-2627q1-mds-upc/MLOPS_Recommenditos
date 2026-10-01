@@ -144,6 +144,12 @@ Experiment ladder (each step is one or more MLflow runs in the same experiment):
 
 Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 
+**Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
+Measured once on the real snapshot (test-split MdAPE, fitted on the 11 supported makes): step 1 12.16 %, step 2 9.52 %, step 3 6.83 %, step 4 6.32 %, so the extended feature set is worth 0.51 pp over the basic one.
+The whole ladder trains in 67 seconds.
+Numbers, hyperparameters and the caveats - notably that the tree budget is binding, so steps 3 and 4 are untuned - are in the [model card](model-card.md#the-experiment-ladder-as-measured).
+Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
+
 Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) on top of quantile LightGBM models (e.g. 5 % / 95 %).
 Train with random masking of optional fields so the model produces wider intervals for partial inputs.
 The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.

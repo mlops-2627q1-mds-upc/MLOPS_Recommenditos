@@ -1,32 +1,191 @@
 """`train` stage: one run of the experiment ladder, once per variant.
 
-STUB. It fits the simplest thing that is a model - a constant predictor at the
-median of the training `log_price` - and saves it in a format `evaluate` can
-load. That is enough for the whole pipeline to produce real metrics before any
-real estimator exists.
-
 `dvc.yaml` iterates `train.variants` in params.yaml with `foreach`, so the
-stages are `train@b0`, `train@b1`, `train@lgbm-basic`, `train@lgbm-extended`
+stages are `train@b0`, `train@b1`, `train@lgbm-basic` and `train@lgbm-extended`,
 and each declares only its own key under `params:`. Changing one variant's
 hyperparameters therefore retrains that variant alone.
 
-Issue #37 implements the four estimators and the MLflow tracking on DagsHub:
-one experiment, one run per variant, parameters, metrics and the model artefact
-logged. Note the demo's warning that each DVC stage becomes its own MLflow run,
-so the runs have to be grouped deliberately.
+What this module does is everything around the fit: read the matrices and their
+contract, restrict the rows to the makes the API serves, open one MLflow run,
+call `fit_variant`, write the bundle and log the run. The estimators themselves
+and the predict seam are in `model.py`, because `evaluate` depends on that file
+and must not depend on this one.
+
+Three properties are deliberate and each is tested.
+
+**The rows are the served population (EDN-48).** `split` stays a lossless
+partition and records which makes cleared EDN-05's threshold; this stage applies
+that list, so no make the API answers with a 422 is in the model's own training
+data. The list travels into the bundle, so the API reads the scope off the model
+it is serving.
+
+**One variant is one MLflow run.** This stage creates it and records its id in
+`model.json`; `evaluate` resumes that run rather than opening its own, so the
+experiment holds four runs, each carrying its hyperparameters, its artefact,
+issue #38's energy figures and issue #39's test metrics and gate verdict.
+
+**Training works with no credentials and no network.** `optional_run` degrades
+to a handle that logs nothing, because the test suite and a fresh clone have to
+be able to train. `RECOMMENDITOS_REQUIRE_TRACKING=1` turns that into a failure
+for the runs whose numbers are cited.
 """
 
-import json
 from pathlib import Path
+import shutil
+import time
 
 from loguru import logger
+import pandas as pd
 import typer
 
 from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
-from recommenditos.data.build_features import FeatureSpace
+from recommenditos.data.build_features import FeatureSpace, read_supported_makes
+from recommenditos.modeling.model import Model, TrainingData, fit_variant, load_model
 from recommenditos.pipeline import load_params, read_frame
+from recommenditos.tracking import Run, optional_run
+
+#: The split a variant is fitted on, and the one early stopping watches. Named
+#: rather than inlined because the pair is the whole of what a fit may read: the
+#: `calibration` split is held for the conformal intervals of UC2 and `test` for
+#: `evaluate`, and a stage that reads either would invalidate both.
+TRAIN_SPLIT = "train"
+VALIDATION_SPLIT = "validation"
+
+#: Where the bundle lands inside the MLflow run, so the UI shows `model/` rather
+#: than four loose files at the run's root.
+ARTIFACT_PATH = "model"
 
 app = typer.Typer()
+
+
+def _fit(
+    variant: str, settings: dict, data: TrainingData, *, seed: int, num_threads: int
+) -> tuple[Model, float]:
+    """The measured section: the fit, and nothing else.
+
+    TODO(#38): wrap exactly this call with CodeCarbon's `EmissionsTracker` and
+    return the emissions alongside the model. Nothing else in this module
+    allocates compute worth measuring, which is what makes "only the fit is
+    measured" true rather than approximate, and the two log calls in `main` that
+    the energy metrics and the hardware parameters belong to are marked there.
+    """
+    started = time.perf_counter()
+    model = fit_variant(variant, settings, data, seed=seed, num_threads=num_threads)
+    return model, time.perf_counter() - started
+
+
+def read_matrices(
+    input_dir: Path, feature_set: str, supported_makes: tuple[str, ...]
+) -> TrainingData:
+    """The two matrices a fit may read, restricted to the supported makes.
+
+    The contract comes from the artefact beside the matrices rather than from
+    `features.sets`: the equipment multi-hot columns and every category's levels
+    are whatever the training rows decided, so a contract rebuilt from
+    params.yaml would not describe the file it is validating.
+    """
+    space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
+    frames = {}
+    for split in (TRAIN_SPLIT, VALIDATION_SPLIT):
+        whole = read_frame(input_dir / feature_set / f"{split}.parquet", space.schema)
+        frames[split] = _supported_only(whole, supported_makes, split=split)
+    return TrainingData(
+        space=space,
+        train=frames[TRAIN_SPLIT],
+        validation=frames[VALIDATION_SPLIT],
+        supported_makes=supported_makes,
+    )
+
+
+def _supported_only(
+    frame: pd.DataFrame, supported_makes: tuple[str, ...], *, split: str
+) -> pd.DataFrame:
+    """`frame` without the makes the API refuses (FR-04, EDN-05, EDN-48).
+
+    Fitting on a make the product will not serve does not inflate a metric - rare
+    makes are harder, so a pooled figure over them is if anything pessimistic -
+    but it makes the reported population a different one from the served
+    population, and a number about cars nobody can ask about is not a number about
+    the product.
+
+    That is the whole reason, and it is not a comparability argument: problem-spec
+    section 8's reference values were measured on 96,831 listings with no make
+    filter, so they describe a different population than this one either way. The
+    model card's cross-check against them spans two populations and two split
+    schemes and is labelled as such.
+
+    `reset_index(drop=True)` so the frames a fit sees are indexed 0..n-1 whatever
+    was removed. Nothing here depends on the index, and leaving gaps in it would
+    make a later positional assumption wrong in a way that is invisible until it
+    is not.
+    """
+    kept = frame[frame["make"].isin(supported_makes)].reset_index(drop=True)
+    if kept.empty:
+        raise ValueError(
+            f"no {split} row is one of the {len(supported_makes)} supported make(s) "
+            f"({', '.join(supported_makes)}), so there is nothing to fit. The make list and "
+            f"the matrices have to come from the same `split` run."
+        )
+    removed = len(frame) - len(kept)
+    logger.info(
+        f"{split}: {len(kept):,} rows of {len(frame):,} are a supported make "
+        f"({removed:,} removed, {removed / len(frame):.1%})."
+    )
+    return kept
+
+
+def _logged_params(variant: str, settings: dict, data: TrainingData, *, seed: int) -> dict:
+    """What MLflow records about how this run was configured.
+
+    Exactly the params.yaml keys `dvc.yaml` declares for this stage, plus the
+    shape of the data they were applied to. The stage logs its own parameters
+    because only it knows which keys it declared; the commit and the data version
+    are the same question for every run and `tracked_run` answers them.
+    """
+    return {
+        "variant": variant,
+        "estimator": settings["estimator"],
+        "feature_set": settings["feature_set"],
+        "seed": seed,
+        "n_features": len(data.space.schema.feature_names),
+        "n_train_rows": len(data.train),
+        "n_validation_rows": len(data.validation),
+        "n_supported_makes": len(data.supported_makes),
+        **{f"{settings['estimator']}.{key}": value for key, value in settings["params"].items()},
+    }
+
+
+def _log_the_run(
+    run: Run, model: Model, *, fit_seconds: float, params: dict, directory: Path
+) -> None:
+    """Everything this stage tells MLflow about the run it just finished.
+
+    No metric in euros. `train` must not touch the test set, and a train or
+    validation MdAPE would be a second implementation of the metric beside
+    `evaluate.point_metrics`, so one run could carry two numbers that disagree.
+    The absolute error in log space is what early stopping reads, so it is the
+    honest thing for this stage to report.
+    """
+    training = model.metadata["training"]
+    run.set_tags(
+        {
+            "variant": model.variant,
+            "estimator": model.estimator,
+            "feature_set": model.feature_set,
+            "dvc_stage": f"train@{model.variant}",
+        }
+    )
+    run.log_params(params)
+    run.log_metrics(
+        {
+            "train_l1_log_price": training["train_l1_log_price"],
+            "validation_l1_log_price": training["validation_l1_log_price"],
+            "best_iteration": training.get("best_iteration"),
+            "fit_seconds": fit_seconds,
+            # TODO(#38): the energy metrics of the fit belong in this call.
+        }
+    )
+    run.log_artifacts(directory, artifact_path=ARTIFACT_PATH)
 
 
 @app.command()
@@ -38,42 +197,57 @@ def main(
 ):
     params = load_params(params_path)
     settings = params["train"]["variants"][variant]
-    feature_set = settings["feature_set"]
-    # The matrix's columns depend on the data - the equipment multi-hot columns
-    # and the category levels are whatever the training rows decided - so the
-    # contract travels with the matrices instead of being rebuilt from
-    # params.yaml here. `FeatureSpace` because #37 needs the vocabulary too.
-    space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
-    schema = space.schema
+    seed = params["seed"]
+    num_threads = params["train"]["num_threads"]
 
-    train = read_frame(input_dir / feature_set / "train.parquet", schema)
+    # Beside the split frames rather than beside the matrices, because that is
+    # where `split` writes it and `features` reads it. Derived from `input_dir`
+    # so that a test - and a `dvc repro` of a stage whose paths were redirected -
+    # cannot read the make list of one run against the matrices of another.
+    supported_makes = read_supported_makes(input_dir.parent)
+    data = read_matrices(input_dir, settings["feature_set"], supported_makes)
 
-    logger.warning(
-        f"STUB: {variant!r} is fitted as a constant predictor, not as "
-        f"{settings['estimator']!r}. Issue #37 implements the estimators and MLflow."
+    with optional_run(params["train"]["mlflow_experiment"], variant) as run:
+        model, fit_seconds = _fit(variant, settings, data, seed=seed, num_threads=num_threads)
+        model.metadata["mlflow"] = {
+            "experiment": params["train"]["mlflow_experiment"],
+            "tracking_mode": run.mode,
+            # What `evaluate` resumes, so the test metrics and the gate verdict
+            # land in the run that already holds the hyperparameters.
+            "run_id": run.run_id,
+        }
+        directory = output_dir / variant
+        _replace_directory(directory)
+        model.save(directory)
+        logged = _logged_params(variant, settings, data, seed=seed)
+        # TODO(#38): the hardware parameters of the measurement belong in `logged`.
+        _log_the_run(run, model, fit_seconds=fit_seconds, params=logged, directory=directory)
+
+    training = model.metadata["training"]
+    logger.success(
+        f"{variant}: fitted {settings['estimator']!r} on {training['n_train_rows']:,} rows in "
+        f"{fit_seconds:.2f} s, validation L1(log price) "
+        f"{training['validation_l1_log_price']:.4f}."
     )
-    model = {
-        "variant": variant,
-        "estimator": "constant_median",
-        "planned_estimator": settings["estimator"],
-        "feature_set": feature_set,
-        # Features and targets as two lists, not one. The matrix carries the
-        # label beside the inputs so that one file per split is enough, which
-        # means every consumer of this artefact - #37's estimators, #39's
-        # masking sweep, the API - has to be told where the boundary is. One
-        # list of `schema.names` ends in `price, log_price`, so a consumer that
-        # takes it at its word fits the target on itself.
-        "features": list(schema.feature_names),
-        "targets": list(schema.target_names),
-        "seed": params["seed"],
-        "constant_log_price": float(train["log_price"].median()),
-        "n_training_rows": len(train),
-    }
+    # The load, not the fitted object: what `evaluate` and the API will use is
+    # what came off the disk, and a bundle that cannot be read back is a failed
+    # training run even though the fit succeeded.
+    load_model(directory)
 
-    model_dir = output_dir / variant
-    model_dir.mkdir(parents=True, exist_ok=True)
-    (model_dir / "model.json").write_text(json.dumps(model, indent=2) + "\n", encoding="utf-8")
-    logger.success(f"Wrote {model_dir / 'model.json'}.")
+
+def _replace_directory(directory: Path) -> None:
+    """Start the bundle empty, so no file of a previous fit survives into it.
+
+    `dvc repro` removes a stage's outputs before running it, but `train.main` is
+    also called directly - by the tests, and by anyone re-running one variant by
+    hand - and then a variant switched from `lightgbm` to `ridge` would leave its
+    `booster.txt` beside the new `pipeline.joblib`. `load_model` dispatches on the
+    record, so it would ignore the stale file; DVC would not, and the directory's
+    hash would depend on which fits a machine happened to have run.
+    """
+    if directory.exists():
+        shutil.rmtree(directory)
+    directory.mkdir(parents=True)
 
 
 if __name__ == "__main__":
