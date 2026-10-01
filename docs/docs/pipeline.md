@@ -45,10 +45,12 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
 | `train` | `recommenditos/modeling/train.py` | `models/<variant>/` |
-| `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json` |
+| `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs}.csv` |
 
 `features` and `evaluate` have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
 Its text model needs no feature engineering, and it asserts its metric threshold inside `tests/test_model.py` instead of producing a metrics artefact, which is not enough for the gate [NFR-01](specification.md) describes.
+`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 24 leaves (23 of them rendered while `deployable_variant` is null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
+`dvc metrics diff` is long-format and lists only the leaves that changed, which is what compares two model versions across a merge.
 
 Two stages iterate a mapping in `params.yaml` with `foreach`, so they are named after the item rather than its position: `features@basic`, `train@lgbm-extended`.
 Each declares only its own slice under `params:`, so changing one variant's hyperparameters retrains that variant and no other.
@@ -148,7 +150,7 @@ Known gaps
        **Open, and it is `features`' obligation**: the equipment thresholds and every category's levels are still decided by all the training rows, so `make` has more levels than there are supported makes.
        `train`'s restriction covers the model's own rows but not the vocabulary that encodes them, and the gap is visible in the stage log, which reports the level count against the supported count.
     3. `evaluate`'s per-make segments are restricted to the listed makes, or SC-04 reports a segment the API answers with a 422.
-       **Open**, and it belongs to #39, which adds the segments; the pooled metrics are already restricted, and `evaluate` takes the make list out of the model's own metadata so the evaluated population is by construction the trained one.
+       **Done.** The stage restricts the test rows before it cuts them, taking the make list out of the model's own metadata so the evaluated population is by construction the trained one, and `check_make_levels_are_served` then refuses a per-make level outside that list, so the restriction is a checked property rather than an intention.
     4. A test asserts that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
        **Done** for the two that are applied: `tests/test_model.py::test_the_model_is_fitted_on_the_supported_makes_only` and `tests/test_pipeline.py::test_the_reported_population_is_the_served_population`, both of which first assert that the fixture holds an unsupported make, so neither can pass by the filter being unnecessary.
 
@@ -159,4 +161,4 @@ Known gaps
 - A stage's `deps` and `params` cannot be conditional, so `download` declares both sources' inputs whichever one is selected. Under `download.source: zenodo`, editing `recommenditos/data/synthetic.py` or `download.rows` therefore reruns the stage as a 25-second re-read of the cached CSV that produces an identical Parquet. Dropping either would be worse, because a synthetic run would then not notice that its own generator or row count changed.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The synthetic data is reproducible within a fixed toolchain, but NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what `download.source: synthetic` generates. `zenodo` is pinned harder but not all the way: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. Within one toolchain version the write is byte-stable, which is what NFR-06 is measured against.
-- The stage bodies are stubs apart from `download` and `preprocess`. Each module's docstring names the issue that implements it and what that issue still owes.
+- `configure_gx` and `validate-data` are still stubs: `validate-data` enforces the structural contract from `recommenditos/schema.py` and the value expectations of issue #25 are not built yet. Each module's docstring names the issue that implements it and what that issue still owes.

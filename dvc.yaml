@@ -225,7 +225,10 @@ stages:
   #
   # Like `train`, it does not declare `features.sets`: it reads each matrix's
   # contract from the artefact beside it, and it already depends on the whole
-  # features directory.
+  # features directory. It does not declare `features.equipment_columns` either,
+  # for the same reason: which multi-hot columns an equipment field produced is in
+  # the vocabulary beside the matrices, so SC-06's masking reads it from there and
+  # a change to that key reruns this stage through the directory above.
   # ----------------------------------------------------------------------
   evaluate:
     cmd: python3 -m recommenditos.modeling.evaluate
@@ -243,10 +246,11 @@ stages:
       - train.variants
       - evaluate
     outs:
-      # The full per-variant record, which issue #39 extends with the
-      # per-segment table the report cites. Not a `metrics` entry: DVC renders
-      # one column per JSON leaf, and four variants times six criteria is not a
-      # table anyone can read.
+      # The full per-variant record, plus the per-segment table and the masking
+      # sweep the report cites, as one CSV each across all variants. Not a
+      # `metrics` entry: DVC renders one column per JSON leaf, and four variants
+      # times six criteria is not a table anyone can read. `metrics.json` below
+      # keeps the 24 leaves that are, and the stage docstring says how to read it.
       - reports/metrics:
           cache: false
     metrics:

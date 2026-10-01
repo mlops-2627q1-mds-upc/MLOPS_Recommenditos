@@ -289,14 +289,19 @@ evaluate:
     - seller_type
     - fuel_category
     - age_bucket
-  # Lower edges in years; the last bucket is open ended.
+  # Lower edges in years; the last bucket is open ended. The bucket labels are
+  # generated from this list, so moving an edge moves the labels with it.
   age_bucket_edges: [0, 1, 3, 6, 10, 20]
+  # Lower edges in EUR, same convention. Reported only: a price bucket conditions
+  # on the target, and `evaluate` refuses to gate on one.
+  price_bucket_edges: [0, 5000, 10000, 20000, 40000, 80000]
   # The model variant SC-03 compares against.
   baseline_variant: b0
   # The fields specification FR-01 requires of `/predict` (EDN-15). SC-06 masks
-  # every *other* field of the feature set, on its own and all at once, so this
-  # list is what decides which fields the criterion covers. The API reads the
-  # same list, so the two cannot disagree about what is optional.
+  # every *other input field* of the evaluated variant's feature set, on its own
+  # and all at once, so this list is what decides which fields the criterion
+  # covers. The API reads the same list, so the two cannot disagree about what is
+  # optional.
   required_input_fields:
     - make
     - model
@@ -308,6 +313,22 @@ evaluate:
     - country_code
     - body_type
     - seller_type
+  # The feature column an API input field becomes, where the two differ. FR-01
+  # requires `registration_date`; the model consumes the derived `age_years`, so
+  # without this line the naive difference against the list above would make
+  # `age_years` look optional and SC-06 would mask the most important feature in
+  # the model. An equipment field needs no entry: which multi-hot columns it
+  # produced is what the training rows decided, so `evaluate` reads that from the
+  # vocabulary in the model bundle rather than from here.
+  input_field_to_feature:
+    registration_date: age_years
+  # The partial-input scenario P1 of SC-05 and FR-02, as the exact field list two
+  # requirements and one criterion depend on. Everything else is masked.
+  sc05_p1_fields:
+    - make
+    - model
+    - registration_date
+    - mileage_km_raw
   # SC-01 to SC-06 of problem-spec section 8, as numbers the `evaluate` stage
   # can check. NFR-01 gates deployment on all six, so each one is written to
   # metrics.json with its measured value and a pass or fail.
@@ -318,9 +339,12 @@ evaluate:
     sc02_within_20pct_min: 0.85
     # SC-03: MdAPE at least 30 % below the baseline variant's.
     sc03_mdape_improvement_over_baseline_min: 0.30
-    # SC-04: every segment with at least this many test rows stays at or below
-    # 15 % MdAPE. The exploratory run already found cars over 20 years at
+    # SC-04: every segment *level* with at least this many test rows stays at or
+    # below 15 % MdAPE. The exploratory run already found cars over 20 years at
     # 15.3 %, so this is expected to fail first; that is the point of having it.
+    # When no level reaches the minimum, the criterion is reported as not
+    # measured, which blocks the gate: "every level satisfies P" is vacuously
+    # true over an empty set and a pass would claim a check nobody ran.
     sc04_segment_mdape_max: 0.15
     sc04_min_segment_rows: 500
     # SC-05: the nominal 90 % intervals reach an empirical coverage in this
@@ -329,6 +353,9 @@ evaluate:
     sc05_coverage_max: 0.92
     # SC-06: with each optional input masked on its own, and with all of them
     # masked at once, MdAPE stays at or below this multiple of the full-input
-    # value. The optional fields are the ones specification FR-01 does not
-    # require (EDN-15).
+    # value. The optional fields are the input fields of the evaluated variant's
+    # feature set that FR-01 does not require (EDN-15), so the criterion covers 6
+    # fields for a basic variant and 23 for an extended one. What "masked" means
+    # per field follows EDN-23: an assertion flag is `False`, an equipment list is
+    # empty, everything else is absent.
     sc06_masked_mdape_ratio_max: 1.5
