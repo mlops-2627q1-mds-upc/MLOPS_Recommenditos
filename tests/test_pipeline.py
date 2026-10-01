@@ -68,6 +68,15 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     raw_path.parent.mkdir(parents=True)
     _generated_frame.to_parquet(raw_path, index=False)
 
+    # The fixture *is* what `download.source: synthetic` produces, so the stages
+    # are run against a params file that says so rather than against the
+    # project's, which names the real snapshot. Otherwise the metrics artefacts
+    # this run writes would carry `data_source: zenodo` over generated rows -
+    # the exact mislabel that field exists to make impossible.
+    params_path = params_override(
+        root, params, download={"source": download_raw_dataset.SYNTHETIC}
+    )
+
     interim_path = root / "interim" / "listings.parquet"
     processed = root / "processed"
     features = processed / "features"
@@ -76,18 +85,18 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     summary_path = root / "metrics.json"
     validation_path = root / "data-validation" / "summary.json"
 
-    preprocess.main(raw_path, interim_path, PARAMS_FILE)
+    preprocess.main(raw_path, interim_path, params_path)
     # Every path is passed explicitly. A stage's defaults point into the real
     # repository, so a test that relies on them writes its result over the
     # pipeline's - which is exactly how a test run's validation summary once
     # ended up committed.
     validate_data.main(raw_path, interim_path, validation_path)
-    split_data.main(interim_path, processed, PARAMS_FILE)
+    split_data.main(interim_path, processed, params_path)
     for feature_set in params["features"]["sets"]:
-        build_features.main(feature_set, processed, features, PARAMS_FILE)
+        build_features.main(feature_set, processed, features, params_path)
     for variant in params["train"]["variants"]:
-        train.main(variant, features, models, PARAMS_FILE)
-    evaluate.main(features, models, metrics_dir, summary_path, PARAMS_FILE)
+        train.main(variant, features, models, params_path)
+    evaluate.main(features, models, metrics_dir, summary_path, params_path)
 
     return {
         "raw": raw_path,
@@ -226,6 +235,30 @@ def test_the_gate_reports_every_success_criterion(pipeline, params):
         for criterion in evaluate.CRITERIA:
             assert f"{criterion}_measured" in record
             assert f"{criterion}_passed" in record
+
+
+def test_the_metrics_artefacts_say_which_data_and_which_estimator_produced_them(pipeline, params):
+    # No `req` marker: this asserts the shape of the artefacts, not a requirement.
+    # It exists because of a real defect rather than for completeness. Before the
+    # `evaluate` stage was implemented, `metrics.json` carried one MdAPE under all
+    # four variant names, computed by a constant-median stub on generated rows,
+    # and nothing in the file said either of those things - so `dvc metrics show`
+    # read as a model result. This run is on the stand-in, and these are the two
+    # fields that have to say so.
+    summary = json.loads(pipeline["summary"].read_text())
+    assert summary["data_source"] == download_raw_dataset.SYNTHETIC
+
+    for variant, settings in params["train"]["variants"].items():
+        record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
+        assert record["data_source"] == download_raw_dataset.SYNTHETIC, variant
+        # Read out of the bundle rather than out of params, because what the
+        # metrics have to name is the estimator that answered. The stub era is
+        # the case that makes the distinction real: it wrote `constant_median`
+        # beside the `median_baseline` the variant had asked for.
+        fitted = json.loads((pipeline["models"] / variant / "model.json").read_text())["estimator"]
+        assert record["estimator"] == fitted, variant
+        assert summary["variants"][variant]["estimator"] == fitted, variant
+        assert fitted == settings["estimator"], variant
 
 
 @pytest.mark.req("NFR-01")

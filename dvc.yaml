@@ -243,6 +243,12 @@ stages:
       - data/processed/features
       - models
     params:
+      # `download.source` is declared because the stage reads it: it writes the
+      # resolved value into `metrics.json`, so a reader of `dvc metrics show`
+      # sees which data the numbers were measured on. Changing the source
+      # already reruns this stage through the chain; declaring it is what keeps
+      # the recorded value from being able to disagree with the lock.
+      - download.source
       - train.variants
       - evaluate
     outs:
