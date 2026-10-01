@@ -108,7 +108,7 @@ The report describes this check as part of the data decisions.
   The raw file itself contains this PII. **[decided]** The `download` stage fetches it from the pinned Zenodo DOI and keeps it as a gitignored local cache under `data/external/`, so we do not track or re-publish the CSV (EDN-35, EDN-36, [Data versioning](data-versioning.md)). **[decided]** The Parquet the stage derives from it keeps the same PII columns, because preprocessing needs them to build the split's group key, and it is pushed to our DagsHub remote, which is public (EDN-20), so we accept that those columns are re-published in that format; the identical data is already public on Zenodo (EDN-34). The PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08.
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
-- **Price in the description:** about 7 % of descriptions contain the exact listing price (6.85 % measured on 2026-09-29).
+- **Price in the description:** about 7 % of all rows have the exact listing price in `description` (6.8 % matched as a whole number; a plain substring match gives 6.9 %, because it also counts a price that is only part of a longer number, see the [profiling notebook](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/notebooks/1.0-lh-dataset-card-profiling.ipynb)).
   How many contain any currency amount depends entirely on the pattern used (29 % for a currency token next to digits, 39 to 44 % for separator-formatted numbers depending on how the number is bounded), so we do not quote a single figure for it.
   Strip currency and number patterns before any text feature.
 - **Duplicates:** `vin` is only 34 % filled, so VIN-based deduplication is not enough.
@@ -216,12 +216,14 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 - **Alibi Detect 0.13** requires numpy<2 and pandas<3 and pulls in transformers, opencv and scikit-image.
   It must run in its own container, never in the API image.
   Its license is Business Source License 1.1 (free for non-production use); mention this in the report.
-- **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9.
-  Run it isolated with `uvx pynblint`, not as a project dependency.
+- **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9, so it is never a project dependency.
+  It pins typer but not click, and typer 0.12 crashes on click 8.2 and newer (released 2025-05-10) on every Python version, so a bare `uvx pynblint` does not run at all.
+  **[decided]**, [EDN-64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): it runs from its own locked environment in `tools/pynblint-env/` (`pynblint==0.1.6`, `click<8.2`, a hash-verified `uv.lock` of its own) via `make notebook-lint`.
+  It exits 0 whatever it finds, so `tools/notebook_lint.py` reads its JSON report and is the gate; the rules it enforces are the table in [Notebooks](notebooks.md#pynblint-rules) (EDN-65).
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
   It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
-- **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8".
+- **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8", and ruff lints the code cells of the notebooks too, while Pynblint checks their structure.
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 
 ## 7. Milestones

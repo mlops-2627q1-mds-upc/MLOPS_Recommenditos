@@ -41,12 +41,15 @@ pre-commit install
 ## Before opening a PR
 
 ```bash
-make format   # ruff format + fix
-make lint     # ruff format --check + ruff check
-make test     # pytest, which also reports the coverage of recommenditos/
+make format         # ruff format + fix
+make lint           # ruff format --check + ruff check
+make test           # pytest, which also reports the coverage of recommenditos/
+make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
 
 `make lint` runs the same ruff rules as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+
+`make notebook-lint` is exactly what CI's `Notebook lint (Pynblint)` job runs, and the rules it enforces are the table in [docs/docs/notebooks.md](docs/docs/notebooks.md#pynblint-rules).
 
 `make test` prints a coverage table; CI puts the same table in the summary of its test job.
 There is no coverage gate on a PR, so a number below 80 % does not fail anything.

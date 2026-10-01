@@ -61,6 +61,47 @@ jobs:
           python-version: "3.12"
       - uses: pre-commit/action@v3.0.1
 
+  # NFR-07 asks for notebooks that pass the agreed checks without findings. Which
+  # Pynblint rules those are, and why the others are excluded, is the table in
+  # docs/docs/notebooks.md, and tools/notebook_lint.py gates on exactly that table.
+  #
+  # No paths filter, for the reason the traceability job gives: the report cites
+  # this summary on the delivery commit, whatever that commit touches. It runs in
+  # seconds, with no project sync, no data and no credentials.
+  notebook-lint:
+    name: Notebook lint (Pynblint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          # The default cache key is the one the test, traceability and docs jobs
+          # share, and this job, finishing first, would save a cache holding only
+          # Pynblint's environment under it. That environment installs cold in a
+          # few seconds anyway.
+          enable-cache: false
+      # Writes the report first and fails afterwards, so the two steps below
+      # still publish what made the job red.
+      - name: Lint every notebook
+        run: make notebook-lint
+      - name: Publish the notebook lint to the job summary
+        if: always()
+        run: |
+          if [ -f reports/notebook-lint.md ]; then
+            cat reports/notebook-lint.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## The notebook lint could not run, see the job log.' \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: notebook-lint
+          path: |
+            reports/notebook-lint.md
+            reports/notebook-lint.json
+
   test:
     name: Tests
     needs: changes

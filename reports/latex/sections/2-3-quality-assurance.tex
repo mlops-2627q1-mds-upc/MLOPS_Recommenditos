@@ -49,24 +49,44 @@ The figures themselves do not exist yet:
   \textbf{Template:} e.g.\ pylint.\\
   \textbf{Rubric (10 pts, shared with model and data testing):} To what degree does our linting contribute to the overall quality and consistency of the codebase?\\
   The lab lists Pynblint (notebook and repository QA), Pylint or flake8.
-  We run ruff through pre-commit and CI; the demo additionally enables Pylint rules in ruff (\texttt{PL}), which our config does not yet.
+  We run ruff through pre-commit and CI; the demo additionally enables Pylint rules in ruff (\texttt{PL}), which our config does too.
 }
 
 Static analysis is ruff, as both linter and formatter, with the rule set \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import sorting and the Pylint-derived rules that cover the rubric's \enquote{Pylint or flake8}.
 The line length is 99, first-party imports are declared so that import order is deterministic, and the whole configuration lives in \texttt{pyproject.toml} rather than in a separate file per tool.
-On the commit this report was built from, \texttt{ruff format --check} reports 49 files already formatted and \texttt{ruff check} reports no findings.
+Ruff also lints the code cells of every notebook, because its default discovery includes \texttt{.ipynb} files and the pre-commit hook runs on them.
+On the commit this report was built from, \texttt{ruff format --check} reports 62 files already formatted and \texttt{ruff check} reports no findings.
 
-The property we cared about is that the three places it runs cannot disagree: a pre-commit hook locally, the same pre-commit configuration in CI, and \texttt{make lint} over the same files, so a green \texttt{make lint} means a green CI lint job rather than a different opinion.
-That is also why the configuration deliberately has no \texttt{include} key, which ruff does not apply to paths passed explicitly, as pre-commit does, and which would therefore make a local \texttt{ruff check} blind to files CI still lints.
+Enabling the full rule set found two things.
+The rules themselves produced exactly five findings, all \texttt{PLR2004} on the same Cookiecutter placeholder line in the five CLI stubs; the line was removed and the rule stayed enabled.
+The more important finding was about the configuration: its \texttt{include} key limited \texttt{make lint} to \texttt{recommenditos/}, but ruff does not apply \texttt{include} to paths passed explicitly, as pre-commit passes them, so CI linted \texttt{tests/} and \texttt{notebooks/} while the command every contributor runs locally did not.
+The property we cared about since is that the three places ruff runs cannot disagree: a pre-commit hook locally, the same pre-commit configuration in CI, and \texttt{make lint} over the same files, so a green \texttt{make lint} means a green CI lint job rather than a different opinion.
+That is why the configuration deliberately has no \texttt{include} key.
 
 Two exclusions exist and both are justified in the configuration itself rather than left for a reader to wonder about.
 \texttt{reports/analysis/} is excluded because those scripts are the evidence behind EDN entries and are kept exactly as they were run; reformatting them would change what an entry points at.
 \texttt{PLR2004}, the magic-value rule, is ignored under \texttt{tests/} because asserting against a literal expected value is what an assertion is, while the rule earns its place in \texttt{recommenditos/}, where a bare threshold should get a name.
 
-Notebook quality is the gap.
-Pynblint is the tool the lab lists for it, it cannot be a project dependency because it pins \texttt{typer<0.13} and \texttt{ipython<9} against our own versions, and it therefore has to run isolated through \texttt{uvx}.
-It is not in CI yet, and \texttt{notebooks/} currently holds no notebook, so there is nothing for it to find today; wiring it in is issue \#41.
-\tbd{the Pynblint setup and its findings on the notebooks that exist by the delivery (issue \#41)}
+\paragraph{Notebooks: ruff, Pynblint and nbstripout (EDN-64, EDN-65).}
+Our notebook is the exploratory analysis behind the dataset card: it recomputes the card's 174 checked figures from the pinned source file through the pipeline's own functions, and in doing so found two statements the card had wrong, which the card now corrects.
+Three tools look at it, and each answers a different question: ruff checks the code in its cells, Pynblint checks its structure and narrative, and nbstripout removes outputs, execution counts and metadata on every commit, which also keeps rows of a dataset with personal data out of git.
+
+Pynblint 0.1.6 \cite{quaranta2022pynblint} could not run the way the plan said, through a bare \texttt{uvx}: it pins \texttt{typer<0.13} but not click, and click 8.2 crashes that typer on every Python version.
+It therefore runs from a locked environment of its own in \texttt{tools/pynblint-env/}, every package pinned and hash-checked, apart from the project's lock, whose \texttt{typer} and \texttt{ipython} it would conflict with.
+It also exits 0 whatever it finds, so a CI step that only ran it could never fail.
+\texttt{tools/notebook\_lint.py} is the gate: it runs Pynblint with a sanitised environment, because Pynblint reads its settings from unprefixed environment variables, reads the JSON report and fails on any finding.
+CI runs \texttt{make notebook-lint}, so a green local run means a green job.
+
+The policy is a table of all 22 rules in the documentation, and the gate reads that table rather than a copy of it, refusing to run unless it classifies exactly the rules the installed version has.
+Thirteen rules are enforced at their default thresholds.
+Three are excluded because nbstripout removes the execution counts they read, so on a committed notebook they would either always fire or never fire; that the notebook runs top to bottom is shown by running it with \texttt{make notebook-run} instead, which stays out of CI because it needs the 548\,MB source file.
+The five repository-level rules are not run, because each tests a property something else here enforces more strongly, for example a \texttt{.coverage} file where CI measures and publishes the coverage of every run; the last rule is off by default.
+There is no warning tier and no waiver: a rule that is wrong for us is excluded in the table, with its reason, in a reviewed pull request.
+
+Pynblint bit on its first run.
+The notebook as first drafted had five code cells over the 30-line limit, which were restructured rather than the limit raised, and the stripped copy that is committed tripped only \texttt{non-executed-notebook}, which is the measurement behind excluding the execution rules.
+On the commit this report was built from it reports no findings on the one notebook.
+Its rules are heuristics with known blind spots, for example an import rule that does not see \texttt{from x import y}, and the documentation states each next to its rule.
 
 \subsubsection{Model testing}
 \label{sec:m3-model-testing}

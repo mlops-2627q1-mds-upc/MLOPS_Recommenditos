@@ -1859,6 +1859,108 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #57: the four options were laid out against the existing docstring's 24-leaf constraint, and the fixture's mislabelling was found by asking what `params["download"]["source"]` would resolve to inside the test run rather than inside the pipeline.
 - **Other evidence:** [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py), `gate_summary` and `_evaluate_variant`; `tests/test_pipeline.py::test_the_metrics_artefacts_say_which_data_and_which_estimator_produced_them`; `metrics.json`; [EDN-12](#edn-12-retraining-and-promotion-are-human-triggered-not-automated), [EDN-33](#edn-33-a-generated-synthetic-fixture-and-a-downloadsource-parameter-so-the-skeleton-runs-without-the-raw-file); [issue #57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57).
 - **In LaTeX:** no
+
+### EDN-64: Pynblint runs from its own locked environment, and a wrapper that reads its JSON report is the gate
+
+- **Date:** 2026-10-01
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Static Analysis, CI/CD
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** Pynblint 0.1.6 runs from a dedicated tool environment in `tools/pynblint-env/`, with its own `pyproject.toml` (`pynblint==0.1.6`, `click<8.2`, Python 3.12) and its own hash-verified `uv.lock`, invoked as `uv run --project tools/pynblint-env --locked`.
+  A stdlib-only wrapper, `tools/notebook_lint.py`, runs inside that environment, lints each notebook, reads Pynblint's JSON report and is what fails the build, because Pynblint itself exits 0 whatever it finds.
+  `make notebook-lint` is the one command, and the CI job `Notebook lint (Pynblint)` runs exactly that target.
+- **Alternatives considered:**
+  - **Option A (chosen): a locked tool environment, plus a wrapper that is the gate.**
+    Pros: all 64 packages are pinned and their hashes verified, so the tool cannot change under us; `--locked` fails when the `pyproject.toml` and the lock drift apart; the root `uv.lock` is untouched and the directory is not a workspace member; it is the only option that gives Dependabot a file to read.
+    The wrapper runs Pynblint with an allowlisted environment in an empty working directory, so no stray variable or `.pynblint` file can reconfigure it, and it fails loudly when Pynblint crashes instead of reading a crash as a clean run.
+    Cons: two more files, one of them a generated 75 KB lock, a wrapper of its own with tests, and a deviation from the issue's literal "via `uvx pynblint`".
+  - **Option B: `uvx --python 3.12 --with 'click==8.1.8' pynblint==0.1.6`.**
+    Pros: one line, and the closest to what the issue asked for.
+    Cons: about 59 transitive dependencies float, and that is exactly how the tool broke: a click release nobody chose crashed it, so CI can turn red on a pull request that changed nothing near it, and a run cannot be reproduced later.
+  - **Option C: the same, plus `--exclude-newer <date>`.**
+    Pros: the whole resolution is frozen in time, still in one line.
+    Cons: no hash verification, a magic date in the Makefile, and no lock file for the dependency graph or Dependabot to see.
+  - **Option D: a hashed requirements file passed to `uvx -c`.**
+    Pros: looks like a lock without a second project.
+    Cons: `uvx` silently ignores the hashes; a deliberately tampered hash still ran with exit 0, while `uv pip install -r` on the same file failed with "Hash mismatch".
+  - **Option E: a pre-commit hook with `additional_dependencies`.**
+    Pros: feedback at commit time, and CI's existing lint job would run it.
+    Cons: the dependencies float as in option B, and the raw hook reported "Passed" on a notebook with findings, so it needs the same wrapper anyway.
+  - **Option F: a dependency group in the root project, kept apart with uv's `conflicts`.**
+    Pros: one lock file for everything.
+    Cons: it ties our lock to an unmaintained tool's `typer<0.13` and `ipython<9`, and every resolution of the project would carry that weight.
+  - **For the gate: `jq -e` over the JSON in the Makefile, or the wrapper run in the project environment.**
+    Pros: `jq` needs no code; the project environment would let the wrapper use typer and loguru like `tools/requirement_matrix.py`.
+    Cons: `jq` is not on every contributor's machine and prints no reasons; the project environment would make a seconds-long CI job install mlflow, lightgbm and DVC just to lint.
+- **Rationale:** The decision rests on three measured facts about Pynblint 0.1.6, each reproduced rather than read from its documentation.
+  First, it does not run as the issue proposed: it pins `typer<0.13` but not click, and typer 0.12 crashes on click 8.2 and newer (released 2025-05-10) with `TypeError: Secondary flag is not valid for non-boolean flag`, on Python 3.12, 3.13 and 3.14 alike.
+  A tool that broke once through a dependency nobody pinned should not be run in a way that lets it break again, which rules out options B and E and makes the lock worth its two files.
+  Second, it exits 0 with findings: a notebook with eleven findings still returned 0 in both file and directory mode, so a CI step that only runs it can never fail and something has to read the report.
+  Third, its configuration leaks in from outside: its settings are read from environment variables with no prefix, so an ordinary `INCLUDE=/usr/include` crashed a run with a validation error, and a `.pynblint` file in the current directory reconfigures it silently.
+  The wrapper is the smallest thing that answers all three: it pins nothing itself, it isolates the process, and its exit code is the finding count.
+  It is stdlib only so that it can run in the tool environment, which keeps the CI job free of the project's own dependencies.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI did the experiments the decision rests on: it reproduced the click crash and pinned it to click rather than to the Python version, measured the exit code with findings, found that `uvx -c` ignores hashes by tampering with one, and timed every isolation option cold and warm.
+  It also found that the issue's own premise, "run it isolated via `uvx pynblint`", did not work as written.
+  AI then laid out options A to F with a recommendation, and the owner chose A.
+  The wrapper and its tests were generated by AI test-first and reviewed before merging.
+- **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #41: a research run on Pynblint 0.1.6 in a scratch directory (rule catalogue, configuration, exit codes, isolation options with timings), then an architecture pass that turned the measurements into options with pros and cons; the owner was given the isolation and gate options with these measurements and chose the locked environment with the wrapper.
+- **Other evidence:** [`tools/pynblint-env/pyproject.toml`](../tools/pynblint-env/pyproject.toml), [`tools/notebook_lint.py`](../tools/notebook_lint.py), `tests/test_notebook_lint.py`, the `Notebook lint (Pynblint)` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); [EDN-65](#edn-65-the-pynblint-policy-enforce-what-can-fire-on-a-committed-notebook-and-show-execution-by-running-it); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41).
+- **In LaTeX:** no
+
+### EDN-65: The Pynblint policy: enforce what can fire on a committed notebook, and show execution by running it
+
+- **Date:** 2026-10-01
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Static Analysis, Testing Strategy
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** Of Pynblint 0.1.6's 22 rules, 13 are enforced at their default thresholds and 9 are excluded, each with its reason, in the table in [Notebooks](../docs/docs/notebooks.md#pynblint-rules).
+  That table is the configuration: the gate reads it, and refuses to run unless it classifies exactly the rules the installed Pynblint has.
+  The three rules that read execution counts are excluded, because nbstripout removes those counts on every commit, and that a notebook runs top to bottom is shown by running it with `make notebook-run` instead.
+  The five repository-level rules are not run, each with the reason and with what enforces the same property here.
+  Pynblint lints every notebook git would commit, one file at a time, and a rule of our own requires every notebook to sit directly in `notebooks/` under the Cookiecutter name `<number>.<version>-<initials>-<description>.ipynb`.
+  There is no warning tier and no per-notebook waiver: a finding fails the build, and a rule that is wrong for us is excluded in the table, with its reason, in a reviewed pull request.
+- **Alternatives considered:**
+  - **Option A (chosen): exclude the execution rules, keep nbstripout as it is, and evidence execution by running the notebook.**
+    Pros: nbstripout 0.9.1 sets every `execution_count` to null, so on a committed notebook `non-executed-notebook` always fires, `non-linear-execution` can never fire, and `non-executed-cells` fires only on an empty code cell and then flags every cell; enforcing them would either keep the build red forever or claim checks that do not happen.
+    Stripping also keeps rows of a dataset with personal data out of git (NFR-08), which is more than diff hygiene.
+    Cons: execution is not gated in CI; `make notebook-run` is a local drill, because the notebook needs the 548 MB source file.
+  - **Option B: `nbstripout --keep-count`, so the three rules have something to read.**
+    Pros: three more live rules.
+    Cons: execution counts churn in every diff, and they record what one kernel once did, not that a fresh kernel runs the notebook: an edited cell that was never re-run keeps its old count.
+    Every edit would need a full re-run on the source file before committing, and an editor that writes no counts trips the rules.
+  - **Option C: scan the repository root and run the repository rules.**
+    Pros: the literal reading of "notebook and repository QA".
+    Cons: `repository-not-versioned` looks for a `.git` directory and fires in every git worktree, which is how this team works; locally the scan walks `.venv` and other worktrees and lints other branches' stale notebook copies; `test-coverage-data-not-available` depends on whether the tests ran in that checkout.
+    Each repository rule is about a property something else here already enforces more strongly, which the table says rule by rule.
+  - **Option D: scan the `notebooks/` directory.**
+    Pros: one command, no file list.
+    Cons: three structural false positives to exclude, untracked scratch files get linted, and a notebook committed anywhere else escapes the scan.
+  - **Option E: the policy in a commented `.pynblint` file.**
+    Pros: Pynblint's own configuration format.
+    Cons: it is read only from the current directory and is overridden by environment variables, its reasons are comments nothing checks, and a misspelt rule name is accepted silently, so an exclusion with a typo excludes nothing and says nothing.
+  - **Option F: raise `cell-too-long` or `notebook-too-long` so the first notebook passes.**
+    Pros: no restructuring.
+    Cons: it is the threshold adjusted to its result that EDN-62 rejects; the reason would be the notebook, not the rule.
+  - **Option G: report the excluded rules as non-blocking warnings.**
+    Pros: nothing is hidden.
+    Cons: Pynblint has no severities, and a warning tier is exactly the "findings nobody acts on" the issue warns about.
+- **Rationale:** A rule is enforced where it can fire on what we commit, and excluded where it cannot, with the reason written next to it.
+  That principle is what keeps the gate honest in both directions: nothing it reports is noise, and nothing it lists as checked is unchecked.
+  It also bit on the first run: the dataset card's profiling notebook, as first drafted, had five code cells over 30 lines, and they were restructured into shorter cells with precomputed values rather than the threshold being raised, so the notebook stayed within the 50-cell limit as well.
+  On the stripped copy that is committed, the only rule that fired was `non-executed-notebook`, which is the measurement behind excluding the execution rules.
+  Making the documentation table the configuration follows the pattern of the requirement matrix, which reads the requirements and the specification rather than a copy of them: the reasons cannot drift from what the gate does, and a rule a future Pynblint adds or renames stops the build until someone decides about it.
+  Exclusion-based rather than include-based, because a typo in an exclusion fails safe, the rule still runs, while a typo in an inclusion would silently check nothing.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI read the Pynblint 0.1.6 source and tested every rule on purpose-built notebooks, stripped and unstripped, which is how the interaction with nbstripout was found rule by rule rather than assumed; it also found the blind spots the table now states as caveats.
+  It proposed the policy, the docs-as-configuration design and the location rule, and laid out options A to G; the owner chose A for the execution rules and the docs table as the policy.
+  The notebook's own first findings are evidence about the notebook, not about AI: they were fixed in the notebook, as the policy says.
+- **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #41: a rule-by-rule experiment on stripped and unstripped sample notebooks, an architecture pass that produced the policy table and options A to G, and the owner's choice among them.
+- **Other evidence:** [Notebooks](../docs/docs/notebooks.md), the rule table; [`notebooks/1.0-lh-dataset-card-profiling.ipynb`](../notebooks/1.0-lh-dataset-card-profiling.ipynb); `tests/test_notebook_lint.py`; [specification](../docs/docs/specification.md) NFR-07; [EDN-64](#edn-64-pynblint-runs-from-its-own-locked-environment-and-a-wrapper-that-reads-its-json-report-is-the-gate); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41).
+- **In LaTeX:** no
+
 ## Template
 
 ```markdown
