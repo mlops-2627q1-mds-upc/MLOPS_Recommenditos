@@ -18,11 +18,12 @@ This stage partitions; it does not filter. Every row of the interim frame lands
 in exactly one of the five artefacts, which is what makes "the split loses no
 row" a testable invariant instead of a hope, and what keeps EDN-05's threshold
 revisitable without re-running the split. The supported-make list is therefore
-a *record* here, and the stages that turn a set into model input are where it
-has to be applied: problem-spec section 5 describes the split as removing
-nothing but `ES`, while section 2 scopes the *model* to the supported makes.
-What the downstream stages owe as a result is written down in
-`docs/docs/pipeline.md` under "Known gaps", not only in issue #35's pull
+a *record* here, and `features` is where it is applied, to every frame and
+before the vocabulary is built (EDN-48, EDN-67): problem-spec section 5
+describes the split as removing nothing but `ES`, while section 2 scopes the
+*model* to the supported makes. Which stage applies the list, which ones check
+it and which tests hold each guarantee is written down in
+`docs/docs/pipeline.md` under "The supported makes", not only in a pull
 request, because a squash-merge commit message is not somewhere anyone looks.
 
 The holdout is selected per row, so "every `ES` row is held out" wins over "no

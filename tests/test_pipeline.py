@@ -207,22 +207,24 @@ def test_the_reported_population_is_the_served_population(pipeline, params):
     # describe a population the product does not serve and cannot be compared
     # with the reference values of problem-spec section 8, which are all
     # post-filter. Asserted here rather than in tests/test_model.py because it is
-    # a property of the two stages agreeing, not of one model.
+    # a property of the stages agreeing, not of one model.
+    #
+    # Counted on the test frame `split` wrote, which still holds every make,
+    # rather than on the matrix: `features` restricts the matrix (EDN-67), so the
+    # matrix alone cannot show that anything was removed.
     supported = {
         entry["make"]
         for entry in json.loads((pipeline["processed"] / "supported_makes.json").read_text())[
             "supported_makes"
         ]
     }
+    test = pd.read_parquet(pipeline["processed"] / "test.parquet", columns=["make"])
+    expected = int(test["make"].isin(supported).sum())
+    assert 0 < expected < len(test), (
+        "the fixture has to hold both supported and unsupported makes, or this test cannot fail"
+    )
     for variant in params["train"]["variants"]:
-        model = json.loads((pipeline["models"] / variant / "model.json").read_text())
         record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
-        test = pd.read_parquet(pipeline["features"] / model["feature_set"] / "test.parquet")
-        expected = int(test["make"].isin(supported).sum())
-        assert 0 < expected < len(test), (
-            "the fixture has to hold both supported and unsupported makes, "
-            "or this test cannot fail"
-        )
         assert record["n_test_rows"] == expected, variant
 
 

@@ -77,6 +77,19 @@ an engine letter - and what range `weight_kg` covers once parsed out of its text
 `extended_features_results.txt` is the output of the run cited in EDN-41, the model card and the
 dataset card (2026-09-30).
 
+## The feature space over the served makes (EDN-67, model card)
+
+`served_vocabulary.py` builds the `features` stage's vocabulary twice from the same `split` output,
+once over every training row and once over the training rows of the supported makes, and reports
+the level counts, the equipment columns, the `model_version` levels and their coverage at both
+floors `params.yaml` quotes, and the rows each frame keeps.
+It is the before-and-after of moving the supported-make filter in front of the vocabulary (issue #63).
+Like `split_gate.py` it imports the stage's own functions, so it runs from the repository root, and
+it reads the `split` artefacts under `data/processed/` rather than the raw CSV, so `dvc pull` is all
+it needs.
+`served_vocabulary_results.txt` is the output of the run cited in EDN-67, the model card and
+`params.yaml` (2026-10-05).
+
 ## The preprocess row funnel (dataset card, issue #34)
 
 `preprocess_funnel.py` reports how many listings each row rule of the `preprocess` stage removes

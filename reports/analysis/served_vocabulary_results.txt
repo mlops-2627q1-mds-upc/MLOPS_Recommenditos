@@ -1,0 +1,34 @@
+# uv run python reports/analysis/served_vocabulary.py, run 2026-10-05 on the split artefacts of dvc.lock at abea241
+features block: {"equipment_columns": ["equipment_comfort", "equipment_entertainment", "equipment_extra", "equipment_safety"], "equipment_min_frequency": 0.01, "model_version_tokens": 1, "model_version_min_frequency": 0.0005}
+supported makes (11): BMW, Porsche, Mercedes-Benz, Audi, Alfa Romeo, Suzuki, Volvo, Honda, Hyundai, Aston Martin, Volkswagen
+
+rows per frame, all against served
+  train         61,180 ->  60,378  (802 removed)
+  validation     8,992 ->   8,859  (133 removed)
+  calibration    9,169 ->   8,987  (182 removed)
+  test          19,985 ->  19,665  (320 removed)
+  holdout_es     6,079 ->   5,979  (100 removed)
+
+== all training rows: 61,180
+  categorical levels: {'make': 25, 'model': 561, 'body_type': 9, 'fuel_category': 9, 'transmission': 3, 'drive_train': 3, 'country_code': 7, 'seller_type': 2, 'body_color': 14, 'paint_type': 2, 'upholstery': 6, 'upholstery_color': 11, 'model_version': 279, 'envir_standard': 11, 'original_market': 29}
+  make levels: Alfa Romeo, Aston Martin, Audi, BMW, BYD, Bugatti, Dongfeng, Ford, Honda, Hyundai, Kia, Maserati, Maybach, Mercedes-Benz, Mitsubishi, Opel, Porsche, Renault, Rolls-Royce, SsangYong, Suzuki, Tesla, Volkswagen, Volvo, smart
+  equipment_comfort: 43 of 45 items get a column
+  equipment_entertainment: 16 of 16 items get a column
+  equipment_extra: 38 of 49 items get a column
+  equipment_safety: 36 of 36 items get a column
+  equipment columns: 133 of 146 items
+  model_version at floor 0.0005: 279 levels covering 85.9% of the rows
+  model_version at floor 0.001: 167 levels covering 78.1% of the rows
+  extended matrix columns: 164
+
+== served training rows: 60,378
+  categorical levels: {'make': 11, 'model': 437, 'body_type': 9, 'fuel_category': 9, 'transmission': 3, 'drive_train': 3, 'country_code': 7, 'seller_type': 2, 'body_color': 14, 'paint_type': 2, 'upholstery': 6, 'upholstery_color': 11, 'model_version': 278, 'envir_standard': 11, 'original_market': 29}
+  make levels: Alfa Romeo, Aston Martin, Audi, BMW, Honda, Hyundai, Mercedes-Benz, Porsche, Suzuki, Volkswagen, Volvo
+  equipment_comfort: 43 of 45 items get a column
+  equipment_entertainment: 16 of 16 items get a column
+  equipment_extra: 38 of 49 items get a column
+  equipment_safety: 36 of 36 items get a column
+  equipment columns: 133 of 146 items
+  model_version at floor 0.0005: 278 levels covering 86.5% of the rows
+  model_version at floor 0.001: 167 levels covering 78.8% of the rows
+  extended matrix columns: 164
