@@ -165,8 +165,9 @@ features:
     - equipment_extra
     - equipment_safety
   # An equipment item becomes its own column only above this share of the
-  # training rows, so the matrix does not grow a tail of near-constant columns.
-  # It keeps 133 of the 146 items the training rows hold.
+  # training rows of the supported makes (EDN-67), so the matrix does not grow a
+  # tail of near-constant columns. It keeps 133 of the 146 items those rows hold,
+  # the same 133 as over every training row (2026-10-05).
   equipment_min_frequency: 0.01
   # `model_version` is free text truncated at 50 characters, multilingual and
   # full of marketing: 80,332 distinct values over the 105,405 scoped listings,
@@ -175,15 +176,16 @@ features:
   # distinct values, two leaves 18,248.
   model_version_tokens: 1
   # A normalised trim becomes a level only above this share of the training
-  # rows. Below it the value is missing rather than a level of its own, the same
-  # treatment any absent value gets (EDN-15). One token at this threshold keeps
-  # 279 levels covering 85.9 % of the training rows; at 0.001 it keeps 167
-  # covering 78.1 %.
+  # rows of the supported makes. Below it the value is missing rather than a
+  # level of its own, the same treatment any absent value gets (EDN-15). One
+  # token at this threshold keeps 278 levels covering 86.5 % of those rows; at
+  # 0.001 it keeps 167 covering 78.8 % (2026-10-05).
   #
   # Both values are coarse on purpose and the ladder is meant to sweep them: the
   # leading token names the body style for some makes and the engine letter for
-  # others, which merges heavily (EDN-41). The measurements behind these numbers,
-  # and the rejected finer alternatives, are in the model card and in
+  # others, which merges heavily (EDN-41). The counts above are measured by
+  # reports/analysis/served_vocabulary.py; the merging and the rejected finer
+  # alternatives are in the model card and in
   # reports/analysis/extended_features.py (2026-09-30).
   model_version_min_frequency: 0.0005
 
