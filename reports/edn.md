@@ -1985,28 +1985,30 @@ How to add an entry:
 - **Participants:** @lukas2510, decided by the repository owner
 - **Decision:** The `features` stage restricts all five frames it reads - train, validation, calibration, test and the `ES` holdout - to the makes `data/processed/supported_makes.json` names, and does so before any training-derived vocabulary or statistic is computed.
   That discharges the first and second of the four guarantees EDN-48 left to the downstream stages, in one place.
-  The holdout matrix therefore holds 5,979 of the 6,079 `ES` rows: the 100 it loses are exactly the listings the API answers with a 422 under FR-04, so the M6 replay sends only traffic the model can serve.
+  The holdout matrix therefore holds 5,979 of the 6,079 `ES` rows: the 100 it loses are exactly the listings the API answers with a 422 under FR-04, so the matrix is the holdout as the model receives it.
+  It is not what M6 replays: a request cannot be rebuilt from a matrix, because the holdout's `country_code` is empty in every row (EDN-42) and `registration_date` has become `age_years`, both fields FR-01 requires.
+  The replay reads `data/processed/holdout_es.parquet`, which `split` still writes with all 6,079 rows, and has to filter to the supported makes itself or count the 100 refused requests as FR-04's 422s.
   As a consequence `train` and `evaluate` no longer filter at all; they check the property with `check_served_makes_only` and fail when it does not hold.
 - **Alternatives considered:**
   - **Option A (chosen): filter every frame in `features`, the holdout included, before the vocabulary.**
     Pros: the rule gets one owner, at the only point where it still decides the feature space, so the `make` levels (11 rather than 25), the `model` levels (437 rather than 561), the equipment threshold and the `model_version` floor are all shares of the population the product serves.
-    Obligations 1 and 2 close together, and the two consumers that have no ticket yet - the UC2 conformal calibration and the M6 replay - inherit a served population instead of each having to remember the filter.
-    The replayed population is the 5,979 rows EDN-14 measured NFR-11 on, so the drift evidence and the replay describe the same traffic.
-    Cons: the holdout matrix no longer holds every `ES` listing, so an M6 analysis of what the API refuses has to read `data/processed/holdout_es.parquet`, which `split` still writes losslessly, rather than the matrix.
+    Obligations 1 and 2 close together, and the UC2 conformal calibration, which has no ticket yet, inherits a served population instead of having to remember the filter.
+    Any model-side use of the holdout matrix - scoring it offline, or comparing encoded inputs for drift - is on the 5,979 rows the API would pass to the model, the population EDN-14 measured NFR-11 on.
+    Cons: the holdout matrix no longer holds every `ES` listing, so a model-side analysis that wants the refused rows has to start from `data/processed/holdout_es.parquet`, which `split` still writes losslessly.
     The vocabulary moves, so every model and every number in the model card had to be re-measured.
   - **Option B: restrict only the training rows the vocabulary is fitted on, and leave the holdout matrix unfiltered for the M6 ticket to decide.**
-    Pros: the smallest change to what the drift scenario sees, and it keeps the option of replaying refused requests to exercise the 422 path.
+    Pros: the smallest change to the holdout matrix, which would keep every `ES` row.
     Cons: it leaves obligation 1 open for calibration and the holdout, so the guarantee stays spread over stages and tickets that do not exist yet, which is the cost EDN-48 accepted and this ticket exists to remove.
-    And the raw holdout matrix would not even be raw: once the vocabulary is fitted on served rows, the 100 unserved rows are encoded with no `make` level at all, so the matrix would describe requests the model never receives, in an encoding that cannot say what they were.
-    Replaying them would produce 422s rather than predictions, mixing two populations into the replay's drift and error figures.
-    The 422 path is FR-04's, and FR-04's evidence is an API test, not the drift replay.
-- **Rationale:** The restriction belongs where the feature space is decided, and the holdout belongs inside it rather than beside it.
-  M6 replays the `ES` listings against the running API, and the API refuses an unsupported make with a 422 before the model is called (FR-04), so the traffic the monitored model receives is the 5,979 rows, not the 6,079.
-  That is also the population EDN-14 measured NFR-11 on, so A is the option under which the drift evidence and the replay describe the same thing.
-  Option B's one real advantage, being able to replay refused requests, is not lost either: `split` still writes `data/processed/holdout_es.parquet` with every `ES` listing, so the M6 ticket can read refused requests from there if it wants them, and the choice made here stays reversible.
+    And the raw holdout matrix would not even be raw: once the vocabulary is fitted on served rows, the 100 unserved rows are encoded with no `make` level at all, so the matrix would hold rows the model never receives, in an encoding that cannot say what they were.
+    Nor would it keep anything for M6: the replay cannot be built from a matrix under either option, and the split frame keeps the refused rows under both.
+- **Rationale:** The restriction belongs where the feature space is decided, and the holdout matrix belongs inside it rather than beside it.
+  The matrix is how the model sees the holdout, and the API refuses an unsupported make with a 422 before the model is called (FR-04), so what the model can ever receive from the `ES` listings is the 5,979 rows, not the 6,079 - the population EDN-14 measured NFR-11 on.
+  What M6 replays is a separate question this decision does not settle.
+  The replay is built from the split frame, because a matrix cannot be turned back into requests, and it must either apply the same list or count FR-04's 422s for the 100 refused rows; either way the drift and error figures it reports are about the 5,979 the model answers.
+  That is also why option B's apparent advantage, keeping refused requests replayable, is not one: they stay in `data/processed/holdout_es.parquet` under either option, so the choice made here stays reversible.
 
   **Interaction with EDN-42, checked on the real run.** The filter acts on rows by `make` and touches no other encoding, so the holdout's `country_code` is still missing in every one of its 5,979 rows, because `ES` is still not a training level, and the stage's warning about a column a split never fills still names `country_code` and nothing else.
-  What changes is the rest of the holdout matrix: before, its 100 unserved rows were encoded with make levels the model was never meant to serve; now every holdout row is one of the 11 training makes and none has a missing make, so `country_code` is the only input the model sees as unknown on a replayed request, which is the new-market signal EDN-42 chose to keep.
+  What changes is the rest of the holdout matrix: before, its 100 unserved rows were encoded with make levels the model was never meant to serve; now every holdout row is one of the 11 training makes and none has a missing make, so `country_code` is the only feature of the holdout matrix the model sees as unknown, which is the new-market signal EDN-42 chose to keep.
 
   **What it moved, measured on the real snapshot (2026-10-05, `reports/analysis/served_vocabulary.py` and the committed `dvc.lock`).** The `make` levels go from 25 to 11, the `model` levels from 561 to 437, and the `model_version` levels from 279 covering 85.9 % of the training rows to 278 covering 86.5 % of the served ones; the equipment vocabulary is the same 133 of 146 items either way, so neither matrix gains or loses a column.
   On the ladder, three of the four variants are unchanged to full precision: the `b0` and `b1` payloads are byte-identical, and `lgbm-basic` builds the same trees, with only the category codes inside its split bitsets renumbered.
@@ -2015,7 +2017,9 @@ How to add an entry:
 
   **Consequences for the other stages.** `train` and `evaluate` used to filter their own rows; the filter is now a check, `check_served_makes_only`, which refuses a matrix holding a make outside the list, a row with no make level, or a `make` level the list does not name.
   A second filter would never remove a row from matrices `features` wrote, and on any other matrices it would quietly repair the rows while keeping a feature space decided over another population, so the rule keeps one owner and its consumers check a property rather than an intention.
-  This changes behaviour only for inconsistent inputs - matrices from another run, a make list rewritten without rebuilding them, or a supported make that no training row holds - which used to be filtered silently and now fail with a message naming the state.
+  This changes behaviour only for inconsistent inputs - matrices from another run, or a make list rewritten without rebuilding them - which used to be filtered silently and now fail with a message naming the state.
+  One state is not an inconsistency and gets a failure of its own in `features`: a supported make that no training row holds, which `split` can produce because it counts support over all four sets, so after a change to `seed` or to the threshold every seller of a make can land outside train.
+  The API would accept that make while the model had never seen it, and only `features` can say why, so it refuses the state by name rather than leaving `train` to report matrices from another run.
   For the same reason the guard against an empty population moved into `features` and covers every frame: an empty matrix cannot even be read back, because Parquet keeps no levels for an empty categorical, so the downstream guards it replaces could no longer be reached.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
@@ -2023,8 +2027,11 @@ How to add an entry:
   Implementing it test first turned up two things the options had not anticipated.
   Once the vocabulary is fitted on served rows, an unfiltered holdout would encode its unserved rows with no make level at all, which takes away most of what option B was meant to preserve; and an empty matrix cannot be read back through Parquet, which is why the empty-population guard moved from `train` and `evaluate` into `features`.
   AI measured the accuracy effect rather than assuming it, and established why three variants did not move rather than reporting the unchanged numbers as a coincidence.
-  It also declined one instruction of the task: the task asked for `req("FR-04")` markers on the new tests, and AI left them unmarked with a comment, because FR-04 is the API's 422 and its specification cell names an API test, so by EDN-45 a pipeline test carrying the marker would report it verified by a route that does not exist yet.
+  An independent review of the pull request, also by AI, then corrected two points without changing the decision.
+  The first version of this entry argued that the filtered matrix is what M6 replays, which it cannot be, since a request cannot be rebuilt from a matrix; the replay reads the split frame, and the reasoning above says so.
+  And a supported make with no training row was only warned about in `features`, so the failure surfaced in `train` with advice that looped; `features` now refuses it by name.
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #63: the two options were laid out with the 5,979-of-6,079 holdout count and the EDN-42 interaction, and Lukas chose A.
+  The independent review of PR #71 on the same day found the replay argument and the untrained-make diagnosis, and reproduced the second with a training split holding only BMW against the list BMW and Audi.
   The measurement behind the numbers is `reports/analysis/served_vocabulary_results.txt` and the ladder re-run the committed `dvc.lock` records, tracked as one MLflow run per variant.
 - **Other evidence:** [issue #63](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/63); [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71); [`recommenditos/data/build_features.py`](../recommenditos/data/build_features.py) (`served_rows`, `check_served_makes_only`); `tests/test_features.py::test_every_frame_the_stage_writes_holds_only_supported_makes` and `::test_the_vocabulary_is_decided_by_the_served_training_rows_alone`; [`reports/analysis/served_vocabulary.py`](analysis/served_vocabulary.py) and its results file (2026-10-05); [pipeline docs](../docs/docs/pipeline.md), "The supported makes"; [model card](../docs/docs/model-card.md), "Feature space" and the ladder; [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one), [EDN-42](#edn-42-a-categorical-value-the-training-rows-never-saw-becomes-missing-and-the-holdouts-country-is-allowed-to-vanish), [EDN-48](#edn-48-split-records-the-supported-make-list-and-stays-a-lossless-partition-the-downstream-stages-apply-it).
 - **In LaTeX:** no

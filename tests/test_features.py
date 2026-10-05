@@ -787,9 +787,8 @@ def test_the_supported_make_list_is_read_as_names_and_not_as_its_entries(run_sta
     # `split` now computes a real list and refuses to write an empty one (#35), so
     # that case cannot arise from the only producer; what can still go wrong is
     # the shape. Each entry is `{"make": ..., "listings": ...}`, and reading the
-    # entries instead of the names satisfies the `len()` this stage needs today
-    # while silently matching nothing the first time a caller restricts on it -
-    # which is what EDN-48 leaves #36, #37 and #39 to do.
+    # entries instead of the names would satisfy `len()` and then match nothing
+    # in `served_rows`, which restricts every frame on it (EDN-67).
     run_stage(
         {"train": processed_frame([{"make": "BMW"}] * 4 + [{"make": "Audi"}] * 4)},
         supported_makes=["Audi", "BMW"],
@@ -914,6 +913,42 @@ def test_a_frame_with_no_supported_make_fails_the_stage(run_stage, name):
 
     with pytest.raises(ValueError, match=f"no {name} row is one of the 1 supported make"):
         run_stage(frames, supported_makes=[_SERVED_MAKE])
+
+
+def test_a_frame_that_was_empty_before_the_filter_is_not_blamed_on_the_make_list(run_stage):
+    # Two causes, two messages: a frame the filter emptied points at the make
+    # list, while a frame `split` wrote with no row at all points at `split`, and
+    # blaming the list there would send whoever reads it to the wrong stage.
+    frames = {
+        "train": processed_frame([{"make": _SERVED_MAKE}] * 4),
+        "calibration": processed_frame([{}]).head(0),
+    }
+
+    with pytest.raises(ValueError, match="calibration frame has no row at all") as raised:
+        run_stage(frames, supported_makes=[_SERVED_MAKE])
+    assert "make list" not in str(raised.value)
+
+
+def test_a_supported_make_the_training_split_does_not_hold_fails_the_stage(run_stage):
+    # A real state rather than a corrupted one: `split` counts support over all
+    # four sets, so a make can clear the threshold with every one of its sellers
+    # outside train, after nothing more than a change to `seed` or to
+    # `split.min_listings_per_make`. The API would accept that make while the
+    # model had never seen it. Letting the stage pass would push the failure to
+    # `train`, whose check can only say the matrices come from another run -
+    # advice that loops, because rebuilding them reproduces the same state.
+    frames = {
+        "train": processed_frame([{"make": _SERVED_MAKE}] * 4),
+        "validation": processed_frame([{"make": _SERVED_MAKE}, {"make": "Audi"}]),
+    }
+
+    with pytest.raises(ValueError) as raised:
+        run_stage(frames, supported_makes=[_SERVED_MAKE, "Audi"])
+
+    message = str(raised.value)
+    assert "Audi" in message
+    assert "no train row" in message
+    assert "seller" in message
 
 
 def _make_column(values: "list[str | None]", levels: "list[str]") -> pd.DataFrame:

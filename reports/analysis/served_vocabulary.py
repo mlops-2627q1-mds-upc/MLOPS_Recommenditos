@@ -75,4 +75,6 @@ for label, frame in populations.items():
             f"  model_version at floor {floor}: {len(levels)} levels covering "
             f"{trims.isin(levels.index).mean():.1%} of the rows"
         )
+    # The extended set's columns, less the four equipment lists, plus the multi-hot columns built
+    # from them, plus the two targets every matrix carries (`price` and `log_price`).
     print(f"  extended matrix columns: {len(columns) - len(vocabulary.equipment) + vocabulary.n_equipment_features + 2}")

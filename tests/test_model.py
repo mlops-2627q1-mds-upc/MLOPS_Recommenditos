@@ -899,9 +899,9 @@ def test_a_budget_early_stopping_never_reaches_is_recorded_as_the_trees_it_built
 ):
     """`best_iteration_` is 0 when early stopping never fired, and 0 means no trees.
 
-    Not a corner case: on the real snapshot `lgbm-basic` used all 1,000 trees and
-    `lgbm-extended` stopped at 996, so the budget is what binds there and this is
-    the branch that run takes. The fixture always early-stops, so the budget is
+    Not a corner case: on the real snapshot both LightGBM variants use all 1,000
+    trees (measured 2026-10-05), so the budget is what binds there and this is the
+    branch those runs take. The fixture always early-stops, so the budget is
     lowered here to reach it.
     """
     for name in REQUIRED_ENV_VARS:

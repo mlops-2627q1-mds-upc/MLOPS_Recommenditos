@@ -95,11 +95,12 @@ def read_matrices(
     metric - rare makes are harder, so a pooled figure over them is if anything
     pessimistic - but it makes the reported population a different one from the
     served population, and a number about cars nobody can ask about is not a
-    number about the product. That is the whole reason, and it is not a
-    comparability argument: problem-spec section 8's reference values were
-    measured on 96,831 listings with no make filter, so they describe a different
-    population than this one either way, and the model card labels its
-    cross-check against them as spanning two populations and two split schemes.
+    number about the product. It would also loosen the one external check the
+    numbers have: problem-spec section 8's reference values come from a run
+    whose documented scope is section 2's, supported makes included. That run's
+    code is not in the repository and it split 80/20 rather than 60/10/10/20, so
+    the model card reads the agreement with it as a cross-check, not as a
+    like-for-like comparison.
 
     `features` applies the list (EDN-67); this function only checks it, for both
     frames, because early stopping watches the validation split and a validation
