@@ -45,6 +45,20 @@ format:
 test:
 	uv run pytest
 
+# The API image installs `[project] dependencies` alone (EDN-47), so this builds
+# an environment with exactly that plus the `test` group and runs the serving
+# path from it. `--no-sync` because a plain `uv run` would install the default
+# groups into the environment this target exists to keep without them; and no
+# coverage, because one file's coverage of the package is not a number to read.
+SERVING_ENV = .venv-serving
+
+## Run the serving tests from the runtime dependencies alone, as CI does
+.PHONY: test-serving
+test-serving:
+	UV_PROJECT_ENVIRONMENT=$(SERVING_ENV) uv sync --locked --no-default-groups --group test
+	UV_PROJECT_ENVIRONMENT=$(SERVING_ENV) RECOMMENDITOS_SERVING_RUNTIME=1 \
+		uv run --no-sync pytest tests/test_serving.py --no-cov
+
 
 ## Set up Python interpreter environment
 .PHONY: create_environment

@@ -164,6 +164,8 @@ celerybeat.pid
 # Environments
 .env
 .venv
+# The runtime-only environment `make test-serving` builds (EDN-47).
+.venv-serving/
 env/
 venv/
 ENV/

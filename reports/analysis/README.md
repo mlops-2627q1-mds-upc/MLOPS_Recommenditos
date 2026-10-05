@@ -113,3 +113,16 @@ The scope of these scripts follows the pipeline: used cars only (EDN-04), listin
 after the age reference date dropped (EDN-22), the training price range, deduplicated before any
 split. Re-run them whenever a decision changes that scope, because their outputs are cited as
 EDN evidence.
+
+## The serving runtime's footprint (EDN-47)
+
+`runtime_footprint.py` builds two environments from `uv.lock` into a scratch directory: the full one a plain `uv sync` installs, and the runtime one the API image installs with `--no-default-groups`.
+It measures each one's site-packages as installed and after `compileall`, lists the largest distributions by the files their `RECORD` names, and then loads every committed bundle under `models/` in both environments and prices the first rows of its test matrix, so the runtime set is shown to serve rather than only to import.
+`runtime_footprint_results.txt` is the output of the run recorded in EDN-47 (2026-10-05).
+Its last two lines say which group packages the serving path imported: `tqdm` in the full environment, because `recommenditos/config.py` imports it when it can, and nothing in the runtime one, where it is absent and the import is skipped.
+
+Unlike the scripts above it needs no raw dataset, only `models/` and `data/processed/features/`, so run it after `dvc pull`, from the repository root:
+
+```bash
+uv run python reports/analysis/runtime_footprint.py /tmp/footprint
+```

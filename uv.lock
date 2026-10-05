@@ -2743,62 +2743,84 @@ name = "recommenditos"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
-    { name = "coverage" },
-    { name = "dvc" },
-    { name = "ipython" },
     { name = "joblib" },
-    { name = "jupyterlab" },
     { name = "lightgbm" },
     { name = "loguru" },
-    { name = "matplotlib" },
-    { name = "mkdocs" },
-    { name = "mlflow" },
-    { name = "nbstripout" },
-    { name = "notebook" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "pip" },
-    { name = "pre-commit" },
     { name = "pyarrow" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "requests" },
-    { name = "ruff" },
     { name = "scikit-learn" },
-    { name = "tqdm" },
     { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "nbstripout" },
+    { name = "pip" },
+    { name = "pre-commit" },
+    { name = "ruff" },
+]
+docs = [
+    { name = "mkdocs" },
+]
+notebook = [
+    { name = "ipython" },
+    { name = "jupyterlab" },
+    { name = "matplotlib" },
+    { name = "notebook" },
+]
+pipeline = [
+    { name = "dvc" },
+    { name = "mlflow" },
+    { name = "requests" },
+    { name = "tqdm" },
+]
+test = [
+    { name = "coverage" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "coverage" },
-    { name = "dvc" },
-    { name = "ipython" },
     { name = "joblib" },
-    { name = "jupyterlab" },
     { name = "lightgbm", specifier = ">=4.5" },
     { name = "loguru" },
-    { name = "matplotlib" },
-    { name = "mkdocs" },
-    { name = "mlflow", specifier = ">=3.16.1,<4" },
-    { name = "nbstripout" },
-    { name = "notebook" },
     { name = "numpy" },
     { name = "pandas", specifier = ">=3" },
-    { name = "pip" },
-    { name = "pre-commit" },
     { name = "pyarrow" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "requests" },
-    { name = "ruff" },
     { name = "scikit-learn" },
-    { name = "tqdm" },
     { name = "typer" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "nbstripout" },
+    { name = "pip" },
+    { name = "pre-commit" },
+    { name = "ruff" },
+]
+docs = [{ name = "mkdocs" }]
+notebook = [
+    { name = "ipython" },
+    { name = "jupyterlab" },
+    { name = "matplotlib" },
+    { name = "notebook" },
+]
+pipeline = [
+    { name = "dvc" },
+    { name = "mlflow", specifier = ">=3.16.1,<4" },
+    { name = "requests" },
+    { name = "tqdm" },
+]
+test = [
+    { name = "coverage" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
 ]
 
 [[package]]

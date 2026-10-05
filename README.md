@@ -68,7 +68,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── dvc.yaml           <- The pipeline; see docs/docs/pipeline.md
 ├── params.yaml        <- Everything the pipeline is configured by
 ├── metrics.json       <- The SC-01 to SC-06 gate result, written by `evaluate`
-├── pyproject.toml     <- Package metadata and tool configuration
+├── pyproject.toml     <- Serving dependencies, the dependency groups and tool configuration
 ├── references         <- Course material, data dictionaries and other references
 ├── reports            <- Report and EDN (LaTeX), metrics, generated figures
 ├── tests              <- Pytest test suite

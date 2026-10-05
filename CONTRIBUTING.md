@@ -38,12 +38,38 @@ uv sync
 pre-commit install
 ```
 
+`uv sync` installs every dependency, in every group, so that is all a contributor ever needs.
+
+## Dependencies
+
+`pyproject.toml` splits the dependencies in two, because the API image is built from one half only and NFR-04 caps that image at 1 GB ([EDN-47](reports/edn.md)):
+
+- `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing.
+  FastAPI, uvicorn and pydantic join it with the API in M4.
+- `[dependency-groups]` is everything else, by who needs it: `pipeline` (the DVC stages and experiment tracking, so also data validation and energy measurement), `notebook`, `docs`, `test` and `dev`.
+
+`[tool.uv] default-groups = "all"` is why a plain `uv sync` and `uv run` still install both halves.
+Only the image, and `make test-serving` below, opt out with `--no-default-groups`.
+
+Adding one:
+
+```bash
+uv add --group pipeline <package>   # or notebook, docs, test, dev
+uv add <package>                    # the serving runtime, only by the rule below
+```
+
+A package goes into the runtime only when a module the API imports needs it, at import time or to predict.
+Today that is `recommenditos/modeling/model.py` and what it imports: `data/build_features.py`, `data/split_data.py`, `pipeline.py`, `schema.py` and `config.py`.
+Anything only training needs - MLflow, CodeCarbon, Great Expectations, `shap` (EDN-11) - goes in a group, and is imported from a module serving never imports, such as `modeling/train.py`.
+`pyproject.toml` keeps a comment beside each dependency saying why it is there; keep it with the dependency when you move one.
+
 ## Before opening a PR
 
 ```bash
 make format         # ruff format + fix
 make lint           # ruff format --check + ruff check
 make test           # pytest, which also reports the coverage of recommenditos/
+make test-serving   # the serving path from the runtime dependencies alone
 make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
 
@@ -57,6 +83,10 @@ It runs every notebook top to bottom on the real data, which CI cannot do becaus
 `make test` prints a coverage table; CI puts the same table in the summary of its test job.
 There is no coverage gate on a PR, so a number below 80 % does not fail anything.
 NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
+
+`make test-serving` builds `.venv-serving/` from `uv.lock` with the runtime dependencies and the `test` group, and runs `tests/test_serving.py` from it.
+CI's `Serving runtime` job runs the same target, so a serving module that imports a group's package fails the PR rather than the M5 image build.
+It only matters when you change a dependency or what a serving module imports, but it is cheap enough to run every time.
 
 ## Requirement traceability
 

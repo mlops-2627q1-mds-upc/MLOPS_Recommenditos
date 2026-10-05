@@ -140,6 +140,47 @@ jobs:
             reports/junit.xml
             reports/coverage.xml
 
+  # The API image installs `[project] dependencies` alone (EDN-47), because
+  # NFR-04 caps it at 1 GB. This is the one job that does not install the full
+  # environment: `make test-serving` builds the runtime list plus the `test`
+  # group and runs the serving path from it, so a module the API imports that
+  # needs a package from one of the groups fails here rather than in M5's image
+  # build. The size goes into the job summary, so the number M5 starts from is
+  # visible on every change that can move it.
+  serving:
+    name: Serving runtime
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
+      - uses: astral-sh/setup-uv@v10.1.0
+        if: needs.changes.outputs.code == 'true'
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          # A cache of its own: this job downloads a fraction of what the others
+          # do, and under their key it could save that fraction as the cache
+          # every other job then restores.
+          cache-suffix: serving
+      - run: make test-serving
+        if: needs.changes.outputs.code == 'true'
+      # Without `__pycache__`, so the figure is the installed size EDN-47
+      # records rather than whatever the test run happened to compile.
+      - name: Publish the runtime's installed size to the job summary
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          site=$(.venv-serving/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+          {
+            echo '## Serving runtime'
+            echo
+            echo "site-packages without bytecode: $(du -sh --exclude=__pycache__ "$site" | cut -f1)"
+            echo
+            echo '```text'
+            (cd "$site" && du -sh --exclude=__pycache__ -- * | sort -rh | head -n 10)
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # NFR-07 promises that every requirement is traceable to the test that
   # verifies it or is marked as verified by hand, and that CI builds the matrix
   # that proves it. The gate is milestone-scoped: see tools/expected_coverage.yaml.
