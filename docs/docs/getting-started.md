@@ -48,7 +48,7 @@ Open `.env` and paste your DagsHub username into `MLFLOW_TRACKING_USERNAME` and 
 Those three are all the project reads from `.env`, and DVC is not one of its readers; step 4 is where DVC gets the same token.
 `.env` is gitignored and must stay that way.
 Never paste a token into an issue, a pull request, a commit or a chat - revoke it on the Tokens page instead if it ever leaks.
-The gitleaks hook of step 1 refuses a commit that contains one, and CI scans every commit of every branch for one (NFR-15), but by the time CI finds it the push has published it, so the hook is the check that actually protects you.
+The gitleaks hook of step 1 refuses a commit that contains one, and CI scans every commit of every branch and pull request for one (NFR-15), but by the time CI finds it the push has published it, so the hook is the check that actually protects you.
 
 `.env` is read from this clone only: `recommenditos/config.py` loads `<repo>/.env` by name rather than searching upwards, so a checkout inside another checkout cannot pick up the other one's credentials.
 

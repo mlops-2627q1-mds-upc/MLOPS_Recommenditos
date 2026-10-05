@@ -243,13 +243,15 @@ jobs:
   # secret this job finds has already been published with the push: revoke it,
   # do not only remove it (CONTRIBUTING.md).
   #
-  # The whole history, not the tip alone. `gitleaks git` reads every commit of
-  # every ref the checkout has, and with `fetch-depth: 0` that is every branch
-  # and tag on GitHub plus the pull request's own commits. A secret added in one
-  # commit and deleted in the next is still published, and a scan of the tip
-  # would not see it; one on somebody else's branch is published too, so it turns
-  # every pull request red until it is dealt with, which is the point. All of it
-  # scans in a few seconds.
+  # The whole published history, not the tip alone. `gitleaks git` reads every
+  # commit of every ref the checkout has: with `fetch-depth: 0` that is every
+  # branch and tag, and the fetch below adds the head of every pull request ever
+  # opened, which GitHub keeps after a squash merge has deleted the branch. A
+  # secret added in one commit and deleted in the next is still published, and a
+  # scan of the tip would not see it; one on somebody else's branch is published
+  # too, so it turns every pull request red until it is dealt with, which is the
+  # point. A rule added later is applied to all of it the same way. It scans in a
+  # few seconds (228 commits on 2026-10-05).
   #
   # No paths filter, for the traceability job's reason and one more: a secret can
   # arrive in any file, so no list of paths can say which changes need a scan.
@@ -276,6 +278,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch the head of every pull request
+        run: git fetch --quiet --no-tags origin '+refs/pull/*/head:refs/remotes/pull/*'
       - name: Check that the pre-commit hook runs the same release
         run: |
           if ! grep -A1 '^  - repo: https://github.com/gitleaks/gitleaks$' .pre-commit-config.yaml \
@@ -315,7 +319,7 @@ jobs:
           fi
           {
             echo '## Secret scan'
-            echo "gitleaks ${GITLEAKS_VERSION} with \`.gitleaks.toml\`, over every branch and tag as of \`$(git rev-parse --short HEAD)\`: ${scanned}, ${verdict}."
+            echo "gitleaks ${GITLEAKS_VERSION} with \`.gitleaks.toml\`, over every branch, tag and pull request head as of \`$(git rev-parse --short HEAD)\`: ${scanned}, ${verdict}."
           } >> "$GITHUB_STEP_SUMMARY"
 
   docs:

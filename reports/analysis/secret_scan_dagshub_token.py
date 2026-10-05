@@ -5,7 +5,7 @@ read off the shape of a real one in a gitignored `.env` without printing it. Nei
 rule for it. How often do gitleaks' default rules, gitleaks with `.gitleaks.toml`, and
 detect-secrets' default plugins catch such a token, in each place one has been or could plausibly
 be written in this project? What does each flag that is not a secret, on the committed tree and,
-for gitleaks, which can read it, on the whole history of every branch?
+for gitleaks, which can read it, on every commit GitHub publishes for the repository?
 
 Every token here is generated with `secrets.token_hex(20)`; none is real and none is written
 anywhere but a temporary directory. Run from the repository root with the gitleaks binary the CI
@@ -26,6 +26,7 @@ import tempfile
 GITLEAKS = sys.argv[1] if len(sys.argv) > 1 else "gitleaks"
 DETECT_SECRETS = ["uvx", "--from", "detect-secrets==1.5.0", "detect-secrets"]
 CONFIG = Path(".gitleaks.toml").resolve()
+ORIGIN = "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git"
 TOKENS_PER_CONTEXT = 200
 ENTROPY_SAMPLES = 200_000
 GENERIC_ENTROPY = 3.5  # generic-api-key in gitleaks' default config
@@ -163,19 +164,32 @@ def main():
         for path, types in sorted(flagged.items()):
             print(f"    {path}: {', '.join(types)}")
 
-    commits = subprocess.run(
-        ["git", "rev-list", "--all", "--no-merges", "--count"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    print(f"\nthe whole history, every branch, {commits} non-merge commits (gitleaks only):")
-    for label, config in (("gitleaks defaults", None), ("gitleaks + ours", CONFIG)):
-        with tempfile.TemporaryDirectory() as root:
-            findings = gitleaks(["git", "--redact", "--log-opts=--all", "."], root, config)
-        print(f"  {label}: {len(findings)} finding(s)")
-        for item in findings:
-            print(f"    {item['RuleID']} {item['File']}:{item['StartLine']} {item['Commit'][:8]}")
+    # Everything GitHub publishes: a fresh clone has every branch and tag, and the pull request
+    # heads add the commits a squash merge left behind when it deleted their branch. A local
+    # checkout is not that set: it holds branches GitHub no longer has and lacks other people's.
+    with tempfile.TemporaryDirectory() as root:
+        clone = Path(root, "clone")
+        subprocess.run(["git", "clone", "--quiet", "--no-checkout", ORIGIN, str(clone)], check=True)
+        subprocess.run(
+            ["git", "-C", str(clone), "fetch", "--quiet", "origin", "+refs/pull/*/head:refs/remotes/pull/*"],
+            check=True,
+        )
+        commits = subprocess.run(
+            ["git", "-C", str(clone), "rev-list", "--all", "--no-merges", "--count"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        print(
+            f"\neverything GitHub publishes, every branch, tag and pull request head, "
+            f"{commits} non-merge commits (gitleaks only):"
+        )
+        for label, config in (("gitleaks defaults", None), ("gitleaks + ours", CONFIG)):
+            with tempfile.TemporaryDirectory() as scratch:
+                findings = gitleaks(["git", "--redact", "--log-opts=--all", str(clone)], scratch, config)
+            print(f"  {label}: {len(findings)} finding(s)")
+            for item in findings:
+                print(f"    {item['RuleID']} {item['File']}:{item['StartLine']} {item['Commit'][:8]}")
 
 
 if __name__ == "__main__":

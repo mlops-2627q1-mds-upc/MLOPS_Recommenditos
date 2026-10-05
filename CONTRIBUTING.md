@@ -87,7 +87,7 @@ Two checks enforce that, with the same rules from `.gitleaks.toml`:
 
 - The **gitleaks pre-commit hook** scans what you stage and refuses the commit when it finds a secret.
   It redacts what it found, so its output is safe to paste into an issue.
-- CI's **`Secret scan (gitleaks)`** job scans every commit of every branch and tag on every pull request and every push to `main`, which catches a commit made with `--no-verify` or from a clone without the hook.
+- CI's **`Secret scan (gitleaks)`** job scans every commit of every branch, tag and pull request on every pull request and every push to `main`, which catches a commit made with `--no-verify` or from a clone without the hook.
 
 The hook prevents a leak; the CI job only detects one.
 The repository is public, so by the time CI reports a secret, the push has already published it, and GitHub keeps every commit a pull request ever pointed at, so rewriting the branch does not take it back.

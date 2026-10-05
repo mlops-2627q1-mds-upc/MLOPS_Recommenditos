@@ -33,7 +33,7 @@ useDefault = true
 # of the context words precedes.
 #
 # The entropy floor is 2.5 rather than the generic 3.5: low enough that no real
-# token falls under it (none of the analysis's 200,000 fakes came below 3.0), and
+# token falls under it (the lowest of the analysis's 200,000 fakes was 3.0), and
 # high enough that a placeholder made of repeats, `0000...` or `deadbeef` five
 # times, which a document might use to show the shape, is not reported.
 #
