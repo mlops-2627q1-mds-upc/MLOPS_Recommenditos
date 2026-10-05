@@ -7,7 +7,7 @@
   "data_source": "zenodo",
   "deployable_variant": null,
   "best_variant": "lgbm-extended",
-  "best_mdape": 0.06324586957136544,
+  "best_mdape": 0.06255536280848185,
   "variants": {
     "b0": {
       "estimator": "median_baseline",
@@ -25,15 +25,15 @@
     },
     "lgbm-basic": {
       "estimator": "lightgbm",
-      "mdape": 0.0682736453954665,
-      "within_20pct": 0.8968217645563183,
+      "mdape": 0.06807619451970763,
+      "within_20pct": 0.898093058733791,
       "gate_passed": false,
       "gate_blocked_by": "sc04 failed; sc05 unmeasured"
     },
     "lgbm-extended": {
       "estimator": "lightgbm",
-      "mdape": 0.06324586957136544,
-      "within_20pct": 0.9028731248410883,
+      "mdape": 0.06255536280848185,
+      "within_20pct": 0.9040427154843631,
       "gate_passed": false,
       "gate_blocked_by": "sc04,sc06 failed; sc05 unmeasured"
     }
