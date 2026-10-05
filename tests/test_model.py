@@ -35,8 +35,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from tests.conftest import PII_COLUMNS, params_override
+import yaml
 
-from recommenditos.config import PARAMS_FILE
+from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, Vocabulary, read_supported_makes
 from recommenditos.modeling import train
@@ -1480,6 +1481,100 @@ def test_one_variant_is_one_run_that_evaluate_appends_to(
         assert len(client.search_runs([experiment.experiment_id])) == 1
     finally:
         mlflow.set_tracking_uri(before)
+
+
+#: What a `train` run records besides the keys `dvc.yaml` declares for its stage:
+#: which variant it is, and the shape of the data those keys were applied to.
+#: Listed so that the comparison below is an equality, and a parameter nobody
+#: declared cannot reach the run unnoticed either.
+NOT_DECLARED_TRAIN_PARAMS = frozenset(
+    {"variant", "n_features", "n_train_rows", "n_validation_rows", "n_supported_makes"}
+)
+
+
+def _declared_train_params(variant: str) -> dict:
+    """Every `params.yaml` leaf `dvc.yaml` declares for `train@<variant>`, by dotted key.
+
+    Read from `dvc.yaml` itself rather than restated, because the claim under test
+    is about what DVC tracks: a key declared there and missing from the run is a
+    parameter that changes the model without the run saying so.
+    """
+    stage = yaml.safe_load((PROJ_ROOT / "dvc.yaml").read_text(encoding="utf-8"))["stages"]["train"]
+    params = _project_params()
+    leaves: dict = {}
+
+    def flatten(key: str, value) -> None:
+        if isinstance(value, dict):
+            for child, nested in value.items():
+                flatten(f"{key}.{child}", nested)
+        else:
+            leaves[key] = value
+
+    for declared in stage["do"]["params"]:
+        assert isinstance(declared, str), "train declares keys of params.yaml, not other files"
+        key = declared.replace("${key}", variant)
+        value = params
+        for part in key.split("."):
+            value = value[part]
+        flatten(key, value)
+    return leaves
+
+
+def _run_param_name(key: str, variant: str, estimator: str) -> str:
+    """Where `train` logs a declared key, which is the naming its docstring promises.
+
+    Without the path that differs between variants, so the four runs of the ladder
+    share their columns in the experiment table, and a hyperparameter under its
+    estimator's name, so LightGBM's `num_leaves` and the Ridge's `alpha` never
+    share one.
+    """
+    hyperparameters = f"train.variants.{variant}.params."
+    if key.startswith(hyperparameters):
+        return f"{estimator}.{key.removeprefix(hyperparameters)}"
+    return key.removeprefix(f"train.variants.{variant}.").removeprefix("train.")
+
+
+@pytest.mark.req("NFR-14")
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_a_run_records_every_parameter_its_stage_declares(
+    variant: str, matrices: dict, tmp_path: Path, monkeypatch
+):
+    """NFR-14's parameter clause, read back from the run rather than from the code.
+
+    Every key `dvc.yaml` declares for `train@<variant>` is a parameter DVC reruns
+    the stage for, so it is one that can change the model, and the run has to say
+    what it was. `train.mlflow_experiment` is the one recorded as what it is, the
+    run's experiment, rather than repeated as a parameter of every run in it.
+    """
+    before = mlflow.get_tracking_uri()
+    store = f"sqlite:///{tmp_path / 'mlflow.db'}"
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", store)
+    monkeypatch.setenv("MLFLOW_TRACKING_USERNAME", "someone")
+    monkeypatch.setenv("MLFLOW_TRACKING_PASSWORD", "a-token")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
+
+    try:
+        train.main(variant, matrices["features"], tmp_path / "models", PARAMS_FILE)
+        record = json.loads((tmp_path / "models" / variant / MODEL_FILE).read_text("utf-8"))
+        client = mlflow.MlflowClient(tracking_uri=store)
+        run = client.get_run(record["mlflow"]["run_id"])
+        experiment = client.get_experiment(run.info.experiment_id).name
+    finally:
+        mlflow.set_tracking_uri(before)
+
+    declared = _declared_train_params(variant)
+    assert experiment == declared.pop("train.mlflow_experiment")
+    estimator = declared[f"train.variants.{variant}.estimator"]
+    expected = {
+        _run_param_name(key, variant, estimator): str(value) for key, value in declared.items()
+    }
+
+    logged = dict(run.data.params)
+    assert set(logged) - set(expected) == NOT_DECLARED_TRAIN_PARAMS, (
+        "the run carries a parameter that is neither declared nor the data's shape"
+    )
+    assert {name: logged.get(name) for name in expected} == expected
 
 
 def test_resume_run_without_a_run_id_does_nothing(caplog):
