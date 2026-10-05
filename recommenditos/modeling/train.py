@@ -139,8 +139,9 @@ def _logged_params(
     and DVC reruns the stage for it.
 
     The stage logs its own parameters because only it knows which keys it
-    declared; the commit and the data version are the same question for every
-    run and `tracked_run` answers them.
+    declared; the commit and the hashes of the stage's inputs are the same
+    question for every run, and `tracked_run` answers them
+    (`recommenditos/provenance.py`).
     `tests/test_model.py::test_a_run_records_every_parameter_its_stage_declares`
     reads the declared keys out of `dvc.yaml` and compares them with a real run.
     """

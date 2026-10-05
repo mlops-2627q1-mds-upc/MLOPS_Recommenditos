@@ -8,10 +8,11 @@ inside a half-finished training run - the cheapest failure is the one that
 happens before the fit.
 
 `tracked_run` is the seam a stage uses: it configures the server, opens the run
-and tags it with the git commit and the DVC data version that NFR-14 requires.
-Those tags live here rather than in each caller because a caller that has to
-remember a second call eventually forgets one, and a run without them cannot be
-reproduced from the report.
+and tags it with the provenance NFR-14 requires - the commit, whether the tree
+had moved on from it, and the hashes of the running stage's inputs, which
+`recommenditos/provenance.py` computes. Those tags are set here rather than by
+each caller because a caller that has to remember a second call eventually
+forgets one, and a run without them cannot be reproduced from the report.
 
 `python -m recommenditos.tracking` goes through the same seam with a throwaway
 experiment, which is how a new contributor proves their credentials work before
@@ -33,15 +34,15 @@ actually landed rather than discovering a silent skip afterwards.
 gate verdict to that same run, so the experiment holds exactly one run per
 variant carrying its hyperparameters, its artefact, its energy figures and its
 metrics. The alternative - one run per DVC stage - is the course demo's wart and
-would scatter four variants over eight runs nothing joins.
+would scatter four variants over eight runs nothing joins. The appending stage
+tags the run with its own provenance under its own name, `evaluate.git_commit`
+and `evaluate.deps.<path>`, so the run says what each half was produced from.
 """
 
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
-import hashlib
 import os
 from pathlib import Path
-import subprocess
 import sys
 import time
 
@@ -73,7 +74,8 @@ import typer
 # `load_dotenv()`, so the credentials from the gitignored .env are in the
 # environment by the time this module reads them. Every DVC stage imports it
 # too, which is why the loading is not repeated here.
-from recommenditos.config import PROJ_ROOT
+import recommenditos.config  # noqa: F401
+from recommenditos.provenance import resumed_run_tags, run_tags
 
 app = typer.Typer()
 
@@ -89,12 +91,6 @@ REQUIRED_ENV_VARS = (
 # experiment from params.yaml: a credential check is not an experiment result
 # and has no business sitting next to the runs the report cites.
 SETUP_CHECK_EXPERIMENT = "setup-check"
-
-# `dvc.lock` pins the hash of every artefact the pipeline produced, so one digest
-# over it identifies the data a run saw without the run enumerating its inputs.
-# That is the "DVC data version" NFR-14 asks for. MD5 because DVC's own hashes
-# are MD5, so the two are read side by side.
-DVC_LOCK_FILE = PROJ_ROOT / "dvc.lock"
 
 # Where MLflow is pointed when nothing configured it. Since 3.16 an unset
 # tracking URI does not mean "tracking off": it resolves to
@@ -144,39 +140,21 @@ def _is_configured(name: str) -> bool:
     return bool(value) and value != UNCONFIGURED_TRACKING_URI
 
 
-def run_provenance() -> dict[str, str]:
-    """The code and data version of this checkout, as MLflow tags (NFR-14).
-
-    `git_dirty` is separate from `git_commit` on purpose: a commit alone says
-    nothing about a working tree that has moved on from it, and a run nobody can
-    map back to a state of the code is not evidence.
-
-    It counts untracked files, because an untracked module the code imports makes
-    a run as unreproducible from its commit as an edited tracked file does. The
-    cost of that reading is that anything left lying in the tree marks every run
-    dirty, so whatever is genuinely noise has to be in `.gitignore` - which is
-    where the agent tooling's `/.claude/worktrees/` entry comes from.
-    """
-    tags = {"git_commit": _git("rev-parse", "HEAD") or "unknown", "git_dirty": "false"}
-    if _git("status", "--porcelain"):
-        tags["git_dirty"] = "true"
-    if DVC_LOCK_FILE.exists():
-        tags["dvc_lock_md5"] = hashlib.md5(DVC_LOCK_FILE.read_bytes()).hexdigest()
-    return tags
-
-
 @contextmanager
 def tracked_run(experiment: str, run_name: str | None = None) -> Iterator[mlflow.ActiveRun]:
     """Open an MLflow run on the shared server, tagged with its provenance.
 
     The parameters a stage read stay with the stage: only it knows which keys of
     `params.yaml` its `dvc.yaml` entry declares, so it logs those itself. The
-    commit and the data version are the same question for every run, which is
-    why they are answered here instead.
+    commit and the inputs are the same question for every run, which is why they
+    are answered here instead.
+
+    The tags are computed before the run exists and passed to `start_run`, so a
+    failure to compute them fails the opening - which `optional_run` degrades on
+    like any other - rather than leaving a run on the server without them.
     """
     configure_tracking(experiment)
-    with mlflow.start_run(run_name=run_name) as run:
-        mlflow.set_tags(run_provenance())
+    with mlflow.start_run(run_name=run_name, tags=run_tags()) as run:
         yield run
 
 
@@ -286,6 +264,10 @@ def resume_run(run_id: str | None) -> Iterator[Run]:
     Ends the run it opened, which matters because `evaluate` is one stage over
     four variants in one process: without it, variant two would append to variant
     one's run.
+
+    Tags the run with the resuming stage's own provenance, prefixed with its name
+    (`recommenditos.provenance.resumed_run_tags`), computed before the run is
+    reopened for the reason `tracked_run` gives.
     """
     missing = run_id is None or not _tracking_is_configured()
     if missing and not _require_tracking():
@@ -307,13 +289,13 @@ def resume_run(run_id: str | None) -> Iterator[Run]:
     # loaded afterwards.
     if _require_tracking():
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-        with mlflow.start_run(run_id=run_id):
+        with mlflow.start_run(run_id=run_id, tags=resumed_run_tags()):
             yield Run(run_id)
         return
 
     def reopen() -> AbstractContextManager[mlflow.ActiveRun]:
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-        return mlflow.start_run(run_id=run_id)
+        return mlflow.start_run(run_id=run_id, tags=resumed_run_tags())
 
     with _degrading(
         reopen, on_failure=lambda cause: f"could not resume MLflow run {run_id} ({cause})."
@@ -376,25 +358,6 @@ def _tracking_is_configured() -> bool:
 
 def _require_tracking() -> bool:
     return os.environ.get(REQUIRE_TRACKING_ENV_VAR, "") not in {"", "0"}
-
-
-def _git(*args: str) -> str:
-    """`git` in the project root, or an empty string where git cannot answer.
-
-    A tarball, a container build without the `.git` directory or a machine
-    without git installed are all reasons a run may not know its commit. None of
-    them is a reason to fail the run, so the tag says `unknown` instead.
-    """
-    try:
-        completed = subprocess.run(
-            ["git", "-C", str(PROJ_ROOT), *args],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return ""
-    return completed.stdout.strip()
 
 
 @app.command()

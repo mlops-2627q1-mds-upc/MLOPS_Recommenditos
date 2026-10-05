@@ -1,0 +1,80 @@
+# Before: the runs main's committed models point at, made by the code before EDN-74.
+# Run 2026-10-05 on a commit of this branch whose dvc.lock and models/ are still main's (e1e91e1); exit status 1.
+
+HEAD 4a1fc03741101e5684bca6b73451f7a60c4e64fd, tree clean, MD5 of its dvc.lock 7a0a78e53b74de48a87d7f7a0e3a98c1
+
+b0: run d2c636425e914ec88bce2b2ec6f71144 (b0, FINISHED)
+    dvc_stage train@b0
+    git_commit fa27196684ff9c49164c9db9d14d7df79ac5f94a, git_dirty false
+    evaluate.git_commit None, evaluate.git_dirty None
+    dvc_lock_md5 a3a1180672b25b101ae165701b6df464 differs from the committed lock's
+    train.deps: 0/9 equal the lock
+    evaluate.deps: 0/9 equal the lock
+
+b1: run f398958558244a2c9d660b982c9242cc (b1, FINISHED)
+    dvc_stage train@b1
+    git_commit fa27196684ff9c49164c9db9d14d7df79ac5f94a, git_dirty true
+    evaluate.git_commit None, evaluate.git_dirty None
+    dvc_lock_md5 6e280745c393bb7f4261c88fa7b5f97a differs from the committed lock's
+    train.deps: 0/9 equal the lock
+    evaluate.deps: 0/9 equal the lock
+
+lgbm-basic: run a4140c12adbf40d980e754e6a8926cc9 (lgbm-basic, FINISHED)
+    dvc_stage train@lgbm-basic
+    git_commit fa27196684ff9c49164c9db9d14d7df79ac5f94a, git_dirty true
+    evaluate.git_commit None, evaluate.git_dirty None
+    dvc_lock_md5 4fab2e83e3449fe5c2f6927329905ace differs from the committed lock's
+    train.deps: 0/9 equal the lock
+    evaluate.deps: 0/9 equal the lock
+
+lgbm-extended: run 77471b5cf50d40e9bf62ed6a4da201c8 (lgbm-extended, FINISHED)
+    dvc_stage train@lgbm-extended
+    git_commit fa27196684ff9c49164c9db9d14d7df79ac5f94a, git_dirty true
+    evaluate.git_commit None, evaluate.git_dirty None
+    dvc_lock_md5 0ed20b65cd36db3e80525e939b7f1299 differs from the committed lock's
+    train.deps: 0/9 equal the lock
+    evaluate.deps: 0/9 equal the lock
+
+b0: 3 problem(s): evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
+b1: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
+lgbm-basic: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
+lgbm-extended: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
+
+
+# After: the four runs of the dvc repro this pull request committed, made by the code of EDN-74 from the clean commit fdd6f51,
+# with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-05 on the commit that holds that run's dvc.lock (fd499ef); exit status 0.
+
+HEAD fd499efe5ef1488f77268abbb834173b587de8fe, tree clean, MD5 of its dvc.lock 8f36ab0b44cddafe5377cf3cdbc17c8e
+
+b0: run 571cd2f493f04365830c00d0c8dbe2be (b0, FINISHED)
+    dvc_stage train@b0
+    git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, git_dirty false
+    evaluate.git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b1: run 9ac9a1162f224b9e84be8c1162d8dc80 (b1, FINISHED)
+    dvc_stage train@b1
+    git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, git_dirty false
+    evaluate.git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-basic: run 2522c82da9e34a949a691ba368edef9a (lgbm-basic, FINISHED)
+    dvc_stage train@lgbm-basic
+    git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, git_dirty false
+    evaluate.git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-extended: run ee516b9dac1d4023ba281e9a12f79cb6 (lgbm-extended, FINISHED)
+    dvc_stage train@lgbm-extended
+    git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, git_dirty false
+    evaluate.git_commit fdd6f51b05b1ccd3b7619d5060d6dbb8d809c7c3, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b0: OK
+b1: OK
+lgbm-basic: OK
+lgbm-extended: OK

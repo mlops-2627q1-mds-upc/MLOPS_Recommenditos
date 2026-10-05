@@ -51,7 +51,10 @@ than in a convention somebody has to remember:
 Each variant's metrics are appended to the MLflow run `train@<variant>` created,
 rather than logged to a run of this stage's own. One run per variant then holds
 the hyperparameters, the artefact, the energy figures and the verdict, which is
-what makes the four comparable in one table.
+what makes the four comparable in one table. The tracking seam tags the run with
+this stage's own provenance beside the fit's, `evaluate.git_commit`,
+`evaluate.git_dirty` and `evaluate.deps.<path>`, because the two stages need not
+run at the same commit (`recommenditos/provenance.py`).
 """
 
 import csv

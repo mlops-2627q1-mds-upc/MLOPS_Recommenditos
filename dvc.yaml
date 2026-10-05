@@ -229,6 +229,12 @@ stages:
   # (EDN-48, EDN-67). A changed list already reruns this stage through the
   # matrices; declaring it is what keeps the recorded list from disagreeing with
   # the lock.
+  #
+  # Every `deps` entry of this stage and of `evaluate` is also a tag on the
+  # variant's MLflow run, `train.deps.<path>` and `evaluate.deps.<path>`, holding
+  # the hash this file's lock records for it (NFR-14, EDN-74). So a dependency
+  # added here is traced from the run with no further change, and one the stage
+  # reads without declaring it is missing from both.
   # ----------------------------------------------------------------------
   train:
     foreach: ${train.variants}
@@ -238,6 +244,7 @@ stages:
         - recommenditos/modeling/train.py
         - recommenditos/modeling/model.py
         - recommenditos/tracking.py
+        - recommenditos/provenance.py
         - recommenditos/data/build_features.py
         - recommenditos/config.py
         - recommenditos/schema.py
@@ -268,6 +275,7 @@ stages:
       - recommenditos/modeling/evaluate.py
       - recommenditos/modeling/model.py
       - recommenditos/tracking.py
+      - recommenditos/provenance.py
       - recommenditos/data/build_features.py
       - recommenditos/config.py
       - recommenditos/schema.py

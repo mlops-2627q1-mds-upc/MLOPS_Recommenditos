@@ -2295,6 +2295,64 @@ How to add an entry:
 - **Other evidence:** [`reports/analysis/mileage_scope.py`](analysis/mileage_scope.py) and its results; [`reports/data-validation/summary.json`](data-validation/summary.json); [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), `_mileage_in_range`; [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date), [EDN-68](#edn-68-the-great-expectations-store-is-a-cached-build-product-the-suites-are-generated-from-the-contract-and-each-rule-sits-on-the-frame-where-it-can-hold); [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76).
 - **In LaTeX:** no
 
+### EDN-74: A run is tagged with the hashes of its own stage's inputs, and `git_dirty` ignores what DVC writes itself
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Experiment Tracking, Reproducibility
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** Every MLflow run a pipeline stage opens or appends to is tagged with the hash of each dependency `dvc.yaml` declares for that stage, one `<stage>.deps.<path>` tag each, computed through DVC's own API when the stage starts; it is the value `dvc.lock` records under `stages.<stage>.deps` once the stage has finished.
+  `git_dirty` is computed while ignoring the files `dvc repro` writes itself: each pipeline's lock file and every output declared `cache: false`, read off the pipeline rather than listed.
+  `dvc_lock_md5`, the MD5 of the whole lock, is dropped.
+  `evaluate`, which appends to the run `train` opened (EDN-55), records its own `evaluate.git_commit`, `evaluate.git_dirty` and `evaluate.deps.<path>` beside the fit's `git_commit`, `git_dirty` and `train.deps.<path>`.
+  Input hashes are recorded only when DVC runs the stage, which DVC signals by setting `DVC_STAGE`.
+- **Alternatives considered:**
+  - **Option A (chosen): the hashes of the stage's own inputs, taken when it starts, and `git_dirty` without DVC's writes.**
+    Pros: every tag names something a commit or the DVC remote reproduces: for the runs of a committed `dvc repro`, each input tag equals the committed lock line for line, and a clean commit is reported clean.
+    The tags exist from the moment the run does, so a stage that fails half-way still says what it read.
+    A data dependency's hash is its address in the DVC cache and on the remote, so `dvc pull` restores that input from it and it identifies the input whatever happens to the commits, a squash merge or a rebase included; a code file is restored by git at the commit, where a clean tree guarantees it has the recorded hash.
+    And one tag per input lets MLflow find every run that read a given matrix with an exact filter.
+    Cons: a run carries 24 provenance tags instead of three, ten input hashes and a commit and a dirty flag for each of its two stages; the stage opens the DVC repository in-process, which costs about 0.3 s per run, measured at 0.28 to 0.41 s on the laptop against fits of 0.1 to 19 s; the code depends on DVC's Python API (`Index.stages`, `Output.get_hash`), which DVC does not promise to keep stable, so a DVC upgrade can break it - the test that runs a real `dvc repro` and compares with the lock is what would say so; and a hand edit of an uncached output, `metrics.json` say, no longer marks a run dirty, which costs nothing today, because no stage that opens or appends to a run depends on an uncached output; a stage that did would hash it among its inputs, so the edit would show there.
+  - **Option B: keep the whole-lock MD5, and document what it does not identify.**
+    Pros: no code change; the model card already warned that the four runs of one ladder carry four different digests.
+    Cons: the tag identifies no committed state, so documenting it would only document that NFR-14's data-version clause is unmet.
+    Measured on the runs `main`'s models pointed at before this change: four `train` runs, four different digests, none equal to the committed lock; and the first stage's digest equals the lock from before the re-run.
+    It also leaves `git_dirty` true for every stage after the first of a clean `dvc repro`, three of those four runs, only because `dvc.lock` had changed under them, so the report could not say its runs were made from a committed state either.
+  - **Option C: tag after the run instead of before it.**
+    Either at the end of the stage's own process, or by a separate step after `dvc repro` that reads the committed lock and writes the tags onto the runs.
+    Pros: the separate step reads the very lock it is compared with, so the tags would equal it by construction; and the stage-end variant needs no change to how the run is opened.
+    Cons: at the end of its own process a stage still cannot read its lock entry, because DVC writes it only after the command has exited, so the stage-end variant would have to compute the same hashes A computes, later and with less of the run covered: a stage that fails half-way would carry none.
+    The separate step is a second command somebody has to remember after every `dvc repro`, and one forgotten leaves the runs without provenance and nothing failing; it would also describe the tree when the step ran, not when the stage did, and attribute anything changed in between to the run.
+    And it equals the lock by copying it, so it could not detect a run whose inputs differ from what the lock says, which is the one thing the check is for.
+- **Rationale:** NFR-14 promises that a run can be traced back to what produced it, and only a committed state can be traced back to.
+  A whole-lock digest taken during a `dvc repro` is never the lock committed with that run, so option B keeps a tag that cannot do its job, and C either recomputes A's hashes later or copies the lock instead of checking against it.
+  A is the only option whose tags are evidence: two programs, the stage at its start and DVC at its end, write the same values independently, and the check is that they agree.
+
+  Three implementation choices are part of the decision.
+  The hashes are computed through DVC's API rather than read from upstream stages' outputs in `dvc.lock`, because only some dependencies are another stage's output: the code files are no stage's output, and `evaluate`'s `models` and `data/processed/features` are the parents of several outputs and the output of none, so their `.dir` hashes are in the lock only as `evaluate`'s own dependencies, written after it has run.
+  Reimplementing DVC's directory hash with `hashlib` would be one more thing that can disagree with the lock; calling the code that writes the lock cannot, and `tests/test_provenance.py` proves the two equal on a three-stage pipeline DVC really runs, on a directory, a file, a `foreach` stage and an uncached output that a later stage depends on.
+  The tags are recorded only under DVC because every test calls the stages with paths under a temporary directory: the hashes of the files `dvc.yaml` declares would then describe files the run never opened.
+  And `evaluate` records its own commit beside the fit's because the two need not run at the same commit: a change to `evaluate.py` alone reruns only `evaluate`, against the runs of an earlier `train`, and overwriting `git_commit` would then claim the fit came from code it did not come from.
+
+  The implementation found more than the issue described.
+  DVC deletes a stage's outputs before running it, so a stage with an uncached output starts with that git-tracked file deleted: on a three-stage pipeline reproduced from a clean commit with the old code, even the first stage was tagged dirty, and only the first stage's digest matched any committed lock, the one from before the run.
+  And DVC adds a line to the `.gitignore` beside a cached output the first time it produces it, which for `gx/` is the repository root's hand-written `.gitignore`; ignoring that file would hide every edit to it, so the first run of a new cached output is reported dirty until its line is committed, which `pipeline.md` says.
+  And DVC addresses a stage relative to the directory `dvc repro` was started in, `../dvc.yaml:train@b0` from a subdirectory, so the stage is looked up by its name alone; an independent review of the pull request found that the first version resolved the path against the repository root, and that from a subdirectory every run would then have lost its tracking, under a warning that blamed the credentials.
+
+  Checked on the real snapshot rather than only in a test: the four `train` stages and `evaluate` were re-run from a clean commit with `RECOMMENDITOS_REQUIRE_TRACKING=1`, and `reports/analysis/run_provenance_check.py` read the four runs back from DagsHub.
+  Before the re-run, the four runs `main`'s committed models pointed at carried none of the input tags, three of them were tagged dirty, and each `dvc_lock_md5` differed from the digest of the committed lock.
+  After it, each of the four carries ten `train.deps` and ten `evaluate.deps` tags, every one equal to the committed lock, and `git_dirty` and `evaluate.git_dirty` are `false` for all four, naming the clean commit the re-run started from (`reports/analysis/run_provenance_check_results.txt`).
+  The re-run, 1 min 48 s at a peak RSS of 693 MB, moved no number: `metrics.json`, the segment table and the masking sweep are byte-identical, each per-variant record changed only in its MLflow run id, and inside each model bundle only `model.json` changed, by the provenance EDN-56 puts there, while every payload file kept its hash.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI found the defect in an independent review of PR #70, by reading the runs back from DagsHub instead of trusting the tests, which checked that the tags exist and that they change when `dvc.lock` changes, not that they identify a committed state.
+  It measured the four digests against the committed lock and the dirty flags against the files that had changed, generated options A to C and assessed them, and recommended A, fixed now in a pull request of its own; Lukas chose that, before the first delivery, so that the report's provenance claim is true and the CodeCarbon run of #38 retrains only once afterwards.
+  The implementation details were AI's, as were the two further findings, the deleted uncached output and the `.gitignore` line, both reproduced before they were acted on.
+  An independent AI review of the pull request reproduced the evidence and found the subdirectory regression, two overstated claims - that every hash retrieves its input from the remote, and that a hand edit of the validation summary would show in a run - and three smaller gaps: a dependency path MLflow refuses as a tag key, a failed `git status` read as a clean tree, and a test pipeline without a parameter; each was fixed, test first where there was code, before merging, which is the modification.
+- **AI interaction evidence:** Claude Code sessions on 2026-10-05: the independent review of PR #70, whose measurement is the body of issue #79, and the implementation of issue #79, in which the issue's scenario was reproduced on a three-stage pipeline with `main`'s `run_provenance` (every stage tagged dirty, the digests of the lock before the run and of two mid-run locks), the new tests were confirmed to fail on `main`, where the module they test does not exist, and the check script was run against DagsHub before and after the re-run.
+- **Other evidence:** [issue #79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/79); [PR #80](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80); [`recommenditos/provenance.py`](../recommenditos/provenance.py) and `recommenditos/tracking.py`; [`tests/test_provenance.py`](../tests/test_provenance.py) and the NFR-14 tests of `tests/test_tracking.py`; [`reports/analysis/run_provenance_check.py`](analysis/run_provenance_check.py) and [its results](analysis/run_provenance_check_results.txt); [The DVC pipeline](../docs/docs/pipeline.md), From a run to its inputs; [specification](../docs/docs/specification.md) NFR-14; [EDN-55](#edn-55-evaluate-resumes-the-run-train-created-instead-of-opening-its-own), [EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean).
+- **In LaTeX:** no
+
 ## Template
 
 ```markdown
