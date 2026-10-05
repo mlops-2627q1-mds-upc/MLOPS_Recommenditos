@@ -1,5 +1,5 @@
 # Before: the runs main's committed models point at, made by the code before EDN-74.
-# Run 2026-10-05 on the branch's first commit, whose dvc.lock and models/ are main's (e1e91e1); exit status 1.
+# Run 2026-10-05 on a commit of this branch whose dvc.lock and models/ are still main's (e1e91e1); exit status 1.
 
 HEAD 4a1fc03741101e5684bca6b73451f7a60c4e64fd, tree clean, MD5 of its dvc.lock 7a0a78e53b74de48a87d7f7a0e3a98c1
 
@@ -39,3 +39,42 @@ b0: 3 problem(s): evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 
 b1: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
 lgbm-basic: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
 lgbm-extended: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
+
+
+# After: the four runs of the dvc repro this pull request committed, made by the code of EDN-74 from the clean commit 7aa2a69,
+# with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-05 on the commit that holds that run's dvc.lock (aa3dbe4); exit status 0.
+
+HEAD aa3dbe4d1fc1c346cff692d92cb73134723f6369, tree clean, MD5 of its dvc.lock adec9c514bcf87c5b5980217a43331db
+
+b0: run fecebf5a0773468ba9a8f95d926550a1 (b0, FINISHED)
+    dvc_stage train@b0
+    git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, git_dirty false
+    evaluate.git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b1: run 3d1da3a885004e76abf5177ed6129fc8 (b1, FINISHED)
+    dvc_stage train@b1
+    git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, git_dirty false
+    evaluate.git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-basic: run 6963104fd28148f499866fa6a87df509 (lgbm-basic, FINISHED)
+    dvc_stage train@lgbm-basic
+    git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, git_dirty false
+    evaluate.git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-extended: run 3cbda3fbd9494e198f68e4741940258c (lgbm-extended, FINISHED)
+    dvc_stage train@lgbm-extended
+    git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, git_dirty false
+    evaluate.git_commit 7aa2a69d7096f6bf76b4dc954a5f9011ea2c0cea, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b0: OK
+b1: OK
+lgbm-basic: OK
+lgbm-extended: OK
