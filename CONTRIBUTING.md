@@ -42,6 +42,8 @@ uv run pre-commit install-hooks
 `uv sync` installs every dependency, in every group, so that is all a contributor ever needs.
 `pre-commit install` puts the hooks in place, and `install-hooks` builds their environments now rather than during your first commit.
 One of them is gitleaks, which pre-commit builds from source, downloading Go first if you have none: that takes one to six minutes and a few hundred MB of disk, once per machine, and well under a second per commit afterwards.
+If Go is on your `PATH`, pre-commit builds with that Go, and gitleaks 8.30.1 needs Go 1.24.11 or newer: an older one fails with `go.mod requires go >= 1.24.11`, or cannot read the file at all before Go 1.21.
+With Go 1.21 or newer, run `GOTOOLCHAIN=auto uv run pre-commit install-hooks` once, so Go fetches the toolchain it needs; with an older Go, upgrade it, or run `install-hooks` with Go off your `PATH` so pre-commit downloads its own.
 
 ## Dependencies
 
@@ -87,7 +89,7 @@ Two checks enforce that, with the same rules from `.gitleaks.toml`:
 
 - The **gitleaks pre-commit hook** scans what you stage and refuses the commit when it finds a secret.
   It redacts what it found, so its output is safe to paste into an issue.
-- CI's **`Secret scan (gitleaks)`** job scans every commit of every branch, tag and pull request on every pull request and every push to `main`, which catches a commit made with `--no-verify` or from a clone without the hook.
+- CI's **`Secret scan (gitleaks)`** job scans every commit of every branch, tag and pull request on every pull request and every push to `main`, merge commits included, which catches a commit made with `--no-verify` or from a clone without the hook.
 
 The hook prevents a leak; the CI job only detects one.
 The repository is public, so by the time CI reports a secret, the push has already published it, and GitHub keeps every commit a pull request ever pointed at, so rewriting the branch does not take it back.
@@ -97,10 +99,14 @@ When the scan finds one:
 2. Remove it from the branch, by rewriting the commits that carry it and force-pushing the feature branch.
    `main` cannot be rewritten, so a secret that reached it stays in its history.
 3. A revoked secret that has to stay in the history is acknowledged by adding the fingerprint the job log prints to `.gitleaksignore`, in a pull request that says it was revoked.
+   Always the whole fingerprint, commit included: an entry without its commit ignores that line of that file in every commit, and CI's canary fails on one that covers a place it plants a token in.
    That file is never a way to let a live secret pass.
 
 Never commit past a finding with `--no-verify`.
-If the hook fires on something that is not a secret, the fix is a narrow allowlist entry in `.gitleaks.toml`, by path and pattern, in a reviewed pull request; EDN-71 has why the rules look the way they do.
+
+The one false positive to expect comes from the rule for DagsHub tokens, which are shaped like a commit SHA: a full 40-character SHA up to 40 characters after `dagshub`, `mlflow`, `password`, `passwd`, `token` or `secret` on the same line, as in "the MLflow run of commit 3e05487...", fires it.
+Write the short SHA instead, which is what the rest of the repository does anyway.
+If the hook fires on something else that is not a secret, the fix is a narrow allowlist entry in `.gitleaks.toml`, by path and pattern, in a reviewed pull request, and CI's canary fails if the entry hides a token in any of the places it plants one; EDN-71 has why the rules look the way they do.
 
 ## Before opening a PR
 

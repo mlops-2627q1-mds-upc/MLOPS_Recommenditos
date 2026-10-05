@@ -24,6 +24,7 @@ Run project commands through `uv run <command>` rather than activating the envir
 
 `install-hooks` builds the hooks now rather than during your first commit.
 The slow one is gitleaks, which refuses a commit that contains a secret such as the token of step 2: pre-commit builds it from source, downloading Go first if you have none, which takes one to six minutes and a few hundred MB of disk, once (see [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#secrets)).
+If it fails with `go.mod requires go >= 1.24.11`, the Go on your `PATH` is too old: run `GOTOOLCHAIN=auto uv run pre-commit install-hooks` instead, or see [Local setup](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#local-setup) for a Go older than 1.21.
 
 ## 2. Get a DagsHub access token
 

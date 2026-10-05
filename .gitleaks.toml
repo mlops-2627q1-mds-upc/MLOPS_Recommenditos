@@ -37,9 +37,16 @@ useDefault = true
 # high enough that a placeholder made of repeats, `0000...` or `deadbeef` five
 # times, which a document might use to show the shape, is not reported.
 #
-# tools/secret_scan_canary.py plants a token in each of those places before CI
-# scans the history and fails unless every one is found, so an edit that breaks
-# this rule turns the job red instead of leaving it silently green.
+# One false positive is known and accepted: a full commit SHA on the same line
+# within 40 characters after one of the words, "the MLflow run of <40-hex SHA>",
+# fires the rule. Prose here uses short SHAs, so it does not come up; if it does,
+# shorten the SHA rather than allowlist the line (CONTRIBUTING.md, Secrets).
+#
+# `tools/secret_scan.py canary` plants a token in each of those places, in a
+# throwaway history with merge commits, and scans it with the command CI scans
+# the real history with. It fails unless every one is found, so an edit that
+# breaks this rule, or an allowlist that hides one of those places, turns the job
+# red instead of leaving it silently green.
 [[rules]]
 id = "dagshub-token"
 description = "DagsHub access token, the credential of our DVC remote and MLflow server"

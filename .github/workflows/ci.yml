@@ -250,8 +250,10 @@ jobs:
   # secret added in one commit and deleted in the next is still published, and a
   # scan of the tip would not see it; one on somebody else's branch is published
   # too, so it turns every pull request red until it is dealt with, which is the
-  # point. A rule added later is applied to all of it the same way. It scans in a
-  # few seconds (228 commits on 2026-10-05).
+  # point. A rule added later is applied to all of it the same way. A merge
+  # commit is read for what it changed itself, so a secret written into a
+  # conflict resolution is seen as well (`--remerge-diff`, see
+  # tools/secret_scan.py). It scans in a few seconds (228 commits on 2026-10-05).
   #
   # No paths filter, for the traceability job's reason and one more: a secret can
   # arrive in any file, so no list of paths can say which changes need a scan.
@@ -299,16 +301,16 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # A scan that finds nothing is evidence only if it could have found
-      # something, and gitleaks has no rule of its own for a DagsHub token.
-      - name: Check that the rules still find a DagsHub token
-        run: python3 tools/secret_scan_canary.py
-      - name: Scan every commit of the history
+      # something, and gitleaks has no rule of its own for a DagsHub token. The
+      # canary plants tokens in a throwaway history and scans it with the very
+      # command the next step runs, so it fails on whatever would blind that scan.
+      - name: Check that the scan still finds a DagsHub token
+        run: python3 tools/secret_scan.py canary
+      - name: Scan every commit GitHub publishes
         id: scan
         # `shell: bash` for pipefail, so the scan's exit code survives the `tee`.
         shell: bash
-        run: |
-          gitleaks git --config .gitleaks.toml --redact --verbose --no-banner . 2>&1 \
-            | tee "$RUNNER_TEMP/gitleaks.log"
+        run: python3 tools/secret_scan.py history 2>&1 | tee "$RUNNER_TEMP/gitleaks.log"
       # The job's result is what the delivery review reads for NFR-15, so say in
       # the summary what it covered rather than leaving that to the log.
       - name: Publish the scan to the job summary
@@ -322,7 +324,7 @@ jobs:
           fi
           {
             echo '## Secret scan'
-            echo "gitleaks ${GITLEAKS_VERSION} with \`.gitleaks.toml\`, over every branch, tag and pull request head as of \`$(git rev-parse --short HEAD)\`: ${scanned}, ${verdict}."
+            echo "gitleaks ${GITLEAKS_VERSION} with \`.gitleaks.toml\`, over every branch, tag and pull request head, merge commits included, as of \`$(git rev-parse --short HEAD)\`: ${scanned}, ${verdict}."
           } >> "$GITHUB_STEP_SUMMARY"
 
   docs:
