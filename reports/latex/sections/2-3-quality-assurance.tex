@@ -140,11 +140,11 @@ Because \texttt{conform} selects only the contract's columns, the seven personal
 
 The value layer is Great Expectations, in two DVC stages that fix the demo's two warts (EDN-68).
 \texttt{configure\_gx} builds the context, and its output \texttt{gx/} is a dependency of \texttt{validate-data}, so validation cannot run against a missing or stale store; it is cached rather than committed, because Great Expectations writes fresh UUIDs on every save.
-The suites are generated, their schema checks from \texttt{schema.py} and every bound from \texttt{params.yaml}, and each rule sits on the frame where it can hold.
+The suites are generated, their schema checks from \texttt{schema.py} and every bound from \texttt{params.yaml}; a row minimum and fill rates on the bounded columns keep any rule from passing vacuously, and each rule sits on the frame where it can hold.
 \texttt{registration\_date} at or before the reference date is hard on the cleaned frame and tolerated on the raw one up to \texttt{mostly=0.99}, so a future scrape carrying many such rows is flagged rather than silently cleaned (EDN-22); the training price range is checked on the cleaned frame only, since the published file starts at 1\,EUR; and the cleaned frame's column list is NFR-08's check that no personal-data column survives.
 Two planned rules were dropped on evidence: an \texttt{is\_used}/\texttt{offer\_type} agreement fails 18,108 rows of the published file by design (EDN-23), and the supported-make list only exists after this stage (EDN-48).
 Probed per expectation on our pandas-3 frames, the tool works, but compares only a column's scalar type, so it cannot tell nullable, extension or \texttt{object} dtypes from their counterparts, which \texttt{schema.py} owns, nor bound a text date, so the raw suite sees that column parsed.
 
-On the real snapshot, the raw suite's 100 expectations find the 164 registrations after the reference date, 0.14\,\% of the dated rows and inside its tolerance, and three odometer readings above 1,000,000\,km, the highest 2,570,000\,km.
-All 54 of the cleaned suite pass, the mileage rule included: the three readings survive preprocessing, and the range is a check that tolerates 0.1\,\% rather than a filter.
+On the real snapshot, the raw suite's 103 expectations find the 164 registrations after the reference date, 0.14\,\% of the dated rows and inside its tolerance, and three odometer readings above 1,000,000\,km, the highest 2,570,000\,km.
+All 57 of the cleaned suite pass, the mileage rule included (EDN-72): the three readings survive preprocessing, and the range is a check that tolerates 0.1\,\% rather than a filter.
 A failed expectation fails the stage (\cref{sec:m2-data-versioning}) after writing the Data Docs, which \texttt{dvc pull} restores, and \texttt{reports/\allowbreak data-validation/\allowbreak summary.json}, git-tracked and free of timestamps, so its diff in a pull request is exactly what the data did.

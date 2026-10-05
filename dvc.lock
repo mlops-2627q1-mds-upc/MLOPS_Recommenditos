@@ -151,8 +151,8 @@ stages:
       size: 18858
     - path: recommenditos/data/validate_data.py
       hash: md5
-      md5: b820fa82611e41024e6c0f8ec92698e9
-      size: 12763
+      md5: c7d2a3b02a9cc186b0ffcaf127d2995d
+      size: 12797
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -164,12 +164,12 @@ stages:
     outs:
     - path: reports/data-validation/data-docs
       hash: md5
-      md5: 59f4e212304d453a1d844ce105743e7a.dir
+      md5: 71b2e156babd2ce6dbcc93e56fd4d674.dir
       size: 4758543
       nfiles: 25
     - path: reports/data-validation/results
       hash: md5
-      md5: 33ff7e2e5a2c22193e5191a810641ede.dir
+      md5: c5d2f869a18c361dd396430d3e9ce360.dir
       size: 132085
       nfiles: 3
     - path: reports/data-validation/summary.json
