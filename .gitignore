@@ -5,6 +5,11 @@
 !/data/**/*.dvc
 !/data/**/.gitignore
 
+# The Great Expectations context: the `configure_gx` stage's DVC output, built
+# from recommenditos/data/gx_context_configuration.py. Every save writes fresh
+# UUIDs into it, so committing it would put a diff in every rebuild (EDN-68).
+/gx
+
 # MLflow's local stores. Ours is the DagsHub tracking server, so neither of these
 # belongs in a commit - but an unset MLFLOW_TRACKING_URI resolves to
 # `sqlite:///$PWD/mlflow.db` since mlflow 3.16, and `mlruns/` is what the file

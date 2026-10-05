@@ -123,10 +123,11 @@ The report describes this check as part of the data decisions.
   A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-23).
   This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around (EDN-24).
 - **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
-  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them and the Great Expectations suite bounds the date at the reference date (EDN-22).
+  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them, and the Great Expectations suites bound the date at the reference date: hard on the cleaned frame, with `mostly=0.99` on the raw one (EDN-22, [Data validation](pipeline.md#data-validation)).
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
-  Great Expectations checks must cover these ranges.
+  The price range is a scope filter in preprocessing and a hard expectation on the cleaned frame.
+  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing (EDN-72).
 
 ## 4. Modelling plan
 
@@ -223,6 +224,9 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
   It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
+- **Great Expectations 1.23.2** works on our pandas-3 frames for every expectation the suites use, each checked against a frame that satisfies it and one that breaks it ([EDN-68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/gx_probe.py`).
+  Two gaps: it compares only a column's scalar type, so it cannot tell a nullable, extension or `object` dtype from its counterpart (`datetime64[us]` passes `datetime64[ns]`, `boolean` passes `bool`, `Float64` passes `float64`, `object` and `string[python]` pass `str`), and `schema.py` alone checks the declared dtype; and it cannot bound a text date, so the raw suite sees `registration_date` parsed.
+  It is a pipeline dependency, not part of the API image.
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8", and ruff lints the code cells of the notebooks too, while Pynblint checks their structure.
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 - **Dependency groups** **[decided]**, [EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `[project] dependencies` in `pyproject.toml` is the serving runtime only, and the API image installs that alone (`uv sync --no-default-groups`).

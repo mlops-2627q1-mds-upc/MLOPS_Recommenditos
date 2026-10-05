@@ -156,3 +156,17 @@ The difference between the two is the optional imports: tqdm, psutil and charset
 uv run python reports/analysis/serving_imports.py
 .venv-serving/bin/python reports/analysis/serving_imports.py
 ```
+
+## Great Expectations on pandas 3 (EDN-68)
+
+`gx_probe.py` runs every expectation kind the suites use against a small pandas-3 frame that satisfies it and one that breaks it, because a dependency resolving is not the same as it working on our dtypes.
+It also builds the same file context twice and lists which files differ, which is what decided that `gx/` is a cached stage output rather than committed configuration.
+It needs no data: `uv run python reports/analysis/gx_probe.py`.
+`gx_probe_results.txt` is the output of the run cited in EDN-68 (2026-10-05).
+
+`gx_fingerprint_cost.py` runs the real `validate-data` stage on the real snapshot with Great Expectations' batch fingerprint switched off, as the stage does, or on, against a context in a temporary directory, so the pipeline's outputs are not touched.
+Run each mode under `/usr/bin/time -v`; `gx_fingerprint_cost_results.txt` holds the wall time and peak RSS of both runs cited in EDN-68 (2026-10-05).
+
+`mileage_scope.py` measures the alternative EDN-72 rejected for the mileage rule: dropping the three cleaned listings above FR-03's 1,000,000 km in preprocessing.
+It runs the real `split`, `features`, `train` and `evaluate` stages on the interim frame without them, in a temporary directory with tracking off, and compares the result with the committed `metrics.json`.
+`mileage_scope_results.txt` is the output of the run cited in EDN-72 (2026-10-05), taken against the `metrics.json` of commit `abea241`.

@@ -84,6 +84,11 @@ requires-python = "~=3.12.0"
 # validation and energy measurement belong here too.
 pipeline = [
     "dvc",
+    # The value layer of the `validate-data` stage (#25). The floor is the version
+    # whose expectations were checked against our pandas-3 frames, each on a frame
+    # that satisfies it and one that breaks it (reports/analysis/gx_probe.py).
+    # Only the two validation stages import it, neither of them on the serving path.
+    "great-expectations>=1.23.2",
     # Figures. In this group rather than in `notebook`, because DVC stages draw
     # figures into `reports/figures/` too (the `compare-energy` stage of #38 is
     # the first), and an install of the pipeline alone has to be able to run them.

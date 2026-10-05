@@ -72,10 +72,19 @@ stages:
   # ----------------------------------------------------------------------
   # configure_gx: build the Great Expectations context and suites (#25).
   #
-  # TODO(#25): give this stage an `outs` naming what it writes under `gx/`, and
-  # make `validate-data` depend on that path. Without one it is a disconnected
-  # node in the DAG - the wart the course demo has - so DVC does not guarantee
-  # it runs before `validate-data`.
+  # The context under `gx/` is this stage's output, cached and gitignored like
+  # `models/`: Great Expectations writes a fresh UUID into every object it saves,
+  # so a committed store would change on every rebuild. The module that builds
+  # it is the reviewed source of truth (EDN-68). Declaring the output is also
+  # what connects this stage to `validate-data`, which depends on it - the
+  # course demo's stage declares none and is a disconnected node in the DAG.
+  #
+  # The suites are written from `schema.py` and from these parameters, so a
+  # changed bound reruns this stage and the validation. The validation's summary
+  # then changes, so `split` reruns too, and stops the chain there: its outputs
+  # come out byte-identical, so nothing after it is out of date.
+  # The price bounds are named one by one, so that editing the deduplication key
+  # does not rebuild the suites.
   # ----------------------------------------------------------------------
   configure_gx:
     cmd: python3 -m recommenditos.data.gx_context_configuration
@@ -83,15 +92,27 @@ stages:
       - recommenditos/data/gx_context_configuration.py
       - recommenditos/config.py
       - recommenditos/schema.py
+      - recommenditos/pipeline.py
+    params:
+      - reference_date
+      - preprocess.price_min_eur
+      - preprocess.price_max_eur
+      - validate
+    outs:
+      - gx
 
   # ----------------------------------------------------------------------
   # validate-data: the data gate (#25).
   #
-  # Two things the course demo's equivalent does not do: a violation fails the
-  # stage rather than only being logged, and the stage writes a summary that
-  # `split` depends on, so the gate sits in the graph. The demo's stage has no
-  # `outs`, which makes it a leaf nothing depends on, so `dvc repro split`
-  # would walk straight past it.
+  # Three things the course demo's equivalent does not do: a failed expectation
+  # fails the stage rather than only being logged, the result of every frame is
+  # read rather than only the first, and the stage writes a summary that `split`
+  # depends on, so the gate sits in the graph. The demo's stage has no `outs`,
+  # which makes it a leaf nothing depends on, so `dvc repro split` would walk
+  # straight past it.
+  #
+  # It reads no parameter itself: every bound is in the suites, which is what
+  # the dependency on `gx` carries.
   # ----------------------------------------------------------------------
   validate-data:
     cmd: python3 -m recommenditos.data.validate_data
@@ -101,13 +122,20 @@ stages:
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
+      - gx
       - data/raw/listings.parquet
       - data/interim/listings.parquet
-    params:
-      - validate
     outs:
+      # The full validation results and the Data Docs rendered from them. Cached
+      # and pushed rather than committed, because both carry the run's timestamp
+      # in their paths and their content, so every run would be a diff; `dvc
+      # pull` brings them to any clone, and `data-docs/index.html` opens offline.
+      - reports/data-validation/results
+      - reports/data-validation/data-docs
       # Not cached, so the validation result is git-tracked and shows up in the
-      # diff of any pull request that changes the data.
+      # diff of any pull request that changes the data. It is written without a
+      # run id or a timestamp for that reason: what a diff of it shows is what
+      # the data did.
       - reports/data-validation/summary.json:
           cache: false
 
