@@ -38,12 +38,50 @@ uv sync
 pre-commit install
 ```
 
+`uv sync` installs every dependency, in every group, so that is all a contributor ever needs.
+
+## Dependencies
+
+`pyproject.toml` splits the dependencies in two, because the API image is built from one half only and NFR-04 caps that image at 1 GB ([EDN-47](reports/edn.md)):
+
+- `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing.
+  FastAPI, uvicorn and pydantic join it with the API in M4.
+- `[dependency-groups]` is everything else, by who needs it: `pipeline` (the DVC stages and experiment tracking, so also data validation and energy measurement), `notebook`, `docs`, `test` and `dev`.
+
+`[tool.uv] default-groups = "all"` is why a plain `uv sync` and `uv run` still install both halves.
+Only the image, and `make test-serving` below, opt out with `--no-default-groups`.
+
+Adding one:
+
+```bash
+uv add --group pipeline <package>   # or notebook, docs, test, dev
+uv add <package>                    # the serving runtime, only by the rule below
+```
+
+A package goes into the runtime only when a module the API imports needs it, at import time or to predict.
+Anything only training needs - MLflow, CodeCarbon, Great Expectations, `shap` (EDN-11) - goes in a group, and is imported from a module serving never imports, such as `modeling/train.py`.
+`pyproject.toml` keeps a comment beside each dependency saying why it is there; keep it with the dependency when you move one.
+
+These are the modules held to the runtime, all under `recommenditos/`, because they are the ones `tests/test_serving.py` imports and `make test-serving` checks:
+
+| Module | Why it is held to the runtime |
+|--------|-------------------------------|
+| `modeling/model.py` | The serving seam: `load_model` and `predict_eur` |
+| `data/build_features.py`, `data/split_data.py`, `pipeline.py`, `schema.py`, `config.py` | What `model.py` imports |
+| `data/preprocess.py` | The API is to reuse its request-side functions, such as `hash_seller_group` |
+| `data/synthetic.py` | The check builds its bundles from this fixture |
+
+`modeling/evaluate.py` is not one of them: it imports MLflow through `tracking.py`.
+So `point_metrics`, which [the pipeline docs](docs/docs/pipeline.md) list among the functions the API will import, has to move to one of the modules above before serving code can use it.
+A module the API comes to import goes into this table and into `tests/test_serving.py` in the same pull request.
+
 ## Before opening a PR
 
 ```bash
 make format         # ruff format + fix
 make lint           # ruff format --check + ruff check
 make test           # pytest, which also reports the coverage of recommenditos/
+make test-serving   # the serving path from the runtime dependencies alone
 make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
 
@@ -57,6 +95,12 @@ It runs every notebook top to bottom on the real data, which CI cannot do becaus
 `make test` prints a coverage table; CI puts the same table in the summary of its test job.
 There is no coverage gate on a PR, so a number below 80 % does not fail anything.
 NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
+
+`make test-serving` builds `.venv-serving/` from `uv.lock` with the runtime dependencies and the `test` group, and runs `tests/test_serving.py` from it.
+It loads that file and the modules in the table above, and nothing else: pytest runs with `--noconftest`, so what `tests/conftest.py` imports for the rest of the suite cannot fail the check.
+It fails when a serving module imports a group's package, when the serving path imports a module only the `test` group installs, such as `packaging`, and when the environment holds anything beyond the runtime and the `test` group.
+CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the M5 image build.
+It only matters when you change a dependency or what a serving module imports, but it is cheap enough to run every time.
 
 ## Requirement traceability
 

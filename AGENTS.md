@@ -11,6 +11,11 @@ Chat with the team may happen in any language, but nothing written into the repo
 Full workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md) - read it before opening a PR.
 Key point for agents: branch protection blocks direct pushes to `main`, and squash merge is the only merge method enabled on GitHub - never merge commit or rebase merge.
 
+## Dependencies
+
+`[project] dependencies` in `pyproject.toml` is the serving runtime the API image is built from, not a list of everything the project uses.
+Before adding or moving a dependency, read the Dependencies section of [CONTRIBUTING.md](CONTRIBUTING.md): almost every new package belongs in a group (`uv add --group pipeline <package>`), and `make test-serving` checks that serving code imports nothing from one.
+
 ## Project brief
 
 [docs/docs/project-brief.md](docs/docs/project-brief.md) holds the project goal, the verified data facts, the modelling and architecture plan and the open decisions.

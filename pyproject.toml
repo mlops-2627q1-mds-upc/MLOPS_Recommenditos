@@ -15,25 +15,80 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License"
 ]
+# The serving runtime: what it takes to load a bundle from `models/<variant>/`
+# and price a listing, and nothing else. The API image (M5) installs this list
+# alone (`uv sync --no-default-groups`), because NFR-04 caps that image at 1 GB
+# and none of the pipeline, notebook, docs or tooling stacks answers a request
+# (EDN-47). Everything else is in `[dependency-groups]` below, which a plain
+# `uv sync` installs as well.
+#
+# A package belongs here only when a module the API imports needs it, at import
+# time or to predict. `make test-serving`, and CI's `Serving runtime` job, install
+# this list on its own and run the serving path from it, so a module on that path
+# that needs a group's package fails the build instead of the M5 image. FastAPI,
+# uvicorn and pydantic join this list with the API in M4.
 dependencies = [
-    "coverage",
-    "dvc",
-    "ipython",
     # The `b1` pipeline is persisted with joblib rather than by hand: a fitted
     # `ColumnTransformer` carries the category lists, the imputer means, the
     # scaler statistics and the infrequent-level groupings, and none of that is
     # worth re-serialising. It arrives with scikit-learn anyway, but a direct
     # import of a transitive dependency breaks the day that dependency drops it.
     "joblib",
-    "jupyterlab",
     # The main estimator of the ladder (EDN-02: native categorical handling, no
     # one-hot). 4.5 or newer for `deterministic` and the sklearn-style
     # `eval_X`/`eval_y` arguments that replace the deprecated `eval_set`;
     # observed working on 4.7.0.
     "lightgbm>=4.5",
     "loguru",
+    "numpy",
+    # pandas 3 or newer: the contract relies on its `str` dtype and on
+    # `astype("str")` preserving a missing value instead of writing "nan".
+    "pandas>=3",
+    # Parquet is the interchange format between pipeline stages: it is typed, so
+    # a frame keeps its dtypes across a stage boundary instead of being re-inferred.
+    # A runtime dependency, not a pipeline one, because `b0`'s lookup table is a
+    # Parquet file inside its bundle, and because pandas 3 backs its `str` dtype
+    # with pyarrow whenever it is installed. It is also the largest package of
+    # this list (157 MB of the 421 MB measured for EDN-47), which is worth knowing
+    # in M5.
+    "pyarrow",
+    # `recommenditos/config.py` loads `<repo>/.env` when it is imported, and every
+    # module imports it. A missing file is not an error, so the image needs the
+    # package but no `.env`.
+    "python-dotenv",
+    # params.yaml, read by every stage and by the tests that check dvc.yaml. Also
+    # a runtime dependency because `recommenditos/pipeline.py` imports it, and the
+    # serving seam reaches that module through `build_features`.
+    "pyyaml",
+    "scikit-learn",
+    # Every stage module declares its command line when it is imported, and the
+    # serving seam imports two of them: `model.py` reads the feature space through
+    # `build_features`, which imports `split_data`. Keeping typer here (7 MB with
+    # rich and Pygments) is cheaper than splitting those modules, which would
+    # break EDN-28's one module per stage and the `deps` dvc.yaml names for them.
+    "typer",
+]
+requires-python = "~=3.12.0"
+
+# Everything that is not serving, grouped by who needs it (PEP 735). Unlike
+# optional extras, groups are not published as package metadata, and installing
+# the project does not offer them; they exist for working on this repository.
+# `default-groups` below makes `uv sync` and `uv run` install every group, so a
+# contributor and CI still get the whole environment from the same commands as
+# before; only the API image opts out (EDN-47). Add a dependency to a group with
+# `uv add --group <name> <package>`, and to the runtime list above only by the
+# rule written there.
+[dependency-groups]
+# What the DVC stages and experiment tracking need beyond the runtime list:
+# everything that produces or measures a model rather than serving one. Data
+# validation and energy measurement belong here too.
+pipeline = [
+    "dvc",
+    # Figures. In this group rather than in `notebook`, because DVC stages draw
+    # figures into `reports/figures/` too (the `compare-energy` stage of #38 is
+    # the first), and an install of the pipeline alone has to be able to run them.
+    # The notebooks need nothing more: `uv sync` installs every group.
     "matplotlib",
-    "mkdocs",
     # Experiment tracking against the DagsHub tracking server. The course demo
     # pins `>=2.22,<3` for DagsHub compatibility; that ceiling is not carried
     # over, because 3.16.1 was verified against
@@ -44,34 +99,58 @@ dependencies = [
     # file store now refuses to run and an unset tracking URI resolves to a local
     # SQLite database - and NFR-06's reproducibility promise should not rest on
     # whatever a major release does next. Raising it is a deliberate act with a
-    # re-verification against DagsHub, which is the point.
+    # re-verification against DagsHub, which is the point. Not in the runtime
+    # list: the model ships inside the image and the API never calls MLflow
+    # (EDN-08).
     "mlflow>=3.16.1,<4",
-    "notebook",
-    "nbstripout",
-    "numpy",
-    # pandas 3 or newer: the contract relies on its `str` dtype and on
-    # `astype("str")` preserving a missing value instead of writing "nan".
-    "pandas>=3",
-    "pip",
-    "pre-commit",
-    # Parquet is the interchange format between pipeline stages: it is typed, so
-    # a frame keeps its dtypes across a stage boundary instead of being re-inferred.
-    "pyarrow",
-    "pytest",
-    "pytest-cov",
-    "python-dotenv",
     # The `download` stage streams the raw file from Zenodo. It arrives with DVC
     # anyway, but a direct import of a transitive dependency breaks the day that
     # dependency changes, so it is declared here.
     "requests",
-    # params.yaml, read by every stage and by the tests that check dvc.yaml.
-    "pyyaml",
-    "ruff",
-    "scikit-learn",
+    # `recommenditos/config.py` routes loguru through `tqdm.write` when tqdm can
+    # be imported, so that a progress bar and a log line do not overwrite each
+    # other. Deliberately not in the runtime list: serving draws no progress bar,
+    # and without tqdm the API logs to loguru's default stderr sink, which
+    # colours only a terminal, instead of a sink that writes colour codes into
+    # every container log line.
     "tqdm",
-    "typer",
 ]
-requires-python = "~=3.12.0"
+# Running and writing the notebooks under `notebooks/`.
+notebook = [
+    "ipython",
+    "jupyterlab",
+    "notebook",
+]
+# The documentation site under `docs/`, which CI builds with `--strict`.
+docs = [
+    "mkdocs",
+]
+# The test suite. A group of its own rather than part of `dev`, because the
+# serving check installs exactly this on top of the runtime list, and every
+# package beyond it would be one a serving import could lean on unnoticed.
+test = [
+    # CI calls `coverage report` itself for the job summary, so it is declared
+    # rather than left to arrive with pytest-cov.
+    "coverage",
+    "pytest",
+    "pytest-cov",
+]
+# Contributor tooling: formatting and lint, and the git hooks.
+dev = [
+    # pre-commit runs its own copy as a hook; this one is for running it by hand.
+    "nbstripout",
+    # uv does not seed an environment with pip, and nothing in the project calls
+    # it; this is so that `python -m pip` works inside `.venv` for a contributor.
+    "pip",
+    "pre-commit",
+    "ruff",
+]
+
+[tool.uv]
+# Every group, so that `uv sync` and `uv run` still give the whole environment.
+# The API image, and the serving check that stands in for it until M5, opt out
+# with `--no-default-groups`.
+default-groups = "all"
 
 
 [tool.pytest.ini_options]

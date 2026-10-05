@@ -1,0 +1,44 @@
+Installed size of site-packages (decimal MB)
+              as installed   with bytecode  packages
+full                815 MB        1,054 MB       248
+runtime             421 MB          519 MB        23
+runtime / full, with bytecode: 49%
+
+Largest 12 distributions of runtime, as installed
+  pyarrow==25.0.1                             157 MB
+  scipy==1.17.1                               114 MB
+  numpy==2.4.6                                 57 MB
+  pandas==3.0.6                                39 MB
+  scikit-learn==1.9.1                          31 MB
+  lightgbm==4.7.0                              10 MB
+  Pygments==2.21.0                              5 MB
+  PyYAML==6.0.3                                 3 MB
+  narwhals==2.26.0                              2 MB
+  rich==15.0.0                                  1 MB
+  joblib==1.6.0                                 1 MB
+  typer==0.26.8                                 0 MB
+
+Largest 12 distributions of full, as installed
+  pyarrow==25.0.1                             157 MB
+  scipy==1.17.1                               114 MB
+  numpy==2.4.6                                 57 MB
+  mlflow==3.16.1                               43 MB
+  jupyterlab==4.6.3                            41 MB
+  pandas==3.0.6                                39 MB
+  scikit-learn==1.9.1                          31 MB
+  babel==2.18.0                                31 MB
+  matplotlib==3.11.2                           25 MB
+  ruff==0.16.8                                 24 MB
+  fonttools==4.65.0                            23 MB
+  pillow==12.3.0                               20 MB
+
+The runtime environment, every distribution
+  annotated-doc==0.0.5, cloudpickle==3.1.2, joblib==1.6.0, lightgbm==4.7.0, loguru==0.7.3, markdown-it-py==4.2.0, mdurl==0.1.2, narwhals==2.26.0, numpy==2.4.6, pandas==3.0.6, pyarrow==25.0.1, Pygments==2.21.0, python-dateutil==2.9.0.post0, python-dotenv==1.2.3, PyYAML==6.0.3, recommenditos==0.0.1, rich==15.0.0, scikit-learn==1.9.1, scipy==1.17.1, shellingham==1.5.4, six==1.17.0, threadpoolctl==3.7.0, typer==0.26.8
+
+Serving check: every bundle under models/, first 5 test rows, in euros
+  b0             115,945, 179,911, 63,690, 89,900, 107,499   identical to full: True
+  b1             100,564, 156,733, 61,862, 98,330, 92,774   identical to full: True
+  lgbm-basic     131,543, 150,569, 63,129, 90,780, 75,945   identical to full: True
+  lgbm-extended  138,557, 147,333, 61,740, 92,951, 75,760   identical to full: True
+  group packages imported by the serving path in full: ['tqdm']
+  group packages imported by the serving path in runtime: none

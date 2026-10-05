@@ -1338,6 +1338,92 @@ How to add an entry:
 - **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-09 in [the specification](../docs/docs/specification.md).
 - **In LaTeX:** no
 
+### EDN-47: The serving runtime is `[project] dependencies`, and everything else is a PEP 735 dependency group
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance (shapes M5: Model Packaging)
+- **Activity / Topic:** Containerization, Dependency management
+- **Participants:** @lukas2510
+- **Decision:** `pyproject.toml` no longer has one flat dependency list.
+  `[project] dependencies` holds the serving runtime only, meaning what it takes to load a bundle from `models/<variant>/` and price a listing: joblib, lightgbm, loguru, numpy, pandas, pyarrow, python-dotenv, pyyaml, scikit-learn and typer.
+  Everything else is in `[dependency-groups]`: `pipeline` (dvc, matplotlib, mlflow, requests, tqdm), `notebook` (ipython, jupyterlab, notebook), `docs` (mkdocs), `test` (coverage, pytest, pytest-cov) and `dev` (nbstripout, pip, pre-commit, ruff).
+  `[tool.uv] default-groups = "all"` keeps a plain `uv sync` and `uv run` installing every group, so no documented command changed.
+  The API image will install the runtime alone with `uv sync --locked --no-default-groups`.
+  FastAPI, uvicorn and pydantic join the runtime with the API in M4; Great Expectations, CodeCarbon and `shap` (EDN-11) go into groups.
+  `make test-serving`, run by CI's `Serving runtime` job, which is a required check, builds the runtime set plus the `test` group from the lock and runs `tests/test_serving.py` from it, without `tests/conftest.py`.
+  A serving module that imports a group's package therefore fails the pull request instead of M5's image build.
+- **Alternatives considered:**
+  - **Option A (chosen): PEP 735 dependency groups, with the runtime in `[project] dependencies` and `default-groups = "all"`.**
+    Pros: one lock file and one resolution for everything, so the full set's versions do not move and the image installs a strict subset of exactly what CI tested; uv supports it natively (`--group`, `--only-group`, `--no-default-groups`); with `default-groups = "all"`, a contributor's `uv sync`, CI's `uv sync --locked` and every `uv run` behave as before; groups are not published as package metadata, which suits a course project that nobody installs from an index.
+    Cons: the default is the opposite of what the image needs, so the image and the serving check have to remember `--no-default-groups`, and a `uv run` without `--no-sync` in that environment would quietly install every group into it.
+    Two tests in the check close that gap: one fails when the environment holds anything beyond the runtime and `test` closures read from `uv.lock`, so the check cannot pass vacuously; the other runs the serving path in a fresh interpreter and fails when it imported a module only the `test` group installs, because the check's environment has pytest and five packages it pulls in, which the image will not.
+  - **Option B: optional extras (`[project.optional-dependencies]`).**
+    Pros: older and more widely known than dependency groups, and every installer has supported them for years.
+    Cons: `uv sync` leaves extras out unless it is given `--all-extras` or `--extra`, so every documented `uv sync` (getting-started, CONTRIBUTING, the README, the pipeline docs and every CI job) would either have to change or would silently install less than it does today.
+    Extras are also published package metadata, an install-time choice for the users of a library, and nobody installs this project as a library.
+  - **Option C: keep one flat list and swap `mlflow` for `mlflow-skinny`.**
+    Pros: a one-line change; MLflow is the dependency people usually suspect of bloat.
+    Cons: measured while reviewing #42, it does not do what it promises.
+    `mlflow-skinny` depends on fastapi, uvicorn, starlette and databricks-sdk as well, so none of them leaves.
+    What it does drop (alembic, docker, flask, flask-cors, graphene, gunicorn, waitress, sqlalchemy, huey, skops, aiohttp) is 39 MB of a 915 MB `.venv`, which is noise next to jupyterlab and the rest of the training stack.
+    Dropping sqlalchemy and alembic also breaks the two tests that exercise a real MLflow store offline, which are the only place the suite does so without credentials.
+    And the image would still contain the notebooks, the docs and the tooling.
+  - **Option D: keep one flat list, and give the image its own hand-written requirements file.**
+    Pros: no change to `pyproject.toml`.
+    Cons: a second dependency list that nothing ties to `uv.lock`, so the image would either resolve its own versions, and then it is not running what CI tested, or need its versions copied by hand and kept in step forever.
+    A serving import of a training package would still first fail in the image build.
+  - **Option E: a separate project or uv workspace member for the API.**
+    Pros: the hardest boundary, with its own `pyproject.toml`.
+    Cons: the API imports `recommenditos` itself (`model.py`, `build_features`), so it would depend on the package anyway and the split would end up inside it again.
+    A workspace means two members to version and document, which is more structure than a five-person, one-semester project needs.
+- **Rationale:** The issue framed the lever correctly: what matters is which dependencies reach the image at all, not which MLflow package is installed.
+  Option C was ruled out by measurement before this work started.
+  Between A and B the deciding difference is the default.
+  Extras would have changed every documented `uv sync`, or quietly installed less with it, while groups with `default-groups = "all"` leave every existing command exactly as it was and only ask the image to opt out.
+
+  The runtime set comes from evidence, not from a guess.
+  An import hook traced a real `load_model` and `predict_eur` on every committed bundle, in the full environment and in the runtime one (`reports/analysis/serving_imports.py`).
+  `model.py` reaches `build_features`, `split_data`, `pipeline`, `schema` and `config`, and those import nine of the ten packages above themselves.
+  The tenth, pyarrow, is imported by pandas, whose `read_parquet` needs it but which declares it only as an extra.
+  The other packages that got imported belong to those ten: their own requirements, such as narwhals, which both lightgbm and scikit-learn require, scipy and threadpoolctl.
+  The exceptions are optional imports that are skipped when the package is absent: tqdm from `config.py`, psutil from joblib and charset_normalizer from numpy.
+  All three appear in the full environment's trace and are missing from the runtime one's, which still serves.
+  Nothing on the serving path imports MLflow, DVC or anything else from the training stack, so no refactor was needed.
+  Three small packages stay in the runtime on purpose.
+  typer is there because every stage module declares its command line when it is imported, and the serving seam imports two of them.
+  It costs 6.7 MB with rich and Pygments, and splitting `build_features` to avoid it would break EDN-28's one module per stage and the `deps` that `dvc.yaml` names.
+  pyyaml and python-dotenv are there because `pipeline.py` and `config.py` import them, and together they are 3.0 MB.
+  tqdm went the other way, into `pipeline`: `config.py` sends loguru through `tqdm.write` with colour forced on whenever tqdm can be imported, which would put escape codes into every container log line.
+  Without it, the API logs to loguru's default stderr sink, which colours only a terminal.
+  `test` is a group of its own rather than part of `dev`, because the serving check installs it on top of the runtime, and every extra package there would be one a serving import could lean on unnoticed.
+  matplotlib is in `pipeline`, not `notebook`, because a DVC stage draws figures too: issue #38's `compare-energy` stage writes `reports/figures/energy-vs-error.png`, and an install of the pipeline alone has to be able to run it.
+
+  Measured on 2026-10-05 by building both environments from `uv.lock` (`reports/analysis/runtime_footprint.py`): the runtime is **23 distributions, the project included, and 421 MB of site-packages as installed (519 MB with bytecode)**.
+  The full environment is **248 distributions and 815 MB (1,054 MB)**.
+  So the runtime is 52 % of the full environment as installed and 49 % with bytecode, and the full one, once compiled, would exceed NFR-04's 1 GB cap with its site-packages alone, before a base image or a model.
+  The runtime leaves 579 MB as installed, or 481 MB compiled, for the base image, FastAPI, the model and the comparables index.
+  The largest runtime packages are pyarrow (157 MB), scipy (114 MB), numpy (57 MB), pandas (39 MB), scikit-learn (31 MB) and lightgbm (10 MB).
+  pyarrow is therefore the first place M5 should look if the image runs tight, but it is not a free saving: `b0`'s bundle carries a Parquet lookup table, and pandas 3 backs its `str` dtype with pyarrow whenever it is installed, so dropping it changes how every string column of a request is stored.
+  The four committed bundles price their first five test rows identically in both environments, so the runtime set serves the same numbers rather than merely importing.
+
+  The full set's resolution did not move: `uv export --all-groups` lists the same 252 packages at the same versions before and after, the project itself aside, and the only lock change is the project's own entry.
+  The guarantee is made permanent rather than measured once.
+  Adding `import mlflow` to `model.py` made `make test-serving` fail with `ModuleNotFoundError: No module named 'mlflow'`, while the full suite would still have passed.
+  Adding `import packaging.version` there failed it as well, naming `packaging` as a module only the `test` group installs.
+  A module-level `import codecarbon` in `tests/conftest.py`, which is what issue #38's PR does, leaves it green, because the check never loads that file.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** Lukas chose dependency groups over extras before the implementation started, and the `mlflow-skinny` measurement had already been taken while reviewing #42.
+  What AI contributed is the evidence that the split is correct and stays correct.
+  It traced the serving import graph by running it rather than by reading the imports, which is what separated the three optional imports from real requirements.
+  It built both environments from the lock, priced the committed bundles in each, checked that the lock's resolution was unchanged, and placed every dependency with a stated reason.
+  That includes the three that did not obviously belong anywhere: typer kept in the runtime rather than splitting the stage modules, tqdm moved out of it because of the forced-colour log sink, and `test` separated from `dev`.
+  It then proved the CI check catches a training import by injecting one, and added the guard that fails the check when anything beyond the runtime and the test group is installed, so a lost `--no-default-groups` cannot make the job pass vacuously.
+  An independent AI review of the pull request then found three ways the check could still be wrong, and reproduced each: the check loaded `tests/conftest.py`, so #38's conftest import of CodeCarbon would have turned it red with no serving module at fault; the test group's own packages could have stood in for a missing runtime dependency; and a change to the `Makefile` alone did not trigger the job.
+  Each is fixed and covered by a break-it check; the review also caught that narwhals had been called optional when lightgbm and scikit-learn both require it.
+- **AI interaction evidence:** Claude Code sessions on 2026-10-05 implementing issue #61 and reviewing PR #69: the import trace and the footprint run committed under `reports/analysis/`, the before/after `uv export --all-groups` comparison, the injected imports that turned `make test-serving` red, and the review's reproduction of the conftest failure by merging #68's head into this branch.
+- **Other evidence:** [issue #61](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/61); [PR #69](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/69); `pyproject.toml`; [`reports/analysis/runtime_footprint.py`](analysis/runtime_footprint.py) and [its output](analysis/runtime_footprint_results.txt); [`reports/analysis/serving_imports.py`](analysis/serving_imports.py) and [its output](analysis/serving_imports_results.txt); `tests/test_serving.py`; `make test-serving` and the `Serving runtime` job in `.github/workflows/ci.yml`; the Dependencies section of [CONTRIBUTING.md](../CONTRIBUTING.md); NFR-04 in [the specification](../docs/docs/specification.md); [EDN-08](#edn-08-model-loading-bake-into-the-api-image-via-dvc-pull-at-ci-build-time-not-the-mlflow-registry-at-runtime), [EDN-11](#edn-11-keep-shap-out-of-the-api-image-serving-uses-the-boosters-native-shap-export), [EDN-28](#edn-28-one-module-per-dvc-stage-deviating-from-the-flat-cookiecutter-layout).
+- **In LaTeX:** no
 
 ### EDN-48: `split` records the supported-make list and stays a lossless partition; the downstream stages apply it
 
