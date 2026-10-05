@@ -43,7 +43,8 @@ access to the counters for the duration of the run (a reboot also revokes it):
     sudo chmod 0400 /sys/class/powercap/intel-rapl:*/energy_uj \\
         /sys/class/powercap/intel-rapl-mmio:*/energy_uj
 
-It takes about four minutes. `--dry-run` skips both checks and replaces the sysfs
+It takes about four minutes. `--check-only` runs the two checks and stops, which
+is how to see whether the machine is ready. `--dry-run` skips both checks and replaces the sysfs
 tree with a synthetic counter that draws 5 W and wraps every 10 J, which exercises
 the whole script, wrap handling included, without any permission; its output is
 labelled as such and is not evidence.
@@ -78,10 +79,15 @@ logger.remove()
 POWERCAP = Path("/sys/class/powercap")
 ZONE_PATTERNS = ("intel-rapl:*", "intel-rapl-mmio:*")
 
-#: How idle the machine has to be. A laptop with a desktop session and nothing
-#: else sits well below both; a single busy thread on 8 logical CPUs is 12.5 %.
-MAX_LOAD_1MIN = 1.5
-MAX_BUSY_SHARE = 0.08
+#: How idle the machine has to be. Measured on this laptop at 23:35 with no job
+#: running, the desktop alone - VS Code's GPU and renderer processes and two
+#: Claude Code sessions - kept it 14 % busy at a 1-minute load of 1.25, so the
+#: bars sit just above that: any real job adds at least one busy logical CPU,
+#: 12.5 % of the eight, and is refused. A steady background like the desktop's is
+#: in the idle baseline and so subtracted from every fit's marginal energy; what
+#: it cannot subtract is a background that changes, which `others_cpu_s` shows.
+MAX_LOAD_1MIN = 2.0
+MAX_BUSY_SHARE = 0.20
 IDLE_SAMPLE_S = 10.0
 
 BASELINE_S = 30.0
@@ -329,6 +335,8 @@ def baseline(directories) -> dict[str, float]:
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true")
+    # Only the two checks, and what they found; no data is read and nothing is fitted.
+    parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--variants", nargs="*")
     args = parser.parse_args()
     global BASELINE_S, REPEATS
@@ -337,6 +345,9 @@ def main():
         print("DRY RUN: synthetic counter, no idle check. Not evidence.\n")
     else:
         problems = check_idle()
+        if args.check_only:
+            report_checks(problems)
+            return
         if problems:
             print(
                 "Refusing to measure: RAPL counts the whole package, so other work would be "
@@ -358,6 +369,23 @@ def main():
         run(usable, sorted(set(found) - set(usable)), args)
 
 
+def report_checks(problems: list[str]) -> None:
+    """What `--check-only` prints: both checks, and the exit code a real run would get."""
+    print(
+        f"idle check (1-minute load at most {MAX_LOAD_1MIN}, machine at most "
+        f"{MAX_BUSY_SHARE:.0%} busy over {IDLE_SAMPLE_S:.0f} s): "
+        + ("passed" if not problems else "refused")
+    )
+    for problem in problems:
+        print(f"  {problem}")
+    found = zones(POWERCAP)
+    for key, path in found.items():
+        print(f"  {key}: {'readable' if readable(path) else 'NOT readable'}")
+    package = any(key.endswith("package-0") and readable(path) for key, path in found.items())
+    print("readability check: " + ("passed" if package else f"refused; {chmod_hint()}"))
+    sys.exit(3 if problems else 0 if package else 2)
+
+
 @contextmanager
 def _real_powercap():
     yield POWERCAP
@@ -373,10 +401,12 @@ def run(directories: dict[str, Path], unreadable: list[str], args) -> None:
     }
     features = PROCESSED_DATA_DIR / "features"
     makes = read_supported_makes(PROCESSED_DATA_DIR)
-    data = {
-        name: train.read_matrices(features, spec["feature_set"], makes)
-        for name, spec in variants.items()
+    # One copy of each feature set's matrices, shared by the variants fitted on it.
+    matrices = {
+        feature_set: train.read_matrices(features, feature_set, makes)
+        for feature_set in sorted({spec["feature_set"] for spec in variants.values()})
     }
+    data = {name: matrices[spec["feature_set"]] for name, spec in variants.items()}
 
     print(
         f"{time.strftime('%Y-%m-%d %H:%M')}, codecarbon {codecarbon.__version__}, "
@@ -460,15 +490,16 @@ def report(frame: pd.DataFrame, idle_before: dict, idle_after: dict) -> None:
     print(medians.round(3).to_string())
 
     reference = "lgbm-basic" if "lgbm-basic" in medians.index else medians.index[0]
-    ratios = medians[
-        [
-            "fit_s",
-            "rapl_package_J",
-            "rapl_package_marginal_J",
-            "cc_estimate_total_J",
-            "cc_default_total_J",
-        ]
-    ].div(medians.loc[reference])
+    compared = [
+        "fit_s",
+        "cpu_s",
+        "rapl_package_J",
+        "rapl_package_marginal_J",
+        "cc_estimate_cpu_J",
+        "cc_estimate_total_J",
+        "cc_default_total_J",
+    ]
+    ratios = medians[compared].div(medians.loc[reference, compared])
     print(f"\n== Each variant relative to {reference}: does the ranking survive? ==\n")
     print(ratios.round(3).to_string())
     print(

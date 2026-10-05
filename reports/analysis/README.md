@@ -134,6 +134,16 @@ Unlike the scripts below it needs no raw data: it uses the synthetic fixture and
 uv run python reports/analysis/codecarbon_validity.py
 ```
 
+`rapl_validation.py` is the one-off check EDN-69 chose instead of granting RAPL access permanently: it measures an idle baseline and three fits of each ladder variant with the RAPL counters themselves, with CodeCarbon's `cpu_load` estimate forced as the pipeline gets it, and with CodeCarbon's own RAPL figure, all around the same fit.
+It refuses to run on a busy machine, because RAPL counts the whole package, and when the counters are not readable it prints the command that makes them readable.
+`rapl_validation_results.txt` is its output.
+
+```bash
+sudo chmod a+r /sys/class/powercap/intel-rapl:*/energy_uj /sys/class/powercap/intel-rapl-mmio:*/energy_uj
+MLFLOW_TRACKING_URI= uv run python reports/analysis/rapl_validation.py > reports/analysis/rapl_validation_results.txt
+sudo chmod 0400 /sys/class/powercap/intel-rapl:*/energy_uj /sys/class/powercap/intel-rapl-mmio:*/energy_uj
+```
+
 Run them against the raw dataset, which is not in the repo (NFR-08; EDN-35 for where it does live).
 Use the `download` stage's own cache rather than a second 548 MB copy: `uv run dvc repro download`
 with `download.source: zenodo` puts the pinned file there, verified against `download.md5`, and

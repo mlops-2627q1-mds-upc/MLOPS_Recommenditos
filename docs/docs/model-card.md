@@ -570,7 +570,23 @@ Explanations are part of the product, not an afterthought: every valuation ships
 
 ## Environmental Impact
 
-Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (NFR-10), which issue #38 implements; the tracked runs carry their fit time but no emissions figure yet.
+CodeCarbon records the energy and emissions of every fit, and only of the fit, into `reports/emissions/<variant>.csv` and into the variant's MLflow run beside its accuracy (NFR-10, EDN-69).
+**The figure is an estimate, not a reading.**
+RAPL, the CPU's energy counter, is root-only on Linux since kernel 5.10, so on every machine we train on CodeCarbon falls back to its `cpu_load` model: 10 W for the RAM plus the CPU's TDP times the share of its logical CPUs the fit kept busy.
+On the i5-10210U the ladder is trained on, that is 15 W / 8 x the fit's CPU time plus 10 W x its wall time, so at `train.num_threads: 1` a fit is charged 11.75 to 11.80 W for every second it runs, and the RAM constant is most of it.
+The energies of two variants are therefore in the ratio of their fit times, which is a fair comparison of their cost when both come from one run on one machine, and nothing more: the same fit is charged more on a busy laptop, because it takes longer, and about 80 W per second on a GitHub runner, whose four vCPUs CodeCarbon gives a quarter of a 280 W server TDP each.
+Emissions are energy times the Spanish grid's 174.05 g CO2eq/kWh, pinned rather than geolocated so that an identical fit has identical emissions wherever it runs.
+Checked once against the RAPL counter on an idle laptop (`reports/analysis/rapl_validation.py`): **[pending RAPL check]**.
+
+| Variant | Fit time | Energy | Emissions | MdAPE, every field given | MdAPE, only the fields FR-01 requires |
+|---|---|---|---|---|---|
+| `b0` | **[pending final run]** | | | | |
+| `b1` | | | | | |
+| `lgbm-basic` | | | | | |
+| `lgbm-extended` | | | | | |
+
+`reports/figures/energy-vs-error.png` draws the same rows, built by the `compare-energy` stage from the artefacts rather than by hand.
+**[pending final run: whether the extended feature set earns its extra training energy.]**
 
 | | |
 |---|---|
@@ -578,9 +594,9 @@ Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (
 | **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-06: 8.3 s of fitting for the candidate `lgbm-basic`, 37.6 s for the whole ladder. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
-| **Carbon emitted** | _TBD, per training run from CodeCarbon._ |
+| **Carbon emitted** | **[pending final run]** for the whole ladder, per variant in the table above: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
 
-Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02.
+Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02. On the VM it will be the same kind of estimate.
 
 ## Technical Specifications
 
