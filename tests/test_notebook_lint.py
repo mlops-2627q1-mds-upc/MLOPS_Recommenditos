@@ -319,10 +319,10 @@ def test_the_exclusions_reach_pynblint_as_a_json_array_and_it_runs_unattended(tm
     own help suggests crashes it. Without `--yes` an existing output file stops
     the run at a prompt, and the output format is chosen by the `.json` suffix."""
     output = tmp_path / "report.json"
-    command = pynblint_command(
-        Path("/repo/notebooks/1.0-lh-x.ipynb"), ["non-linear-execution", "empty-cells"], output
-    )
-    assert command[:4] == [sys.executable, "-m", "pynblint", "/repo/notebooks/1.0-lh-x.ipynb"]
+    notebook = Path("/repo/notebooks/1.0-lh-x.ipynb")
+    command = pynblint_command(notebook, ["non-linear-execution", "empty-cells"], output)
+    # str(), not the literal: the path is native, so it has backslashes on Windows.
+    assert command[:4] == [sys.executable, "-m", "pynblint", str(notebook)]
     options = command[4:]
     assert json.loads(options[options.index("--exclude") + 1]) == [
         "empty-cells",
