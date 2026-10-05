@@ -278,8 +278,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Into a namespace of their own: the checkout already holds this pull
+      # request's merge commit as `refs/remotes/pull/<n>/merge`, so mapping the
+      # heads to `refs/remotes/pull/<n>` would collide with it and fail the fetch.
       - name: Fetch the head of every pull request
-        run: git fetch --quiet --no-tags origin '+refs/pull/*/head:refs/remotes/pull/*'
+        run: git fetch --quiet --no-tags origin '+refs/pull/*/head:refs/remotes/pull-heads/*'
       - name: Check that the pre-commit hook runs the same release
         run: |
           if ! grep -A1 '^  - repo: https://github.com/gitleaks/gitleaks$' .pre-commit-config.yaml \
