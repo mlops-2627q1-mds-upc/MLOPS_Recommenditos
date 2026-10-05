@@ -973,7 +973,8 @@ def test_a_matrix_of_served_rows_over_served_levels_passes_the_consumer_check():
         # the list, when `train` filtered the rows and the levels kept all 25.
         ([_SERVED_MAKE, _SERVED_MAKE], [_SERVED_MAKE, _UNSERVED_MAKE], _UNSERVED_MAKE),
         # A row with no make level at all: an unserved make the vocabulary does
-        # not know, or a supported make no training row has.
+        # not know, so a matrix from another run. A supported make no training
+        # row has cannot get this far, because `features` refuses it by name.
         ([_SERVED_MAKE, None], [_SERVED_MAKE], "no make level"),
     ],
 )
