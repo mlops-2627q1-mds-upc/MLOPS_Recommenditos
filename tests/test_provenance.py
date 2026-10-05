@@ -196,6 +196,7 @@ def test_a_run_without_git_records_that_rather_than_failing(monkeypatch):
     assert run_tags() == {"git_commit": "unknown", "git_dirty": "false"}
 
 
+@pytest.mark.req("NFR-14")
 def test_a_checkout_without_dvc_counts_every_change(tmp_path: Path):
     """No pipeline to read DVC's writes off, so nothing is excused.
 
