@@ -141,7 +141,7 @@ There is no waiver per notebook or per cell.
 If a rule is wrong for us in general, change its row to `excluded` with a reason in the same pull request, where the change is reviewed like any other.
 Never change a threshold to make a notebook pass.
 
-`Error 2` is not a finding but a run whose answer cannot be trusted: the table is malformed, enforces nothing or a repository rule, or does not match the installed Pynblint, git failed, Pynblint crashed, or the gate got an answer it did not expect, such as a report of another shape from a new Pynblint.
+`Error 2` is not a finding but a run whose answer cannot be trusted: the table is malformed, enforces nothing or a repository rule, or does not match the installed Pynblint, git failed, Pynblint crashed, the reports could not be written, or the gate got an answer it did not expect, such as a report of another shape from a new Pynblint.
 The message names the rule or shows the error: fix the table, the environment, or a notebook file Pynblint cannot read.
 
 ## Who covers what

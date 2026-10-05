@@ -529,6 +529,21 @@ def test_a_run_that_cannot_be_trusted_exits_two_and_is_never_a_pass(tmp_path, to
     assert reason in markdown
 
 
+def test_a_report_that_cannot_be_written_exits_two_rather_than_reading_as_findings(
+    tmp_path, capsys
+):
+    """A traceback out of the gate exits 1, which is what findings exit with, so a
+    clean run whose report cannot be written would fail as if a notebook had a
+    finding. It is a run that cannot be trusted, and the log says why."""
+    root = repository(tmp_path)
+    (root / "reports").write_text("a file where the reports folder belongs", encoding="utf-8")
+
+    assert notebook_lint.main(root, run=FakeTools(), environ={}) == 2
+    printed = capsys.readouterr().err
+    assert "could not write its reports" in printed
+    assert "could not run" in printed
+
+
 # --------------------------------------------------------------------------
 # Which notebooks, and where they live
 # --------------------------------------------------------------------------

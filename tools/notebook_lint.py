@@ -20,9 +20,10 @@ that make nbstripout keep, and so commit, its outputs.
 
 The exit code is 0 when nothing was found, 1 for findings, and 2 when the run
 cannot be trusted: the table is malformed or out of date, git failed, Pynblint
-crashed or wrote no report, or anything else went wrong that the gate did not
-expect. Both reports are written before it exits, so CI publishes them whatever
-the outcome, and a report from an earlier run never stands in for this one.
+crashed or wrote no report, the gate's own reports cannot be written, or anything
+else went wrong that the gate did not expect. Both reports are written before it
+exits, so CI publishes them whatever the outcome, and a report from an earlier run
+never stands in for this one.
 
 It runs in the environment of tools/pynblint-env, which holds Pynblint and its
 pins and none of the project's dependencies, so it uses the standard library
@@ -536,10 +537,15 @@ def _cannot_run(root: Path, reason: str) -> int:
     """Report a run whose answer cannot be trusted, and exit 2.
 
     The report is still written, so that CI's job summary says why instead of
-    showing nothing, or a stale table from an earlier run.
+    showing nothing, or a stale table from an earlier run. When the reports
+    themselves cannot be written, the reason still reaches the log, and the exit
+    code stays 2: a traceback out of here would exit 1, which reads as findings.
     """
     markdown = f"## Notebook lint could not run\n\n```text\n{reason}\n```\n"
-    _write_reports(root, markdown, {"passed": False, "error": reason})
+    try:
+        _write_reports(root, markdown, {"passed": False, "error": reason})
+    except OSError as error:
+        print(f"Notebook lint could not write its reports: {error}", file=sys.stderr)
     print(f"Notebook lint could not run: {reason}", file=sys.stderr)
     return 2
 
@@ -562,9 +568,14 @@ def main(
             # Pynblint reads any other suffix as a zip archive and crashes on it.
             if notebook.endswith(NOTEBOOK_SUFFIX):
                 findings += lint_one(root, notebook, policy.excluded, run, env)
+        result = Result(version, notebooks, policy, findings)
+        # Inside the `try`, so that a report that cannot be written is a run
+        # that cannot be trusted rather than a traceback, which would exit 1.
+        _write_reports(root, render_markdown(result), as_json(result))
     except PolicyError as error:
         return _cannot_run(root, f"{POLICY_DOC.as_posix()}: {error}")
-    # An OSError names its own file: the policy page, a notebook, or git itself.
+    # An OSError names its own file: the policy page, a notebook, a report, or
+    # git itself.
     except (OSError, ToolError) as error:
         return _cannot_run(root, str(error))
     # Anything else is an answer the gate did not expect, such as a report of
@@ -574,8 +585,6 @@ def main(
         traceback.print_exc()
         return _cannot_run(root, f"unexpected {type(error).__name__}: {error}")
 
-    result = Result(version, notebooks, policy, findings)
-    _write_reports(root, render_markdown(result), as_json(result))
     print(render_text(result))
     return 0 if result.passed else 1
 
