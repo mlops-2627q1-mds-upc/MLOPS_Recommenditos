@@ -432,7 +432,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 
 | Property | Target | Measured |
 |---|---|---|
-| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **10.0 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 32.9 s for `lgbm-extended` (1,697 rounds), 45.3 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-05). Read as an order of magnitude and not a benchmark: three fits of the identical two models on the same day took 8.0 s to 10.0 s and 26.4 s to 32.9 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` (EDN-70) |
+| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **8.3 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 27.9 s for `lgbm-extended` (1,697 rounds), 37.6 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-06). Read as an order of magnitude and not a benchmark: fits of the identical two models on 2026-10-05 and 2026-10-06 took 8.0 s to 10.0 s and 26.4 s to 32.9 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` (EDN-70) |
 | Model artefact on disk | no target | 7.6 MB (`booster.txt`, 1,243 trees) for the candidate, 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
@@ -516,12 +516,12 @@ The bold figures are the lowest of the ladder; they are not the candidate, which
 |---|---|---|---|---|---|---|---|---|
 | `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.1 s | 19 KB |
 | `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 1.3 s | 19 KB |
-| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.81 % | 89.8 % | 0.1003 | 1,243 | 8.6 s | 7.6 MB |
-| `lgbm-extended` | 4 | 162 | **6.26 %** | **90.4 %** | 0.0966 | 1,647 | 26.4 s | 10.9 MB |
+| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.81 % | 89.8 % | 0.1003 | 1,243 | 8.3 s | 7.6 MB |
+| `lgbm-extended` | 4 | 162 | **6.26 %** | **90.4 %** | 0.0966 | 1,647 | 27.9 s | 10.9 MB |
 
 What the ladder says, and what it does not:
 
-- **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.55 pp** of MdAPE on a fully described car, and it is **2.04 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %, from the SC-06 sweep). It also costs 146 extra columns, 3.1x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
+- **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.55 pp** of MdAPE on a fully described car, and it is **2.04 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %, from the SC-06 sweep). It also costs 146 extra columns, 3.3x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
 - B0 reproduces the exploratory reference run below almost exactly (12.16 % against 11.9 %), and `lgbm-basic` likewise (6.81 % against 6.7 %), which is the cross-check that the pipeline is measuring what the notebook measured.
 - **Early stopping decides the trees now, and the trees the old budget withheld were worth almost nothing (EDN-70).** At `n_estimators: 1000` both LightGBM variants ran out of budget before early stopping fired.
   With the ceiling at 5,000, early stopping chooses round 1,243 for `lgbm-basic` and 1,647 for `lgbm-extended`, and on the test split that moves MdAPE from 6.83 % to 6.81 % and from 6.32 % to 6.26 %, within 20 % by about 0.1 pp each, and no criterion's verdict for either variant.
@@ -530,7 +530,7 @@ What the ladder says, and what it does not:
   What they cost is linear in the trees: 1.3x and 1.7x the boosting rounds and so the fit, 6.2 to 7.6 MB and 6.8 to 10.9 MB of booster, and one row's native SHAP export from 18.9 to 26.1 ms and from 22.3 to 35.4 ms.
   So the 1,000-tree models were a hair short of where their validation curve flattens, not far from it, and the pooled numbers this card used to quote were not a materially pessimistic bound.
   `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was distinguishable from them (EDN-73, under [Hyperparameters as trained](#hyperparameters-as-trained)).
-- The whole four-variant ladder trains in **45.3 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models on the same day, with identical trees, took 8.0 s and 26.4 s against 10.0 s and 32.9 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
+- The whole four-variant ladder trains in **37.6 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models on 2026-10-05 and 2026-10-06, with identical trees, took 8.0 s to 10.0 s and 26.4 s to 32.9 s against 8.3 s and 27.9 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
 
 #### Reference values
 
@@ -575,7 +575,7 @@ Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (
 | | |
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
-| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-05: 10.0 s of fitting for the candidate `lgbm-basic`, 45.3 s for the whole ladder. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
+| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-06: 8.3 s of fitting for the candidate `lgbm-basic`, 37.6 s for the whole ladder. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | _TBD, per training run from CodeCarbon._ |

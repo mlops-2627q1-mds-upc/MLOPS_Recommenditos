@@ -148,7 +148,7 @@ Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 **Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
 Measured on the real snapshot on 2026-10-05 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-67, with early stopping deciding the tree count, EDN-70): step 1 12.16 %, step 2 9.52 %, step 3 6.81 %, step 4 6.26 %.
 So the extended feature set is worth 0.55 pp on a fully described car - and 2.04 pp *worse* than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-The whole ladder fits in 36 seconds.
+The whole ladder fits in under a minute.
 Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-70), and `learning_rate` and `num_leaves` are deliberately not tuned, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73). Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
