@@ -8,7 +8,7 @@ inside a half-finished training run - the cheapest failure is the one that
 happens before the fit.
 
 `tracked_run` is the seam a stage uses: it configures the server, opens the run
-and tags it with the git commit and the DVC data version that NFR-06 requires.
+and tags it with the git commit and the DVC data version that NFR-14 requires.
 Those tags live here rather than in each caller because a caller that has to
 remember a second call eventually forgets one, and a run without them cannot be
 reproduced from the report.
@@ -92,7 +92,7 @@ SETUP_CHECK_EXPERIMENT = "setup-check"
 
 # `dvc.lock` pins the hash of every artefact the pipeline produced, so one digest
 # over it identifies the data a run saw without the run enumerating its inputs.
-# That is the "DVC data version" NFR-06 asks for. MD5 because DVC's own hashes
+# That is the "DVC data version" NFR-14 asks for. MD5 because DVC's own hashes
 # are MD5, so the two are read side by side.
 DVC_LOCK_FILE = PROJ_ROOT / "dvc.lock"
 
@@ -145,7 +145,7 @@ def _is_configured(name: str) -> bool:
 
 
 def run_provenance() -> dict[str, str]:
-    """The code and data version of this checkout, as MLflow tags (NFR-06).
+    """The code and data version of this checkout, as MLflow tags (NFR-14).
 
     `git_dirty` is separate from `git_commit` on purpose: a commit alone says
     nothing about a working tree that has moved on from it, and a run nobody can

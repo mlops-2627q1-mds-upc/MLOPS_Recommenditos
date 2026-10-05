@@ -80,8 +80,8 @@ MANUAL = "manual"
 #: the promised evidence is the drill the cell names, and a marker there says the
 #: test touches the requirement - useful to record, and not the thing that was
 #: promised. Collapsing the two, as an earlier version of this module did, let a
-#: test whose body asserts that two files exist report NFR-06's reproducibility
-#: and MLflow provenance as covered.
+#: test whose body asserts that two files exist report reproducibility and MLflow
+#: provenance as covered, then both promised by NFR-06 and today NFR-06 and NFR-14.
 VERIFIED_BY_TEST = "verified by a test"
 NAMED_BY_A_TEST = "named by a test"
 VERIFIED_BY_HAND = "verified by hand"

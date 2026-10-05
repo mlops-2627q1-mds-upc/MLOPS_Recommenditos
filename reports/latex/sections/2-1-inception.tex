@@ -24,7 +24,7 @@ The used-car price component won, and the reasoning behind that first choice is 
 What did settle the shape of the problem is recorded, and the data settled it: the AutoScout24 snapshot was the only candidate large and rich enough for the planned gradient-boosting model, with a citable licence and verifiable provenance (EDN-01), and its brand skew was turned into explicit scope rules instead of being hidden, namely used passenger cars only (EDN-04) and only makes with at least 300 listings, a list the pipeline computes rather than hard-codes (EDN-05).
 
 \paragraph{The requirements, and what is distinctive about them.}
-The component has 16 functional and 13 non-functional requirements, each with a MoSCoW priority and an acceptance criterion written as something a test can do rather than as an adjective, and each non-functional one declares its quality characteristic against ISO/IEC 25010 and the AI extension 25059, with the three that have no equivalent in either, reproducibility, energy efficiency and delivery, saying so instead of being forced into a category.
+The component has 16 functional and 15 non-functional requirements, each with a MoSCoW priority and an acceptance criterion written as something a test can do rather than as an adjective, and each non-functional one declares its quality characteristic against ISO/IEC 25010 and the AI extension 25059, with the three that have no equivalent in either, reproducibility, energy efficiency and delivery, saying so instead of being forced into a category.
 Three properties go beyond writing requirements down.
 
 \emph{Two levels, one identifier space (EDN-27).}
@@ -39,7 +39,7 @@ Where a target still cannot be measured it carries a \textbf{[proposed]} marker 
 
 \emph{Traceability as a build artefact.}
 A test declares the requirements it verifies with a \texttt{@pytest.\allowbreak mark.\allowbreak req} marker and CI turns the markers into a requirement-to-test matrix, so every requirement is traceable to the test that verifies it or explicitly marked as verified by hand (NFR-07).
-Three requirements carry markers today, NFR-01, NFR-06 and NFR-08, across six tests; the matrix itself is \tbd{the requirement-to-test matrix from CI (issue \#40), with the count of requirements covered automatically and by hand}.
+Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 52 tests; the matrix itself is \tbd{the requirement-to-test matrix from CI (issue \#40), with the count of requirements covered automatically and by hand}.
 
 \subsubsection{Dataset card}
 \label{sec:m1-dataset-card}

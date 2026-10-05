@@ -374,10 +374,11 @@ One MLflow experiment, `params.yaml`'s `train.mlflow_experiment` (`recommenditos
 That is deliberate: a run per DVC stage would scatter four variants over eight runs nothing joins, and the point of tracking is to be able to compare them.
 
 Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the model artefact under `model/` and the test metrics with the six criteria.
+Its parameters are every `params.yaml` key `dvc.yaml` declares for the `train` stage - the seed, `num_threads`, the estimator, the feature set and the hyperparameters, the last under the estimator's name - plus the variant's name and the shape of the training data; the experiment is the one declared key recorded as the run's experiment rather than as a parameter (NFR-14).
 The emissions of the fit are not among them yet; they arrive with issue #38.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
 
-Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-06 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
+Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-14 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
 The ladder this card reports is four runs of the `recommenditos-price` experiment, one per variant, produced by the `dvc repro` whose lock is committed.
 The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
 

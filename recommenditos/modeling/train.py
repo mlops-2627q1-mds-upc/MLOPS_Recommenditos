@@ -120,19 +120,36 @@ def read_matrices(
     )
 
 
-def _logged_params(variant: str, settings: dict, data: TrainingData, *, seed: int) -> dict:
-    """What MLflow records about how this run was configured.
+def _logged_params(
+    variant: str, settings: dict, data: TrainingData, *, seed: int, num_threads: int
+) -> dict:
+    """What MLflow records about how this run was configured (NFR-14).
 
-    Exactly the params.yaml keys `dvc.yaml` declares for this stage, plus the
-    shape of the data they were applied to. The stage logs its own parameters
-    because only it knows which keys it declared; the commit and the data version
-    are the same question for every run and `tracked_run` answers them.
+    Every params.yaml key `dvc.yaml` declares for this stage but one, plus the
+    variant's name and the shape of the data the keys were applied to. A key is
+    logged under its own name, without the `train.variants.<variant>.` path that
+    differs between variants, so the runs of the ladder share their columns, and
+    a hyperparameter under its estimator's name, so LightGBM's `num_leaves` and
+    the Ridge's `alpha` never share one. The exception is `train.mlflow_experiment`,
+    which is recorded as what it is, the experiment the run belongs to, rather
+    than repeated as a parameter of every run in it.
+
+    `num_threads` is logged although the trees do not depend on it, because
+    LightGBM writes it into `booster.txt` (EDN-53), so it changes the artefact
+    and DVC reruns the stage for it.
+
+    The stage logs its own parameters because only it knows which keys it
+    declared; the commit and the data version are the same question for every
+    run and `tracked_run` answers them.
+    `tests/test_model.py::test_a_run_records_every_parameter_its_stage_declares`
+    reads the declared keys out of `dvc.yaml` and compares them with a real run.
     """
     return {
         "variant": variant,
         "estimator": settings["estimator"],
         "feature_set": settings["feature_set"],
         "seed": seed,
+        "num_threads": num_threads,
         "n_features": len(data.space.schema.feature_names),
         "n_train_rows": len(data.train),
         "n_validation_rows": len(data.validation),
@@ -205,7 +222,7 @@ def main(
         directory = output_dir / variant
         _replace_directory(directory)
         model.save(directory)
-        logged = _logged_params(variant, settings, data, seed=seed)
+        logged = _logged_params(variant, settings, data, seed=seed, num_threads=num_threads)
         # TODO(#38): the hardware parameters of the measurement belong in `logged`.
         _log_the_run(run, model, fit_seconds=fit_seconds, params=logged, directory=directory)
 

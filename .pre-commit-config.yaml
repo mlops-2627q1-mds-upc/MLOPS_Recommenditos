@@ -27,6 +27,19 @@ repos:
     hooks:
       - id: nbstripout
 
+  # NFR-15: scans the staged change for a secret, with the rules of .gitleaks.toml,
+  # before the commit exists. The `gitleaks` hook rather than `gitleaks-system` or
+  # `gitleaks-docker`, because it is the one that needs nothing installed by hand:
+  # pre-commit builds it from source, downloading Go first if there is none. That
+  # costs a few minutes once per machine and version (EDN-71); afterwards a commit
+  # pays milliseconds. `rev` is the release the `Secret scan (gitleaks)` CI job
+  # pins as GITLEAKS_VERSION, and that job fails when the two differ, so a commit
+  # is judged by the same rules locally and in CI.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
     hooks:
