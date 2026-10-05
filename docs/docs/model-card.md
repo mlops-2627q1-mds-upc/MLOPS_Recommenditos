@@ -244,7 +244,7 @@ The pipeline is built in Milestone 2; these steps are fixed by decisions already
 3. **Deduplicate**, before anything is split off, on a composite key rather than on `vin`, which is only 34 % filled ([dataset card](dataset-card.md#known-data-issues)).
 4. **Hold out `ES`** as the new-market drift set (EDN-03).
    It never reaches training, validation or calibration.
-5. **Restrict to supported makes** (EDN-05), computed from the cleaned data.
+5. **Restrict to supported makes** (EDN-05), computed by `split` from the cleaned data and applied by `features` to every frame, the `ES` holdout included, before any level or column is decided (EDN-48, EDN-67).
 6. **Drop PII, identifiers, leaking and redundant columns** as listed in the [problem specification](problem-spec.md#4-features).
    `seller_company_name` survives only as a hash, as the split's grouping key.
 7. **Split** into train, validation, calibration and test **grouped by seller**, so no seller appears in two sets.
@@ -258,14 +258,19 @@ Every stage runs under DVC, and a clean clone reproduces the same splits and met
 
 The two feature sets are defined in the [problem specification](problem-spec.md#4-features).
 What the data-dependent parts of them currently amount to is measured, not specified, because both thresholds are parameters the experiment ladder sweeps.
-Measured on 2026-09-30 by [`reports/analysis/extended_features.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/extended_features.py) over the scoped, deduplicated snapshot (105,405 listings, 61,180 of them in the training split), at `equipment_min_frequency` 0.01, `model_version_tokens` 1 and `model_version_min_frequency` 0.0005.
+All at `equipment_min_frequency` 0.01, `model_version_tokens` 1 and `model_version_min_frequency` 0.0005.
+What the training split decides is measured on 2026-10-05 by [`reports/analysis/served_vocabulary.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/served_vocabulary.py) over the **60,378 training rows of the supported makes**, which is the population the vocabulary is fitted on (EDN-67); the script builds it over all 61,180 training rows too, and that figure is given beside it.
+The properties of the raw columns are measured on 2026-09-30 by [`reports/analysis/extended_features.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/extended_features.py) over the scoped, deduplicated snapshot (105,405 listings).
 
 | Measurement | Value |
 |---|---|
-| Multi-hot equipment columns | 133 of the 146 distinct items in the training rows (comfort 43 of 45, entertainment 16 of 16, extra 38 of 49, safety 36 of 36) |
+| `make` levels | 11, exactly the supported makes (25 over all training rows) |
+| `model` levels | 437 (561 over all training rows) |
+| Multi-hot equipment columns | 133 of the 146 distinct items in the served training rows (comfort 43 of 45, entertainment 16 of 16, extra 38 of 49, safety 36 of 36); the same 133 over all training rows |
+| `model_version` levels above the floor | 278, covering 86.5 % of the served training rows (167 and 78.8 % at a floor of 0.001); 279 and 85.9 % over all training rows |
+| Columns per matrix | 16 features in the basic set and 162 in the extended one, plus `price` and `log_price`; unchanged by the restriction, because no equipment item crossed the threshold either way |
 | `model_version` distinct raw values | 80,332, of which 78,738 survive folding case, accents and separators |
 | `model_version` distinct leading tokens | 2,882 at one token, 18,248 at two |
-| `model_version` levels above the floor | 279, covering 85.9 % of the training rows (167 and 78.1 % at a floor of 0.001) |
 | `weight_kg` parsed range | 1 kg to 93,000 kg, median 1,810 kg; 30 rows below 500 kg and 9 above 4,000 kg |
 
 Two of these are known weaknesses rather than results.
@@ -273,6 +278,7 @@ Two of these are known weaknesses rather than results.
 The `model_version` levels are coarse, and unevenly so.
 The leading token names the body style for Audi and Porsche, and the engine letter for the German premium models that make up most of the data: `d`, `911` and `e` are the three most frequent levels, and 12.4 % of the training rows lead with an engine letter, which largely repeats `fuel_category` while discarding the trim.
 Inside a single make and model the merging is heavy, with Porsche 992 level `911` covering 743 distinct raw trims and Audi A6 `avant` 473, and 329 pairs of levels survive where one is a prefix of the other.
+These figures are EDN-41's, measured on 2026-09-30 over all training rows; the restriction to the supported makes leaves the per-model merges as they were, because every make named here is supported, and takes one level off the total.
 This is accepted as a parameterised starting point; [EDN-41](problem-spec.md#decision-records) records the two finer alternatives that were measured and rejected.
 
 `weight_kg` runs from 1 kg to 93,000 kg, so the column carries data-entry errors from the source.
@@ -281,7 +287,8 @@ The pipeline deliberately does not clean them: a value range is a data-quality r
 #### Training
 
 The `train` stage fits one variant of the [experiment ladder](project-brief.md#4-modelling-plan) per `dvc.yaml` stage, so `dvc repro train@lgbm-basic` retrains that variant alone.
-Every variant is fitted only on the makes the API serves: `split` records them in `data/processed/supported_makes.json` and `train` restricts its rows to them (EDN-48), so no make the API refuses with a 422 is in the model's own training data.
+Every variant is fitted only on the makes the API serves: `split` records them in `data/processed/supported_makes.json`, `features` restricts every frame to them before it builds the vocabulary, and `train` refuses a matrix holding any other make rather than filtering it again (EDN-48, EDN-67).
+So no make the API refuses with a 422 is in the model's training data, and none decided the levels and columns the model is encoded in.
 
 - **Target:** `log(price)`, predictions transformed back with `exp`.
   **No bias correction** is applied to the inverse transform (EDN-49).
@@ -629,6 +636,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion although the flag behind it is unreliable.
 - EDN-48: `split` records the supported-make list and the stages that build model input apply it.
+- EDN-67: `features` applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built.
 - EDN-49: no bias correction on the log-to-euro inverse transform.
 - EDN-50: one-hot encoding for the Ridge baseline only, against EDN-02's "no one-hot".
 - EDN-51: mean fill plus a per-feature missingness indicator for the Ridge numerics, which is not imputation.
