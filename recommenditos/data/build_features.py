@@ -6,9 +6,20 @@ parsed out of its text form (`'1,945 kg'`) and a normalised `model_version`.
 This stage has no equivalent in the course demo, whose text model needs no
 feature engineering; it is our addition and the report says so.
 
-Everything data-dependent about a matrix is decided by the **training rows
-alone** and written beside the matrices as `feature_space.json`: which
-equipment items cleared the frequency threshold, and which levels each
+Every frame is first restricted to the makes the API serves. `split` records
+them in `supported_makes.json` and leaves every row in its frames (EDN-48);
+this stage is the one place the list is applied (EDN-67), to all five frames -
+the `ES` holdout included - and before anything is decided from the rows,
+because that is the only point at which the restriction still shapes the
+feature space. Applied any later, it would leave the model encoded in make
+levels, equipment columns and trims that listings the API answers with a 422
+helped choose. `train` and `evaluate` check the property with
+`check_served_makes_only` rather than filtering a second time, so the rule has
+one owner and its consumers verify it instead of repairing what they are given.
+
+Everything data-dependent about a matrix is then decided by the **served
+training rows alone** and written beside the matrices as `feature_space.json`:
+which equipment items cleared the frequency threshold, and which levels each
 categorical has. Deciding it over all the frames would let validation, test and
 the `ES` holdout choose the feature space, which is a leak. Deciding it per
 frame would be worse: every split would get different columns and different
@@ -528,25 +539,19 @@ def load_vocabulary(directory: Path) -> Vocabulary:
 def read_supported_makes(directory: Path) -> tuple[str, ...]:
     """The makes the API serves, as `split` wrote them beside its frames (FR-04).
 
-    Read here, before the vocabulary is built, because that is the only point at
-    which restricting the model to the supported makes could still decide the
-    level set. `make`'s levels are the sorted unique training values, so
-    restricting the training rows first would make the level set exactly the
-    supported makes, and a make outside them already becomes missing in every
-    other frame rather than a new code.
-
-    This stage does not apply that restriction yet: whether the model is fitted
-    on the supported makes alone is a modelling decision recorded in EDN-48, and
-    the four things this stage and `train` and `evaluate` owe it are written down
-    in docs/docs/pipeline.md under "Known gaps". What this function does is read
-    the list, so that the level count and the supported count are visible
-    together and so a change to the list reruns the matrices.
+    Read before the vocabulary is built, because that is the only point at which
+    restricting the model to the supported makes still decides the feature
+    space: `served_rows` applies the list to every frame first, so `make`'s
+    levels are the supported makes the training rows hold, and the equipment and
+    trim thresholds are shares of the served rows rather than of every row.
+    `train` reads the same file to check its matrices against and to record the
+    list in the model bundle, which is where the API takes it from.
 
     Each entry of the artefact is `{"make": ..., "listings": ...}`, carrying the
     count that admitted it so the file can be audited on its own, so the name has
     to be taken out of the entry. Returning the entries themselves would satisfy
-    `len()`, which is all this stage needs today, and then silently match nothing
-    the first time a caller writes `frame["make"].isin(supported)`.
+    `len()` and then match nothing in `frame["make"].isin(supported)`, so every
+    row of every frame would be removed as unserved.
 
     An empty list is refused rather than read as "no make is supported": `split`
     raises when no make reaches the threshold, so an empty list here means the
@@ -562,6 +567,114 @@ def read_supported_makes(directory: Path) -> tuple[str, ...]:
             f"make at all."
         )
     return tuple(str(entry["make"]) for entry in entries)
+
+
+def served_rows(frame: pd.DataFrame, supported: "tuple[str, ...]", *, name: str) -> pd.DataFrame:
+    """`frame` without the rows of a make the API refuses (FR-04, EDN-48, EDN-67).
+
+    The one place the supported-make list is applied. Called on every frame this
+    stage reads, the `ES` holdout included, and on the training split before
+    `build_vocabulary`, so no listing the API answers with a 422 is in a fit, a
+    metric, the conformal calibration or the M6 replay, and none decides which
+    levels or columns the model is encoded in.
+
+    The `ES` holdout is filtered for the same reason the others are rather than
+    kept raw for the drift scenario: M6 replays it against the API, and the API
+    refuses the unsupported makes before the model sees them, so a raw holdout
+    would replay requests that never reach the model and an unfiltered matrix
+    would describe traffic the monitored system does not receive. On the real
+    snapshot that is 100 of its 6,079 rows, the count EDN-14 already measured
+    NFR-11 on.
+
+    A null make is removed too, because `isin` is False for it and because FR-01
+    makes `make` a required field, so the API refuses that request as well.
+
+    An empty result fails the stage, whichever frame it is. For the training
+    split the vocabulary would otherwise fail on every categorical at once and
+    blame the feature set; for any other frame the matrix could not even be read
+    back, because Parquet keeps no levels for an empty categorical and the next
+    stage's contract check would refuse the file over its levels. In both cases
+    the likely cause is a make list from a different `split` run than the
+    frames, so that is what the message says.
+
+    `reset_index(drop=True)` so the frame is indexed 0..n-1 whatever was removed.
+    Nothing here depends on the index, and leaving gaps in it would make a later
+    positional assumption wrong in a way that is invisible until it is not.
+    """
+    kept = frame[frame["make"].isin(supported)].reset_index(drop=True)
+    if kept.empty:
+        raise ValueError(
+            f"no {name} row is one of the {len(supported)} supported make(s) "
+            f"({', '.join(supported)}), so there is nothing to build a matrix from. The make "
+            f"list and the frames have to come from the same `split` run."
+        )
+    removed = len(frame) - len(kept)
+    logger.info(
+        f"{name}: {len(kept):,} of {len(frame):,} rows are a supported make "
+        f"({removed:,} removed, {removed / len(frame):.1%})."
+    )
+    return kept
+
+
+def check_served_makes_only(
+    matrix: pd.DataFrame, supported: "list[str] | tuple[str, ...]", *, name: str
+) -> None:
+    """Refuse a feature matrix that holds, or was encoded over, a make the API refuses.
+
+    What `train` and `evaluate` call instead of filtering a second time. On the
+    matrices this stage writes a second filter would never remove a row; on any
+    other matrices - an older run, or a make list rewritten without rebuilding
+    them - it would quietly repair the rows while keeping a feature space decided
+    over another population, and the fit or the metric would go ahead with no
+    error anywhere. Checking turns that state into a failure that names it, so
+    the rule keeps one owner, `served_rows`, and its consumers verify a property
+    rather than trusting an intention.
+
+    Two things are checked, because each catches what the other cannot see.
+
+    - The `make` levels are the vocabulary. A level outside the list means the
+      feature space was decided over rows the API refuses even when every row
+      left is served, which is exactly what these matrices were before EDN-67,
+      when `train` filtered its rows and the encoding kept 25 levels.
+    - The rows are the population. A row whose make is not in the list is a
+      request the API answers with a 422. A row with no make level at all is
+      refused too: `make` is a required field, so after `served_rows` a missing
+      level can only be an unserved make the vocabulary does not know, or a
+      supported make that no training row has, and neither belongs in a fit or
+      in a metric about the served population.
+    """
+    allowed = set(supported)
+    make = matrix["make"]
+    problems = []
+
+    foreign_levels = sorted(set(map(str, make.cat.categories)) - allowed)
+    if foreign_levels:
+        problems.append(
+            f"its make levels include {', '.join(foreign_levels)}, so its feature space was "
+            f"decided over rows the API refuses"
+        )
+    outside = ~make.isin(allowed)
+    if outside.any():
+        named = sorted(set(make[outside].dropna().astype(str)))
+        unlevelled = int(make[outside].isna().sum())
+        detail = [f"makes {', '.join(named)}"] if named else []
+        if unlevelled:
+            detail.append(
+                f"{unlevelled:,} with no make level, which is an unserved make the vocabulary "
+                f"does not know or a supported make no training row has"
+            )
+        problems.append(
+            f"{int(outside.sum()):,} of {len(matrix):,} row(s) are not one of the "
+            f"{len(supported)} supported make(s) ({'; '.join(detail)})"
+        )
+
+    if problems:
+        raise ValueError(
+            f"{name}: " + "; ".join(problems) + f". The supported makes are "
+            f"{', '.join(supported)}. `features` restricts every frame to them before it "
+            f"builds anything (EDN-67), so this matrix and the make list come from different "
+            f"runs; rebuild the matrices with `dvc repro features` rather than filtering here."
+        )
 
 
 def unobserved_columns(matrix: pd.DataFrame) -> set[str]:
@@ -589,6 +702,30 @@ def _warn_about_unobserved_columns(split: str, columns: "list[str]") -> None:
             f"{VOCABULARY_SPLIT} rows fill it. Expected where the split is defined by that "
             f"column - the `ES` holdout has no country_code, because `ES` is not a "
             f"{VOCABULARY_SPLIT} level (EDN-03, EDN-18) - and a defect anywhere else."
+        )
+
+
+def _warn_about_supported_makes_without_training_rows(
+    vocabulary: Vocabulary, supported: "tuple[str, ...]"
+) -> None:
+    """Name a supported make the training rows do not hold, if there is one.
+
+    `split` counts support over train, validation, calibration and test
+    together, so a make can clear EDN-05's threshold with every one of its
+    sellers outside the training split. The API would then accept that make
+    (FR-04) while the model encodes it as missing, and `check_served_makes_only`
+    refuses its validation and test rows as unlevelled. It does not happen on the
+    real snapshot, where all 11 supported makes are training levels; the warning
+    exists so that the state is named here rather than discovered there.
+    """
+    if "make" not in vocabulary.categories:
+        return
+    absent = sorted(set(supported) - set(vocabulary.categories["make"]))
+    if absent:
+        logger.warning(
+            f"supported make(s) {', '.join(absent)} have no {VOCABULARY_SPLIT} row, so the API "
+            f"accepts them while the model encodes them as missing; `train` and `evaluate` "
+            f"will refuse their rows."
         )
 
 
@@ -620,23 +757,30 @@ def main(
     columns = feature_params["sets"][feature_set]
     destination = output_dir / feature_set
 
-    training = read_frame(input_dir / f"{VOCABULARY_SPLIT}.parquet", PROCESSED_SCHEMA)
-    # Before the vocabulary, because that is the only point at which a
-    # supported-make restriction could still decide the level set.
     supported = read_supported_makes(input_dir)
+    # Restricted before the vocabulary, because that is the only point at which
+    # the restriction still decides the feature space (EDN-48, EDN-67).
+    training = served_rows(
+        read_frame(input_dir / f"{VOCABULARY_SPLIT}.parquet", PROCESSED_SCHEMA),
+        supported,
+        name=VOCABULARY_SPLIT,
+    )
     vocabulary = build_vocabulary(training, columns, feature_params)
     schema = matrix_schema(columns, vocabulary, name=f"features-{feature_set}")
     _write_feature_space(destination, schema, vocabulary)
     logger.info(
         f"{feature_set}: {len(schema.names)} columns, {vocabulary.n_equipment_features} of them "
-        f"equipment, decided by the {vocabulary.train_rows:,} {VOCABULARY_SPLIT} rows. "
+        f"equipment, decided by the {vocabulary.train_rows:,} served {VOCABULARY_SPLIT} rows. "
         f"{len(vocabulary.categories.get('make', ()))} make level(s) against "
         f"{len(supported)} supported make(s)."
     )
+    _warn_about_supported_makes_without_training_rows(vocabulary, supported)
 
     unobserved_in_training: set[str] = set()
     for name in FEATURE_INPUTS:
-        frame = read_frame(input_dir / f"{name}.parquet", PROCESSED_SCHEMA)
+        frame = served_rows(
+            read_frame(input_dir / f"{name}.parquet", PROCESSED_SCHEMA), supported, name=name
+        )
         matrix = build_matrix(frame, schema, vocabulary, reference_date=params["reference_date"])
         write_frame(matrix, destination / f"{name}.parquet", schema)
         # Compared against the training split rather than reported outright: a

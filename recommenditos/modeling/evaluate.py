@@ -32,10 +32,13 @@ Three outputs:
   and its LaTeX tables cite.
 
 The stage reports on the test rows the API would answer, which is the makes the
-model was fitted on (EDN-48). It takes that list out of the model's own metadata
-rather than reading `supported_makes.json` again, so the evaluated population is
-by construction the trained population, and the per-make segment levels are
-checked against it.
+model was fitted on (EDN-48). `features` has already restricted the test matrix
+to them (EDN-67), so this stage checks rather than filters: it takes the list out
+of the model's own metadata rather than reading `supported_makes.json` again,
+refuses a test matrix holding or encoded over any other make, and checks the
+per-make segment levels against the same list. A filter here would only ever
+remove rows from a matrix of another run, and would then report on a population
+chosen by whichever run the model came from.
 
 Two structural rules keep a criterion honest, both in code that fails rather
 than in a convention somebody has to remember:
@@ -69,7 +72,11 @@ from recommenditos.config import (
     PROCESSED_DATA_DIR,
     REPORTS_DIR,
 )
-from recommenditos.data.build_features import FeatureSpace, equipment_feature_name
+from recommenditos.data.build_features import (
+    FeatureSpace,
+    check_served_makes_only,
+    equipment_feature_name,
+)
 from recommenditos.modeling.model import Model, load_model
 from recommenditos.pipeline import load_params, read_frame
 from recommenditos.tracking import resume_run
@@ -900,7 +907,12 @@ def _evaluate_variant(
     # columns and the category levels are whatever the training rows decided.
     space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
     test = read_frame(input_dir / feature_set / "test.parquet", space.schema)
-    test = _supported_only(test, model)
+    # Taken from the model's own metadata rather than from `supported_makes.json`,
+    # so the evaluated population is checked against the one the model was
+    # fitted on (EDN-48) and the two cannot be read from different `split` runs.
+    check_served_makes_only(
+        test, model.metadata["training"]["supported_makes"], name=f"{variant} test"
+    )
     predicted = model.predict_eur(test)
     metrics = point_metrics(test["price"], predicted)
 
@@ -978,43 +990,16 @@ def _evaluate_variant(
     return record, gate_input
 
 
-def _supported_only(test: pd.DataFrame, model: Model) -> pd.DataFrame:
-    """The test rows the API would answer, which is the population to report on.
-
-    Taken from the model's own metadata rather than from `supported_makes.json`,
-    so the evaluated population is by construction the one the model was fitted
-    on (EDN-48) and the two cannot be read from different `split` runs.
-    """
-    supported = model.metadata["training"]["supported_makes"]
-    kept = test[test["make"].isin(supported)]
-    logger.info(
-        f"{model.variant}: {len(kept):,} of {len(test):,} test rows are one of the "
-        f"{len(supported)} supported make(s)."
-    )
-    # An empty frame here is refused rather than carried further. `predict_eur`
-    # answers one since #62, so this is no longer a guard against a library
-    # traceback: it is that there is nothing to report on. Every metric below
-    # would be undefined, `point_metrics` would raise about an empty set, and the
-    # message would name the metric rather than the population.
-    if kept.empty:
-        raise ValueError(
-            f"no test row is one of the {len(supported)} make(s) {model.variant!r} was fitted "
-            f"on, so there is nothing to report on. The test split and the model's supported-make "
-            f"list come from the same `split` run, so this means one of them was rebuilt without "
-            f"the other."
-        )
-    return kept
-
-
 def check_make_levels_are_served(
     rows: "list[dict]", *, supported: "list[str] | tuple[str, ...]", variant: str
 ) -> None:
     """Refuse a per-make segment level naming a make the API answers with a 422.
 
-    EDN-48's third obligation. `_supported_only` restricts the test rows before
-    they are cut, so this is the check that it did: without it, the report would
-    print an error figure for a make FR-04 rejects, which is worse than printing
-    nothing at all.
+    EDN-48's third obligation. `features` restricts the test rows before they
+    are cut and `check_served_makes_only` checks the matrix, so this is the check
+    on what the stage actually produced: without it, the report would print an
+    error figure for a make FR-04 rejects, which is worse than printing nothing
+    at all.
     """
     unserved = sorted(
         {row["level"] for row in rows if row["segment"] == MAKE_SEGMENT} - set(supported)

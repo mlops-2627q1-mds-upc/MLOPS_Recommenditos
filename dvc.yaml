@@ -148,12 +148,13 @@ stages:
   # directory, and it must not get one - a matrix and the vocabulary that
   # explains it have to be restored together or not at all.
   #
-  # `supported_makes.json` is a dependency because the supported-make list bounds
-  # the feature space: `make`'s levels are the sorted unique training values, so
-  # a change to which makes the API serves changes the level set, and a matrix
-  # built against the old list has to be rebuilt rather than reused.
-  # What this stage owes the make list, and what `train` and `evaluate` owe it,
-  # is written down in docs/docs/pipeline.md under "Known gaps" (EDN-48).
+  # `supported_makes.json` is a dependency because this stage applies it: every
+  # frame, the `ES` holdout included, is restricted to the makes the API serves
+  # before the vocabulary is built (EDN-48, EDN-67). A change to which makes
+  # those are therefore changes both the rows of every matrix and the feature
+  # space they are encoded in, and a matrix built against the old list has to be
+  # rebuilt rather than reused. How `train` and `evaluate` check the result is in
+  # docs/docs/pipeline.md under "The supported makes".
   # ----------------------------------------------------------------------
   features:
     foreach: ${features.sets}
@@ -194,9 +195,12 @@ stages:
   # still retrains, through the directory dependency above - the `features` stage
   # rewrites it first - so nothing is lost by not declaring a key nobody reads.
   #
-  # `supported_makes.json` is a dependency because the stage applies it: the
-  # variant is fitted on the makes the API serves and no others (EDN-48), so a
-  # change to which makes those are is a change to the model's training rows.
+  # `supported_makes.json` is a dependency because the stage reads it: it checks
+  # that the matrices hold the makes the API serves and no others, and records
+  # the list in the bundle, which is where the API takes FR-04's scope from
+  # (EDN-48, EDN-67). A changed list already reruns this stage through the
+  # matrices; declaring it is what keeps the recorded list from disagreeing with
+  # the lock.
   # ----------------------------------------------------------------------
   train:
     foreach: ${train.variants}

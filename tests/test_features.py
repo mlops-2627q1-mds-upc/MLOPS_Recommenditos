@@ -478,17 +478,20 @@ def test_a_categorical_keeps_the_training_levels_in_every_split(run_stage):
 
 
 def test_a_level_the_training_rows_never_saw_is_missing_not_a_new_code(run_stage):
+    # On `model` rather than on `make`: an unsupported make no longer reaches a
+    # matrix at all, while a model the training rows never saw is the case
+    # EDN-18 accepts at request time.
     directory = run_stage(
         {
-            "train": processed_frame([{"make": "BMW"}] * 2),
-            "test": processed_frame([{"make": "BMW"}, {"make": "Porsche"}]),
+            "train": processed_frame([{"model": "3 Series"}] * 2),
+            "test": processed_frame([{"model": "3 Series"}, {"model": "i3"}]),
         }
     )
     written = matrix(directory, "test")
 
-    assert written["make"].iloc[0] == "BMW"
-    assert written["make"].isna().iloc[1]
-    assert "Porsche" not in written["make"].cat.categories
+    assert written["model"].iloc[0] == "3 Series"
+    assert written["model"].isna().iloc[1]
+    assert "i3" not in written["model"].cat.categories
 
 
 def test_a_categorical_the_training_rows_never_observe_fails_the_stage(run_stage):
@@ -811,6 +814,142 @@ def test_an_empty_supported_make_list_is_refused_rather_than_read_as_no_make(run
 
     with pytest.raises(FeatureSpaceError, match="names no supported make"):
         build_features.read_supported_makes(tmp_path / "processed")
+
+
+# --------------------------------------------------------------------------
+# The served population (EDN-48, EDN-67)
+#
+# Deliberately unmarked with `@pytest.mark.req("FR-04")`, for the reason
+# tests/test_split.py gives for the make list itself: FR-04 is the API's 422,
+# its specification cell names an API test as the evidence, and by EDN-45 a
+# marker here would report it verified by a route these tests do not take. What
+# they verify is the pipeline half of the same scope - that no frame reaching a
+# model holds a make that answer refuses, and that no such make decides the
+# feature space the model is encoded in.
+# --------------------------------------------------------------------------
+
+#: A make the tests below support, and one the API answers with a 422.
+_SERVED_MAKE = "BMW"
+_UNSERVED_MAKE = "Trabant"
+
+
+def test_every_frame_the_stage_writes_holds_only_supported_makes(run_stage):
+    # EDN-48's first obligation, in the one stage that now owns it: train,
+    # validation, calibration, test and the `ES` holdout. The holdout is the one
+    # people forget, and it is the set NFR-11 and FR-15 rest on.
+    #
+    # Every input frame holds an unsupported make, so a frame passed through
+    # unfiltered fails here rather than the test passing because the filter had
+    # nothing to do. Each frame also has a row count of its own, so the count
+    # assertion cannot be satisfied by the wrong frame.
+    frames = {
+        name: processed_frame(
+            [{"make": _SERVED_MAKE}] * (position + 2)
+            + [{"make": _UNSERVED_MAKE, "model": "601"}] * 3
+        )
+        for position, name in enumerate(build_features.FEATURE_INPUTS)
+    }
+    for name, frame in frames.items():
+        assert (frame["make"] == _UNSERVED_MAKE).any(), (
+            f"the {name} frame has to hold an unsupported make, or this test cannot fail"
+        )
+
+    directory = run_stage(frames, supported_makes=[_SERVED_MAKE])
+
+    for name, frame in frames.items():
+        written = matrix(directory, name)
+        # `isin` is False for a missing value, so this also catches an unserved
+        # row that survived as a make the vocabulary does not know.
+        assert written["make"].isin([_SERVED_MAKE]).all(), name
+        assert len(written) == int((frame["make"] == _SERVED_MAKE).sum()), name
+
+
+def test_the_vocabulary_is_decided_by_the_served_training_rows_alone(run_stage):
+    # EDN-48's second obligation: the filter comes before anything is fitted on
+    # the training rows. Ten served rows and ten unserved ones, built so that
+    # every data-dependent part of the vocabulary comes out differently if the
+    # unserved rows are counted at all:
+    #
+    # - their make and their model would be levels;
+    # - 'Two-stroke engine' and the trim '601 S de luxe' are on every unserved row
+    #   and on no served one, so over all twenty rows they clear both thresholds;
+    # - 'Cruise control' and the trim 'Touring' are on 3 of the 10 served rows,
+    #   which is 30 % of the served rows but 15 % of all twenty, so at a threshold
+    #   of 0.2 they earn a column and a level only if the denominator is the
+    #   served rows too. An implementation that filtered the counts and not the
+    #   denominator would fail on these two.
+    served = [comfort("Cruise control") | {"model_version": "Touring 320d"}] * 3 + [comfort()] * 7
+    unserved = [
+        comfort("Two-stroke engine")
+        | {"make": _UNSERVED_MAKE, "model": "601", "model_version": "601 S de luxe"}
+    ] * 10
+
+    directory = run_stage(
+        {"train": processed_frame(served + unserved)},
+        supported_makes=[_SERVED_MAKE],
+        equipment_min_frequency=0.2,
+        model_version_min_frequency=0.2,
+    )
+    vocabulary = build_features.load_vocabulary(directory)
+
+    assert vocabulary.train_rows == len(served)
+    assert vocabulary.categories["make"] == (_SERVED_MAKE,)
+    assert vocabulary.categories["model"] == ("3 Series",)
+    assert vocabulary.equipment["equipment_comfort"] == ("Cruise control",)
+    # The seven other served rows keep the default trim, '320d Touring'.
+    assert vocabulary.categories["model_version"] == ("320d", "touring")
+
+
+@pytest.mark.parametrize("name", build_features.FEATURE_INPUTS)
+def test_a_frame_with_no_supported_make_fails_the_stage(run_stage, name):
+    # Failing here is the only place the failure can say what happened. For the
+    # training split the stage would otherwise die inside the vocabulary, naming
+    # every categorical as unobserved and blaming the feature set. For any other
+    # frame it would write a matrix nobody can read back: Parquet keeps no levels
+    # for an empty categorical, so the contract check of the next stage refuses
+    # the file and talks about levels, not about makes. Either way the likely
+    # cause is a make list from another `split` run.
+    served = processed_frame([{"make": _SERVED_MAKE}] * 4)
+    frames = {"train": served, name: processed_frame([{"make": _UNSERVED_MAKE}] * 4)}
+
+    with pytest.raises(ValueError, match=f"no {name} row is one of the 1 supported make"):
+        run_stage(frames, supported_makes=[_SERVED_MAKE])
+
+
+def _make_column(values: "list[str | None]", levels: "list[str]") -> pd.DataFrame:
+    return pd.DataFrame({"make": pd.Categorical(values, categories=levels)})
+
+
+def test_a_matrix_of_served_rows_over_served_levels_passes_the_consumer_check():
+    build_features.check_served_makes_only(
+        _make_column([_SERVED_MAKE, _SERVED_MAKE], [_SERVED_MAKE]),
+        (_SERVED_MAKE, "Audi"),
+        name="train",
+    )
+
+
+@pytest.mark.parametrize(
+    ("values", "levels", "named"),
+    [
+        # A row of a make the API refuses.
+        ([_SERVED_MAKE, _UNSERVED_MAKE], [_SERVED_MAKE, _UNSERVED_MAKE], _UNSERVED_MAKE),
+        # Every row served, but the vocabulary was decided over a population that
+        # held an unserved make: what the matrices were before this stage applied
+        # the list, when `train` filtered the rows and the levels kept all 25.
+        ([_SERVED_MAKE, _SERVED_MAKE], [_SERVED_MAKE, _UNSERVED_MAKE], _UNSERVED_MAKE),
+        # A row with no make level at all: an unserved make the vocabulary does
+        # not know, or a supported make no training row has.
+        ([_SERVED_MAKE, None], [_SERVED_MAKE], "no make level"),
+    ],
+)
+def test_a_matrix_the_consumer_check_cannot_vouch_for_is_refused(values, levels, named):
+    # `train` and `evaluate` call this instead of filtering again, so that the
+    # rule has one owner and the two stages check a property rather than quietly
+    # repairing a matrix that came from a different run.
+    with pytest.raises(ValueError, match=named):
+        build_features.check_served_makes_only(
+            _make_column(values, levels), (_SERVED_MAKE,), name="train"
+        )
 
 
 def test_the_written_contract_is_the_one_the_stage_built(run_stage, params):

@@ -159,17 +159,17 @@ def trained(matrices: dict) -> dict:
 
 
 @pytest.fixture(scope="session")
-def test_frames(matrices: dict, supported_makes: tuple[str, ...]) -> dict:
-    """The test matrix per feature set, restricted to the makes the API serves.
+def test_frames(matrices: dict) -> dict:
+    """The test matrix per feature set, as `features` wrote it.
 
-    The population `evaluate` reports on (EDN-48), so a test that scores a model
-    here scores it on the same rows the stage would.
+    Already the population `evaluate` reports on, because the stage restricts
+    every frame to the makes the API serves (EDN-48, EDN-67), so a test that
+    scores a model here scores it on the same rows the stage would.
     """
-    frames = {}
-    for feature_set in _feature_sets():
-        frame = pd.read_parquet(matrices["features"] / feature_set / "test.parquet")
-        frames[feature_set] = frame[frame["make"].isin(supported_makes)]
-    return frames
+    return {
+        feature_set: pd.read_parquet(matrices["features"] / feature_set / "test.parquet")
+        for feature_set in _feature_sets()
+    }
 
 
 @pytest.fixture(scope="session")
@@ -281,12 +281,18 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
     docs/docs/pipeline.md lists for the make list. Asserted on the row count as
     well as on the list, because recording the right makes while fitting on every
     row would pass a check that only read the metadata.
+
+    Counted on the frames `split` wrote rather than on the matrices, because
+    `features` is where the restriction happens now (EDN-67): a matrix holds only
+    supported makes, so it cannot show that anything was removed, while the split
+    frames still hold every make and say what the model should have been fitted
+    on.
     """
     expected = {}
     for split in ("train", "validation"):
-        matrix = pd.read_parquet(matrices["features"] / "basic" / f"{split}.parquet")
-        expected[split] = int(matrix["make"].isin(supported_makes).sum())
-        assert expected[split] < len(matrix), (
+        frame = pd.read_parquet(matrices["processed"] / f"{split}.parquet", columns=["make"])
+        expected[split] = int(frame["make"].isin(supported_makes).sum())
+        assert expected[split] < len(frame), (
             f"the fixture's {split} split has to contain an unsupported make, or this test "
             f"cannot fail"
         )
@@ -298,6 +304,9 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
         # stage logs, so a validation set holding makes the API refuses would stop
         # the fit on one population and report a number about another.
         assert model.metadata["training"]["n_validation_rows"] == expected["validation"], variant
+        # And the encoding the model was fitted in knows no other make, which is
+        # the half of EDN-48 a row count cannot see (obligation 2).
+        assert set(model.space.vocabulary.categories["make"]) <= set(supported_makes), variant
 
 
 def test_the_baseline_lookup_is_a_table_a_person_can_read(trained: dict):
@@ -1294,15 +1303,17 @@ def test_a_matrix_column_no_estimator_can_encode_is_refused():
         Model(metadata, space)
 
 
-def test_training_fails_when_no_row_is_a_supported_make(
+def test_training_refuses_matrices_built_against_another_make_list(
     matrices: dict, tmp_path: Path, params: dict, monkeypatch
 ):
-    """A make list from another `split` run would otherwise fit on nothing.
+    """A make list from another `split` run fails the fit rather than being reapplied.
 
-    The threshold is set absurdly high rather than the list being edited, because
-    that is the way it happens: `split.min_listings_per_make` is swept, the
-    matrices are not rebuilt, and an empty intersection would train a model on
-    zero rows and report metrics for it.
+    The way it happens: `split.min_listings_per_make` is swept, the list is
+    rewritten and the matrices are not rebuilt. `features` owns the restriction
+    (EDN-67), so `train` does not filter again - that would quietly repair the
+    rows while keeping a vocabulary decided over a different population - but it
+    checks that every row it is about to fit is a make the list names, and says
+    which list it checked against.
     """
     for name in REQUIRED_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
@@ -2106,22 +2117,21 @@ def test_every_segment_partitions_the_rows_and_no_level_is_empty(trained, test_f
         assert counted == len(frame), segment
 
 
-def test_a_test_set_with_no_supported_make_is_refused_rather_than_predicted(
+def test_a_test_matrix_holding_a_make_the_model_was_not_fitted_on_is_refused(
     trained, matrices, tmp_path
 ):
-    # Refused where the population is decided, so the message names the
-    # population. `predict_eur` answers an empty frame since #62, so the stage
-    # would otherwise run on to `point_metrics` and fail about an empty set,
-    # which says nothing about why the set is empty. Reachable only when the test
-    # split and the model's make list come from different `split` runs, which is
-    # exactly what the message says.
+    # Reachable only when the test matrix and the model's make list come from
+    # different `split` runs. `features` owns the restriction (EDN-67), so the
+    # stage checks the test rows against the model's own list instead of
+    # filtering them again: a filter here would report on a population chosen by
+    # whichever run the model came from, with no error anywhere.
     models = tmp_path / "models"
     shutil.copytree(trained["dir"], models)
     record = json.loads((models / "b0" / MODEL_FILE).read_text())
     record["training"]["supported_makes"] = ["Trabant"]
     (models / "b0" / MODEL_FILE).write_text(json.dumps(record), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="no test row is one of the 1 make"):
+    with pytest.raises(ValueError, match=r"b0 test: .* not one of the 1 supported make\(s\)"):
         evaluate_main(
             matrices["features"], models, tmp_path / "metrics", tmp_path / "metrics.json"
         )
