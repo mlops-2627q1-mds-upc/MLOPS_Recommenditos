@@ -283,7 +283,28 @@ train:
       params:
         learning_rate: 0.05
         num_leaves: 63
-        n_estimators: 1000
+        # A ceiling for early stopping, not a tree count: early stopping on the
+        # validation split decides how many trees the model keeps (EDN-70). At
+        # 1,000 the ceiling decided instead, for both LightGBM variants. With no
+        # ceiling in reach, early stopping chooses round 1,243 here and 1,647 for
+        # `lgbm-extended` (reports/analysis/early_stopping_ceiling_results.txt,
+        # 2026-10-05).
+        #
+        # 5,000 rather than higher, because the ceiling is also the worst case of
+        # every cost that grows with the trees. Measured per tree on the real
+        # snapshot, a fit that used all 5,000 would take about 80 s for
+        # `lgbm-extended` against NFR-10's 15 minutes, write a booster of about
+        # 33 MB, and spend about 105 ms on one row's native SHAP export, which
+        # NFR-02 budgets at 200 ms for the whole of `/predict`; at 10,000 that
+        # last figure alone would exceed the budget. And rather than 2,000,
+        # because `lgbm-extended` ran to round 1,697 and a ceiling 300 rounds
+        # above it would bind again after a modest change to the data. 5,000 is
+        # three times its best round.
+        #
+        # `train` warns when the ceiling ends a fit, and `model.json` and the
+        # MLflow run record it as `early_stopped`, so a binding ceiling is visible
+        # rather than read off a tree count.
+        n_estimators: 5000
         early_stopping_rounds: 50
     # Ladder step 4: what the extended features are worth.
     lgbm-extended:
@@ -292,7 +313,8 @@ train:
       params:
         learning_rate: 0.05
         num_leaves: 63
-        n_estimators: 1000
+        # The same ceiling as `lgbm-basic`, for the reasons given there.
+        n_estimators: 5000
         early_stopping_rounds: 50
 
 evaluate:

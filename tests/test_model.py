@@ -255,6 +255,9 @@ def test_model_json_declares_the_seam(trained: dict, spaces: dict):
             "train_l1_log_price",
             "validation_l1_log_price",
             "supported_makes",
+            "best_iteration",
+            "boosting_rounds",
+            "early_stopped",
         }, variant
 
 
@@ -895,15 +898,18 @@ def test_the_payload_of_a_refit_is_byte_identical(
         assert digests[0] == digests[1], variant
 
 
-def test_a_budget_early_stopping_never_reaches_is_recorded_as_the_trees_it_built(
+def test_a_budget_early_stopping_never_reaches_is_recorded_as_a_budget_that_bound(
     tmp_path: Path, matrices: dict, params: dict, monkeypatch
 ):
-    """`best_iteration_` is 0 when early stopping never fired, and 0 means no trees.
+    """A fit the `n_estimators` budget ended says so, in the record and in the log.
 
-    Not a corner case: on the real snapshot both LightGBM variants use all 1,000
-    trees (measured 2026-10-05), so the budget is what binds there and this is the
-    branch those runs take. The fixture always early-stops, so the budget is
-    lowered here to reach it.
+    `best_iteration` alone cannot say it. LightGBM 4.7 reports the best iteration
+    inside the budget whether or not early stopping fired, so a fit cut off while
+    still improving records the budget itself - and one whose curve wobbled near
+    the end records a few trees less, which reads exactly like early stopping.
+    That is what happened on the real snapshot at the former budget of 1,000
+    trees: `lgbm-extended` recorded 996 and had never stopped (issue #64). The
+    fixture always early-stops, so the budget is lowered here to reach the branch.
     """
     for name in REQUIRED_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
@@ -919,14 +925,49 @@ def test_a_budget_early_stopping_never_reaches_is_recorded_as_the_trees_it_built
     }
     overridden = params_override(tmp_path, params, train={**params["train"], "variants": variants})
 
-    train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+    reported: list[str] = []
+    sink = logger.add(reported.append, format="{message}", level="WARNING")
+    try:
+        train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+    finally:
+        logger.remove(sink)
 
     record = json.loads(
         (tmp_path / "models" / "lgbm-basic" / MODEL_FILE).read_text(encoding="utf-8")
     )
     assert record["training"]["best_iteration"] == 3
+    assert record["training"]["boosting_rounds"] == 3
+    assert record["training"]["early_stopped"] is False
     booster = lightgbm.Booster(model_file=str(tmp_path / "models" / "lgbm-basic" / "booster.txt"))
     assert booster.num_trees() == 3
+    assert any("n_estimators" in message and "lgbm-basic" in message for message in reported), (
+        reported
+    )
+
+
+def test_a_lightgbm_record_says_early_stopping_ended_the_fit(trained: dict):
+    """The property issue #64 is about, recorded where every consumer can read it.
+
+    Early stopping fired when the fit ran exactly `early_stopping_rounds` past its
+    best iteration and stopped short of the budget. The record carries both the
+    trees kept and the rounds run, so whether the budget bound a fit is a fact of
+    the bundle rather than something read back out of a training log. Asserted on
+    the fixture, which early-stops; the real snapshot's answer is in the committed
+    `model.json` and the MLflow run.
+    """
+    for variant in ("lgbm-basic", "lgbm-extended"):
+        training = trained["models"][variant].metadata["training"]
+        settings = _variants()[variant]["params"]
+        assert training["early_stopped"] is True, variant
+        assert (
+            training["boosting_rounds"]
+            == training["best_iteration"] + settings["early_stopping_rounds"]
+        ), variant
+        assert training["boosting_rounds"] < settings["n_estimators"], variant
+    for variant in ("b0", "b1"):
+        training = trained["models"][variant].metadata["training"]
+        assert training["early_stopped"] is None, variant
+        assert training["boosting_rounds"] is None, variant
 
 
 def test_num_threads_is_pinned_from_params(
@@ -997,13 +1038,15 @@ def test_the_booster_is_saved_at_its_early_stopped_iteration(trained: dict):
     already truncates the booster when early stopping fires. It pins the
     property, so it would catch a LightGBM that stopped truncating or a
     configuration in which early stopping never fires - which the second
-    assertion is there to rule out for the fixture as it stands.
+    assertion is there to rule out for the fixture as it stands. It reads the
+    record rather than comparing `best_iteration` with the budget, because a best
+    iteration below the budget does not mean early stopping fired.
     """
     for variant in ("lgbm-basic", "lgbm-extended"):
-        best = trained["models"][variant].metadata["training"]["best_iteration"]
+        training = trained["models"][variant].metadata["training"]
         booster = lightgbm.Booster(model_file=str(trained["dir"] / variant / "booster.txt"))
-        assert booster.num_trees() == best, variant
-        assert best < _variants()[variant]["params"]["n_estimators"], (
+        assert booster.num_trees() == training["best_iteration"], variant
+        assert training["early_stopped"], (
             f"{variant} never early-stopped, so this test proves nothing"
         )
 

@@ -1,0 +1,29 @@
+# reports/analysis/early_stopping_ceiling.py on the real snapshot, 2026-10-05 (the matrices of main b26387a's dvc.lock); log lines removed
+seed 20251108, num_threads 1, exploratory budget 20,000
+
+== lgbm-basic (basic, 16 features)
+  params as committed: {'learning_rate': 0.05, 'num_leaves': 63, 'n_estimators': 1000, 'early_stopping_rounds': 50}
+  train rows 60,378, validation rows 8,859
+  early stopping chose round 1,243; the fit ran 1,293 rounds; early stopping ended it: True
+  fit 8.0 s for 1,293 rounds = 6.22 s per 1,000 rounds
+  booster.txt 7.6 MB for 1,243 trees = 6.15 MB per 1,000 trees
+  validation L1(log price) as the stage records it: 0.10027
+  trees    val L1(log)   val MdAPE   predict 1 row   + SHAP 1 row
+     250   0.10544      7.4002%        0.48 ms         5.13 ms
+     500   0.10229      7.0903%        0.52 ms        10.34 ms
+   1,000   0.10049      6.9473%        0.59 ms        18.87 ms
+   1,243   0.10027      6.9563%        0.62 ms        26.12 ms  <- early stopping
+
+== lgbm-extended (extended, 162 features)
+  params as committed: {'learning_rate': 0.05, 'num_leaves': 63, 'n_estimators': 1000, 'early_stopping_rounds': 50}
+  train rows 60,378, validation rows 8,859
+  early stopping chose round 1,647; the fit ran 1,697 rounds; early stopping ended it: True
+  fit 27.1 s for 1,697 rounds = 15.97 s per 1,000 rounds
+  booster.txt 10.9 MB for 1,647 trees = 6.61 MB per 1,000 trees
+  validation L1(log price) as the stage records it: 0.09663
+  trees    val L1(log)   val MdAPE   predict 1 row   + SHAP 1 row
+     250   0.10184      6.7688%        1.13 ms         6.43 ms
+     500   0.09879      6.5668%        1.18 ms        12.62 ms
+   1,000   0.09722      6.4482%        1.45 ms        22.27 ms
+   1,500   0.09671      6.4348%        1.51 ms        32.22 ms
+   1,647   0.09663      6.4531%        1.47 ms        35.35 ms  <- early stopping

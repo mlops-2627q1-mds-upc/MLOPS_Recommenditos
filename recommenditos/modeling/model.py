@@ -932,11 +932,34 @@ class LightGBMModel(Model):
             categorical_feature=list(model.categorical_columns),
             callbacks=[lightgbm.early_stopping(rounds, first_metric_only=True, verbose=False)],
         )
-        # `best_iteration_` is 0 when early stopping never fired, and
+        # One score per round the fit ran, because the curve is recorded for every
+        # round and only the booster is truncated.
+        boosting_rounds = len(estimator.evals_result_[_EVAL_NAME]["l1"])
+        # `best_iteration_` is the best round *inside the budget*, whether or not
+        # early stopping fired: lightgbm 4.7's callback reports it on the last
+        # round too. So it cannot say which of the two ended the fit, and a curve
+        # that wobbled near the end of a binding budget records a few trees less
+        # than the budget, which reads exactly like early stopping. It is 0 only
+        # when the callback is disabled (`early_stopping_rounds: 0`), and then
         # `save_model(num_iteration=0)` would write a booster with no trees.
-        metadata["training"]["best_iteration"] = int(
-            estimator.best_iteration_ or estimator.booster_.num_trees()
+        best_iteration = int(estimator.best_iteration_ or estimator.booster_.num_trees())
+        # Fired means the fit ran the full patience past its best round. Not
+        # "stopped short of `n_estimators`": the patience can run out on the very
+        # last round of the budget, and that fit was ended by early stopping.
+        early_stopped = rounds > 0 and boosting_rounds - best_iteration >= rounds
+        metadata["training"].update(
+            best_iteration=best_iteration,
+            boosting_rounds=boosting_rounds,
+            early_stopped=early_stopped,
         )
+        if not early_stopped:
+            logger.warning(
+                f"{metadata['variant']}: the n_estimators budget of {tuning['n_estimators']:,} "
+                f"ended the fit, not early stopping. The validation L1 was still at its best "
+                f"within the last {rounds} round(s), so the model kept {best_iteration:,} "
+                f"trees and was still improving: raise n_estimators until early stopping "
+                f"decides it."
+            )
         model.booster = estimator.booster_
         return model
 
@@ -1022,6 +1045,12 @@ def fit_variant(
             # which estimator writes which key.
             "train_l1_log_price": None,
             "validation_l1_log_price": None,
+            # Written by the estimators that boost, and null for the two that do
+            # not: the trees the model kept, the rounds the fit ran, and whether
+            # early stopping or the `n_estimators` budget ended it.
+            "best_iteration": None,
+            "boosting_rounds": None,
+            "early_stopped": None,
             # FR-04's scope, carried in the metadata because the API answers the
             # scope check from the model it serves rather than from a file it has
             # to be pointed at separately.
