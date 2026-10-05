@@ -165,8 +165,9 @@ jobs:
           cache-suffix: serving
       - run: make test-serving
         if: needs.changes.outputs.code == 'true'
-      # Without `__pycache__`, so the figure is the installed size EDN-47
-      # records rather than whatever the test run happened to compile.
+      # Without `__pycache__`, so the figure is comparable to the installed size
+      # EDN-47 records rather than whatever the test run happened to compile. It
+      # includes the `test` group, a few MB that the image will not carry.
       - name: Publish the runtime's installed size to the job summary
         if: needs.changes.outputs.code == 'true'
         run: |
@@ -174,7 +175,7 @@ jobs:
           {
             echo '## Serving runtime'
             echo
-            echo "site-packages without bytecode: $(du -sh --exclude=__pycache__ "$site" | cut -f1)"
+            echo "site-packages of the runtime plus the \`test\` group, without bytecode: $(du -sh --exclude=__pycache__ "$site" | cut -f1)"
             echo
             echo '```text'
             (cd "$site" && du -sh --exclude=__pycache__ -- * | sort -rh | head -n 10)
