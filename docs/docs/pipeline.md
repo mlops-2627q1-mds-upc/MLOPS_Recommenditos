@@ -206,19 +206,22 @@ Every MLflow run the pipeline makes names the committed state that produced it (
 | `evaluate.deps.<path>` | `evaluate` resumes the run | Each dependency of `evaluate`, by the hash `dvc.lock` records for it under that stage. |
 
 `git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/` and `reports/data-validation/summary.json`.
-So the runs of a clean commit reproduced with `dvc repro` are tagged clean, and `true` means a change somebody made, an untracked file included.
+So the runs of a clean commit reproduced with `dvc repro` are tagged clean, and `true` means a change somebody made, an untracked file included; `unknown` means git named the commit but could not read the tree's status.
 The one write of DVC's that still counts is the line it adds to a `.gitignore` the first time a new cached output is produced, because that file is also the hand-written `.gitignore` of the repository root; commit the line, and the next run is clean.
 
 The input hashes are computed through DVC's own API when the stage starts, and DVC records the same values in `dvc.lock` once the stage has finished: an MD5 for a file and an MD5 with a `.dir` suffix for a directory.
 So for the runs of a committed `dvc repro`, every `train.deps.<path>` equals the `md5` the committed lock lists for `<path>` under `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks exactly that against the tracking server, for the runs the committed models point at.
 A run made any other way - by a test, or by calling a stage module by hand - carries the commit and no input hashes, because its arguments may point it at other files than `dvc.yaml` declares and no lock records what it read.
+MLflow cannot remove a tag by setting the others, so when `evaluate` resumes a run a second time after a dependency was dropped from its `deps`, the dropped dependency's `evaluate.deps.<path>` tag stays on the run from the first time; the committed lock is the list to compare against, not the run's tags.
 
 To get from a run back to what produced it:
 
-1. **Code and parameters:** check out `git_commit`, or `evaluate.git_commit` for the evaluation; `git_dirty: false` says nothing else was in play, and `params.yaml` at that commit is what the stage read.
+1. **Code and parameters:** `git checkout` the run's `git_commit`, or `evaluate.git_commit` for the evaluation.
+   With `git_dirty: false` the code there is what ran, and every code file has the hash its `deps` tag records, which is the plain `md5sum` of its bytes; `params.yaml` at that commit is what the stage read.
    The commit is the one the pipeline ran from, on the branch of its pull request, so after the squash merge it is reachable through the pull request (`git fetch origin pull/<n>/head`) rather than from `main`.
-2. **Data:** the hashes are content addresses, so they identify the inputs whatever happened to the commits.
-   `git log -S <hash> -- dvc.lock` finds the commits whose lock records one, and `dvc pull` at such a commit restores the file or directory it names; a file's hash is also the plain `md5sum` of its bytes.
+2. **Data:** a data dependency's hash is its address in the DVC cache and on the remote, so it identifies the input whatever happened to the commits.
+   `git log --reverse --format=%H -S <hash> -- dvc.lock` lists the commits that added or removed the hash in the lock, oldest first; the first one added it, and its lock records the input.
+   `git checkout` that commit and `dvc pull <path>` restores the file or directory.
 
 Runs made before 2026-10-05 carry a `dvc_lock_md5` tag instead of the input hashes: the MD5 of `dvc.lock` as it stood when that stage started, which for the first stage of a `dvc repro` is the previous run's lock and for every later one a lock that only existed mid-run, so it is never the lock that records the run (EDN-74).
 

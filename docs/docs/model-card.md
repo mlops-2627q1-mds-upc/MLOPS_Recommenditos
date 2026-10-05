@@ -392,11 +392,15 @@ with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metr
 That filter is what picks one chain out of the experiment: the four runs of a `dvc repro` share one commit, and a run from another commit is a different pipeline.
 Two things about it are worth knowing before the filter is believed, both checked on this ladder rather than assumed:
 
-- **The commit is the one the pipeline ran from, not the one that holds its lock.** `dvc repro` runs at a commit and its `dvc.lock` and metrics are committed after it, so the runs name the parent of the commit that records them, and `tags.git_dirty` is `false` for all four: what DVC writes while it runs does not count as a change. The commit is on the branch of the pull request that re-ran the pipeline, so after the squash merge it is reached through that pull request.
-- **The input tags are what ties a run to the committed lock.** For each of the four runs, every `train.deps.<path>` equals the hash the committed `dvc.lock` records for that dependency of `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks that against the server, and its output is committed beside it. Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the ladder before this one were tagged dirty only because DVC had rewritten `dvc.lock` under them.
+- **The commit is the one the pipeline ran from, not the one that holds its lock.**
+  `dvc repro` runs at a commit and its `dvc.lock` and metrics are committed after it, so the runs name the parent of the commit that records them, and `tags.git_dirty` is `false` for all four: what DVC writes while it runs does not count as a change.
+  The commit is on the branch of the pull request that re-ran the pipeline, so after the squash merge it is reached through that pull request.
+- **The input tags are what ties a run to the committed lock.**
+  For each of the four runs, every `train.deps.<path>` equals the hash the committed `dvc.lock` records for that dependency of `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks that against the server, and its output is committed beside it.
+  Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the ladder before this one were tagged dirty only because DVC had rewritten `dvc.lock` under them.
 
 The experiment also holds runs that are **not** pipeline runs: the test suite trains the same four variants on the synthetic fixture, and it logs to this experiment whenever a `.env` is present, under the same four run names.
-Their metrics are an order of magnitude worse and they carry a different commit; they also carry no `train.deps.<path>` tags, because DVC did not run them, so a run without those tags is not a pipeline run and its numbers are not the model's.
+Their metrics are an order of magnitude worse and they carry a different commit; they also carry no `train.deps.<path>` tags, because DVC did not run them, so since 2026-10-05 a run without those tags is not a pipeline run and its numbers are not the model's.
 
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.

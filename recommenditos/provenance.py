@@ -43,10 +43,10 @@ Input hashes are only recorded when DVC runs the stage. DVC sets `DVC_STAGE` in
 the environment of every command it runs, so the stage learns which stage it is
 from DVC rather than from its own arguments. The stage is looked up by its name
 alone, because the rest of the address is relative to wherever `dvc repro` was
-started: `../dvc.yaml:train@b0` from a subdirectory. Outside DVC - a test, or a stage
-module called by hand - those arguments can point the stage at other files than
-the ones `dvc.yaml` declares, as every test of this project does, and no lock
-records what it read. Such a run carries the commit and no input hashes, rather
+started: `../dvc.yaml:train@b0` from a subdirectory. Outside DVC - a test, or a
+stage module called by hand - those arguments can point the stage at other files
+than the ones `dvc.yaml` declares, as every test of this project does, and no
+lock records what it read. Such a run carries the commit and no input hashes, rather
 than hashes of files it may not have read.
 
 This module talks to git and to DVC and to nothing else, so the tags can be
