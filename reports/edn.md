@@ -2100,6 +2100,7 @@ How to add an entry:
   So a test now reads the keys `dvc.yaml` declares for each `train@<variant>` out of `dvc.yaml` itself and compares them with the parameters of a real run; it failed on the code before the change, on `num_threads` for all four variants, and passes since the stage logs it.
   `train.mlflow_experiment` is the one declared key recorded as what it is, the experiment the run belongs to, and the test checks it there rather than as a repeated parameter.
   `train.py` and `recommenditos/tracking.py`, whose three comments also move from NFR-06 to NFR-14, are dependencies of the four `train` stages and of `evaluate`, so the change reruns them on the real snapshot.
+  The re-run on 2026-10-05 moved no number: `metrics.json`, the segment table and the masking sweep are unchanged, and inside each model bundle only `model.json` changed, by the provenance EDN-56 puts there, while every payload file kept its hash; the four new runs carry all of their stage's declared parameters, `num_threads` among them.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** The owner decided to split both requirements, which half comes due when, and that the hygiene half is verified by a secret scan; the issue and its comment are his.
