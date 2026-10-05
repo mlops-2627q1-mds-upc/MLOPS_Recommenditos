@@ -192,6 +192,38 @@ Paths do not: they stay in `recommenditos/config.py`, derived from the repositor
 This is a deliberate improvement on the demo, which keeps the same settings as Python constants in `config.py`.
 A parameter change reruns the stages that read it, `dvc params diff` shows what changed between two commits, and `dvc exp` can sweep them.
 
+Tuning a hyperparameter
+-----------------------
+
+A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+It exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
+
+- **The split is validation.** A sweep runs the `train` stage and nothing after it, so `evaluate` never reads the test split during a choice.
+  The test metrics of an adopted value are read once, by the committed `dvc repro`, after the choice is made.
+- **The metric is `validation_l1_log_price`**, which `train` logs to MLflow and writes into `model.json`.
+  It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot.
+- **A value replaces the committed one only when the difference is resolved.** The 95 % interval of a paired bootstrap of the validation L1 difference, resampled by seller group because the split is grouped by seller (EDN-14), has to lie entirely below zero.
+  `reports/analysis/tuning_sweep.py` computes it; it needs every validation row's prediction from both models, which neither DVC nor MLflow keeps, so set its `VARIANT` and grid to the sweep's and run it on the candidate.
+- **Every point is decided by early stopping.** A point whose MLflow run has `metrics.early_stopped = 0` was cut off by the `n_estimators` ceiling, not by its curve, so raise the ceiling for the sweep with `-S` before comparing it (EDN-70).
+- **The sweep is tracked apart from the ladder**, in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs.
+
+One queued experiment per point, targeted at the variant's `train` stage:
+
+```bash
+set -a; . ./.env; set +a   # the queued workspace is built from the commit, without the gitignored .env
+uv run dvc exp run --queue -n lr-0025 \
+  -S train.mlflow_experiment=recommenditos-price-tuning \
+  -S train.variants.lgbm-basic.params.learning_rate=0.025 \
+  train@lgbm-basic
+uv run dvc queue start -j 1   # one fit at a time, so the logged fit times stay comparable
+```
+
+Verified on 2026-10-05: the queued experiment runs `train@lgbm-basic` alone - the stages before it are skipped as unchanged and `evaluate` is never reached - and the worker inherits the exported tracking variables.
+Read the results in MLflow, not in `dvc exp show`: because `evaluate` does not run, every experiment carries its parent commit's `metrics.json`, so the test metrics `dvc exp show` prints are the committed model's and say nothing about the point.
+`uv run dvc exp remove <name>` discards an experiment once it has been read.
+
+A value that passes is adopted like any other parameter change: edit `params.yaml`, run `dvc repro` with `RECOMMENDITOS_REQUIRE_TRACKING=1`, commit the lock and the metrics, and record the choice in the EDN with the interval behind it.
+
 From a run to its inputs
 ------------------------
 

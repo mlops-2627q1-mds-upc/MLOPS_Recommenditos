@@ -2356,6 +2356,52 @@ How to add an entry:
 - **Other evidence:** [issue #64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64); [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77); [`params.yaml`](../params.yaml), `train.variants`; [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `LightGBMModel.fit`; `tests/test_model.py::test_a_lightgbm_record_says_early_stopping_ended_the_fit` and `::test_a_budget_early_stopping_never_reaches_is_recorded_as_a_budget_that_bound`; [`reports/analysis/early_stopping_ceiling.py`](analysis/early_stopping_ceiling.py) and [`tuning_sweep.py`](analysis/tuning_sweep.py) with their results files (2026-10-05); [model card](../docs/docs/model-card.md), Training and the ladder; [EDN-53](#edn-53-trainnum_threads-is-pinned-to-1-trading-fit-speed-for-a-machine-independent-artefact), [EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around).
 - **In LaTeX:** no
 
+### EDN-73: `learning_rate` and `num_leaves` are not tuned, and any later tuning follows a written protocol
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Hyperparameter Tuning, Evaluation Protocol, Experiment Tracking
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** `learning_rate: 0.05` and `num_leaves: 63` stay as they are for both LightGBM variants, because a bounded sweep around them found no point the validation split can tell apart from them.
+  The sweep is kept as the evidence that this region is flat, and any later tuning of a committed hyperparameter follows a protocol written down in `docs/docs/pipeline.md`, "Tuning a hyperparameter":
+  selection on the validation split, by `validation_l1_log_price`; a committed value is replaced only when the 95 % interval of a paired bootstrap of the validation L1 difference, resampled by seller group, excludes zero; sweeps run as queued `dvc exp run --queue -S ... train@<variant>` experiments, so `evaluate` never runs and the test split takes no part in the choice; and they are tracked in their own MLflow experiment, `recommenditos-price-tuning`, so the ladder's `recommenditos-price` holds only pipeline runs.
+- **Alternatives considered:**
+  - **Option A (chosen): do not tune now, and write the protocol down.**
+    Pros: no number moves for a gain the data cannot resolve, so the report's numbers are final for this delivery.
+    It avoids the winner's curse: of eleven noisy comparisons against the committed point, the best-looking one is the one most likely to look better than it is.
+    It costs no compute, and the protocol makes the next tuning attempt cheap and honest instead of ad hoc.
+    Cons: the model is untuned in the conventional sense, and the evidence covers a small grid of two knobs for one variant; `min_child_samples`, `feature_fraction` and L2 regularisation are not parameters yet, and `lgbm-extended` was not swept.
+  - **Option B: adopt the validation-L1 winner, `learning_rate` 0.025 with `num_leaves` 63, under the same protocol.**
+    Pros: the lowest validation L1 of the grid, and a model that can be called tuned.
+    Cons: it would fail the protocol it is adopted under. The gain is inside the noise: L1 -0.00031 with a 95 % interval of [-0.00086, +0.00025], better in 86 % of the draws, and MdAPE -0.009 pp with an interval of [-0.11, +0.09] pp.
+    It costs 1.55x the trees and so the fit time and energy, a booster of about 12 MB and about 41 ms for one row's SHAP export, and it moves every number in the report for nothing measurable.
+  - **Option C: a wider search, random or Optuna over more knobs, selected by seller-grouped k-fold cross-validation on train plus validation.**
+    Pros: cross-validation is a less noisy selection than one validation split, and a larger space might hold a real gain.
+    Cons: new code and new parameters, about five times the fits per point, more energy, and a departure from the problem specification's "the validation set is used for early stopping and tuning" - all for a gain the flat grid suggests is small.
+    Left open for a later ticket if a criterion ever comes to depend on a fraction of a point.
+  - **Option D: sweep with `dvc exp` over the whole pipeline and pick by the test metrics `dvc exp show` prints.**
+    Pros: the least setup, and the metric is the one the gate reads.
+    Cons: rejected, because it leaks the test split into the model the gate then judges, which makes SC-01 to SC-04 an optimistic estimate of a choice the test rows were part of.
+- **Rationale:** `reports/analysis/tuning_sweep.py` fitted `lgbm-basic`, the candidate (EDN-62), at `learning_rate` 0.025, 0.05 and 0.1 against `num_leaves` 31, 63, 127 and 255, with the ceiling at 20,000 so early stopping decided every point (it did, at best rounds from 217 to 4,066), through the stage's own `fit_variant` on the train and validation matrices only.
+  Each point's difference from the committed one was bootstrapped 2,000 times, paired and resampled by the 2,784 seller groups of the 8,859 validation rows, with the same draws for every point.
+  The region is flat: validation MdAPE spans 6.88 % to 7.04 % across all twelve points, every MdAPE interval spans zero and is about ±0.13 pp wide, and no point improves validation L1 with an interval below zero.
+  Five points are measurably *worse* in L1: all of `learning_rate` 0.1 except the 31-leaf one, which is worse too, and 127 leaves at 0.05.
+  The two metrics do not even agree on the best point - `(0.025, 63)` by L1, `(0.05, 255)` by MdAPE - which is the signature of a choice among noise.
+
+  The protocol's parts each follow from the measurement. Validation L1 is the selection metric because it is what early stopping reads and because its intervals are about 2.5 times narrower than MdAPE's relative to the value, so it resolves differences MdAPE cannot; MdAPE stays the gate's metric, read once on test after the choice.
+  The interval rule is what makes a sweep of many points safe against the winner's curse.
+  `dvc exp run --queue` targeted at `train@<variant>` was run once on 2026-10-05 to check the protocol is executable as written: only `train@lgbm-basic` ran, the stages before it were skipped as unchanged, `evaluate` was never reached, and the queue worker inherited the exported tracking variables, which matters because the queued workspace is built from the commit and does not see the gitignored `.env`.
+  It also showed one trap the protocol warns about: since `evaluate` does not run, every experiment carries its parent's `metrics.json`, so the test metrics `dvc exp show` prints belong to the committed model, not to the point.
+  The selection metric is therefore read from MLflow, and the interval from the analysis script, because it needs every validation row's prediction from both models and neither DVC nor MLflow keeps them.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI designed and ran the bounded sweep, added the paired, seller-grouped bootstrap so the question became "can the validation split tell these apart" rather than "which number is lowest", and extended the grid to `learning_rate` 0.025 after the first run showed the lower learning rate was the only direction not clearly worse.
+  It laid out options A to D, recommended A with the protocol, and stopped for the decision rather than committing a tuned value; Lukas chose A as proposed.
+  AI then ran one queued `dvc exp` experiment to confirm the documented commands do what the protocol claims before writing them into the pipeline documentation, which is how the `metrics.json` trap and the `.env` point were found.
+- **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #64: the sweep's output is `reports/analysis/tuning_sweep_results.txt`; the options and the recommendation were reported to Lukas with those numbers, and he chose A.
+- **Other evidence:** [issue #64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64); [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77); [`reports/analysis/tuning_sweep.py`](analysis/tuning_sweep.py) and its results file (2026-10-05); [pipeline docs](../docs/docs/pipeline.md), "Tuning a hyperparameter"; [model card](../docs/docs/model-card.md), Hyperparameters as trained; [`params.yaml`](../params.yaml), `train.variants.lgbm-basic`; [problem specification](../docs/docs/problem-spec.md) section 5; [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count), [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one).
+- **In LaTeX:** no
+
 ### EDN-74: A run is tagged with the hashes of its own stage's inputs, and `git_dirty` ignores what DVC writes itself
 
 - **Date:** 2026-10-05

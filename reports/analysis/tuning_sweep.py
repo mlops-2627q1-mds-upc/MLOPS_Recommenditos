@@ -1,6 +1,6 @@
-"""How much `learning_rate` and `num_leaves` could still buy, read on validation only (issue #64).
+"""How much `learning_rate` and `num_leaves` could still buy, read on validation only (EDN-73).
 
-The evidence behind the open decision on a tuning protocol, not a tuning run: a small, bounded
+The evidence behind the decision not to tune them (issue #64), not a tuning run: a small, bounded
 grid around the committed values of the candidate `lgbm-basic` (EDN-62), each fit with
 `n_estimators` far past anything the curve needs, so early stopping decides every one and no
 point of the grid is judged at a budget that binds it. Everything else is as `params.yaml` has it.

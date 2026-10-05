@@ -281,6 +281,11 @@ train:
       estimator: lightgbm
       feature_set: basic
       params:
+        # Not tuned, on evidence rather than by omission: a 12-point grid of these
+        # two around their values is flat on the validation split, and no point of
+        # it is distinguishable from them (EDN-73,
+        # reports/analysis/tuning_sweep_results.txt). A new value goes through the
+        # protocol in docs/docs/pipeline.md, "Tuning a hyperparameter".
         learning_rate: 0.05
         num_leaves: 63
         # A ceiling for early stopping, not a tree count: early stopping on the
