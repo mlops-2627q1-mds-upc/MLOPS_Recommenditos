@@ -1,2 +1,12 @@
-# Shell scripts run inside Linux containers; CRLF from Windows checkouts breaks them.
-*.sh text eol=lf
+# Every text file is LF in the repository and in every checkout, whatever the
+# contributor's core.autocrlf says. DVC hashes files byte for byte, so a Windows
+# checkout with CRLF endings makes every Python dependency in dvc.lock look
+# changed, and `dvc repro` would rebuild the whole pipeline.
+* text=auto eol=lf
+
+# Pipeline outputs committed to Git (`cache: false` in dvc.yaml) are recorded in
+# dvc.lock by their exact bytes, so Git must not touch their line endings.
+# The CSVs are written by the csv module, which ends rows with CRLF everywhere.
+metrics.json -text
+reports/metrics/** -text
+reports/data-validation/** -text
