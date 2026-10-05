@@ -90,6 +90,18 @@ it needs.
 `served_vocabulary_results.txt` is the output of the run cited in EDN-67, the model card and
 `params.yaml` (2026-10-05).
 
+## Where early stopping lands, and what tuning could still buy (EDN-70, issue #64)
+
+`early_stopping_ceiling.py` fits each LightGBM variant once with `n_estimators` at 20,000, every other setting as `params.yaml` has it, and reports the round early stopping chose, the validation curve at fixed tree counts, and what the trees cost: fit seconds, `booster.txt` size, and the single-row latency of a prediction and of the native SHAP export FR-08 serves.
+It is the evidence behind the committed ceiling of 5,000.
+`early_stopping_ceiling_results.txt` is the output of the run cited in EDN-70, the model card and `params.yaml` (2026-10-05).
+
+`tuning_sweep.py` is the evidence behind the open decision on a tuning protocol, not a tuning run: a small grid of `learning_rate` and `num_leaves` for the candidate `lgbm-basic`, each point fitted with early stopping deciding the trees, and a paired bootstrap by seller group of whether the validation split can tell the best point from the committed one.
+`tuning_sweep_results.txt` is its output (2026-10-05).
+
+Both import the `train` stage's own `read_matrices` and `fit_variant`, so the fits are the stage's fits, and both read the `train` and `validation` matrices only: the test split is never opened, because a choice made on test rows would leak them into the model the gate then judges.
+Run them from the repository root after `dvc pull`, with tracking off (`MLFLOW_TRACKING_URI= uv run python reports/analysis/<script>.py`).
+
 ## The preprocess row funnel (dataset card, issue #34)
 
 `preprocess_funnel.py` reports how many listings each row rule of the `preprocess` stage removes

@@ -1,0 +1,33 @@
+# reports/analysis/tuning_sweep.py on the real snapshot, 2026-10-05 (the matrices of main b26387a's dvc.lock); log lines removed
+lgbm-basic: committed params {'learning_rate': 0.05, 'num_leaves': 63, 'n_estimators': 5000, 'early_stopping_rounds': 50}
+seed 20251108, num_threads 1, exploratory budget 20,000
+grid: learning_rate (0.025, 0.05, 0.1) x num_leaves (31, 63, 127, 255)
+
+learning_rate  num_leaves  best round  rounds run  fit s   val L1(log)  val MdAPE
+        0.025          31       4,066       4,116     21   0.10003      6.8861%
+        0.025          63       1,925       1,975     13   0.09996      6.9470%
+        0.025         127       1,326       1,376     15   0.10041      6.9525%
+        0.025         255       1,030       1,080     19   0.10098      6.9316%
+         0.05          31       2,495       2,545     12   0.10015      6.9684%
+         0.05          63       1,243       1,293      8   0.10027      6.9563%
+         0.05         127         734         784      8   0.10114      6.9390%
+         0.05         255         451         501      9   0.10129      6.8801%
+          0.1          31         946         996      5   0.10122      6.9484%
+          0.1          63         694         744      5   0.10124      6.9529%
+          0.1         127         410         460      5   0.10167      7.0380%
+          0.1         255         217         267      4   0.10260      7.0189%
+
+committed point (0.05, 63); lowest validation L1 at (0.025, 63), MdAPE at (0.05, 255)
+validation rows 8,859, 2,784 seller groups, 2,000 draws
+point minus committed: the difference, its 95 % interval, the share of draws it is better
+  (0.025, 31)  L1 -0.00024 [-0.00101, +0.00054] better  72.5%   MdAPE -0.070% [-0.186%, +0.072%] better  82.3%
+  (0.025, 63)  L1 -0.00031 [-0.00086, +0.00025] better  86.2%   MdAPE -0.009% [-0.112%, +0.092%] better  55.6%
+  (0.025, 127) L1 +0.00014 [-0.00056, +0.00087] better  33.4%   MdAPE -0.004% [-0.129%, +0.134%] better  49.1%
+  (0.025, 255) L1 +0.00071 [-0.00028, +0.00172] better   7.8%   MdAPE -0.025% [-0.174%, +0.134%] better  63.7%
+  (0.05, 31)   L1 -0.00012 [-0.00091, +0.00071] better  61.1%   MdAPE +0.012% [-0.128%, +0.144%] better  44.4%
+  (0.05, 127)  L1 +0.00087 [+0.00009, +0.00161] better   1.2%   MdAPE -0.017% [-0.134%, +0.115%] better  59.6%
+  (0.05, 255)  L1 +0.00102 [-0.00001, +0.00203] better   2.6%   MdAPE -0.076% [-0.215%, +0.066%] better  86.0%
+  (0.1, 31)    L1 +0.00095 [+0.00014, +0.00180] better   1.4%   MdAPE -0.008% [-0.161%, +0.138%] better  53.3%
+  (0.1, 63)    L1 +0.00097 [+0.00024, +0.00169] better   0.4%   MdAPE -0.003% [-0.118%, +0.140%] better  46.9%
+  (0.1, 127)   L1 +0.00140 [+0.00054, +0.00230] better   0.1%   MdAPE +0.082% [-0.067%, +0.200%] better  15.9%
+  (0.1, 255)   L1 +0.00233 [+0.00124, +0.00345] better   0.0%   MdAPE +0.063% [-0.076%, +0.215%] better  18.8%

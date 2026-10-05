@@ -22,8 +22,8 @@ Recommenditos estimates what a used passenger car would be **asked for** on a Eu
 Given a description of a car it returns a point estimate of the listing price (UC1), and for a partial description a price interval with comparable listings (UC2).
 It is the model behind the project's API.
 
-**Status: the four ladder variants train and the three measurable success criteria pass; nothing is released.**
-The training procedure and the point metrics below are measured; SC-04 to SC-06 have no measurement yet, so NFR-01's gate blocks, and the serving sections (latency, image size, explanations, intervals) are still a plan.
+**Status: the four ladder variants train, five of the six success criteria are measured, and nothing is released.**
+The training procedure, the point metrics and SC-01 to SC-04 and SC-06 below are measured; SC-04 fails for every variant and SC-05 has no measurement until the UC2 intervals exist, so NFR-01's gate blocks, and the serving sections (latency, image size, explanations, intervals) are still a plan.
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the remaining placeholders are replaced as the `evaluate` stage's criteria and the API land.
 Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 
@@ -294,7 +294,7 @@ So no make the API refuses with a 422 is in the model's training data, and none 
 - **Target:** `log(price)`, predictions transformed back with `exp`.
   **No bias correction** is applied to the inverse transform (EDN-49).
   `exp(E[log P | x])` is the conditional median, which is what every metric here reports, and a Duan smearing correction targets the conditional mean instead, so it biases every prediction upward and away from the typical asking price a seller wants.
-  Measured on the real snapshot, it makes every variant worse: smearing factor 1.0258 and MdAPE 9.52 % to 9.83 % for `b1`, 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`, 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`.
+  Measured on the real snapshot when the decision was taken, with the LightGBM variants still at the former 1,000-tree budget, it makes every variant worse: smearing factor 1.0258 and MdAPE 9.52 % to 9.83 % for `b1`, 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`, 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`.
   `b0` needs no inverse transform at all, because it is fitted on `price` directly.
 - **Validation set:** early stopping and hyperparameter tuning.
   **Calibration set:** UC2 interval calibration only, never tuning.
@@ -314,13 +314,20 @@ All of these live in `params.yaml`, so a change reruns exactly the variant it af
 |---|---|---|---|---|
 | `b0` | 1 | median of `price` per (make, model, 2-year age band), falling back to the make median and then the global median | basic | `age_bucket_years: 2` |
 | `b1` | 2 | Ridge on `log(price)` | basic | `alpha: 1.0`, `min_category_rows: 5` |
-| `lgbm-basic` | 3 | LightGBM | basic | `learning_rate: 0.05`, `num_leaves: 63`, `n_estimators: 1000`, `early_stopping_rounds: 50` |
+| `lgbm-basic` | 3 | LightGBM | basic | `learning_rate: 0.05`, `num_leaves: 63`, `n_estimators: 5000`, `early_stopping_rounds: 50` |
 | `lgbm-extended` | 4 | LightGBM | extended | as `lgbm-basic` |
 
 The settings that are **not** parameters are modelling choices rather than knobs a sweep should touch, and they are the same for both LightGBM variants: `objective="regression"` (squared error on log price, because the log transform already handles the multiplicative error structure) and `metric="l1"` with `first_metric_only=True` for early stopping.
 The absolute error in log space *is* the symmetric relative error, so the stopping point lines up with MdAPE, the metric the gate reads, rather than with a squared error nothing reports.
-`n_estimators: 1000` is the budget early stopping on the validation split may stop short of, and the booster is saved at whatever iteration it reached, so the file *is* the model and no consumer has to remember an iteration argument.
-On the real snapshot it is the budget that binds and not early stopping, which is a finding rather than the intention: see the [ladder](#the-experiment-ladder-as-measured) below and issue #64.
+`n_estimators: 5000` is a ceiling and not a tree count: early stopping on the validation split decides how many trees the model keeps, and the booster is saved at that round, so the file *is* the model and no consumer has to remember an iteration argument (EDN-70).
+On the real snapshot early stopping chooses round **1,243** for `lgbm-basic` and **1,647** for `lgbm-extended`, so the ceiling sits three times above the later of the two.
+It used to be 1,000, and then it was the ceiling that ended both fits, not early stopping (issue #64).
+5,000 rather than higher, because the ceiling is also the worst case of every cost that grows with the trees: a fit that used all of them would take about 80 s for `lgbm-extended`, write a booster of about 33 MB and spend about 105 ms on one row's SHAP export, against NFR-02's 200 ms for the whole of `/predict`.
+`train` warns when the ceiling ends a fit, and `model.json` and the MLflow run record whether early stopping did (`early_stopped`, with the rounds run beside the trees kept), so a binding ceiling is a fact of the artefact rather than something read off a tree count.
+
+Raising the ceiling is also what showed how closely the stopping metric tracks the gate's.
+Between 1,000 trees and the round early stopping chose, the validation L1 in log space keeps falling - by 0.2 % for `lgbm-basic` and 0.6 % for `lgbm-extended` - while validation MdAPE is flat or marginally worse, 6.947 % to 6.956 % and 6.448 % to 6.453 % (`reports/analysis/early_stopping_ceiling_results.txt`).
+L1 is a mean and MdAPE a median, so the last few hundred trees improve the tail of the errors rather than the typical one; on the test split they moved MdAPE by 0.02 pp and 0.07 pp (see [the ladder](#the-experiment-ladder-as-measured)).
 
 B1's encoding is two decisions that look, at a glance, like rules of this project being broken, and both are recorded.
 Its categoricals are **one-hot encoded**, which EDN-02 rules out for the tree models and which EDN-50 confines to B1: Ridge is linear, has no native categorical handling, and dropping the categoricals would leave the depreciation baseline unable to tell a Porsche from a Dacia.
@@ -359,7 +366,7 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
 
 | File | Contents |
 |---|---|
-| `model.json` | The record: the estimator, the feature and target lists separately, the hyperparameters as trained, the training row counts and price range, the supported makes, the library versions and the MLflow run id. |
+| `model.json` | The record: the estimator, the feature and target lists separately, the hyperparameters as trained, the training row counts and price range, the supported makes, the library versions and the MLflow run id. For the LightGBM variants also the trees kept (`best_iteration`), the rounds the fit ran (`boosting_rounds`) and whether early stopping or the `n_estimators` ceiling ended it (`early_stopped`); the three are null for `b0` and `b1`. |
 | `feature_space.json` | A copy of the `features` stage's own artefact: the contract the matrices were written against and the vocabulary the training rows decided. |
 | `booster.txt` | LightGBM variants: the native text format, saved at the early-stopped iteration. Not a pickle of the sklearn wrapper, because the text format survives a LightGBM upgrade, it is readable, and EDN-11's SHAP export needs a `Booster`. |
 | `pipeline.joblib` | `b1` only: the fitted scikit-learn pipeline. |
@@ -374,7 +381,7 @@ One MLflow experiment, `params.yaml`'s `train.mlflow_experiment` (`recommenditos
 `train` creates the run and records its id in `model.json`; `evaluate` resumes that id and appends the test metrics and the gate verdict rather than opening a run of its own.
 That is deliberate: a run per DVC stage would scatter four variants over eight runs nothing joins, and the point of tracking is to be able to compare them.
 
-Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the model artefact under `model/` and the test metrics with the six criteria.
+Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, for the LightGBM variants the trees kept, the rounds run and `early_stopped` as 1 or 0 (so `metrics.early_stopped = 0` finds every fit the ceiling ended), the model artefact under `model/` and the test metrics with the six criteria.
 Its parameters are every `params.yaml` key `dvc.yaml` declares for the `train` stage - the seed, `num_threads`, the estimator, the feature set and the hyperparameters, the last under the estimator's name - plus the variant's name and the shape of the training data; the experiment is the one declared key recorded as the run's experiment rather than as a parameter (NFR-14).
 The emissions of the fit are not among them yet; they arrive with issue #38.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
@@ -419,8 +426,8 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 
 | Property | Target | Measured |
 |---|---|---|
-| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **8.6 s** for the candidate `lgbm-basic`, 21.7 s for `lgbm-extended`, 32.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-05). Read as an order of magnitude and not a benchmark: an earlier run of the same code on the same day, sharing the CPU with other work, took 12.7 s for `lgbm-basic` with identical trees, which is the size of the effect |
-| Model artefact on disk | no target | 6.2 MB (`booster.txt`) for the candidate, 6.8 MB for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively |
+| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **8.6 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 26.4 s for `lgbm-extended` (1,697 rounds), 36.4 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-05). Read as an order of magnitude and not a benchmark: the exploratory fits of the identical two models on the same day took 8.0 s and 27.1 s, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` (EDN-70) |
+| Model artefact on disk | no target | 7.6 MB (`booster.txt`, 1,243 trees) for the candidate, 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
 | Inference latency, p95 | 200 ms for `/predict` including the explanation, 300 ms for `/price-range` and `/comparables` (NFR-02) | _TBD_ |
@@ -448,12 +455,12 @@ It is a **measured candidate, not a release**: the gate blocks, so nothing is pr
 
 | ID | Criterion | Target | `lgbm-basic` (the candidate) | `lgbm-extended` |
 |----|-----------|--------|------------------------------|-----------------|
-| SC-01 | MdAPE | at most 9 % | 6.83 %, yes | 6.32 %, yes |
-| SC-02 | Predictions within 20 % of the asking price | at least 85 % | 89.7 %, yes | 90.3 %, yes |
-| SC-03 | MdAPE improvement over baseline B0 | at least 30 % lower | 43.9 % lower, yes | 48.0 % lower, yes |
-| SC-04 | MdAPE per segment level with at least 500 test rows | at most 15 % | 17.12 % (`age_bucket=over 20`, 784 rows), **no** | 17.86 %, **no** |
+| SC-01 | MdAPE | at most 9 % | 6.81 %, yes | 6.26 %, yes |
+| SC-02 | Predictions within 20 % of the asking price | at least 85 % | 89.8 %, yes | 90.4 %, yes |
+| SC-03 | MdAPE improvement over baseline B0 | at least 30 % lower | 44.0 % lower, yes | 48.6 % lower, yes |
+| SC-04 | MdAPE per segment level with at least 500 test rows | at most 15 % | 16.77 % (`age_bucket=over 20`, 784 rows), **no** | 18.45 %, **no** |
 | SC-05 | Empirical coverage of the nominal 90 % intervals, full inputs and partial scenario P1 | 88 % to 92 % | not measured, **no** | not measured, **no** |
-| SC-06 | MdAPE with each optional field masked, and with all masked at once | at most 1.5x the full-input MdAPE | 1.21x, yes | **1.58x, no** |
+| SC-06 | MdAPE with each optional field masked, and with all masked at once | at most 1.5x the full-input MdAPE | 1.21x, yes | **1.65x, no** |
 
 `b0` and `b1` miss SC-01, SC-02 and SC-03 as well, and are baselines rather than candidates; their per-criterion numbers are in `reports/metrics/<variant>.json`.
 
@@ -461,14 +468,14 @@ It is a **measured candidate, not a release**: the gate blocks, so nothing is pr
 The candidate above is a documented judgement about which model *would* be released, not a computed one: `metrics.json`'s `best_variant` stays the lowest MdAPE overall, because that field means what it says, and `deployable_variant` stays null while anything blocks.
 The two failures are the interesting half of this card, and neither is a surprise:
 
-- **SC-04 fails on old cars, for every variant, and the extended features do not close it. The miss is accepted and recorded rather than worked around (EDN-62).** The [problem specification](problem-spec.md#8-success-criteria) already recorded cars over 20 years at 15.3 % as the known risk, and the pipeline measures them worse than that: **17.12 % for the candidate** and 17.86 % for `lgbm-extended`, over 784 test rows. The specification named two possible remedies, "the extended features or a scope change for classic cars", and measurement has now **ruled the first one out**: the extended set makes this segment marginally worse while improving the pooled figure by 0.50 pp, so the extra features do not carry information about old cars. That is a finding about the features, not a reason to move the bar: the threshold stays at 15 %, no upper age bound is added, and the criterion is reported as missed. Nothing is unblocked by softening it in any case, because SC-05 blocks the gate regardless. What is left, for a later ticket, is a scope change of the kind EDN-04 made for price, or a segment-specific model.
-- **SC-06 passes for the candidate and fails on `lgbm-extended`, and there only when every optional field is absent at once.** Each of the 23 optional fields masked on its own costs at most 8.4 % of the MdAPE (`equipment_extra`, 1.08x), which is comfortably inside the bound; all 23 together cost 58.3 % (6.32 % to 10.01 %). `lgbm-basic` passes at 1.21x (6.83 % to 8.25 %), because it has six optional fields to lose rather than 23, and `b0` and `b1` pass at 1.00x and 1.16x.
+- **SC-04 fails on old cars, for every variant, and the extended features do not close it. The miss is accepted and recorded rather than worked around (EDN-62).** The [problem specification](problem-spec.md#8-success-criteria) already recorded cars over 20 years at 15.3 % as the known risk, and the pipeline measures them worse than that: **16.77 % for the candidate** and 18.45 % for `lgbm-extended`, over 784 test rows. Letting early stopping decide the tree count (EDN-70) moved the candidate 0.35 pp closer to the bar and not under it. The specification named two possible remedies, "the extended features or a scope change for classic cars", and measurement has now **ruled the first one out**: the extended set makes this segment 1.7 pp worse while improving the pooled figure by 0.55 pp, so the extra features do not carry information about old cars. That is a finding about the features, not a reason to move the bar: the threshold stays at 15 %, no upper age bound is added, and the criterion is reported as missed. Nothing is unblocked by softening it in any case, because SC-05 blocks the gate regardless. What is left, for a later ticket, is a scope change of the kind EDN-04 made for price, or a segment-specific model.
+- **SC-06 passes for the candidate and fails on `lgbm-extended`, and there only when every optional field is absent at once.** Each of the 23 optional fields masked on its own costs at most 9.7 % of the MdAPE (`equipment_extra`, 1.10x), which is comfortably inside the bound; all 23 together cost 64.6 % (6.26 % to 10.30 %). `lgbm-basic` passes at 1.21x (6.81 % to 8.26 %), because it has six optional fields to lose rather than 23, and `b0` and `b1` pass at 1.00x and 1.16x.
 
-    **This is what decided the candidate (EDN-62).** The two rows above describe the same request: only the ten fields FR-01 requires. On that request `lgbm-basic` answers at **8.25 %** and `lgbm-extended` at **10.01 %**, so the variant with the 0.50 pp pooled advantage is beaten by 1.77 pp as soon as the caller stops filling in the optional fields, which FR-01 says a caller need not do. The extended model's advantage is conditional on a well-filled request, which is precisely the fragility EDN-15 added SC-06 to expose, and a criterion a candidate misses is not something to serve. The worst single field is also worth naming per variant, because it is not the same one: `equipment_extra` for `lgbm-extended`, `cylinders_volume_cc` for `lgbm-basic` and `b0`, `nr_doors` for `b1` at 1.16x, which is above that variant's all-at-once ratio of 1.13x. SC-06 bounds the worst of both kinds of request, so a criterion measured only on the all-at-once scenario would have missed it.
+    **This is what decided the candidate (EDN-62).** The two rows above describe the same request: only the ten fields FR-01 requires. On that request `lgbm-basic` answers at **8.26 %** and `lgbm-extended` at **10.30 %**, so the variant with the 0.55 pp pooled advantage is beaten by 2.04 pp as soon as the caller stops filling in the optional fields, which FR-01 says a caller need not do. The extended model's advantage is conditional on a well-filled request, which is precisely the fragility EDN-15 added SC-06 to expose, and a criterion a candidate misses is not something to serve. The worst single field is also worth naming per variant, because it is not the same one: `equipment_extra` for `lgbm-extended`, `cylinders_volume_cc` for `lgbm-basic` and `b0`, `nr_doors` for `b1` at 1.16x, which is above that variant's all-at-once ratio of 1.13x. SC-06 bounds the worst of both kinds of request, so a criterion measured only on the all-at-once scenario would have missed it.
 
 SC-05 needs the UC2 conformal intervals, which are a later ticket.
 The `evaluate` stage reports it as `not_measured` with the capability it checked for, and that blocks the gate rather than passing it (NFR-01).
-The point-estimate half of the partial-input scenario P1 *is* measured now, and it is the strongest argument for building the intervals: the candidate goes from 6.83 % MdAPE to 19.67 % (2.9x) when only `make`, `model`, `registration_date` and `mileage_km_raw` are given, `lgbm-extended` to 18.90 % (3.0x) and `b1` to 2.5x its full-input value, while `b0` is unchanged because it reads only three columns. A point estimate that is typically 19 % off is not something to serve as a number, which is exactly what UC2's interval answers instead. P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
+The point-estimate half of the partial-input scenario P1 *is* measured now, and it is the strongest argument for building the intervals: the candidate goes from 6.81 % MdAPE to 19.67 % (2.9x) when only `make`, `model`, `registration_date` and `mileage_km_raw` are given, `lgbm-extended` to 19.02 % (3.0x) and `b1` to 2.5x its full-input value, while `b0` is unchanged because it reads only three columns. A point estimate that is typically 19 % off is not something to serve as a number, which is exactly what UC2's interval answers instead. P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
 
 #### The per-segment breakdown, and the fairness reading
 
@@ -481,16 +488,16 @@ For the candidate `lgbm-basic`, with `lgbm-extended`'s spread beside it because 
 
 | Segment | Qualifying levels | Best level | Worst level | Spread | Spread, `lgbm-extended` |
 |---|---|---|---|---|---|
-| `make` | 7 | Mercedes-Benz 5.26 % | Volvo 8.95 % (714 rows) | 3.7 pp | 4.4 pp |
-| `country_code` | 6 | DE 6.44 % | FR 8.49 % (1,058 rows) | 2.1 pp | 2.7 pp |
-| `seller_type` | 2 | Dealer 6.49 % | PrivateSeller 8.59 % (3,868 rows) | 2.1 pp | 2.4 pp |
-| `fuel_category` | 5 | Electric/Diesel 5.83 % | Diesel 7.07 % (6,348 rows) | 1.2 pp | 1.4 pp |
-| `age_bucket` | 6 | 0-1 years 5.60 % | over 20 years 17.12 % (784 rows) | 11.5 pp | 13.0 pp |
+| `make` | 7 | Mercedes-Benz 5.23 % | Volvo 9.23 % (714 rows) | 4.0 pp | 4.4 pp |
+| `country_code` | 6 | DE 6.37 % | FR 8.42 % (1,058 rows) | 2.0 pp | 2.7 pp |
+| `seller_type` | 2 | Dealer 6.45 % | PrivateSeller 8.57 % (3,868 rows) | 2.1 pp | 2.4 pp |
+| `fuel_category` | 5 | Electric/Diesel 5.74 % | Diesel 7.07 % (6,348 rows) | 1.3 pp | 1.3 pp |
+| `age_bucket` | 6 | 0-1 years 5.55 % | over 20 years 16.77 % (784 rows) | 11.2 pp | 13.6 pp |
 
 Read as a fairness check: the market segments are close to parity, and the one disparity that matters is **age**, not country or seller type.
-A private seller is served about 2.1 pp worse than a dealer and a French listing 2.1 pp worse than a German one, both inside SC-04's bound; the owner of a car over 20 years old is served 11.5 pp worse than the owner of a new one and outside it.
-The extended features widen all five spreads, `age_bucket`'s most, by 1.5 pp, and `fuel_category`'s least, by 0.1 pp. That is the same finding SC-04 reports from the other direction: they buy pooled accuracy without buying it evenly.
-The price buckets are deliberately not part of this statement: their profile is U-shaped (for the candidate, 22.4 % under 5,000 EUR and 6.4 % over 80,000 EUR against 5.9 % in the 40,000 to 80,000 EUR bucket), which is the regression-to-the-mean artefact of conditioning on the target rather than a finding about a market.
+A private seller is served about 2.1 pp worse than a dealer and a French listing 2.0 pp worse than a German one, both inside SC-04's bound; the owner of a car over 20 years old is served 11.2 pp worse than the owner of a new one and outside it.
+The extended features widen four of the five spreads, `age_bucket`'s most, by 2.4 pp, and leave `fuel_category`'s where it is. That is the same finding SC-04 reports from the other direction: they buy pooled accuracy without buying it evenly.
+The price buckets are deliberately not part of this statement: their profile is U-shaped (for the candidate, 22.2 % under 5,000 EUR and 6.3 % over 80,000 EUR against 5.8 % in the 40,000 to 80,000 EUR bucket), which is the regression-to-the-mean artefact of conditioning on the target rather than a finding about a market.
 
 #### The experiment ladder, as measured
 
@@ -502,16 +509,16 @@ The bold figures are the lowest of the ladder; they are not the candidate, which
 | Variant | Ladder step | Features | MdAPE | Within 20 % | Validation L1 (log price) | Trees | Fit time | Payload |
 |---|---|---|---|---|---|---|---|---|
 | `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.1 s | 19 KB |
-| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 1.6 s | 19 KB |
-| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.83 % | 89.7 % | 0.1005 | 1,000 | 8.6 s | 6.2 MB |
-| `lgbm-extended` | 4 | 162 | **6.32 %** | **90.3 %** | 0.0972 | 1,000 | 21.7 s | 6.8 MB |
+| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 1.3 s | 19 KB |
+| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.81 % | 89.8 % | 0.1003 | 1,243 | 8.6 s | 7.6 MB |
+| `lgbm-extended` | 4 | 162 | **6.26 %** | **90.4 %** | 0.0966 | 1,647 | 26.4 s | 10.9 MB |
 
 What the ladder says, and what it does not:
 
-- **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.50 pp** of MdAPE on a fully described car, and it is **1.77 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.01 % against 8.25 %, from the SC-06 sweep). It also costs 146 extra columns, 2.5x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
-- B0 reproduces the exploratory reference run below almost exactly (12.16 % against 11.9 %), and `lgbm-basic` likewise (6.83 % against 6.7 %), which is the cross-check that the pipeline is measuring what the notebook measured.
-- **`n_estimators: 1000` is binding, not a ceiling.** Both LightGBM variants used all 1,000 trees, so early stopping never fired on real data and both models were still improving when they ran out of budget. The hyperparameters are therefore *untuned*, in the specific sense that the one that matters most is set too low; raising it is a `params.yaml` change and a sweep, and it is the first thing to try before tuning anything else.
-- The whole four-variant ladder trains in **32.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: an earlier run of the same code on the same day measured 50.0 s, and `lgbm-basic`, whose trees are identical in both, took 12.7 s there against 8.6 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
+- **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.55 pp** of MdAPE on a fully described car, and it is **2.04 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %, from the SC-06 sweep). It also costs 146 extra columns, 3.1x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
+- B0 reproduces the exploratory reference run below almost exactly (12.16 % against 11.9 %), and `lgbm-basic` likewise (6.81 % against 6.7 %), which is the cross-check that the pipeline is measuring what the notebook measured.
+- **Early stopping decides the trees now, and the trees the old budget withheld were worth almost nothing (EDN-70).** At `n_estimators: 1000` both LightGBM variants ran out of budget before early stopping fired. With the ceiling at 5,000, early stopping chooses round 1,243 for `lgbm-basic` and 1,647 for `lgbm-extended`, and on the test split that moves MdAPE from 6.83 % to 6.81 % and from 6.32 % to 6.26 %, within 20 % by about 0.1 pp each, and no criterion's verdict for either variant. The training L1 falls much further than the validation L1 (0.0688 to 0.0655 against 0.1005 to 0.1003 for the candidate), so the extra trees mostly fit the training rows more closely. For `lgbm-extended` that comes with a larger dependence on its optional fields, SC-06 1.58x to 1.65x, and a worse old-car segment, 17.86 % to 18.45 %, while the candidate's old-car segment improves from 17.12 % to 16.77 %. What they cost is linear in the trees: 1.3x and 1.7x the boosting rounds and so the fit, 6.2 to 7.6 MB and 6.8 to 10.9 MB of booster, and one row's native SHAP export from 18.9 to 26.1 ms and from 22.3 to 35.4 ms. So the 1,000-tree models were a hair short of where their validation curve flattens, not far from it, and the pooled numbers this card used to quote were not a materially pessimistic bound. `learning_rate` and `num_leaves` are still the values the ladder was first fitted with; whether and how to tune them is the open half of issue #64.
+- The whole four-variant ladder trains in **36.4 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: the exploratory fits of the same two LightGBM models on the same day took 8.0 s and 27.1 s against 8.6 s and 26.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
 
 #### Reference values
 
@@ -525,13 +532,13 @@ Same scope as above without `ES`, deduplicated, 96,831 listings, 80/20 split gro
 
 #### Summary
 
-The ladder reproduces the reference run, and the first three criteria pass with margin for both LightGBM variants: the candidate `lgbm-basic` is at 6.83 % MdAPE against SC-01's 9 %, 89.7 % within 20 % against SC-02's 85 %, and 43.9 % below the median baseline against SC-03's 30 %.
+The ladder reproduces the reference run, and the first three criteria pass with margin for both LightGBM variants: the candidate `lgbm-basic` is at 6.81 % MdAPE against SC-01's 9 %, 89.8 % within 20 % against SC-02's 85 %, and 44.0 % below the median baseline against SC-03's 30 %.
 Nothing is released on that, because NFR-01's word is "every": SC-04 fails for every variant and SC-05 has no measurement until the UC2 intervals exist.
-The chosen model is therefore `lgbm-basic` **as a candidate**, chosen over the lower pooled MdAPE of `lgbm-extended` because it is the one that meets SC-06 (EDN-62), and the honest statement about it is that it is untuned in the one dimension that matters: the tree budget is binding.
+The chosen model is therefore `lgbm-basic` **as a candidate**, chosen over the lower pooled MdAPE of `lgbm-extended` because it is the one that meets SC-06 (EDN-62). Early stopping decides its tree count (EDN-70), and its other two hyperparameters are still the values it was first fitted with: the honest statement about it is that it is untuned in `learning_rate` and `num_leaves`, and that the tree count, the one knob measured so far, turned out to be worth 0.02 pp.
 
 Three open risks going into the rest of Milestone 3, all three now measured rather than anticipated:
 
-- **SC-04 is missed and the miss is accepted (EDN-62).** The over-20-years segment sat at 15.3 % in the reference run and the pipeline measures it at 17.12 % for the candidate, and the extended features are now ruled out as the remedy. A scope change or a segment-specific model is the open work.
+- **SC-04 is missed and the miss is accepted (EDN-62).** The over-20-years segment sat at 15.3 % in the reference run and the pipeline measures it at 16.77 % for the candidate, and the extended features are now ruled out as the remedy. A scope change or a segment-specific model is the open work.
 - The low-support makes SC-04 cannot see at all, because they do not reach its 500-row minimum: `Honda` at 177 test rows down to `Ethanol` at 3, ten levels in all, reported in `reports/metrics/segments.csv` with the rule that excluded each one.
 - **SC-06 did genuinely fail, on `lgbm-extended`**, which is what settled the candidate. It cannot be demonstrated on the synthetic fixture, whose generator derives price from a formula that ignores the optional columns, so the test suite drives it with a constructed degrading model instead.
 
@@ -554,7 +561,7 @@ Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (
 | | |
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
-| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-05: 8.6 s of fitting for the candidate `lgbm-basic`, 32.0 s for the whole ladder. |
+| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-05: 8.6 s of fitting for the candidate `lgbm-basic`, 36.4 s for the whole ladder. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | _TBD, per training run from CodeCarbon._ |
@@ -647,6 +654,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-49: no bias correction on the log-to-euro inverse transform.
 - EDN-50: one-hot encoding for the Ridge baseline only, against EDN-02's "no one-hot".
 - EDN-51: mean fill plus a per-feature missingness indicator for the Ridge numerics, which is not imputation.
+- EDN-70: `n_estimators` is a ceiling of 5,000 that early stopping stays under, not a tree count.
 
 ## Model Card Authors
 

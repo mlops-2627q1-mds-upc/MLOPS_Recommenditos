@@ -2295,6 +2295,67 @@ How to add an entry:
 - **Other evidence:** [`reports/analysis/mileage_scope.py`](analysis/mileage_scope.py) and its results; [`reports/data-validation/summary.json`](data-validation/summary.json); [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), `_mileage_in_range`; [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date), [EDN-68](#edn-68-the-great-expectations-store-is-a-cached-build-product-the-suites-are-generated-from-the-contract-and-each-rule-sits-on-the-frame-where-it-can-hold); [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76).
 - **In LaTeX:** no
 
+### EDN-70: `n_estimators` is a ceiling of 5,000 that early stopping stays under, not a tree count
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Modelling Approach, Hyperparameters, Energy Efficiency
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** Both LightGBM variants get `n_estimators: 5000`, with `early_stopping_rounds: 50` unchanged, so early stopping on the validation split decides how many trees each model keeps: round 1,243 for `lgbm-basic` and 1,647 for `lgbm-extended` on the real snapshot.
+  At 1,000 the ceiling had ended both fits before early stopping could.
+  `train` now records in `model.json` and in the MLflow run whether early stopping or the ceiling ended each fit (`early_stopped`, beside `boosting_rounds`, the rounds the fit ran), and logs a warning when it was the ceiling.
+  `learning_rate` and `num_leaves` are not changed by this entry.
+- **Alternatives considered:**
+  - **Option A: keep 1,000.**
+    Pros: no retrain, and the report's numbers stay where they are.
+    Cons: the parameter, not the validation curve, decides the tree count of both variants, so every later comparison - of the feature sets, of `learning_rate`, of `num_leaves` - is judged between models cut off by a budget.
+    And it hides itself: `lgbm-extended` once recorded a best iteration of 996 out of 1,000, which reads like early stopping and was not.
+  - **Option B: 2,000, just above where early stopping lands.**
+    Pros: the smallest worst case of every cost that grows with the trees.
+    Cons: `lgbm-extended` ran to round 1,697, so 2,000 leaves 303 rounds of slack.
+    A modest change to the data - a new snapshot, or the Great Expectations work on the stages before `split` - or a lower learning rate would bind it again, and only the new warning would say so.
+  - **Option C (chosen): 5,000.**
+    Pros: three times the later best round and four times the earlier, so it does not bind under any change measured so far: in a 12-point grid of `learning_rate` and `num_leaves` around the committed values, the slowest point (`learning_rate` 0.025, `num_leaves` 31) ran 4,116 rounds.
+    And its worst case stays inside every budget the trees drive: a fit that used all 5,000 trees would take about 80 s for `lgbm-extended` against NFR-10's 15 minutes, write a booster of about 33 MB against NFR-04's 1 GB image, and spend about 105 ms on one row's native SHAP export against NFR-02's 200 ms for the whole of `/predict`.
+    Cons: it is a value with a stated rationale, not a measured optimum, and the latency half of that rationale is a laptop measurement while NFR-02 is judged on the course VM, so its margin is less certain than the fit-time one.
+  - **Option D: effectively unbounded, 20,000 or more, as the exploratory fits used.**
+    Pros: it could never bind in any plausible configuration.
+    Cons: the ceiling would stop being a guard. A configuration whose validation curve keeps creeping down - a lower learning rate, more data - would run to a model whose SHAP export alone exceeds NFR-02 (about 210 ms at 10,000 trees on the same laptop), with a fit time, an energy figure and an artefact size nobody chose.
+  - **Option E: fix the tree count at the round early stopping chose (`n_estimators: 1243`, early stopping off).**
+    Pros: the same model today, and a fit that no longer reads the validation split.
+    Cons: it bakes one snapshot's answer into a parameter. The next retrain, which EDN-12 makes a response to drift, would get it wrong in either direction, where early stopping decides again on every retrain.
+- **Rationale:** The value was found by measurement rather than guessed, in two steps that never open the test split.
+  `reports/analysis/early_stopping_ceiling.py` fitted each variant once at a ceiling of 20,000 with every other setting as committed, through the stage's own `fit_variant`, on the `train` and `validation` matrices only: early stopping ended both fits, at best rounds 1,243 and 1,647 after 1,293 and 1,697 rounds.
+  The ceiling was then chosen from those numbers and the per-tree costs the same script measured, and only the committed `dvc repro` read the test split, through `evaluate`.
+
+  **What the extra trees are worth, which is less than issue #64 expected.** The issue read the 1,000-tree numbers as a lower bound on what the hyperparameters could reach.
+  They were very nearly the bound itself.
+  On validation, from 1,000 trees to the round early stopping chose, L1 in log space falls by 0.2 % and 0.6 % while MdAPE stays flat (6.947 % to 6.956 %, 6.448 % to 6.453 %): L1 is a mean and MdAPE a median, so the last trees improve the tail of the errors and not the typical one.
+  On the test split the committed run moves MdAPE from 6.827 % to 6.808 % for `lgbm-basic` and from 6.325 % to 6.256 % for `lgbm-extended`, within 20 % from 89.68 % to 89.81 % and from 90.29 % to 90.40 %, SC-03 from 43.9 % to 44.0 % and from 48.0 % to 48.6 %.
+  SC-04's worst segment, cars over 20 years, moves from 17.12 % to 16.77 % for `lgbm-basic` and from 17.86 % to 18.45 % for `lgbm-extended`; SC-06 from 1.208x to 1.213x and from 1.583x to 1.646x.
+  No criterion changes its verdict for any variant, `b0` and `b1` are unchanged, and EDN-62's choice of candidate holds more firmly than before: `lgbm-extended`'s pooled advantage grows from 0.50 pp to 0.55 pp, and its disadvantage on a request carrying only the required fields from 1.77 pp to 2.04 pp (10.30 % against 8.26 %).
+  The training L1 falls much further than the validation L1 - 0.0688 to 0.0655 against 0.1005 to 0.1003 for the candidate - so the added trees mostly fit the training rows more closely, and on `lgbm-extended` that comes with a stronger dependence on its optional fields.
+
+  **What they cost, which is linear in the trees.** 1.29x and 1.70x the boosting rounds, so the same factor of fit time and of the energy the fit draws; the boosters grow from 6.2 to 7.6 MB and from 6.8 to 10.9 MB; one row's native SHAP export, the FR-08 path, from 18.9 to 26.1 ms and from 22.3 to 35.4 ms on the laptop that measured it.
+  The committed run fits the candidate in 8.6 s and the whole ladder in 36.4 s, far inside NFR-10's 15 minutes.
+  Bought at that price, 0.02 pp of MdAPE on the candidate is not much; it is accepted because the alternative is a model whose size is set by an arbitrary parameter rather than by its data, which is what makes every other comparison in the ladder trustworthy.
+
+  **The issue's "Care needed" claims, checked in the code.** Early stopping reads the validation split and nothing else: `LightGBMModel.fit` passes `validation` as the only evaluation set, under `first_metric_only`, and `train.read_matrices` reads only `train` and `validation`; the test split is read by `evaluate` alone, after training.
+  One claim needs a qualification rather than a correction: `early_stopping_rounds` bounds how many rounds the fit runs past its best one, not the optimism of choosing that best round on the same split it is scored on. That optimism is what the untouched test split measures, and here test and validation moved together and by little.
+
+  **A record that can say whether the ceiling bound.** Investigating the issue showed that `best_iteration` alone cannot: lightgbm 4.7 reports the best round inside the budget whether or not early stopping fired, so `best_iteration_` is never 0 at the ceiling, as a code comment in `model.py` claimed, and the 996 of `lgbm-extended` was a fit the ceiling ended.
+  `model.json` therefore records the rounds run as well, and `early_stopped` is true when the fit ran the full patience past its best round.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** The method was set in the brief: raise the ceiling until early stopping fires, find where with one generous exploratory fit per variant, and commit a value with clear headroom.
+  AI ran the measurement, chose 5,000 by the worst-case argument above rather than by a multiple of the observed best round alone, and laid out options A to E.
+  Two of its findings went beyond the brief.
+  It established that the issue's premise, that the 1,000-tree models were materially short of what the hyperparameters could reach, does not hold: the extra trees are worth 0.02 pp and 0.07 pp of test MdAPE.
+  And it found, by probing lightgbm 4.7's early-stopping callback, that the code comment explaining the `best_iteration_ or num_trees()` fallback was wrong and that the record could not tell a binding ceiling from early stopping, which is why `early_stopped` and `boosting_rounds` were added with tests at the `train` seam.
+- **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #64: the exploratory fits are `reports/analysis/early_stopping_ceiling.py` and its results file; the committed run is the `dvc.lock` of the pull request, tracked as one MLflow run per variant in `recommenditos-price` with `best_iteration`, `boosting_rounds` and `early_stopped` logged.
+- **Other evidence:** [issue #64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64); [`params.yaml`](../params.yaml), `train.variants`; [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `LightGBMModel.fit`; `tests/test_model.py::test_a_lightgbm_record_says_early_stopping_ended_the_fit` and `::test_a_budget_early_stopping_never_reaches_is_recorded_as_a_budget_that_bound`; [`reports/analysis/early_stopping_ceiling.py`](analysis/early_stopping_ceiling.py) and [`tuning_sweep.py`](analysis/tuning_sweep.py) with their results files (2026-10-05); [model card](../docs/docs/model-card.md), Training and the ladder; [EDN-53](#edn-53-trainnum_threads-is-pinned-to-1-trading-fit-speed-for-a-machine-independent-artefact), [EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around).
+- **In LaTeX:** no
+
 ### EDN-74: A run is tagged with the hashes of its own stage's inputs, and `git_dirty` ignores what DVC writes itself
 
 - **Date:** 2026-10-05
