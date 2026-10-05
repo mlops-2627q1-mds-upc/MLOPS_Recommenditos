@@ -17,14 +17,23 @@ import shutil
 import subprocess
 import sys
 
+from dvc.repo import Repo
 from loguru import logger
 import mlflow
+from mlflow.utils import validation
 import pytest
 from tests.conftest import commit_all, git_in
 from typer.testing import CliRunner
 
-from recommenditos.config import PROJ_ROOT
-from recommenditos.provenance import DVC_STAGE_ENV_VAR, stage_inputs
+from recommenditos.config import PARAMS_FILE, PROJ_ROOT
+from recommenditos.pipeline import load_params
+from recommenditos.provenance import (
+    DVC_STAGE_ENV_VAR,
+    declared_inputs,
+    input_tag_name,
+    stage_inputs,
+    tag_prefix,
+)
 from recommenditos.tracking import (
     REQUIRED_ENV_VARS,
     UNCONFIGURED_TRACKING_URI,
@@ -36,6 +45,10 @@ from recommenditos.tracking import (
 )
 
 ENV_TEMPLATE = PROJ_ROOT / ".env.template"
+
+
+def _project_variants() -> list[str]:
+    return list(load_params(PARAMS_FILE)["train"]["variants"])
 
 
 @pytest.fixture(autouse=True)
@@ -283,6 +296,31 @@ def test_a_stage_that_resumes_a_run_records_its_own_commit_beside_the_first(
     assert tags["git_commit"] == opened_at
     assert tags["prepare.git_commit"] == resumed_at
     assert tags["prepare.git_dirty"] == "false"
+
+
+@pytest.mark.req("NFR-14")
+def test_every_provenance_tag_of_the_pipeline_is_a_key_mlflow_accepts():
+    """A dependency path MLflow refuses as a tag key would turn tracking off.
+
+    `start_run` validates every tag before it creates the run, so a key it refuses
+    fails the opening, which `optional_run` degrades on: the stage would train
+    with tracking silently off. So every key the stages that open or resume a run
+    would write is checked here, by MLflow's own validator, against the
+    dependencies `dvc.yaml` declares today.
+    """
+    stages = [
+        stage.addressing
+        for stage in Repo(str(PROJ_ROOT)).index.stages
+        if stage.addressing.startswith("train@") or stage.addressing == "evaluate"
+    ]
+    assert len(stages) == len(_project_variants()) + 1, stages
+
+    keys = [input_tag_name(stage, path) for stage in stages for path in declared_inputs(stage)] + [
+        f"{tag_prefix(stage)}.{name}" for stage in stages for name in ("git_commit", "git_dirty")
+    ]
+    for key in keys:
+        validation._validate_tag_name(key)
+        assert len(key) <= validation.MAX_ENTITY_KEY_LENGTH, key
 
 
 # --------------------------------------------------------------------------

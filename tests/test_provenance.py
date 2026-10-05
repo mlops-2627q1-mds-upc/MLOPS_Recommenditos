@@ -126,6 +126,35 @@ def test_an_input_hash_moves_with_its_input_and_with_nothing_else(reproduced: Re
 
 
 @pytest.mark.req("NFR-14")
+def test_a_dvc_repro_started_from_a_subdirectory_still_names_each_stage_s_inputs(
+    dvc_pipeline: Path, tmp_path: Path
+):
+    """DVC addresses a stage relative to where `dvc repro` was started.
+
+    From a subdirectory, `DVC_STAGE` is `../dvc.yaml:prepare`, not `prepare`, and
+    a stage that resolved that path against the repository root looked for a
+    `dvc.yaml` in the repository's parent. Without `RECOMMENDITOS_REQUIRE_TRACKING`
+    that failure turned tracking off for every run, under a warning that blamed
+    the credentials.
+    """
+    root = dvc_pipeline
+    dvc_repro(root, tmp_path / "first")
+    commit_all(root, "the pipeline's first run")
+    (root / "raw" / "b.csv").write_text("bmw,320d,2019\n", encoding="utf-8")
+    head = commit_all(root, "a corrected listing")
+    (root / "notebooks").mkdir()
+
+    dvc_repro(root, tmp_path / "records", "../dvc.yaml", cwd=root / "notebooks")
+
+    for stage, record in _records(tmp_path / "records").items():
+        assert record["run"] == {
+            "git_commit": head,
+            "git_dirty": "false",
+            **_lock_tags(root, stage),
+        }, stage
+
+
+@pytest.mark.req("NFR-14")
 def test_only_what_dvc_writes_is_ignored(dvc_pipeline: Path):
     """The lock and the uncached outputs are DVC's; everything else is a change.
 
@@ -167,6 +196,21 @@ def test_a_change_dvc_did_not_write_still_makes_the_tree_dirty(dvc_pipeline: Pat
         (root / "params.yaml").write_text("seed: 2\n", encoding="utf-8")
 
     assert git_state(root)["git_dirty"] == "true"
+
+
+@pytest.mark.req("NFR-14")
+def test_a_status_git_cannot_read_is_unknown_rather_than_clean(dvc_pipeline: Path):
+    """An empty answer from `git status` means a clean tree, so no answer must not.
+
+    A corrupt index is the realistic case: git still names the commit, from the
+    refs, and fails on anything that reads the index.
+    """
+    (dvc_pipeline / ".git" / "index").write_bytes(b"not an index")
+
+    assert git_state(dvc_pipeline) == {
+        "git_commit": git_in(dvc_pipeline, "rev-parse", "HEAD"),
+        "git_dirty": "unknown",
+    }
 
 
 @pytest.mark.req("NFR-14")

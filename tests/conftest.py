@@ -207,7 +207,9 @@ import sys
 
 from recommenditos.provenance import resumed_run_tags, run_tags
 
-stage = os.environ["DVC_STAGE"]
+# Named after the stage, not its address, which carries the path to `dvc.yaml`
+# when `dvc repro` was started from elsewhere: `../dvc.yaml:prepare`.
+stage = os.environ["DVC_STAGE"].rpartition(":")[2]
 record = {"run": run_tags(Path.cwd()), "resumed": resumed_run_tags(Path.cwd())}
 Path(os.environ["PROVENANCE_RECORDS"], stage + ".json").write_text(json.dumps(record))
 
@@ -223,10 +225,10 @@ else:
 """
 
 #: Shaped like the project's pipeline where provenance is concerned: a directory
-#: dependency, an output DVC caches, an output it does not and which git tracks
-#: instead (as `metrics.json` and the validation summary are), a later stage that
-#: depends on that uncached output, and a `foreach`, so a stage's address has an
-#: `@` in it.
+#: dependency, a parameter, which `dvc.lock` records apart from the `deps`, an
+#: output DVC caches, an output it does not and which git tracks instead (as
+#: `metrics.json` and the validation summary are), a later stage that depends on
+#: that uncached output, and a `foreach`, so a stage's address has an `@` in it.
 _DVC_YAML = """\
 stages:
   prepare:
@@ -234,6 +236,8 @@ stages:
     deps:
       - stage.py
       - raw
+    params:
+      - scale
     outs:
       - prepared
       - summary.json:
@@ -284,12 +288,17 @@ def commit_all(root: Path, message: str) -> str:
     return git_in(root, "rev-parse", "HEAD")
 
 
-def dvc_repro(root: Path, records: Path) -> None:
-    """`dvc repro` in `root`, the way a contributor runs it: as a separate process."""
+def dvc_repro(root: Path, records: Path, *targets: str, cwd: Path | None = None) -> None:
+    """`dvc repro` in `root`, the way a contributor runs it: as a separate process.
+
+    `cwd` starts it from somewhere else in the repository, with `targets` naming
+    the `dvc.yaml` relative to there, which changes the address DVC hands the
+    stage in `DVC_STAGE`: `../dvc.yaml:prepare` rather than `prepare`.
+    """
     records.mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        [sys.executable, "-m", "dvc", "repro", "--quiet"],
-        cwd=root,
+        [sys.executable, "-m", "dvc", "repro", "--quiet", *targets],
+        cwd=cwd or root,
         env={**os.environ, "PROVENANCE_RECORDS": str(records)},
         check=True,
     )
@@ -305,6 +314,7 @@ def build_dvc_pipeline(root: Path) -> Path:
     (root / "raw").mkdir(parents=True)
     (root / "raw" / "a.csv").write_text("audi,a4,2015\n", encoding="utf-8")
     (root / "raw" / "b.csv").write_text("bmw,320d,2018\n", encoding="utf-8")
+    (root / "params.yaml").write_text("scale: 2\n", encoding="utf-8")
     (root / "stage.py").write_text(_STAGE_SCRIPT, encoding="utf-8")
     # Double quotes rather than `shlex.quote`: DVC runs a command through `$SHELL`
     # on POSIX and through `cmd.exe` on Windows, and only double quotes mean the
