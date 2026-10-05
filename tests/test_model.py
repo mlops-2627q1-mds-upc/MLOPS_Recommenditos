@@ -948,12 +948,12 @@ def test_a_budget_early_stopping_never_reaches_is_recorded_as_a_budget_that_boun
 def test_a_lightgbm_record_says_early_stopping_ended_the_fit(trained: dict):
     """The property issue #64 is about, recorded where every consumer can read it.
 
-    Early stopping fired when the fit ran exactly `early_stopping_rounds` past its
-    best iteration and stopped short of the budget. The record carries both the
-    trees kept and the rounds run, so whether the budget bound a fit is a fact of
-    the bundle rather than something read back out of a training log. Asserted on
-    the fixture, which early-stops; the real snapshot's answer is in the committed
-    `model.json` and the MLflow run.
+    Early stopping fired when the fit ran the full `early_stopping_rounds` past its
+    best iteration, which can happen on the last round of the budget as well as
+    before it. The record carries both the trees kept and the rounds run, so
+    whether the budget bound a fit is a fact of the bundle rather than something
+    read back out of a training log. Asserted on the fixture, which early-stops;
+    the real snapshot's answer is in the committed `model.json` and the MLflow run.
     """
     for variant in ("lgbm-basic", "lgbm-extended"):
         training = trained["models"][variant].metadata["training"]
@@ -968,6 +968,53 @@ def test_a_lightgbm_record_says_early_stopping_ended_the_fit(trained: dict):
         training = trained["models"][variant].metadata["training"]
         assert training["early_stopped"] is None, variant
         assert training["boosting_rounds"] is None, variant
+
+
+#: The two budgets just past the fixture's best round, as (rounds past it, expected
+#: `early_stopped`), with the patience as the unit.
+_PAST_THE_BEST_ROUND = {
+    # The case `lgbm-extended`'s 996 of 1,000 was: the best round is inside the
+    # budget, and the budget ends the fit before the patience runs out.
+    "budget-ends-the-fit-past-the-best-round": (Fraction(1, 2), False),
+    # The patience runs out on the very last round the budget allows.
+    "patience-runs-out-on-the-last-round": (Fraction(1), True),
+}
+
+
+@pytest.mark.parametrize("case", list(_PAST_THE_BEST_ROUND), ids=list(_PAST_THE_BEST_ROUND))
+def test_early_stopped_is_decided_by_the_patience_not_by_the_best_round(
+    case: str, trained: dict, tmp_path: Path, matrices: dict, monkeypatch
+):
+    """A best round below `n_estimators` is not evidence that early stopping fired.
+
+    The budget is set just past the fixture's own best round B, which the shared
+    fit found with the budget far out of reach: B plus half the patience leaves a
+    best round of B, below the budget, in a fit the budget ended; B plus the whole
+    patience ends exactly where early stopping would. Comparing `best_iteration`
+    with `n_estimators` calls both of them early stopping, which is the reading
+    this record exists to replace.
+    """
+    share, early_stopped = _PAST_THE_BEST_ROUND[case]
+    for name in REQUIRED_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    params = _project_params()
+    settings = params["train"]["variants"]["lgbm-basic"]
+    best = trained["models"]["lgbm-basic"].metadata["training"]["best_iteration"]
+    budget = best + int(share * settings["params"]["early_stopping_rounds"])
+    variants = {
+        **params["train"]["variants"],
+        "lgbm-basic": {**settings, "params": {**settings["params"], "n_estimators": budget}},
+    }
+    overridden = params_override(tmp_path, params, train={**params["train"], "variants": variants})
+
+    train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+
+    record = json.loads(
+        (tmp_path / "models" / "lgbm-basic" / MODEL_FILE).read_text(encoding="utf-8")
+    )
+    assert record["training"]["best_iteration"] == best < budget
+    assert record["training"]["boosting_rounds"] == budget
+    assert record["training"]["early_stopped"] is early_stopped
 
 
 def test_num_threads_is_pinned_from_params(

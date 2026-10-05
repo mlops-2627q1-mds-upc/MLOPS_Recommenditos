@@ -952,7 +952,9 @@ class LightGBMModel(Model):
             boosting_rounds=boosting_rounds,
             early_stopped=early_stopped,
         )
-        if not early_stopped:
+        # Only with early stopping on: with `early_stopping_rounds: 0` the budget is
+        # the tree count by design, and there is no patience to report.
+        if rounds > 0 and not early_stopped:
             logger.warning(
                 f"{metadata['variant']}: the n_estimators budget of {tuning['n_estimators']:,} "
                 f"ended the fit, not early stopping. The validation L1 was still at its best "
