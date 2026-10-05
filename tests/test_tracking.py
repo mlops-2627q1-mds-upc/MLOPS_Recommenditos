@@ -20,17 +20,18 @@ import sys
 from loguru import logger
 import mlflow
 import pytest
+from tests.conftest import commit_all, git_in
 from typer.testing import CliRunner
 
 from recommenditos.config import PROJ_ROOT
+from recommenditos.provenance import DVC_STAGE_ENV_VAR, stage_inputs
 from recommenditos.tracking import (
-    DVC_LOCK_FILE,
     REQUIRED_ENV_VARS,
     UNCONFIGURED_TRACKING_URI,
     app,
     configure_tracking,
     log_setup_check,
-    run_provenance,
+    resume_run,
     tracked_run,
 )
 
@@ -204,8 +205,14 @@ def test_the_setup_check_logs_a_run_that_can_be_read_back(local_tracking: str):
 
 
 @pytest.mark.req("NFR-14")
-def test_every_run_records_the_commit_and_the_data_version(local_tracking: str):
-    """NFR-14 asks for this on every run, so the seam does it, not the caller."""
+def test_every_run_records_the_commit_it_was_produced_from(local_tracking: str, monkeypatch):
+    """NFR-14 asks for this on every run, so the seam does it, not the caller.
+
+    Outside DVC - here, a test - the run carries the commit and no input hashes,
+    because no lock records what it read (`recommenditos/provenance.py`).
+    """
+    monkeypatch.delenv(DVC_STAGE_ENV_VAR, raising=False)
+
     with tracked_run("a-provenance-check") as run:
         pass
 
@@ -220,37 +227,62 @@ def test_every_run_records_the_commit_and_the_data_version(local_tracking: str):
         ).stdout.strip()
     )
     assert tags["git_dirty"] in {"true", "false"}
-    assert tags["dvc_lock_md5"], "dvc.lock is the data version, and this repo has one"
+    assert not [name for name in tags if ".deps." in name]
 
 
 @pytest.mark.req("NFR-14")
-def test_a_run_without_git_records_that_rather_than_failing(monkeypatch):
-    """An image built without the `.git` directory still has to be able to train."""
+def test_a_run_dvc_opens_records_the_inputs_of_its_stage(
+    local_tracking: str, dvc_pipeline: Path, monkeypatch
+):
+    """The seam puts the input hashes on the run, under the stage's name.
 
-    def no_git(*args, **kwargs):
-        raise FileNotFoundError("git")
+    That they are the hashes `dvc.lock` records is `tests/test_provenance.py`'s
+    to show, on a pipeline DVC runs; this is the wiring from there to MLflow.
+    """
+    monkeypatch.setattr("recommenditos.provenance.PROJ_ROOT", dvc_pipeline)
+    monkeypatch.setenv(DVC_STAGE_ENV_VAR, "prepare")
 
-    monkeypatch.setattr("recommenditos.tracking.subprocess.run", no_git)
+    with tracked_run("a-stage-provenance-check") as run:
+        pass
 
-    provenance = run_provenance()
-
-    assert provenance["git_commit"] == "unknown"
-    assert provenance["git_dirty"] == "false"
+    tags = mlflow.MlflowClient().get_run(run.info.run_id).data.tags
+    inputs = stage_inputs("prepare", dvc_pipeline)
+    assert set(inputs) == {"stage.py", "raw"}
+    assert {name: tags.get(name) for name in ("git_commit", "git_dirty")} == {
+        "git_commit": git_in(dvc_pipeline, "rev-parse", "HEAD"),
+        "git_dirty": "false",
+    }
+    assert {name: value for name, value in tags.items() if ".deps." in name} == {
+        f"prepare.deps.{path}": md5 for path, md5 in inputs.items()
+    }
 
 
 @pytest.mark.req("NFR-14")
-def test_the_data_version_changes_with_the_lock_file(monkeypatch, tmp_path):
-    """A tag that does not move when the data moves records nothing."""
-    assert DVC_LOCK_FILE == PROJ_ROOT / "dvc.lock", "the data version reads the real lock file"
+def test_a_stage_that_resumes_a_run_records_its_own_commit_beside_the_first(
+    local_tracking: str, dvc_pipeline: Path, monkeypatch
+):
+    """`evaluate` appends to the run `train` opened, possibly commits later.
 
-    lock = tmp_path / "dvc.lock"
-    monkeypatch.setattr("recommenditos.tracking.DVC_LOCK_FILE", lock)
+    A change to the evaluation code alone reruns only `evaluate`, against the
+    runs of an earlier `train`. Overwriting the run's commit would then claim the
+    fit came from code it did not come from, and keeping it alone would hide
+    where the metrics came from, so the resuming stage records its own beside it.
+    """
+    monkeypatch.setattr("recommenditos.provenance.PROJ_ROOT", dvc_pipeline)
+    monkeypatch.setenv(DVC_STAGE_ENV_VAR, "prepare")
+    with tracked_run("a-resumed-provenance-check") as run:
+        pass
+    opened_at = git_in(dvc_pipeline, "rev-parse", "HEAD")
+    (dvc_pipeline / "evaluate.py").write_text("THRESHOLD = 0.2\n", encoding="utf-8")
+    resumed_at = commit_all(dvc_pipeline, "a change to the evaluation alone")
 
-    lock.write_text("outs:\n- md5: one\n", encoding="utf-8")
-    first = run_provenance()["dvc_lock_md5"]
-    lock.write_text("outs:\n- md5: two\n", encoding="utf-8")
+    with resume_run(run.info.run_id) as resumed:
+        resumed.log_metrics({"mdape": 0.2})
 
-    assert run_provenance()["dvc_lock_md5"] != first
+    tags = mlflow.MlflowClient().get_run(run.info.run_id).data.tags
+    assert tags["git_commit"] == opened_at
+    assert tags["prepare.git_commit"] == resumed_at
+    assert tags["prepare.git_dirty"] == "false"
 
 
 # --------------------------------------------------------------------------

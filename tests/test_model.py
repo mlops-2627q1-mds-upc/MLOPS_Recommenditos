@@ -1458,8 +1458,11 @@ def test_one_variant_is_one_run_that_evaluate_appends_to(
         assert run.data.tags["variant"] == "b0"
         assert run.data.tags["dvc_stage"] == "train@b0"
         # NFR-14 asks every run to record which code produced it, and the seam
-        # does that rather than each caller.
+        # does that rather than each caller. Called by a test rather than by DVC,
+        # and on matrices under `tmp_path`, the run names no input hashes: the
+        # ones `dvc.yaml` declares are not the files this fit read.
         assert run.data.tags["git_commit"]
+        assert not [name for name in run.data.tags if ".deps." in name]
         assert "train_l1_log_price" in run.data.metrics
         assert {MODEL_FILE, FEATURE_SPACE_FILE, "lookup.parquet"} <= {
             entry.path.split("/")[-1] for entry in client.list_artifacts(run_id, "model")
