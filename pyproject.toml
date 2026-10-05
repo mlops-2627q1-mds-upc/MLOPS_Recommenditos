@@ -84,6 +84,11 @@ requires-python = "~=3.12.0"
 # validation and energy measurement belong here too.
 pipeline = [
     "dvc",
+    # Figures. In this group rather than in `notebook`, because DVC stages draw
+    # figures into `reports/figures/` too (the `compare-energy` stage of #38 is
+    # the first), and an install of the pipeline alone has to be able to run them.
+    # The notebooks need nothing more: `uv sync` installs every group.
+    "matplotlib",
     # Experiment tracking against the DagsHub tracking server. The course demo
     # pins `>=2.22,<3` for DagsHub compatibility; that ceiling is not carried
     # over, because 3.16.1 was verified against
@@ -114,9 +119,6 @@ pipeline = [
 notebook = [
     "ipython",
     "jupyterlab",
-    # Figures. Nothing in `recommenditos/` draws one yet; the day a DVC stage
-    # writes a figure, this moves to `pipeline`.
-    "matplotlib",
     "notebook",
 ]
 # The documentation site under `docs/`, which CI builds with `--strict`.

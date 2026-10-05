@@ -1346,7 +1346,7 @@ How to add an entry:
 - **Participants:** @lukas2510
 - **Decision:** `pyproject.toml` no longer has one flat dependency list.
   `[project] dependencies` holds the serving runtime only, meaning what it takes to load a bundle from `models/<variant>/` and price a listing: joblib, lightgbm, loguru, numpy, pandas, pyarrow, python-dotenv, pyyaml, scikit-learn and typer.
-  Everything else is in `[dependency-groups]`: `pipeline` (dvc, mlflow, requests, tqdm), `notebook` (ipython, jupyterlab, matplotlib, notebook), `docs` (mkdocs), `test` (coverage, pytest, pytest-cov) and `dev` (nbstripout, pip, pre-commit, ruff).
+  Everything else is in `[dependency-groups]`: `pipeline` (dvc, matplotlib, mlflow, requests, tqdm), `notebook` (ipython, jupyterlab, notebook), `docs` (mkdocs), `test` (coverage, pytest, pytest-cov) and `dev` (nbstripout, pip, pre-commit, ruff).
   `[tool.uv] default-groups = "all"` keeps a plain `uv sync` and `uv run` installing every group, so no documented command changed.
   The API image will install the runtime alone with `uv sync --locked --no-default-groups`.
   FastAPI, uvicorn and pydantic join the runtime with the API in M4; Great Expectations, CodeCarbon and `shap` (EDN-11) go into groups.
@@ -1392,6 +1392,7 @@ How to add an entry:
   tqdm went the other way, into `pipeline`: `config.py` sends loguru through `tqdm.write` with colour forced on whenever tqdm can be imported, which would put escape codes into every container log line.
   Without it, the API logs to loguru's default stderr sink, which colours only a terminal.
   `test` is a group of its own rather than part of `dev`, because the serving check installs it on top of the runtime, and every extra package there would be one a serving import could lean on unnoticed.
+  matplotlib is in `pipeline`, not `notebook`, because a DVC stage draws figures too: issue #38's `compare-energy` stage writes `reports/figures/energy-vs-error.png`, and an install of the pipeline alone has to be able to run it.
 
   Measured on 2026-10-05 by building both environments from `uv.lock` (`reports/analysis/runtime_footprint.py`): the runtime is **23 distributions, the project included, and 421 MB of site-packages as installed (519 MB with bytecode)**.
   The full environment is **248 distributions and 815 MB (1,054 MB)**.

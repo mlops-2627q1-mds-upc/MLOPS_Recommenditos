@@ -2768,11 +2768,11 @@ docs = [
 notebook = [
     { name = "ipython" },
     { name = "jupyterlab" },
-    { name = "matplotlib" },
     { name = "notebook" },
 ]
 pipeline = [
     { name = "dvc" },
+    { name = "matplotlib" },
     { name = "mlflow" },
     { name = "requests" },
     { name = "tqdm" },
@@ -2808,11 +2808,11 @@ docs = [{ name = "mkdocs" }]
 notebook = [
     { name = "ipython" },
     { name = "jupyterlab" },
-    { name = "matplotlib" },
     { name = "notebook" },
 ]
 pipeline = [
     { name = "dvc" },
+    { name = "matplotlib" },
     { name = "mlflow", specifier = ">=3.16.1,<4" },
     { name = "requests" },
     { name = "tqdm" },
