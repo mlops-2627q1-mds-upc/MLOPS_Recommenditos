@@ -194,3 +194,18 @@ def test_a_run_without_git_records_that_rather_than_failing(monkeypatch):
     monkeypatch.delenv(DVC_STAGE_ENV_VAR, raising=False)
 
     assert run_tags() == {"git_commit": "unknown", "git_dirty": "false"}
+
+
+def test_a_checkout_without_dvc_counts_every_change(tmp_path: Path):
+    """No pipeline to read DVC's writes off, so nothing is excused.
+
+    A tarball or an image may carry `.git` without `.dvc`; that is no reason to
+    fail the run, and no reason to call a changed lock file clean either.
+    """
+    git_in(tmp_path, "init", "--quiet")
+    (tmp_path / "dvc.lock").write_text("schema: '2.0'\n", encoding="utf-8")
+    commit_all(tmp_path, "a lock file and no DVC repository")
+    (tmp_path / "dvc.lock").write_text("schema: '2.0'\nstages: {}\n", encoding="utf-8")
+
+    assert dvc_written_paths(tmp_path) == ()
+    assert git_state(tmp_path)["git_dirty"] == "true"

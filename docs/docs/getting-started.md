@@ -110,7 +110,8 @@ uv run python -m recommenditos.tracking
 This logs one throwaway run - a single parameter and a single metric - to the `setup-check` experiment and prints its URL.
 Open <https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments> and you should see your run there within seconds.
 It is deliberately not written to the pipeline's experiment: a credential check is not an experiment result and does not belong next to the runs the report cites.
-The run also carries your git commit, whether your working tree was clean and the MD5 of `dvc.lock`, because [NFR-14](specification.md) wants every run traceable to the code and data it saw.
+The run also carries your git commit and whether your working tree was clean, because [NFR-14](specification.md) wants every run traceable to the code and data it saw.
+A run a pipeline stage makes under `dvc repro` carries the hash of every input of its stage as well; [The DVC pipeline](pipeline.md#from-a-run-to-its-inputs) explains the tags.
 
 If a variable is missing, the command prints one line naming which ones and stops there, rather than failing later with an HTTP 401 halfway through a training run:
 

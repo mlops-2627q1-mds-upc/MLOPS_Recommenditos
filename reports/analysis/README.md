@@ -170,3 +170,10 @@ Run each mode under `/usr/bin/time -v`; `gx_fingerprint_cost_results.txt` holds 
 `mileage_scope.py` measures the alternative EDN-72 rejected for the mileage rule: dropping the three cleaned listings above FR-03's 1,000,000 km in preprocessing.
 It runs the real `split`, `features`, `train` and `evaluate` stages on the interim frame without them, in a temporary directory with tracking off, and compares the result with the committed `metrics.json`.
 `mileage_scope_results.txt` is the output of the run cited in EDN-72 (2026-10-05), taken against the `metrics.json` of commit `abea241`.
+
+## What a run's provenance tags identify (EDN-74, issue #79)
+
+`run_provenance_check.py` takes the runs the committed pipeline points at - the run id in each `models/<variant>/model.json`, after checking that the bundle is the one the committed `dvc.lock` records - reads them back from the tracking server, and compares them with that lock.
+For every run it checks that each `train.deps.<path>` tag equals the `md5` the lock records for that dependency of `train@<variant>`, that each `evaluate.deps.<path>` equals the one under `evaluate`, with no dependency missing and no tag extra, and that `git_dirty` and `evaluate.git_dirty` are `false`; for a run made before the fix it also says whether its `dvc_lock_md5` equals the committed lock's digest.
+It needs the tracking credentials in `.env`, `models/` from `dvc pull`, and a clean tree, and runs from the repository root: `uv run python reports/analysis/run_provenance_check.py`.
+`run_provenance_check_results.txt` holds two runs of it (2026-10-05): against the runs `main`'s models pointed at before the fix, and against the four runs of the `dvc repro` this pull request committed.

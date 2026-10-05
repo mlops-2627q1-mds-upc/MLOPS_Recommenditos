@@ -379,7 +379,8 @@ Its parameters are every `params.yaml` key `dvc.yaml` declares for the `train` s
 The emissions of the fit are not among them yet; they arrive with issue #38.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
 
-Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-14 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
+Every run is tagged with `variant`, `estimator`, `feature_set` and `dvc_stage`, and - by the tracking seam, for NFR-14 - with what produced it: `git_commit` and `git_dirty` for the fit, one `train.deps.<path>` per dependency of its `train` stage holding the hash `dvc.lock` records for it, and the same for the evaluation that appended to it, `evaluate.git_commit`, `evaluate.git_dirty` and `evaluate.deps.<path>` (EDN-74).
+[The DVC pipeline](pipeline.md#from-a-run-to-its-inputs) says what each tag identifies and how to get from a run back to its code, data and parameters.
 The ladder this card reports is four runs of the `recommenditos-price` experiment, one per variant, produced by the `dvc repro` whose lock is committed.
 The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
 
@@ -389,13 +390,13 @@ tags.git_commit = '<the full SHA of the run you want>'
 
 with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.fit_seconds`.
 That filter is what picks one chain out of the experiment: the four runs of a `dvc repro` share one commit, and a run from another commit is a different pipeline.
-Two things about it are worth knowing before the filter is believed, both measured on this ladder rather than assumed:
+Two things about it are worth knowing before the filter is believed, both checked on this ladder rather than assumed:
 
-- **`tags.dvc_lock_md5` is not a chain filter**, although its name reads like one. It is the digest of `dvc.lock` as it stood when that one stage ran, and `dvc repro` rewrites the lock after **each** stage, so the four runs of one chain carry four different digests. What it identifies is a stage's inputs, not a ladder; what groups a ladder is the commit.
-- **`tags.git_dirty` is `true` for this ladder**, and correctly so: `params.yaml` held the flip to `download.source: zenodo` and `dvc.lock` was being rewritten while the stages ran, which is unavoidable for the run that produces the lock. The commit the tag names is therefore the one *before* the lock landed, and the run is reproducible from the commit that follows it.
+- **The commit is the one the pipeline ran from, not the one that holds its lock.** `dvc repro` runs at a commit and its `dvc.lock` and metrics are committed after it, so the runs name the parent of the commit that records them, and `tags.git_dirty` is `false` for all four: what DVC writes while it runs does not count as a change. The commit is on the branch of the pull request that re-ran the pipeline, so after the squash merge it is reached through that pull request.
+- **The input tags are what ties a run to the committed lock.** For each of the four runs, every `train.deps.<path>` equals the hash the committed `dvc.lock` records for that dependency of `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks that against the server, and its output is committed beside it. Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the ladder before this one were tagged dirty only because DVC had rewritten `dvc.lock` under them.
 
 The experiment also holds runs that are **not** pipeline runs: the test suite trains the same four variants on the synthetic fixture, and it logs to this experiment whenever a `.env` is present, under the same four run names.
-Their metrics are an order of magnitude worse and they carry a different commit, but nothing in the run itself says "fixture", so read the commit before quoting a number.
+Their metrics are an order of magnitude worse and they carry a different commit; they also carry no `train.deps.<path>` tags, because DVC did not run them, so a run without those tags is not a pipeline run and its numbers are not the model's.
 
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
