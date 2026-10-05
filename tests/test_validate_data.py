@@ -476,7 +476,7 @@ def test_running_the_suites_leaves_the_context_unchanged(context, built, frames)
 
 def test_the_stored_results_carry_no_fingerprint_of_the_frame(stage, built):
     # Great Expectations hashes the whole frame into each batch's markers, which
-    # on the real raw frame costs 9.4 s and 2.3 GB more than the frame itself.
+    # on the real raw frame takes the stage from 2.2 GB to 4.4 GB of peak memory.
     # `validate_data` switches that off through a module constant of Great
     # Expectations; if an upgrade renames it, the switch silently stops working,
     # and this is where that shows.

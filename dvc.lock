@@ -97,8 +97,8 @@ stages:
       size: 1535
     - path: recommenditos/data/gx_context_configuration.py
       hash: md5
-      md5: 069a6f3c2d6f7a0918fe3d6f9b03af11
-      size: 16821
+      md5: 301abafc62ebc0c956c903f70f72f1a6
+      size: 18858
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -116,12 +116,14 @@ stages:
           mileage_min_km: 0
           mileage_max_km: 1000000
           mileage_mostly: 0.999
+          min_rows: 1000
+          filled_mostly: 0.99
           raw_mostly: 0.99
     outs:
     - path: gx
       hash: md5
-      md5: de8c0be5e9c42fcc9602be0de852bed7.dir
-      size: 59991
+      md5: 21af0431c2e2de8440806ff33094ac2b.dir
+      size: 62209
       nfiles: 12
   validate-data:
     cmd: python3 -m recommenditos.data.validate_data
@@ -136,8 +138,8 @@ stages:
       size: 215309993
     - path: gx
       hash: md5
-      md5: de8c0be5e9c42fcc9602be0de852bed7.dir
-      size: 59991
+      md5: 21af0431c2e2de8440806ff33094ac2b.dir
+      size: 62209
       nfiles: 12
     - path: recommenditos/config.py
       hash: md5
@@ -145,12 +147,12 @@ stages:
       size: 1535
     - path: recommenditos/data/gx_context_configuration.py
       hash: md5
-      md5: 069a6f3c2d6f7a0918fe3d6f9b03af11
-      size: 16821
+      md5: 301abafc62ebc0c956c903f70f72f1a6
+      size: 18858
     - path: recommenditos/data/validate_data.py
       hash: md5
-      md5: a9551df198a5e8cc52cef61345bd9991
-      size: 10366
+      md5: b820fa82611e41024e6c0f8ec92698e9
+      size: 12763
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -162,18 +164,18 @@ stages:
     outs:
     - path: reports/data-validation/data-docs
       hash: md5
-      md5: 28e1f15609b1b596579ff46d52f65d42.dir
-      size: 4739242
+      md5: 59f4e212304d453a1d844ce105743e7a.dir
+      size: 4758543
       nfiles: 25
     - path: reports/data-validation/results
       hash: md5
-      md5: 20552edc1d9a6a79b192bc6e059eb225.dir
-      size: 123225
+      md5: 33ff7e2e5a2c22193e5191a810641ede.dir
+      size: 132085
       nfiles: 3
     - path: reports/data-validation/summary.json
       hash: md5
-      md5: 65dd58069ba683f9317ea7a35258dcca
-      size: 3402
+      md5: 320558b84ad53dfa65bec485c224828e
+      size: 4801
   split:
     cmd: python3 -m recommenditos.data.split_data
     deps:
@@ -199,8 +201,8 @@ stages:
       size: 36483
     - path: reports/data-validation/summary.json
       hash: md5
-      md5: 65dd58069ba683f9317ea7a35258dcca
-      size: 3402
+      md5: 320558b84ad53dfa65bec485c224828e
+      size: 4801
     params:
       params.yaml:
         seed: 20251108

@@ -8,6 +8,12 @@
     },
     "rules": [
       {
+        "expectation": "expect_table_row_count_to_be_between",
+        "min_value": 1000,
+        "success": true,
+        "observed_value": 118382
+      },
+      {
         "expectation": "expect_column_values_to_be_between",
         "column": "mileage_km_raw",
         "mostly": 0.999,
@@ -20,6 +26,15 @@
         "unexpected_percent": 0.0025
       },
       {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "mileage_km_raw",
+        "mostly": 0.99,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 644,
+        "unexpected_percent": 0.544
+      },
+      {
         "expectation": "expect_column_values_to_be_between",
         "column": "registration_date",
         "mostly": 0.99,
@@ -29,6 +44,15 @@
         "missing_count": 221,
         "unexpected_count": 164,
         "unexpected_percent": 0.1388
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "registration_date",
+        "mostly": 0.99,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 221,
+        "unexpected_percent": 0.1867
       }
     ]
   },
@@ -40,6 +64,12 @@
       "failed": []
     },
     "rules": [
+      {
+        "expectation": "expect_table_row_count_to_be_between",
+        "min_value": 1000,
+        "success": true,
+        "observed_value": 105405
+      },
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "body_type",
@@ -101,6 +131,15 @@
         "unexpected_percent": 0.0028
       },
       {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "mileage_km_raw",
+        "mostly": 0.99,
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 6,
+        "unexpected_percent": 0.0057
+      },
+      {
         "expectation": "expect_column_values_to_be_between",
         "column": "price",
         "min_value": 500.0,
@@ -120,6 +159,15 @@
         "missing_count": 2,
         "unexpected_count": 0,
         "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "registration_date",
+        "mostly": 0.99,
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 2,
+        "unexpected_percent": 0.0019
       }
     ]
   }

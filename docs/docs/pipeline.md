@@ -27,7 +27,7 @@ A clean clone pays none of that, because `dvc pull` brings the Parquet down and 
 CI never runs the stage; the test suite covers it against fixtures instead.
 
 That is measured, not assumed, and it is the drill NFR-06 names.
-On a scratch clone of this commit, `dvc pull` fetched 34 files and added 32, and `dvc repro` then reported all twelve stages as `didn't change, skipping` and finished with `Data and pipelines are up to date.`
+On a scratch clone of commit `3e05487` (#66, 2026-10-01), before the data-validation stages had outputs of their own, `dvc pull` fetched 34 files and added 32, and `dvc repro` then reported all twelve stages as `didn't change, skipping` and finished with `Data and pipelines are up to date.`
 Nothing came from Zenodo: the clone has no `data/external/` directory at all, and its `metrics.json` and `data/raw/listings.parquet` are byte-identical to the ones this repository produced.
 
 The tests never run the pipeline through DVC.
@@ -180,8 +180,8 @@ Great Expectations writes a fresh UUID into every object it saves and ignores on
 The definition of the suites a reviewer reads is the module that builds them, and the store is rebuilt from scratch on every run, so it cannot keep a rule the module no longer defines.
 To rebuild it by hand, run `uv run dvc repro configure_gx`.
 
-On the real snapshot the stage takes about 10 s and peaks at 2.0 GB of RAM, most of it the raw frame itself.
-Great Expectations would double that by hashing the whole frame into a fingerprint for each run's markers, so `validate-data` switches the fingerprint off.
+On the real snapshot the stage takes 11 s and peaks at 2.2 GB of RAM, most of it the raw frame itself.
+Great Expectations would take that to 14 s and 4.4 GB by hashing the whole frame into a fingerprint for each run's markers, so `validate-data` switches the fingerprint off (`reports/analysis/gx_fingerprint_cost.py`).
 
 Parameters
 ----------

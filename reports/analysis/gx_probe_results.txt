@@ -22,6 +22,18 @@ OfType bool against a nullable `boolean` column holding a null: BROKEN: passes a
   satisfying: (True, 'bool', [])
   breaking:   (True, 'bool', [])
 
+OfType str against an `object` text column: BROKEN: passes a frame that breaks it
+  satisfying: (True, 'str', [])
+  breaking:   (True, None, [])
+
+OfType str against a `string[python]` column: BROKEN: passes a frame that breaks it
+  satisfying: (True, 'str', [])
+  breaking:   (True, 'str', [])
+
+OfType float64 against a nullable `Float64` column: BROKEN: passes a frame that breaks it
+  satisfying: (True, 'float64', [])
+  breaking:   (True, 'float64', [])
+
 NotBeNull on `str` (missing is NaN): works
   satisfying: (True, None, [])
   breaking:   (False, None, [])

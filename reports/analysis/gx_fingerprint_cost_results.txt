@@ -1,0 +1,9 @@
+Run on 2026-10-05 against the real snapshot (118,382 raw and 105,405 cleaned rows), each mode in its own process under /usr/bin/time -v.
+
+fingerprint off: validate_data.main took 6.3 s
+  Elapsed (wall clock) time (h:mm:ss or m:ss): 0:11.35
+  Maximum resident set size (kbytes): 2176480
+
+fingerprint on: validate_data.main took 9.0 s
+  Elapsed (wall clock) time (h:mm:ss or m:ss): 0:13.82
+  Maximum resident set size (kbytes): 4376564

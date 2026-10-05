@@ -127,7 +127,7 @@ The report describes this check as part of the data decisions.
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   The price range is a scope filter in preprocessing and a hard expectation on the cleaned frame.
-  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing (EDN-68).
+  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing (EDN-72).
 
 ## 4. Modelling plan
 

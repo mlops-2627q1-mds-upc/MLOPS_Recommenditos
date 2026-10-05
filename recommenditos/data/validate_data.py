@@ -163,12 +163,13 @@ def _without_batch_fingerprint() -> Iterator[None]:
 
     It fingerprints every in-memory batch whose shallow `memory_usage` is below
     `HASH_THRESHOLD`, and a pandas-3 text column is shallow, so the raw frame
-    always qualifies. Measured on the real snapshot, the hash of its 118,382
-    rows takes 9.4 s and raises the peak memory from 1.7 GB, the frame itself,
-    to 4.0 GB; without it the batch costs nothing. The fingerprint is only a
-    marker in the stored result, and what was validated is already pinned by
-    `dvc.lock`. Scoped rather than set once at import, so it cannot change how
-    Great Expectations behaves for anyone else in the same process.
+    always qualifies. Measured on the real snapshot, the stage takes 14 s and
+    peaks at 4.4 GB with the fingerprint, and 11 s and 2.2 GB without it, most
+    of which is the raw frame itself (reports/analysis/gx_fingerprint_cost.py).
+    The fingerprint is only a marker in the stored result, and what was
+    validated is already pinned by `dvc.lock`. Scoped rather than set once at
+    import, so it cannot change how Great Expectations behaves for anyone else
+    in the same process.
     """
     previous = pandas_execution_engine.HASH_THRESHOLD
     pandas_execution_engine.HASH_THRESHOLD = 0
