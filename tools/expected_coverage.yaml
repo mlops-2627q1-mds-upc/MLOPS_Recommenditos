@@ -40,6 +40,13 @@ milestones:
       - NFR-06
       - NFR-07
       - NFR-08
+      # The two halves EDN-66 split out of NFR-06 and NFR-09 so that neither
+      # waits for the other. Run provenance is recorded by the tracking seam and
+      # the `train` stage, both merged. The secret scan guards credentials that
+      # every contributor has held since the DagsHub remote arrived (EDN-46), so
+      # it is due from the moment the risk is, not from when the API exists.
+      - NFR-14
+      - NFR-15
 
   - milestone: M4
     practice: Model deployment - the API
@@ -63,6 +70,12 @@ milestones:
       # running API, on the machine of EDN-17.
       - NFR-02
       - NFR-03
+      # The running system's security, without the repository's secret hygiene,
+      # which EDN-66 moved to NFR-15 and M3. Its first evidence is the body-limit
+      # test against the API. Its image scan, Dockerfile review and the check from
+      # outside the VM need the image and the deployment of M5; booked M4 as
+      # decided with that split, so the delivery review is what notices if they
+      # are still missing then.
       - NFR-09
       # Energy efficiency is an M3 practice and the emissions half is M3 work
       # (issue #38), but the specification's evidence for NFR-10 also names the

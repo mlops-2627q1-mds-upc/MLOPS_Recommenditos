@@ -377,7 +377,7 @@ Each run therefore carries the hyperparameters, the train and validation L1 in l
 The emissions of the fit are not among them yet; they arrive with issue #38.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
 
-Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-06 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
+Every run is tagged with `variant`, `estimator`, `feature_set`, `dvc_stage`, and - by the tracking seam, for NFR-14 - `git_commit`, `git_dirty` and `dvc_lock_md5`.
 The ladder this card reports is four runs of the `recommenditos-price` experiment, one per variant, produced by the `dvc repro` whose lock is committed.
 The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
 

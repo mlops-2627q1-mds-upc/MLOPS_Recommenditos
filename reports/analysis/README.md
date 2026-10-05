@@ -100,6 +100,14 @@ and the target - instead of re-implementing any of them, so its numbers cannot d
 pipeline does.
 `preprocess_funnel_results.txt` is the output of the run cited in the dataset card (2026-09-30).
 
+## Secret scanning and the DagsHub token (EDN-71, NFR-15)
+
+`secret_scan_dagshub_token.py` plants fake DagsHub tokens, 200 per place, in the thirteen places a real one has been or could plausibly be written in this project, and measures how often gitleaks' default rules, gitleaks with `.gitleaks.toml`, and detect-secrets' default plugins find them.
+It also measures the Shannon entropy of such tokens against the 3.5 threshold of gitleaks' generic rule, and what each scanner flags on the committed tree and, for gitleaks, on the history of every branch.
+It needs no data and no credentials: every token is generated and lives only in a temporary directory, and the shape it copies, 40 lowercase hex characters with no prefix, was read off a real token without printing it.
+Run it from the repository root with the gitleaks binary the CI job pins, `python reports/analysis/secret_scan_dagshub_token.py path/to/gitleaks`; it fetches detect-secrets through `uvx`.
+`secret_scan_dagshub_token_results.txt` is the output of the run recorded in EDN-71 (2026-10-05).
+
 Run them against the raw dataset, which is not in the repo (NFR-08; EDN-35 for where it does live).
 Use the `download` stage's own cache rather than a second 548 MB copy: `uv run dvc repro download`
 with `download.source: zenodo` puts the pinned file there, verified against `download.md5`, and

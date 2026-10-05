@@ -66,6 +66,11 @@ jobs:
         with:
           python-version: "3.12"
       - uses: pre-commit/action@v3.0.1
+        env:
+          # The gitleaks hook scans only staged changes, and CI has none, so here
+          # it would build gitleaks for minutes and then report a scan of nothing
+          # as passed. The `Secret scan (gitleaks)` job below is the CI scan.
+          SKIP: gitleaks
 
   # NFR-07 asks for notebooks that pass the agreed checks without findings. Which
   # Pynblint rules those are, and why the others are excluded, is the table in
@@ -230,6 +235,88 @@ jobs:
           path: |
             reports/requirement-matrix.md
             reports/requirement-matrix.json
+
+  # NFR-15: no secret is committed, in any commit of the history. The gitleaks
+  # pre-commit hook stops one in a staged change; this job is the net for what
+  # reaches GitHub without that hook - a commit made with `--no-verify`, or by
+  # someone who never ran `pre-commit install`. The repository is public, so a
+  # secret this job finds has already been published with the push: revoke it,
+  # do not only remove it (CONTRIBUTING.md).
+  #
+  # The whole history, not the tip alone. `gitleaks git` reads every commit of
+  # every ref the checkout has, and with `fetch-depth: 0` that is every branch
+  # and tag on GitHub plus the pull request's own commits. A secret added in one
+  # commit and deleted in the next is still published, and a scan of the tip
+  # would not see it; one on somebody else's branch is published too, so it turns
+  # every pull request red until it is dealt with, which is the point. All of it
+  # scans in a few seconds.
+  #
+  # No paths filter, for the traceability job's reason and one more: a secret can
+  # arrive in any file, so no list of paths can say which changes need a scan.
+  #
+  # The release binary, not gitleaks/gitleaks-action: the action needs a licence
+  # key for a repository owned by an organisation, which this one is, registered
+  # through a form and stored as a repository secret, and pull requests from forks
+  # get no secrets (EDN-71). The binary is pinned by version and by checksum.
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # The `rev` of the gitleaks hook in .pre-commit-config.yaml; the first step
+      # fails when the two differ.
+      GITLEAKS_VERSION: 8.30.1
+      # SHA-256 of gitleaks_8.30.1_linux_x64.tar.gz, from that release's
+      # checksums file. Pinned here rather than downloaded beside the archive,
+      # because a checksum fetched from the same place as the file it checks
+      # proves nothing about who put either there.
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check that the pre-commit hook runs the same release
+        run: |
+          if ! grep -A1 '^  - repo: https://github.com/gitleaks/gitleaks$' .pre-commit-config.yaml \
+              | grep -qx "    rev: v${GITLEAKS_VERSION}"; then
+            echo "::error file=.pre-commit-config.yaml::the gitleaks hook is not on v${GITLEAKS_VERSION}, the release this job scans with; move both together"
+            exit 1
+          fi
+      - name: Install gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      # A scan that finds nothing is evidence only if it could have found
+      # something, and gitleaks has no rule of its own for a DagsHub token.
+      - name: Check that the rules still find a DagsHub token
+        run: python3 tools/secret_scan_canary.py
+      - name: Scan every commit of the history
+        id: scan
+        # `shell: bash` for pipefail, so the scan's exit code survives the `tee`.
+        shell: bash
+        run: |
+          gitleaks git --config .gitleaks.toml --redact --verbose --no-banner . 2>&1 \
+            | tee "$RUNNER_TEMP/gitleaks.log"
+      # The job's result is what the delivery review reads for NFR-15, so say in
+      # the summary what it covered rather than leaving that to the log.
+      - name: Publish the scan to the job summary
+        if: always() && steps.scan.outcome != 'skipped'
+        run: |
+          scanned=$(grep -o '[0-9]\+ commits scanned' "$RUNNER_TEMP/gitleaks.log" || echo 'no commit scanned')
+          if [ '${{ steps.scan.outcome }}' = success ]; then
+            verdict='no leaks found'
+          else
+            verdict='**leaks found**, see the job log, where they are redacted, and revoke what they name'
+          fi
+          {
+            echo '## Secret scan'
+            echo "gitleaks ${GITLEAKS_VERSION} with \`.gitleaks.toml\`, over every branch and tag as of \`$(git rev-parse --short HEAD)\`: ${scanned}, ${verdict}."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     name: Build docs

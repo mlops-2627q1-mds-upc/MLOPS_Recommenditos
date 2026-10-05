@@ -46,7 +46,8 @@ Day-to-day team communication happens on Discord, and we track our work on the [
 
 ```bash
 uv sync
-pre-commit install
+uv run pre-commit install
+uv run pre-commit install-hooks
 ```
 
 [Getting started](docs/docs/getting-started.md) takes it from there: the DagsHub token, `.env`, `dvc pull` and your first MLflow run.

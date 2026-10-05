@@ -260,7 +260,8 @@ def test_a_test_on_a_manual_requirement_names_it_rather_than_verifying_it():
 
     NFR-06 was reported as covered because one test named it, and that test's
     whole body asserted that two files exist: it measured no determinism and
-    never touched MLflow, which is what NFR-06 is about. The specification says a
+    never touched MLflow, which is what NFR-06 then promised (its MLflow half is
+    NFR-14 since EDN-66). The specification says a
     person is the evidence for a **[manual]** entry, so a marker there records
     that a test touches the requirement and is not the evidence promised.
     """
@@ -455,11 +456,19 @@ def test_an_id_no_requirement_defines_is_reported_as_unknown():
 #: the requirement left the blocking set with no test written and nothing else
 #: changed. Pinning them here makes either move cost a visible test change, which
 #: is where the argument for it belongs.
+#:
+#: NFR-14 and NFR-15 are the halves EDN-66 split out of NFR-06 and NFR-09, so that
+#: neither waits for the half it was written with. NFR-14 is verified by tests,
+#: because what a run records can be read back from a run. NFR-15 is verified by
+#: the CI secret scan, which is not a Pytest test and is therefore **[manual]**,
+#: like the CI run NFR-07 names.
 DUE_AT_M3 = {
     "NFR-01": "automated",
     "NFR-06": "manual",
     "NFR-07": "manual",
     "NFR-08": "automated",
+    "NFR-14": "automated",
+    "NFR-15": "manual",
 }
 
 

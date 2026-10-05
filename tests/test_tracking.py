@@ -203,9 +203,9 @@ def test_the_setup_check_logs_a_run_that_can_be_read_back(local_tracking: str):
     assert runs[0].data.metrics == {"ok": 1.0}
 
 
-@pytest.mark.req("NFR-06")
+@pytest.mark.req("NFR-14")
 def test_every_run_records_the_commit_and_the_data_version(local_tracking: str):
-    """NFR-06 asks for this on every run, so the seam does it, not the caller."""
+    """NFR-14 asks for this on every run, so the seam does it, not the caller."""
     with tracked_run("a-provenance-check") as run:
         pass
 
@@ -223,7 +223,7 @@ def test_every_run_records_the_commit_and_the_data_version(local_tracking: str):
     assert tags["dvc_lock_md5"], "dvc.lock is the data version, and this repo has one"
 
 
-@pytest.mark.req("NFR-06")
+@pytest.mark.req("NFR-14")
 def test_a_run_without_git_records_that_rather_than_failing(monkeypatch):
     """An image built without the `.git` directory still has to be able to train."""
 
@@ -238,7 +238,7 @@ def test_a_run_without_git_records_that_rather_than_failing(monkeypatch):
     assert provenance["git_dirty"] == "false"
 
 
-@pytest.mark.req("NFR-06")
+@pytest.mark.req("NFR-14")
 def test_the_data_version_changes_with_the_lock_file(monkeypatch, tmp_path):
     """A tag that does not move when the data moves records nothing."""
     assert DVC_LOCK_FILE == PROJ_ROOT / "dvc.lock", "the data version reads the real lock file"

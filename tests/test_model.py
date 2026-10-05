@@ -1415,6 +1415,7 @@ def test_require_tracking_makes_a_failure_fatal(matrices: dict, tmp_path: Path, 
         train.main("b0", matrices["features"], tmp_path / "models", PARAMS_FILE)
 
 
+@pytest.mark.req("NFR-14")
 def test_one_variant_is_one_run_that_evaluate_appends_to(
     matrices: dict, tmp_path: Path, monkeypatch
 ):
@@ -1455,7 +1456,7 @@ def test_one_variant_is_one_run_that_evaluate_appends_to(
         assert run.data.params["n_supported_makes"]
         assert run.data.tags["variant"] == "b0"
         assert run.data.tags["dvc_stage"] == "train@b0"
-        # NFR-06 asks every run to record which code produced it, and the seam
+        # NFR-14 asks every run to record which code produced it, and the seam
         # does that rather than each caller.
         assert run.data.tags["git_commit"]
         assert "train_l1_log_price" in run.data.metrics

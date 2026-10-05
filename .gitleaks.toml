@@ -1,0 +1,49 @@
+# What the secret scan of NFR-15 looks for, on top of gitleaks' own rules.
+#
+# Read by the pre-commit hook and by the `Secret scan (gitleaks)` CI job alike, so
+# a commit is judged by the same rules wherever it is checked (EDN-71).
+#
+# The defaults stay on. They cover the credentials this project may yet acquire -
+# a private key, a cloud key, a GitHub token - and the one rule added here only
+# closes the gap they leave for the one secret every contributor already holds.
+
+[extend]
+useDefault = true
+
+# A DagsHub access token is 40 lowercase hex characters with no prefix, which is
+# the shape of a git commit SHA, so no rule can recognise it by its own form and
+# gitleaks ships none. Its generic rule catches one only when a credential word
+# is followed by `=` or `:` and the token's entropy clears 3.5 bits per
+# character, and measured on fake tokens of that exact shape
+# (reports/analysis/secret_scan_dagshub_token.py) that misses two ways: 5 % of
+# real tokens fall below 3.5, so roughly one contributor's token in twenty is
+# invisible even in `.env`; and every other form is missed outright - the
+# getting-started page's `dvc remote modify origin --local password <token>`
+# copied with a real token into a doc or a script, `dagshub login --token
+# <token>`, a token passed to a function positionally, one assigned to a key of
+# `os.environ`, and one inside a URL.
+#
+# So the rule recognises the token by its context instead: a 40-hex run at most
+# 40 characters after a word that names a credential or one of the two services
+# that read it, or as the password of a URL's user part. The `\b` on both sides
+# keeps it from matching inside a longer hex run, so the MD5s of `dvc.lock`,
+# `params.yaml` and the `.dvc` files (32 hex) and the SHA-256s of `uv.lock`
+# (64 hex) cannot fire it, and the whole history held exactly one 40-hex string
+# when it was written, a commit SHA in a GitHub URL in `.gitignore`, which none
+# of the context words precedes.
+#
+# The entropy floor is 2.5 rather than the generic 3.5: low enough that no real
+# token falls under it (none of the analysis's 200,000 fakes came below 3.0), and
+# high enough that a placeholder made of repeats, `0000...` or `deadbeef` five
+# times, which a document might use to show the shape, is not reported.
+#
+# tools/secret_scan_canary.py plants a token in each of those places before CI
+# scans the history and fails unless every one is found, so an edit that breaks
+# this rule turns the job red instead of leaving it silently green.
+[[rules]]
+id = "dagshub-token"
+description = "DagsHub access token, the credential of our DVC remote and MLflow server"
+regex = '''(?i)(?:(?:dagshub|mlflow|passw(?:or)?d|token|secret)[^\n]{0,40}?|://[^\s/:@]+:)\b((?-i:[0-9a-f]{40}))\b'''
+secretGroup = 1
+entropy = 2.5
+keywords = ["dagshub", "mlflow", "passwd", "password", "token", "secret", "://"]

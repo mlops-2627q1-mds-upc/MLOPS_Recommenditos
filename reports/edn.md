@@ -776,8 +776,6 @@ How to add an entry:
 - **Other evidence:** [Requirements](../docs/docs/requirements.md); [Specification](../docs/docs/specification.md); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** no
 
-- **In LaTeX:** no
-
 ### EDN-28: One module per DVC stage, deviating from the flat Cookiecutter layout
 
 - **Date:** 2026-09-29
@@ -1335,7 +1333,7 @@ How to add an entry:
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI established by execution that DVC has no environment-variable route, which is the fact the whole decision rests on, and it wrote the two-store walkthrough. An adversarial review of that work, also by AI, then found three things the first pass had asserted rather than checked: that the `.env` scoping was not repository-local, so the review's own "fresh clone" verification had in fact been running on the parent checkout's credentials; that `mlflow.db` was neither gitignored nor prevented; and that the documented newcomer command printed a traceback where the page promised a message. All three were reproduced before being fixed. The modification is that the template lost the `DAGSHUB_*` block, which the first pass had defended as documentation, once the review showed nothing reads it.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30: the DVC environment-variable question was settled by running `dvc status -c` with and without the variables exported; the review findings were each reproduced before any fix, including a probe showing `find_dotenv` resolving to a `.env` three directories above a credential-free worktree.
-- **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-09 in [the specification](../docs/docs/specification.md).
+- **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-15 in [the specification](../docs/docs/specification.md), which held this as part of NFR-09 when this entry was written ([EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean)).
 - **In LaTeX:** no
 
 ### EDN-47: The serving runtime is `[project] dependencies`, and everything else is a PEP 735 dependency group
@@ -2063,6 +2061,54 @@ How to add an entry:
 - **Other evidence:** [Notebooks](../docs/docs/notebooks.md), the rule table; [`notebooks/1.0-lh-dataset-card-profiling.ipynb`](../notebooks/1.0-lh-dataset-card-profiling.ipynb); `tests/test_notebook_lint.py`; [specification](../docs/docs/specification.md) NFR-07; [EDN-64](#edn-64-pynblint-runs-from-its-own-locked-environment-and-a-wrapper-that-reads-its-json-report-is-the-gate); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
 - **In LaTeX:** no
 
+### EDN-66: NFR-06 and NFR-09 are each split in two, and each ID keeps the half its citations mean
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Requirements Engineering, Testing Strategy
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** NFR-06 and NFR-09 each promised two things that come due in different milestones and are verified by different evidence, so each is split in two, and every half has its own ID, acceptance criterion, verification route and milestone.
+  The existing ID is narrowed to the half its citations mean, and the other half gets the next free ID.
+  **NFR-06** keeps reproducibility: from a clean clone, `dvc pull` and `dvc repro` reproduce the splits and metrics within ±0.1 percentage points; **[manual]**, the clean-clone drill of [The DVC pipeline](../docs/docs/pipeline.md), due M3.
+  **NFR-14** takes run provenance: every training run records its commit, its data version and its parameters; **[automated]**, by the tracking tests and a `train` test that reads a real run back, due M3.
+  **NFR-09** keeps the running system's security: a read-only public surface, the body-size limit, no TLS, the API key from the environment, non-root containers and the vulnerability scan; **[automated]**, due M4.
+  **NFR-15** takes credential hygiene: no secret in any commit of the history, a scan before every merge, and a leaked secret revoked rather than only removed; **[manual]**, the CI secret scan of EDN-71, due M3.
+- **Alternatives considered:**
+  - **Option A (chosen): narrow the existing ID to one half, and give the other half a new ID.**
+    Pros: on `main` before the split, 63 lines cited NFR-06, 15 of them `req` markers, and 18 cited NFR-09.
+    Apart from the requirement rows themselves and the passages that tell NFR-06's history, eleven of NFR-06's citations mean provenance - the tracking seam and its tests, two documentation pages and EDN-54 - and of NFR-09's only EDN-46's evidence pointer means secret hygiene.
+    Every other citation, the report's included, means the half the ID keeps and stays correct without an edit, and the twelve tests marked NFR-06 for determinism and the download pin keep their marker.
+    No ID is reused for a different requirement: a narrowed ID promises a subset of what it promised before and nothing new.
+    Cons: a reader holding an older text can still read NFR-06 as including provenance, so the citations of the moved halves had to be found and repointed, and three are deliberately left (see the rationale).
+    Earlier entries written under the combined meaning, EDN-45, EDN-55 and EDN-56, are records of their date and are not rewritten; EDN-56 in fact already argued the two halves of NFR-06 separately, which is the strongest sign they were two requirements.
+  - **Option B: retire NFR-06 and NFR-09 and issue four new IDs.**
+    Pros: no ID ever changes meaning, not even by narrowing.
+    Cons: every one of those 81 citations becomes a pointer to a requirement that no longer exists, including three sections of the LaTeX report; the fifteen NFR-06 markers fail the per-test check until each is rewritten; and the matrix needs every requirement to have a table row, so a retired ID could only survive in prose, where nothing checks it.
+  - **Option C: suffixes, NFR-06a and NFR-06b.**
+    Pros: the family stays visible in the name.
+    Cons: `tools/requirement_matrix.py` accepts `(?:FR|NFR)-\d{2,}` and nothing else, so the tool would have to change first; and a bare "NFR-06" in an existing citation would become ambiguous between the parent and its halves, which is the ambiguity the split exists to remove.
+  - **Option D: keep one ID each, and let the "Verified by" cell name both routes.**
+    Pros: no ID change at all.
+    Cons: it is the state issue #60 describes.
+    The parser requires exactly one of **[automated]** and **[manual]**, and the gate books an ID to one milestone, so NFR-09's hygiene half sat in M4 behind an API that does not exist yet while the token it protects was already on every contributor's disk, and NFR-06's tests could only ever make it "named by a test".
+- **Rationale:** The constraint is that a requirement ID is never reused for a different requirement, because the report and the EDN cite them; between A and B the question is only which citations break.
+  In A it is a bounded, listed set, the ones that mean the half that moved; in B it is all of them.
+  The halves get their milestones from when their evidence can exist, not from the requirement they came from: NFR-14 is due in M3 because the tracking seam (PR #50) and the `train` stage's parameter logging (PR #62) are both merged, and NFR-15 is due in M3 because the risk has existed since issue #42 and PR #50 put a DagsHub token into every contributor's `.env` and `.dvc/config.local` (EDN-46).
+  NFR-09 stays booked to M4 as decided with the split, although its image scan, its Dockerfile review and the check from outside the VM are M5 work; `tools/expected_coverage.yaml` says so, so the delivery review notices if they are still missing then.
+  NFR-14 is **[automated]** because what a run records can be read back from a run; NFR-15 is **[manual]** because its evidence is a CI job and not a Pytest test, the route NFR-07 already uses for the CI run it names, and making it **[automated]** would have needed a test that only stands in for the scan.
+  Two things are left as they are, on purpose.
+  Three comments in `recommenditos/tracking.py` still cite NFR-06 for the provenance tags: that file is a dependency of the four `train` stages and of `evaluate`, so editing a comment would invalidate their `dvc.lock` entries and retrain every variant, and the next change that touches the file for a reason pays for it instead.
+  And the split showed that NFR-14 is not quite met: `train.num_threads` is declared as a parameter of the `train` stage in `dvc.yaml`, and the run carries it only inside the `model.json` artefact, not as an MLflow parameter, so a comparison of runs by parameter cannot see it; logging it is a change to `train.py` with the same retraining cost, so it is recorded here and in the pull request rather than made in it.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** The owner decided to split both requirements, which half comes due when, and that the hygiene half is verified by a secret scan; the issue and its comment are his.
+  How to split the IDs he delegated, under the constraint that no ID is reused.
+  AI counted every citation of both IDs and sorted them by the half each one means, which is the evidence that decides between A and B, read the matrix's ID pattern to rule out C, and chose A; it also found the unlogged `num_threads` while writing NFR-14's route, and recommended leaving it and the `tracking.py` comments to a change that retrains anyway.
+  Both are stated in the pull request for the owner to review rather than decided silently.
+- **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #60: `grep -rn "NFR-0[69]"` over the documents, the report, the tests, the tools and the package, each hit classified by the half it means, and `git grep` counts on `main` for the figures above; the requirement matrix rebuilt after the split, with NFR-14 verified by four tests and NFR-15 verified by hand.
+- **Other evidence:** [issue #60](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/60) and its comment on NFR-06; [requirements](../docs/docs/requirements.md) and [specification](../docs/docs/specification.md) NFR-06, NFR-09, NFR-14 and NFR-15; `tools/expected_coverage.yaml`; `DUE_AT_M3` in `tests/test_requirement_matrix.py`; [EDN-27](#edn-27-separate-the-requirements-from-their-specification-keeping-one-set-of-frnfr-ids) for the one ID space, [EDN-44](#edn-44-the-traceability-gate-is-milestone-scoped-and-its-expected-coverage-set-is-a-validated-yaml-file), [EDN-45](#edn-45-a-req-marker-is-verification-only-where-the-specification-says-a-test-is-the-evidence), [EDN-46](#edn-46-dagshub-credentials-live-in-two-gitignored-stores-and-the-token-is-entered-twice), [EDN-56](#edn-56-the-model-bundle-carries-its-own-provenance-so-models-is-deliberately-not-byte-reproducible), [EDN-71](#edn-71-secrets-are-scanned-by-gitleaks-before-every-commit-and-over-the-whole-history-in-ci-with-a-rule-of-our-own-for-the-dagshub-token).
+- **In LaTeX:** no
+
 ### EDN-67: `features` applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built
 
 - **Date:** 2026-10-05
@@ -2120,6 +2166,57 @@ How to add an entry:
   The independent review of PR #71 on the same day found the replay argument and the untrained-make diagnosis, and reproduced the second with a training split holding only BMW against the list BMW and Audi.
   The measurement behind the numbers is `reports/analysis/served_vocabulary_results.txt` and the ladder re-run the committed `dvc.lock` records, tracked as one MLflow run per variant.
 - **Other evidence:** [issue #63](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/63); [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71); [`recommenditos/data/build_features.py`](../recommenditos/data/build_features.py) (`served_rows`, `check_served_makes_only`); `tests/test_features.py::test_every_frame_the_stage_writes_holds_only_supported_makes` and `::test_the_vocabulary_is_decided_by_the_served_training_rows_alone`; [`reports/analysis/served_vocabulary.py`](analysis/served_vocabulary.py) and its results file (2026-10-05); [pipeline docs](../docs/docs/pipeline.md), "The supported makes"; [model card](../docs/docs/model-card.md), "Feature space" and the ladder; [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one), [EDN-42](#edn-42-a-categorical-value-the-training-rows-never-saw-becomes-missing-and-the-holdouts-country-is-allowed-to-vanish), [EDN-48](#edn-48-split-records-the-supported-make-list-and-stays-a-lossless-partition-the-downstream-stages-apply-it).
+
+### EDN-71: Secrets are scanned by gitleaks before every commit and over the whole history in CI, with a rule of our own for the DagsHub token
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** CI/CD, Security, Credential handling
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** NFR-15 is enforced with gitleaks 8.30.1, run twice with one configuration, `.gitleaks.toml`.
+  The `gitleaks` pre-commit hook scans the staged change before the commit exists.
+  The `Secret scan (gitleaks)` CI job scans every commit of every branch and tag, on every pull request and every push to `main`, with no paths filter, using the release binary pinned by version and SHA-256 rather than `gitleaks/gitleaks-action`.
+  `.gitleaks.toml` keeps gitleaks' default rules and adds one, `dagshub-token`, which recognises a DagsHub token by its context because its shape cannot be told from a commit SHA.
+  Before the job scans the history it runs `tools/secret_scan_canary.py`, which plants a fake token in each of thirteen places, two tokens each, and fails unless all 26 are found.
+- **Alternatives considered:**
+  - **Option A (chosen): gitleaks, as a pre-commit hook and as a CI job over the whole history.**
+    Pros: purpose-built, offline and MIT-licensed; the hook stops a secret before it is committed, and the job catches what the hook never saw, a commit made with `--no-verify` or from a clone without the hook, including a secret added in one commit and deleted in the next, because it reads the history rather than the tree; the configuration is a file in the repository the course grades, reviewed like code; the default rules stay on, so the credentials the project does not have yet, such as FR-10's API key, a cloud key or a GitHub token, are covered when they arrive.
+    The whole history of every branch, 199 commits, scans in about three seconds and has no finding, with the default rules or with ours.
+    Cons: gitleaks has no rule for a DagsHub token, and its generic rule misses one more often than it looks: in the seven places where the token is assigned with `=` or `:` it finds 92.5 % to 97.5 % of them, because 4.9 % of such tokens fall below its entropy threshold of 3.5, and in the other six places it finds none, including `uv run dvc remote modify origin --local password <token>`, the exact command the getting-started page documents.
+    So the project owns a regex, and the canary exists to keep it honest.
+    The hook is built from source, so its first install is slow, once per machine and gitleaks version: measured on a thermally throttled laptop, 65 s with Go installed and 5 min 35 s without, when pre-commit downloads Go first, at about 145 s of CPU and 300 MB of RAM either way, leaving 47 MB or, with the downloaded Go, 329 MB in pre-commit's cache and about 180 MB in Go's build cache.
+    Each commit then costs about a quarter of a second of scanning.
+  - **Option B: detect-secrets with a committed baseline.**
+    Pros: a Python package that installs into our environment, with no Go toolchain; the baseline makes an existing finding auditable rather than a permanent red build.
+    Its default plugins also detect the DagsHub token better than gitleaks' defaults: in 11 of the 13 places, at 99.5 % to 100 %, missing only the two bare command-line forms, `dvc remote modify ... password <token>` and `dagshub login --token <token>`.
+    Cons: it scans files and, by design, not the git history, so the CI net for a commit that skipped the hook would only see the tip, and a secret added and then deleted would pass both checks; the baseline is a file the team has to keep honest, and an entry audited as "not a secret" is an allowlist that nobody re-reviews; and its entropy detectors flag hex and base64 by entropy alone, which on today's tree is three findings to audit - `download.md5` in `params.yaml`, the gitleaks checksum the CI job pins, and a test string - and grows with every hash we commit, while the MD5s of `dvc.lock` stay quiet only because it skips lock files.
+  - **Option C: GitHub secret scanning with push protection.**
+    Pros: nothing to install or maintain, and push protection blocks the push itself rather than reporting it afterwards.
+    Cons: DagsHub is not among GitHub's supported secret scanning patterns (checked against the documentation and the `github/docs` repository on 2026-10-05), so it would not recognise the one secret the project has; a custom pattern would be another platform setting, as would the feature itself, leaving no trace in the repository the course grades and nothing a reviewer can read in a pull request.
+  - **Option D: a Pytest test that greps the working tree for credential-shaped strings.**
+    Pros: entirely ours, and the evidence would sit in the test suite, where the matrix could report NFR-15 as verified by a test.
+    Cons: the weakest detection of the four: it sees only the tree at the commit under test, so a secret that was committed and deleted passes, and it would have to reimplement the context matching every scanner above already has; it would run only in the test job, which has a paths filter and a shallow checkout; and the matrix status it bought would describe a test standing in for the scan rather than the scan.
+- **Rationale:** What the requirement has to survive is a commit that skipped the hook, and the repository is public, so a secret in any commit of any pushed branch is published whether or not the tip still holds it.
+  That makes reading the history the property that decides, and it rules out B and D, which read files; C fails earlier, because it cannot see a DagsHub token at all.
+  Detection is not what decided it, and the measurement says so: detect-secrets' defaults see the token in more places than gitleaks' do.
+  What decides is that gitleaks' gap can be closed with one rule in a file we own, while B's history gap cannot be closed at all.
+  Three choices inside A follow from the same evidence.
+  The rule matches a 40-hex run by its context - after a word naming a credential or one of the two services, or as the password in a URL - with word boundaries, so the 32-hex MD5s of `dvc.lock`, `params.yaml` and the `.dvc` files and the 64-hex SHA-256s of `uv.lock` cannot fire it; with it, gitleaks finds all 2,600 planted tokens in all 13 places and still nothing in the tree or the history.
+  The CI job uses the release binary because `gitleaks/gitleaks-action` requires a licence key for a repository owned by an organisation, as this one is, obtained through a registration form and stored as a repository secret, which a pull request from a fork would not receive; the binary is checked against a SHA-256 pinned in the workflow, not one downloaded beside it.
+  And the job scans every ref rather than only the pull request's commits, because the cost is seconds and a leak on someone else's branch is published too: it turns every pull request red until it is revoked and acknowledged, which is the point.
+  The canary is there because a scan that reports nothing is only evidence if it could have reported something: a regex edited into matching nothing or an allowlist widened over `.env` would otherwise turn the job silently green.
+  It was checked in both directions: with `.gitleaks.toml` it finds all 26 tokens, with the default rules alone it misses 19.
+  The hook is the `golang` variant because it needs nothing installed by hand, where `gitleaks-system` needs gitleaks on the path and `gitleaks-docker` needs Docker and an unpinned image.
+  CI skips it in the lint job, because it scans only staged changes, of which CI has none, and would report a scan of nothing as passed.
+  What stays manual: the job is not one of the checks branch protection requires, which is a repository setting for the owner, and NFR-15 is **[manual]** in the specification because its evidence is this CI job and not a Pytest test.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out options A to D with their trade-offs and recommended A, and the owner chose it.
+  AI then tested the assumptions the choice rested on before implementing it, and one of them did not hold as stated: detect-secrets had been described as weaker on detection and noisy on the MD5s of `dvc.lock`, and measured, its defaults detect the DagsHub token in more places than gitleaks' and it skips `dvc.lock` entirely.
+  The decision survives on the argument that did hold, history scanning, and this entry records the measured reasons rather than the assumed ones.
+  The measurement also produced the parts of the design that were not in the recommendation: the `dagshub-token` rule, after the default rules turned out to miss the token in six places outright and in one case in twenty elsewhere, and the canary that keeps that rule from failing silently.
+- **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #60: the token's shape was read from the gitignored `.env` as length and character classes only, without printing the value; fake tokens of that shape were planted and scanned with both tools (`reports/analysis/secret_scan_dagshub_token.py` and its results file); gitleaks-action's licence terms were read from its README and the repository's owner type from the GitHub API; the hook's install cost was measured with `/usr/bin/time` on a clean pre-commit cache, once with Go removed from the path and once with Go 1.27 on it; and a token committed with `--no-verify` and deleted in the next commit was confirmed caught by the history scan.
+- **Other evidence:** [issue #60](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/60); `.gitleaks.toml`; `tools/secret_scan_canary.py`; the `secret-scan` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) and the gitleaks hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml); [`reports/analysis/secret_scan_dagshub_token.py`](analysis/secret_scan_dagshub_token.py) and [its results](analysis/secret_scan_dagshub_token_results.txt); [specification](../docs/docs/specification.md) NFR-15; the Secrets section of [CONTRIBUTING.md](../CONTRIBUTING.md#secrets); [EDN-46](#edn-46-dagshub-credentials-live-in-two-gitignored-stores-and-the-token-is-entered-twice), [EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean).
 - **In LaTeX:** no
 
 ## Template

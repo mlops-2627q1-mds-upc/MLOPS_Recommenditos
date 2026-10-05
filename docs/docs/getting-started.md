@@ -15,11 +15,15 @@ git clone https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git
 cd MLOPS_Recommenditos
 uv sync
 uv run pre-commit install
+uv run pre-commit install-hooks
 ```
 
 `uv sync` creates `.venv` from `uv.lock`, so everyone gets byte-identical versions.
 It installs the serving runtime and every dependency group on top of it - `pipeline`, `notebook`, `docs`, `test` and `dev` - so there is nothing else to install; only the API image leaves the groups out (see [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies)).
 Run project commands through `uv run <command>` rather than activating the environment, which is how CI runs them too.
+
+`install-hooks` builds the hooks now rather than during your first commit.
+The slow one is gitleaks, which refuses a commit that contains a secret such as the token of step 2: pre-commit builds it from source, downloading Go first if you have none, which takes one to six minutes and a few hundred MB of disk, once (see [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#secrets)).
 
 ## 2. Get a DagsHub access token
 
@@ -44,6 +48,7 @@ Open `.env` and paste your DagsHub username into `MLFLOW_TRACKING_USERNAME` and 
 Those three are all the project reads from `.env`, and DVC is not one of its readers; step 4 is where DVC gets the same token.
 `.env` is gitignored and must stay that way.
 Never paste a token into an issue, a pull request, a commit or a chat - revoke it on the Tokens page instead if it ever leaks.
+The gitleaks hook of step 1 refuses a commit that contains one, and CI scans every commit of every branch for one (NFR-15), but by the time CI finds it the push has published it, so the hook is the check that actually protects you.
 
 `.env` is read from this clone only: `recommenditos/config.py` loads `<repo>/.env` by name rather than searching upwards, so a checkout inside another checkout cannot pick up the other one's credentials.
 
@@ -104,7 +109,7 @@ uv run python -m recommenditos.tracking
 This logs one throwaway run - a single parameter and a single metric - to the `setup-check` experiment and prints its URL.
 Open <https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments> and you should see your run there within seconds.
 It is deliberately not written to the pipeline's experiment: a credential check is not an experiment result and does not belong next to the runs the report cites.
-The run also carries your git commit, whether your working tree was clean and the MD5 of `dvc.lock`, because [NFR-06](specification.md) wants every run traceable to the code and data it saw.
+The run also carries your git commit, whether your working tree was clean and the MD5 of `dvc.lock`, because [NFR-14](specification.md) wants every run traceable to the code and data it saw.
 
 If a variable is missing, the command prints one line naming which ones and stops there, rather than failing later with an HTTP 401 halfway through a training run:
 
