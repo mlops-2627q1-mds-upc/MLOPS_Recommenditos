@@ -192,8 +192,27 @@ features:
 validate:
   # Bounds the Great Expectations suites assert (#25). The price range lives
   # under `preprocess`, because there it is a scope filter rather than a check.
+  # The mileage range is the one FR-03 accepts at serving time.
   mileage_min_km: 0
   mileage_max_km: 1000000
+  # The share of rows the mileage rule requires inside that range, on both
+  # frames. It is a check and not a filter, so the published file's three
+  # listings above 1,000,000 km (the highest 2,570,000 km, all three in the
+  # cleaned frame too) are reported, not removed. 0.999 tolerates more than thirty
+  # times that count before the stage fails, so a scrape in another unit or with
+  # a shifted decimal is caught while three typos are not.
+  mileage_mostly: 0.999
+  # Both suites fail a frame with fewer rows than this. Every column rule holds
+  # vacuously over no rows, so without it an empty or truncated frame would pass.
+  # Far below any real scrape (118,382 raw and 105,405 cleaned rows) and below
+  # the 2,000-row test fixture, so it only fires on a frame that has lost almost
+  # everything.
+  min_rows: 1000
+  # The share of rows each column a bounded rule reads must fill, on both
+  # frames. Great Expectations skips missing values, so a range over a column
+  # that has emptied out holds vacuously. Measured on the snapshot, the lowest of
+  # these fill rates is the raw `mileage_km_raw` at 99.46 %.
+  filled_mostly: 0.99
   # The raw suite asserts `registration_date <= reference_date` with this
   # tolerance rather than as a hard rule, so a future scrape carrying many such
   # rows is flagged instead of silently cleaned. The cleaned frame asserts it

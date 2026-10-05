@@ -1,10 +1,126 @@
 {
   "raw": {
     "passed": true,
-    "rows": 118382
+    "rows": 118382,
+    "contract": {
+      "expectations": 98,
+      "failed": []
+    },
+    "rules": [
+      {
+        "expectation": "expect_column_values_to_be_between",
+        "column": "mileage_km_raw",
+        "mostly": 0.999,
+        "min_value": 0.0,
+        "max_value": 1000000.0,
+        "success": true,
+        "element_count": 118382,
+        "missing_count": 644,
+        "unexpected_count": 3,
+        "unexpected_percent": 0.0025
+      },
+      {
+        "expectation": "expect_column_values_to_be_between",
+        "column": "registration_date",
+        "mostly": 0.99,
+        "max_value": "2025-11-08T00:00:00",
+        "success": true,
+        "element_count": 118382,
+        "missing_count": 221,
+        "unexpected_count": 164,
+        "unexpected_percent": 0.1388
+      }
+    ]
   },
   "interim": {
     "passed": true,
-    "rows": 105405
+    "rows": 105405,
+    "contract": {
+      "expectations": 45,
+      "failed": []
+    },
+    "rules": [
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "body_type",
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_comfort",
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_entertainment",
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_extra",
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_safety",
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "make",
+        "success": true,
+        "element_count": 105405,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_be_between",
+        "column": "mileage_km_raw",
+        "mostly": 0.999,
+        "min_value": 0.0,
+        "max_value": 1000000.0,
+        "success": true,
+        "element_count": 105405,
+        "missing_count": 6,
+        "unexpected_count": 3,
+        "unexpected_percent": 0.0028
+      },
+      {
+        "expectation": "expect_column_values_to_be_between",
+        "column": "price",
+        "min_value": 500.0,
+        "max_value": 2000000.0,
+        "success": true,
+        "element_count": 105405,
+        "missing_count": 0,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_be_between",
+        "column": "registration_date",
+        "max_value": "2025-11-08T00:00:00",
+        "success": true,
+        "element_count": 105405,
+        "missing_count": 2,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      }
+    ]
   }
 }

@@ -64,6 +64,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── README.md          <- This file
 ├── data               <- Raw, interim and processed data, versioned with DVC
 ├── docs               <- MkDocs project with the project documentation
+├── gx                 <- Great Expectations context, built by `configure_gx` (DVC output, not committed)
 ├── models             <- Trained and serialized models
 ├── notebooks          <- Jupyter notebooks, named `<number>.<version>-<initials>-<description>`
 ├── dvc.yaml           <- The pipeline; see docs/docs/pipeline.md

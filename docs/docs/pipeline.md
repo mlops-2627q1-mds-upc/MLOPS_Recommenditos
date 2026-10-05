@@ -28,7 +28,6 @@ CI never runs the stage; the test suite covers it against fixtures instead.
 
 That is measured, not assumed, and it is the drill NFR-06 names.
 On a scratch clone of this commit, `dvc pull` fetched 34 files and added 32, and `dvc repro` then reported all twelve stages as `didn't change, skipping` and finished with `Data and pipelines are up to date.`
-`configure_gx` is skipped along with the rest, although it declares no `outs`: its `deps` and its lock entry are enough for DVC to answer, so the missing output costs ordering guarantees (see [Known gaps](#known-gaps)) and not an unconditional rerun.
 Nothing came from Zenodo: the clone has no `data/external/` directory at all, and its `metrics.json` and `data/raw/listings.parquet` are byte-identical to the ones this repository produced.
 
 The tests never run the pipeline through DVC.
@@ -47,8 +46,8 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 |---|---|---|
 | `download` | `recommenditos/data/download_raw_dataset.py` | `data/raw/listings.parquet` |
 | `preprocess` | `recommenditos/data/preprocess.py` | `data/interim/listings.parquet` |
-| `configure_gx` | `recommenditos/data/gx_context_configuration.py` | the Great Expectations context |
-| `validate-data` | `recommenditos/data/validate_data.py` | nothing; it fails the pipeline instead |
+| `configure_gx` | `recommenditos/data/gx_context_configuration.py` | `gx/`, the Great Expectations context |
+| `validate-data` | `recommenditos/data/validate_data.py` | `reports/data-validation/`: the summary, the validation results and the Data Docs; a failed expectation fails the pipeline |
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
 | `train` | `recommenditos/modeling/train.py` | `models/<variant>/` |
@@ -68,7 +67,7 @@ The contract
 
 `recommenditos/schema.py` is what the stages code against instead of against each other.
 It describes **structure**: which columns exist, their dtype and whether they may be null.
-Value rules - price ranges, fill rates, the supported make list - are **data quality** and live in the Great Expectations suites, because the two answer different questions.
+Value rules - date and price bounds, ranges, fill rates - are **data quality** and live in the Great Expectations suites (see [Data validation](#data-validation)), because the two answer different questions.
 A structural break is a bug in our code; a value break is a change in the data.
 
 ```python
@@ -142,6 +141,48 @@ The holdout's `country_code` stays empty in every one of those rows, because `ES
 The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
 The problem they pose is a different one: the reported population would not be the served population.
 
+Data validation
+---------------
+
+`validate-data` is the gate between preprocessing and the split, and it checks the raw and the interim frame in two layers ([EDN-68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+Each frame is first read against its contract, then run through the Great Expectations suite `configure_gx` built for it.
+A failure in either fails the stage, and because `split` depends on the stage's summary, the pipeline stops there.
+A frame that breaks its contract is not handed to its suite, whose expectations assume the contract holds.
+A suite with no expectations, or a run that returns fewer results than its suite holds, fails the stage too, so no suite can pass by checking nothing.
+
+| Rule | Raw frame | Interim frame | Bounds from |
+|---|---|---|---|
+| Column list, dtypes and non-null columns | asserted | asserted | `schema.py`, generated |
+| No PII column (NFR-08) and no `is_used` (EDN-23) | - | asserted, through the column list | `schema.py` |
+| `registration_date` at or before the reference date (EDN-22) | tolerated up to `validate.raw_mostly` | hard | `reference_date` |
+| `price` inside the training range | - | hard | `preprocess.price_min_eur`, `preprocess.price_max_eur` |
+| `mileage_km_raw` inside the range FR-03 accepts | tolerated up to `validate.mileage_mostly` | tolerated up to `validate.mileage_mostly` | `validate.mileage_min_km`, `validate.mileage_max_km` |
+| Filled wherever the raw contract declares the column filled | through the contract, which fails `download` on a gap | hard: a check on preprocessing, since a scrape gap never gets this far ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)) | `schema.py` |
+| At least `validate.min_rows` rows, and `registration_date` and `mileage_km_raw` filled up to `validate.filled_mostly` | asserted | asserted | `params.yaml` |
+| `has_full_service_history`, `non_smoking`, `is_rental` boolean and non-null (EDN-23) | through the contract | through the contract | `schema.py` |
+
+The raw suite sees the published file with one change: `registration_date` is parsed by the interim contract's own cast, because Great Expectations 1.23 cannot bound a text date.
+It has no price rule, because the published file runs from 1 EUR to 13.5M EUR and the range is a filter preprocessing applies.
+The mileage range is the opposite case: a check and not a filter, so the published file's three readings above 1,000,000 km reach the cleaned frame, and the rule tolerates a few on both frames while still failing on a systematic break such as a scrape in another unit.
+Two rules are deliberately absent.
+That `is_used` agrees with `offer_type` would fail the published file by design, because a `False` there means "not asserted" (EDN-23).
+The supported-make list is computed by `split`, after this stage, and applied by `features` (see [The supported makes](#the-supported-makes)), so no frame this stage sees is meant to satisfy it.
+The docstring of `recommenditos/data/gx_context_configuration.py` gives each rule's reason.
+
+What the stage writes, all under `reports/data-validation/`:
+
+- `summary.json`, git-tracked: per frame whether it passed, its row count, how many contract expectations ran and which failed, and every rule with its bounds and what it found. It carries no run id and no timestamp, so its diff in a pull request is what the data did.
+- `data-docs/`, the Data Docs rendered from the run. Open `data-docs/index.html` in a browser; `dvc pull reports/data-validation/data-docs` brings them to a clone.
+- `results/`, the full validation results the Data Docs are rendered from.
+
+`gx/` itself is `configure_gx`'s output, cached and pushed rather than committed.
+Great Expectations writes a fresh UUID into every object it saves and ignores one passed in, so two builds from the same code differ in six of the nine files a context holds, and a committed store would be a diff on every rebuild.
+The definition of the suites a reviewer reads is the module that builds them, and the store is rebuilt from scratch on every run, so it cannot keep a rule the module no longer defines.
+To rebuild it by hand, run `uv run dvc repro configure_gx`.
+
+On the real snapshot the stage takes about 10 s and peaks at 2.0 GB of RAM, most of it the raw frame itself.
+Great Expectations would double that by hashing the whole frame into a fingerprint for each run's markers, so `validate-data` switches the fingerprint off.
+
 Parameters
 ----------
 
@@ -163,7 +204,7 @@ Every edge case the pipeline rules exist for is guaranteed present whatever the 
 It also keeps the real make skew and gives each seller several listings, because a seller-grouped split on a flat distribution would be indistinguishable from a random one.
 
 The tests build the frame in memory, so `pytest` writes nothing and no file can go stale.
-When something needs the fixture as an actual file - a Great Expectations asset points at a path, and a notebook is easier to poke at with one - `make fixture` writes it to `data/fixture/listings_fixture.parquet`.
+When something needs the fixture as an actual file - a notebook is easier to poke at with one - `make fixture` writes it to `data/fixture/listings_fixture.parquet`.
 That path is gitignored: the generator is the artefact, the Parquet is a convenience, and both come from the same seeded function.
 
 Working on a stage
@@ -184,8 +225,6 @@ Working on a stage
 Known gaps
 ----------
 
-- `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
 - A stage's `deps` and `params` cannot be conditional, so `download` declares both sources' inputs whichever one is selected. Under `download.source: zenodo`, editing `recommenditos/data/synthetic.py` or `download.rows` therefore reruns the stage as a 25-second re-read of the cached CSV that produces an identical Parquet. Dropping either would be worse, because a synthetic run would then not notice that its own generator or row count changed.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The project's own source, `zenodo`, is pinned hard on the input and not all the way on the output: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. The `synthetic` source is reproducible within a fixed toolchain too, but it depends on one thing more: NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what it generates. Within one toolchain version both writes are byte-stable, which is what NFR-06 is measured against, and `dvc pull` sidesteps the question entirely for everyone who does not rerun the stage.
-- `configure_gx` and `validate-data` are still stubs: `validate-data` enforces the structural contract from `recommenditos/schema.py` and the value expectations of issue #25 are not built yet. Each module's docstring names the issue that implements it and what that issue still owes.

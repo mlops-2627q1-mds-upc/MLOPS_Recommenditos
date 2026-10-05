@@ -54,6 +54,8 @@ There is no manual `dvc add` pointer left.
 |------|--------|-----|
 | `data/raw/listings.parquet` | `download` | DVC cache, pushed |
 | `data/interim/`, `data/processed/`, `models/` | the stages that declare them as outputs | DVC cache, pushed |
+| `gx/`, the Great Expectations context | `configure_gx` | DVC cache, pushed; gitignored, because every rebuild writes fresh UUIDs into it (EDN-68) |
+| `reports/data-validation/results/`, `reports/data-validation/data-docs/` | `validate-data` | DVC cache, pushed; both carry the run's timestamp |
 | `reports/data-validation/summary.json`, `reports/metrics/`, `metrics.json` | `validate-data` and `evaluate` | `cache: false`, so Git, and they show up in a pull request's diff |
 
 What the committed `dvc.lock` names for `data/raw/listings.parquet` is the real snapshot, 215,309,993 bytes over 118,382 rows, cached and pushed like any other stage output (**[decided]**, EDN-34).

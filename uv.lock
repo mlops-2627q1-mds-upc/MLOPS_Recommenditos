@@ -92,6 +92,22 @@ wheels = [
 ]
 
 [[package]]
+name = "altair"
+version = "6.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "narwhals" },
+    { name = "packaging" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e8/de/9731304fae332b5783fdc3ed18531dfaf4a3cc62a66aaaa74c047355b70f/altair-6.3.0.tar.gz", hash = "sha256:fa632121aca6d0fcb198a3d8a9f7d937fa5b7518ec947951cfffb44e736d97c8", size = 766362, upload-time = "2026-09-15T06:38:03.623Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/b9/10a8bb13a0462e0bc4e02c0b7b8237dc24ab590f5bb4be94bec5e8f1d532/altair-6.3.0-py3-none-any.whl", hash = "sha256:7defb6ca730676dfc99a299768e2769f51585fcb3dc960ea71aacc368929d65e", size = 797192, upload-time = "2026-09-15T06:38:01.791Z" },
+]
+
+[[package]]
 name = "amqp"
 version = "5.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1127,6 +1143,35 @@ wheels = [
 ]
 
 [[package]]
+name = "great-expectations"
+version = "1.23.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "altair" },
+    { name = "cryptography" },
+    { name = "jinja2" },
+    { name = "jsonschema" },
+    { name = "marshmallow" },
+    { name = "mistune" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "pydantic" },
+    { name = "pyparsing" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+    { name = "ruamel-yaml" },
+    { name = "scipy" },
+    { name = "tqdm" },
+    { name = "typing-extensions" },
+    { name = "tzlocal" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5c/39/88c2f24b0c17b62571d0773fa03bcadbddde004be77676c9ba060fc0a7b5/great_expectations-1.23.2.tar.gz", hash = "sha256:c4781d99413a60f45e15febd70b5bb14a27dd8368d7f9b9f766b03eb64645a16", size = 36995637, upload-time = "2026-09-25T18:48:29.536Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/45/1b5ef5eb28e09ab4d223c77fa94f87d15326a9d36e0f3740c1f328df8803/great_expectations-1.23.2-py3-none-any.whl", hash = "sha256:2b8e3825e1695b5b6a3a5d85a8a225e5f3e1db37dbb6d1a381a28c7dc296101e", size = 5716039, upload-time = "2026-09-25T18:48:25.247Z" },
+]
+
+[[package]]
 name = "gto"
 version = "1.10.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1740,6 +1785,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/2f/e1/78ee7a023dac597a5825441ebd17170785a9dab23de95d2c7508ade94e0e/markupsafe-3.0.3-cp312-cp312-win32.whl", hash = "sha256:d88b440e37a16e651bda4c7c2b930eb586fd15ca7406cb39e211fcff3bf3017d", size = 14540, upload-time = "2025-09-27T18:36:38.761Z" },
     { url = "https://files.pythonhosted.org/packages/aa/5b/bec5aa9bbbb2c946ca2733ef9c4ca91c91b6a24580193e891b5f7dbe8e1e/markupsafe-3.0.3-cp312-cp312-win_amd64.whl", hash = "sha256:26a5784ded40c9e318cfc2bdb30fe164bdb8665ded9cd64d500a34fb42067b1c", size = 15105, upload-time = "2025-09-27T18:36:39.701Z" },
     { url = "https://files.pythonhosted.org/packages/e5/f1/216fc1bbfd74011693a4fd837e7026152e89c4bcf3e77b6692fba9923123/markupsafe-3.0.3-cp312-cp312-win_arm64.whl", hash = "sha256:35add3b638a5d900e807944a078b51922212fb3dedb01633a8defc4b01a3c85f", size = 13906, upload-time = "2025-09-27T18:36:40.689Z" },
+]
+
+[[package]]
+name = "marshmallow"
+version = "4.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/d7/611e68d57e6a903c29cb33b5afec0f93b4baecacc6c6c62e33cde9eb9dcb/marshmallow-4.3.1.tar.gz", hash = "sha256:fb6b8048af08d4ab061610d5b7d3696a7e4c95337dbda880edb9f95812cabc20", size = 218308, upload-time = "2026-08-08T14:27:29.517Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/57/4526ca0e214a3d158690e3393f6d547a2f8070f88d6388ab21d5b0aac8a1/marshmallow-4.3.1-py3-none-any.whl", hash = "sha256:e65accfbe277546df92ed7996a678c90e063e9a7c2a2f5e03f7d0b90e3768c42", size = 49219, upload-time = "2026-08-08T14:27:28.078Z" },
 ]
 
 [[package]]
@@ -2772,6 +2826,7 @@ notebook = [
 ]
 pipeline = [
     { name = "dvc" },
+    { name = "great-expectations" },
     { name = "matplotlib" },
     { name = "mlflow" },
     { name = "requests" },
@@ -2812,6 +2867,7 @@ notebook = [
 ]
 pipeline = [
     { name = "dvc" },
+    { name = "great-expectations", specifier = ">=1.23.2" },
     { name = "matplotlib" },
     { name = "mlflow", specifier = ">=3.16.1,<4" },
     { name = "requests" },

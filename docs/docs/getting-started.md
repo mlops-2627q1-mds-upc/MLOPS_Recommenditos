@@ -130,7 +130,6 @@ uv run dvc repro
 ```
 
 `dvc repro` runs each stage whose command, `deps` or `params` no longer match what `dvc.lock` recorded, and skips the rest with `Stage '<name>' didn't change, skipping`.
-A stage with no `outs`, like `configure_gx`, is compared the same way and skipped the same way; its missing output is a gap in the graph's ordering, not in its change detection.
 
 So how much runs depends on whether the commit you cloned was reproduced with the `dvc.lock` it carries.
 When it was, DVC touches nothing and ends with `Data and pipelines are up to date.`

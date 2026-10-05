@@ -32,7 +32,6 @@ from recommenditos.schema import (
     PROCESSED_SCHEMA,
     RAW_SCHEMA,
     TARGET_NAMES,
-    SchemaError,
     load_feature_schema,
 )
 
@@ -84,13 +83,20 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     metrics_dir = root / "metrics"
     summary_path = root / "metrics.json"
     validation_path = root / "data-validation" / "summary.json"
+    context_dir = root / "gx"
 
     preprocess.main(raw_path, interim_path, params_path)
     # Every path is passed explicitly. A stage's defaults point into the real
     # repository, so a test that relies on them writes its result over the
     # pipeline's - which is exactly how a test run's validation summary once
     # ended up committed.
-    validate_data.main(raw_path, interim_path, validation_path)
+    gx_context_configuration.main(
+        context_dir,
+        root / "data-validation" / "results",
+        root / "data-validation" / "data-docs",
+        params_path,
+    )
+    validate_data.main(raw_path, interim_path, validation_path, context_dir)
     split_data.main(interim_path, processed, params_path)
     for feature_set in params["features"]["sets"]:
         build_features.main(feature_set, processed, features, params_path)
@@ -107,6 +113,7 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
         "metrics_dir": metrics_dir,
         "summary": summary_path,
         "validation": validation_path,
+        "context": context_dir,
     }
 
 
@@ -376,17 +383,23 @@ def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
     broken_path = tmp_path / "broken.parquet"
     broken.to_parquet(broken_path, index=False)
 
-    with pytest.raises(SchemaError):
-        validate_data.main(pipeline["raw"], broken_path, tmp_path / "summary.json")
+    with pytest.raises(validate_data.DataValidationError, match="log_price"):
+        validate_data.main(
+            pipeline["raw"], broken_path, tmp_path / "summary.json", pipeline["context"]
+        )
 
     # The summary is written before the raise, so a failed run leaves a record
-    # of which artefact broke rather than only a traceback in the DVC log.
+    # of which artefact broke rather than only a traceback in the DVC log. A
+    # frame that breaks its contract never reaches its suite, so the record is
+    # the contract's error rather than a list of expectations.
     written = json.loads((tmp_path / "summary.json").read_text())
     assert written["interim"]["passed"] is False
+    assert "log_price" in written["interim"]["error"]
+    assert written["raw"]["passed"] is True
 
 
 # --------------------------------------------------------------------------
-# download (#33) and configure_gx (#25)
+# download (#33)
 # --------------------------------------------------------------------------
 
 
@@ -421,10 +434,6 @@ def test_the_download_source_is_one_the_stage_implements(params):
     # its author to edit a test. What must hold is that the value names a source
     # the stage knows, which is what the stage exports `SOURCES` for.
     assert params["download"]["source"] in download_raw_dataset.SOURCES
-
-
-def test_configure_gx_is_runnable():
-    gx_context_configuration.main()
 
 
 # --------------------------------------------------------------------------
@@ -537,6 +546,14 @@ def test_the_gate_is_in_the_graph_not_beside_it(dvc_stages):
     declared = [entry for entry in dvc_stages["validate-data"]["outs"]]
     assert any(summary in str(entry) for entry in declared)
     assert summary in dvc_stages["split"]["deps"]
+
+
+def test_the_suites_are_built_before_they_run(dvc_stages):
+    # The course demo's configure_gx declares no outs, which leaves it a
+    # disconnected node DVC does not have to run before the validation. Ours
+    # writes the context and validate-data depends on it.
+    assert "gx" in dvc_stages["configure_gx"]["outs"]
+    assert "gx" in dvc_stages["validate-data"]["deps"]
 
 
 def test_the_metrics_artefact_is_declared_so_dvc_metrics_diff_works(dvc_stages):

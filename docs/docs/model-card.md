@@ -282,7 +282,8 @@ These figures are EDN-41's, measured on 2026-09-30 over all training rows; the r
 This is accepted as a parameterised starting point; [EDN-41](problem-spec.md#decision-records) records the two finer alternatives that were measured and rejected.
 
 `weight_kg` runs from 1 kg to 93,000 kg, so the column carries data-entry errors from the source.
-The pipeline deliberately does not clean them: a value range is a data-quality rule and belongs to the Great Expectations suites (issue #25), not to the feature code.
+The pipeline deliberately does not clean them in the feature code, where a value range does not belong.
+The Great Expectations suites (issue #25) do not bound it either: the column is still text when they run, and no plausible range has been agreed, so the errors reach the extended feature set as they are.
 
 #### Training
 

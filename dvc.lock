@@ -97,12 +97,32 @@ stages:
       size: 1535
     - path: recommenditos/data/gx_context_configuration.py
       hash: md5
-      md5: 3a27983a109d8248b4e883877b305399
-      size: 1657
+      md5: 069a6f3c2d6f7a0918fe3d6f9b03af11
+      size: 16821
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 7cc7bfa9fae9f288537f83272649b8b1
+      size: 1738
     - path: recommenditos/schema.py
       hash: md5
       md5: 743914aba71e40b41e720bcc2fdf63a4
       size: 36483
+    params:
+      params.yaml:
+        preprocess.price_max_eur: 2000000
+        preprocess.price_min_eur: 500
+        reference_date: '2025-11-08'
+        validate:
+          mileage_min_km: 0
+          mileage_max_km: 1000000
+          mileage_mostly: 0.999
+          raw_mostly: 0.99
+    outs:
+    - path: gx
+      hash: md5
+      md5: de8c0be5e9c42fcc9602be0de852bed7.dir
+      size: 59991
+      nfiles: 12
   validate-data:
     cmd: python3 -m recommenditos.data.validate_data
     deps:
@@ -114,18 +134,23 @@ stages:
       hash: md5
       md5: 8c1bca23e7af398faaf3cdb2015429ca
       size: 215309993
+    - path: gx
+      hash: md5
+      md5: de8c0be5e9c42fcc9602be0de852bed7.dir
+      size: 59991
+      nfiles: 12
     - path: recommenditos/config.py
       hash: md5
       md5: 2930e86c1b0156d9626ffb64ff0ee247
       size: 1535
     - path: recommenditos/data/gx_context_configuration.py
       hash: md5
-      md5: 3a27983a109d8248b4e883877b305399
-      size: 1657
+      md5: 069a6f3c2d6f7a0918fe3d6f9b03af11
+      size: 16821
     - path: recommenditos/data/validate_data.py
       hash: md5
-      md5: fdb32c8289c7719f4c7063d54c6eeec4
-      size: 3015
+      md5: a9551df198a5e8cc52cef61345bd9991
+      size: 10366
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -134,17 +159,21 @@ stages:
       hash: md5
       md5: 743914aba71e40b41e720bcc2fdf63a4
       size: 36483
-    params:
-      params.yaml:
-        validate:
-          mileage_min_km: 0
-          mileage_max_km: 1000000
-          raw_mostly: 0.99
     outs:
+    - path: reports/data-validation/data-docs
+      hash: md5
+      md5: 28e1f15609b1b596579ff46d52f65d42.dir
+      size: 4739242
+      nfiles: 25
+    - path: reports/data-validation/results
+      hash: md5
+      md5: 20552edc1d9a6a79b192bc6e059eb225.dir
+      size: 123225
+      nfiles: 3
     - path: reports/data-validation/summary.json
       hash: md5
-      md5: 695b311260dd9cb012bc113186560202
-      size: 117
+      md5: 65dd58069ba683f9317ea7a35258dcca
+      size: 3402
   split:
     cmd: python3 -m recommenditos.data.split_data
     deps:
@@ -170,8 +199,8 @@ stages:
       size: 36483
     - path: reports/data-validation/summary.json
       hash: md5
-      md5: 695b311260dd9cb012bc113186560202
-      size: 117
+      md5: 65dd58069ba683f9317ea7a35258dcca
+      size: 3402
     params:
       params.yaml:
         seed: 20251108

@@ -7,6 +7,7 @@ time without waiting for the 548 MB download, and it keeps the personal data of
 the real listings out of the repository itself (NFR-08).
 """
 
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -35,6 +36,15 @@ PII_COLUMNS = (
 )
 
 
+#: The data-validation stages' outputs, which `recommenditos.data.gx_context_configuration`
+#: defines. Repeated rather than imported, because importing that module imports
+#: Great Expectations, and this file is loaded by every test run, including the
+#: ones that never touch data validation. `tests/test_validate_data.py` holds the
+#: two copies equal.
+GX_DIR = PROJ_ROOT / "gx"
+VALIDATION_DIR = REPORTS_DIR / "data-validation"
+VALIDATION_SUMMARY_FILE = VALIDATION_DIR / "summary.json"
+
 #: Paths no test may create. MLflow resolves an unset tracking URI to
 #: `sqlite:///$PWD/mlflow.db` (or to `mlruns/` under MLFLOW_ALLOW_FILE_STORE), so
 #: a test that logs without setting one leaves a database in the repository root
@@ -52,9 +62,15 @@ def _repo_artefacts_stay_untouched():
     happened once with the validation summary, and the only symptom was a
     mysterious diff after the next `dvc repro`.
     """
-    watched = [METRICS_FILE, REPORTS_DIR / "data-validation" / "summary.json"]
+    watched = [METRICS_FILE, VALIDATION_SUMMARY_FILE]
     before = {path: _fingerprint(path) for path in watched}
-    models_before = _listing(MODELS_DIR)
+    # The Great Expectations context by content, because `configure_gx`
+    # rebuilds it under the same file names: only the UUIDs inside change.
+    context_before = _tree_digest(GX_DIR)
+    # The other DVC-cached outputs by listing: a checkpoint run adds result and
+    # Data Docs files named after its run time.
+    listed = (MODELS_DIR, VALIDATION_DIR)
+    listings_before = {directory: _listing(directory) for directory in listed}
     already_there = [path for path in FORBIDDEN_PATHS if path.exists()]
 
     yield
@@ -66,7 +82,11 @@ def _repo_artefacts_stay_untouched():
     # and what matters is that a test did not train into it. Its bundles are
     # DVC-cached, so a stray one would not show up in `git status` either - the
     # symptom would be `dvc status` reporting a model nobody had pushed.
-    assert _listing(MODELS_DIR) == models_before, f"the test suite trained into {MODELS_DIR}"
+    for directory in listed:
+        assert _listing(directory) == listings_before[directory], (
+            f"the test suite wrote into {directory}"
+        )
+    assert _tree_digest(GX_DIR) == context_before, f"the test suite rebuilt {GX_DIR}"
 
     appeared = sorted(
         str(path) for path in FORBIDDEN_PATHS if path.exists() and path not in already_there
@@ -76,6 +96,18 @@ def _repo_artefacts_stay_untouched():
 
 def _fingerprint(path: Path) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def _tree_digest(directory: Path) -> str | None:
+    """One digest over every file under `directory`, its path and its bytes."""
+    if not directory.exists():
+        return None
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*")):
+        if path.is_file():
+            digest.update(str(path.relative_to(directory)).encode())
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def _listing(directory: Path) -> list[str]:

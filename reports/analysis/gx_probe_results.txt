@@ -1,0 +1,75 @@
+great_expectations 1.23.2 pandas 3.0.6
+
+dtypes: {'text': 'str', 'number': 'float64', 'flag': 'bool', 'date_text': 'str', 'date': 'datetime64[ns]'}
+
+OfType str on pandas 3 `str`: works
+  satisfying: (True, 'str', [])
+  breaking:   (False, 'int64', [])
+
+OfType float64: works
+  satisfying: (True, 'float64', [])
+  breaking:   (False, 'int64', [])
+
+OfType bool: works
+  satisfying: (True, 'bool', [])
+  breaking:   (False, 'str', [])
+
+OfType datetime64[ns] against a datetime64[us] column (the unit): BROKEN: passes a frame that breaks it
+  satisfying: (True, 'datetime64', [])
+  breaking:   (True, 'datetime64', [])
+
+OfType bool against a nullable `boolean` column holding a null: BROKEN: passes a frame that breaks it
+  satisfying: (True, 'bool', [])
+  breaking:   (True, 'bool', [])
+
+NotBeNull on `str` (missing is NaN): works
+  satisfying: (True, None, [])
+  breaking:   (False, None, [])
+
+TableColumnsToMatchOrderedList, a column added: works
+  satisfying: (True, ['text', 'number', 'flag', 'date_text', 'date'], [])
+  breaking:   (False, ['text', 'number', 'flag', 'date_text', 'date', 'vin'], [])
+
+Between on float64 with NaN: works
+  satisfying: (True, None, [])
+  breaking:   (False, None, [])
+
+Between on datetime64[ns], datetime bound: works
+  satisfying: (True, None, [])
+  breaking:   (False, None, [])
+
+a text bound is stored as datetime.date(2025, 11, 8)
+
+Between on datetime64[ns], text bound: BROKEN: fails a frame that satisfies it
+  satisfying: (False, None, ['Invalid comparison between dtype=datetime64[ns] and date'])
+  breaking:   (False, None, ['Cannot compare Timestamp with datetime.date. Use ts == pd.Timestamp(date) or ts.date() == date instead.'])
+
+Between on the raw text dates, text bound: BROKEN: fails a frame that satisfies it
+  satisfying: (False, None, ['Column values, min_value, and max_value must either be None or of the same type.'])
+  breaking:   (False, None, ['Column values, min_value, and max_value must either be None or of the same type.'])
+
+files a file context writes: 9
+  gx/.gitignore
+  gx/checkpoints/raw.json
+  gx/expectations/.ge_store_backend_id
+  gx/expectations/raw.json
+  gx/great_expectations.yml
+  gx/plugins/custom_data_docs/styles/data_docs_custom_styles.css
+  gx/uncommitted/config_variables.yml
+  gx/uncommitted/validations/.ge_store_backend_id
+  gx/validation_definitions/raw.json
+
+changed by a second add_or_update build in the same store:
+  gx/expectations/raw.json
+  gx/great_expectations.yml
+  gx/validation_definitions/raw.json
+
+differing between two fresh builds of the same code:
+  gx/checkpoints/raw.json
+  gx/expectations/.ge_store_backend_id
+  gx/expectations/raw.json
+  gx/great_expectations.yml
+  gx/uncommitted/validations/.ge_store_backend_id
+  gx/validation_definitions/raw.json
+
+an id passed to the suite, validation definition and checkpoint survives the save: False
