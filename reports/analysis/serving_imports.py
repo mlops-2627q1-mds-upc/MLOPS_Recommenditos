@@ -7,12 +7,12 @@ turn, some of it only when it can.
 
 This runs the serving path the way the API will - `load_model` on every bundle
 under `models/`, then `predict_eur` on the first rows of its own test matrix -
-with a hook on `__import__` that records, for every top-level module that was
-not imported yet, which module asked for it first. Each module is then mapped
-to the distribution that installs it. An importer inside `recommenditos` makes
-the package a direct need of the serving path; an importer inside another
-package makes it that package's business, and whether it is a requirement or an
-optional import is what running this in two environments shows.
+with a hook on `__import__` that records which module asked for which top-level
+module. Each module is then mapped to the distribution that installs it. A
+package some `recommenditos` module imports is a direct need of the serving
+path, and the report names those modules; a package only other packages import
+is their business, and whether it is a requirement of theirs or an optional
+import is what running this in two environments shows.
 
 Run it with the interpreter of the environment to trace, from the repository
 root, after `dvc pull` (or `dvc checkout train features`):
@@ -26,14 +26,16 @@ from importlib.metadata import packages_distributions
 from pathlib import Path
 import sys
 
-_first_importer: dict[str, str] = {}
+_importers: dict[str, list[str]] = {}
 _original_import = builtins.__import__
 
 
 def _recording_import(name, globals=None, locals=None, fromlist=(), level=0):
-    top = name.partition(".")[0]
-    if level == 0 and top not in sys.modules and top not in _first_importer:
-        _first_importer[top] = (globals or {}).get("__name__", "?")
+    if level == 0:
+        importer = (globals or {}).get("__name__", "?")
+        seen = _importers.setdefault(name.partition(".")[0], [])
+        if importer not in seen:
+            seen.append(importer)
     return _original_import(name, globals, locals, fromlist, level)
 
 
@@ -57,17 +59,17 @@ def main() -> None:
 
     owners = packages_distributions()
     rows = []
-    for module, importer in _first_importer.items():
-        if module in sys.stdlib_module_names or module not in owners:
+    for module, importers in _importers.items():
+        if module in sys.stdlib_module_names or module not in owners or module not in sys.modules:
             continue
-        direct = importer.partition(".")[0] == "recommenditos"
-        rows.append((not direct, ", ".join(sorted(set(owners[module]))), module, importer))
+        ours = sorted({name for name in importers if name.partition(".")[0] == "recommenditos"})
+        by = ", ".join(ours) if ours else f"only other packages, first {importers[0]}"
+        rows.append((not ours, ", ".join(sorted(set(owners[module]))), module, by))
 
     print(f"Interpreter: {Path(sys.prefix).name}")
-    print(f"{'distribution':22}{'module':22}first imported by")
-    for transitive, distribution, module, importer in sorted(rows):
-        kind = "  (another package)" if transitive else ""
-        print(f"{distribution:22}{module:22}{importer}{kind}")
+    print(f"{'distribution':22}{'module':22}imported by")
+    for _, distribution, module, by in sorted(rows):
+        print(f"{distribution:22}{module:22}{by}")
 
 
 if __name__ == "__main__":

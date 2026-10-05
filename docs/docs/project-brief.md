@@ -229,7 +229,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Everything else is in PEP 735 groups (`pipeline`, `notebook`, `docs`, `test`, `dev`), and `default-groups = "all"` keeps a plain `uv sync` installing the whole environment.
   Measured from `uv.lock` on 2026-10-05: the runtime is 23 distributions, the project itself included, and 421 MB of site-packages (519 MB with bytecode), against 248 distributions and 815 MB (1,054 MB) for the full environment; pyarrow alone is 157 MB of it.
   FastAPI, uvicorn and pydantic join the runtime in M4; Great Expectations, CodeCarbon and `shap` go into groups.
-  CI's `Serving runtime` job (`make test-serving`) runs the serving path from the runtime set alone, so a training-only import in serving code fails the build.
+  CI's `Serving runtime` job (`make test-serving`), a required check, runs the serving path from the runtime set and the test runner alone, so a training-only import in serving code fails the build.
 
 ## 7. Milestones
 

@@ -126,3 +126,12 @@ Unlike the scripts above it needs no raw dataset, only `models/` and `data/proce
 ```bash
 uv run python reports/analysis/runtime_footprint.py /tmp/footprint
 ```
+
+`serving_imports.py` is the trace behind EDN-47's runtime list: it runs the same load-and-predict over `models/` with a hook on `__import__`, and reports for every package the serving path imported which `recommenditos` modules import it, or, when none does, which package imported it first.
+`serving_imports_results.txt` holds its output in the full environment and in `make test-serving`'s `.venv-serving/` (2026-10-05).
+The difference between the two is the optional imports: tqdm, psutil and charset_normalizer appear only in the full one.
+
+```bash
+uv run python reports/analysis/serving_imports.py
+.venv-serving/bin/python reports/analysis/serving_imports.py
+```

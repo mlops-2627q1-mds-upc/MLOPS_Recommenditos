@@ -1,0 +1,46 @@
+Interpreter: .venv
+distribution          module                imported by
+PyYAML                yaml                  recommenditos.pipeline
+joblib                joblib                recommenditos.modeling.model
+lightgbm              lightgbm              recommenditos.modeling.model
+loguru                loguru                recommenditos.config, recommenditos.data.build_features, recommenditos.data.split_data, recommenditos.modeling.model, recommenditos.pipeline
+numpy                 numpy                 recommenditos.data.build_features, recommenditos.modeling.model, recommenditos.schema
+pandas                pandas                recommenditos.data.build_features, recommenditos.data.split_data, recommenditos.modeling.model, recommenditos.pipeline, recommenditos.schema
+python-dotenv         dotenv                recommenditos.config
+scikit-learn          sklearn               recommenditos.modeling.model
+tqdm                  tqdm                  recommenditos.config
+typer                 typer                 recommenditos.data.build_features, recommenditos.data.split_data
+annotated-doc         annotated_doc         only other packages, first typer.main
+charset-normalizer    charset_normalizer    only other packages, first numpy.f2py.crackfortran
+cloudpickle           cloudpickle           only other packages, first joblib.externals.loky.backend.reduction
+narwhals              narwhals              only other packages, first lightgbm.basic
+psutil                psutil                only other packages, first joblib.externals.loky.backend.utils
+pyarrow               pyarrow               only other packages, first pandas.compat.pyarrow
+python-dateutil       dateutil              only other packages, first ?
+rich                  rich                  only other packages, first sklearn.callback._progressbar
+scipy                 scipy                 only other packages, first lightgbm.basic
+shellingham           shellingham           only other packages, first typer._completion_shared
+six                   six                   only other packages, first dateutil.tz.tz
+threadpoolctl         threadpoolctl         only other packages, first sklearn.utils.parallel
+
+Interpreter: .venv-serving
+distribution          module                imported by
+PyYAML                yaml                  recommenditos.pipeline
+joblib                joblib                recommenditos.modeling.model
+lightgbm              lightgbm              recommenditos.modeling.model
+loguru                loguru                recommenditos.config, recommenditos.data.build_features, recommenditos.data.split_data, recommenditos.modeling.model, recommenditos.pipeline
+numpy                 numpy                 recommenditos.data.build_features, recommenditos.modeling.model, recommenditos.schema
+pandas                pandas                recommenditos.data.build_features, recommenditos.data.split_data, recommenditos.modeling.model, recommenditos.pipeline, recommenditos.schema
+python-dotenv         dotenv                recommenditos.config
+scikit-learn          sklearn               recommenditos.modeling.model
+typer                 typer                 recommenditos.data.build_features, recommenditos.data.split_data
+annotated-doc         annotated_doc         only other packages, first typer.main
+cloudpickle           cloudpickle           only other packages, first joblib.externals.loky.backend.reduction
+narwhals              narwhals              only other packages, first lightgbm.basic
+pyarrow               pyarrow               only other packages, first pandas.compat.pyarrow
+python-dateutil       dateutil              only other packages, first ?
+rich                  rich                  only other packages, first sklearn.callback._progressbar
+scipy                 scipy                 only other packages, first lightgbm.basic
+shellingham           shellingham           only other packages, first typer._completion_shared
+six                   six                   only other packages, first dateutil.tz.tz
+threadpoolctl         threadpoolctl         only other packages, first sklearn.utils.parallel
