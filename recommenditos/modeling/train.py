@@ -171,6 +171,7 @@ def _log_the_run(
     honest thing for this stage to report.
     """
     training = model.metadata["training"]
+    early_stopped = training.get("early_stopped")
     run.set_tags(
         {
             "variant": model.variant,
@@ -185,6 +186,10 @@ def _log_the_run(
             "train_l1_log_price": training["train_l1_log_price"],
             "validation_l1_log_price": training["validation_l1_log_price"],
             "best_iteration": training.get("best_iteration"),
+            "boosting_rounds": training.get("boosting_rounds"),
+            # 1 or 0 rather than a tag, so `metrics.early_stopped = 0` finds every
+            # run whose `n_estimators` budget ended the fit, beside the other metrics.
+            "early_stopped": None if early_stopped is None else float(early_stopped),
             "fit_seconds": fit_seconds,
             # TODO(#38): the energy metrics of the fit belong in this call.
         }

@@ -90,6 +90,20 @@ it needs.
 `served_vocabulary_results.txt` is the output of the run cited in EDN-67, the model card and
 `params.yaml` (2026-10-05).
 
+## Where early stopping lands, and what tuning could still buy (EDN-70, issue #64)
+
+`early_stopping_ceiling.py` fits each LightGBM variant once with `n_estimators` at 20,000, every other setting as `params.yaml` has it, and reports the round early stopping chose, the validation curve at fixed tree counts, and what the trees cost: fit seconds, `booster.txt` size, and the single-row latency of a prediction and of the native SHAP export FR-08 serves.
+It is the evidence behind the committed ceiling of 5,000.
+`early_stopping_ceiling_results.txt` is the output of the run cited in EDN-70, the model card and `params.yaml` (2026-10-05).
+
+`tuning_sweep.py` is the evidence behind EDN-73, not a tuning run: a small grid of `learning_rate` and `num_leaves` for the candidate `lgbm-basic`, each point fitted with early stopping deciding the trees, and a paired bootstrap by seller group of whether the validation split can tell any point from the committed one.
+`tuning_sweep_results.txt` is its output (2026-10-05).
+It is also the decision step of the tuning protocol in `docs/docs/pipeline.md`: queued `dvc exp` runs screen a sweep, and this script re-fits the shortlist on validation and adopts a point only when its simultaneous interval, from a max-statistic bootstrap over all the points, lies below zero.
+It covers `learning_rate` and `num_leaves` only.
+
+Both import the `train` stage's own `read_matrices` and `fit_variant`, so the fits are the stage's fits, and both read the `train` and `validation` matrices only: the test split is never opened, because a choice made on test rows would leak them into the model the gate then judges.
+Run them from the repository root after `dvc pull`, with tracking off (`MLFLOW_TRACKING_URI= uv run python reports/analysis/<script>.py`).
+
 ## The preprocess row funnel (dataset card, issue #34)
 
 `preprocess_funnel.py` reports how many listings each row rule of the `preprocess` stage removes
@@ -177,3 +191,4 @@ It runs the real `split`, `features`, `train` and `evaluate` stages on the inter
 For every run it checks that each `train.deps.<path>` tag equals the `md5` the lock records for that dependency of `train@<variant>`, that each `evaluate.deps.<path>` equals the one under `evaluate`, with no dependency missing and no tag extra, and that `git_dirty` and `evaluate.git_dirty` are `false`; for a run made before the fix it also says whether its `dvc_lock_md5` equals the committed lock's digest.
 It needs the tracking credentials in `.env`, `models/` from `dvc pull`, and a clean tree, and runs from the repository root: `uv run python reports/analysis/run_provenance_check.py`.
 `run_provenance_check_results.txt` holds two runs of it (2026-10-05): against the runs `main`'s models pointed at before the fix, and against the four runs of the `dvc repro` this pull request committed.
+A third, appended on 2026-10-06, checks the runs of the next committed `dvc repro`, issue #64's, which pass the same way.

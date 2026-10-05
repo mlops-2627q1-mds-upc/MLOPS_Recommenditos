@@ -78,3 +78,42 @@ b0: OK
 b1: OK
 lgbm-basic: OK
 lgbm-extended: OK
+
+
+# Issue #64 (PR #77): the four runs of the dvc repro that pull request committed, made from the clean commit bc5a87b
+# with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-06 on the commit that holds that run's dvc.lock (aeab146); exit status 0.
+
+HEAD aeab146a7fc10d7ced5f600039e3a60d71efa72f, tree clean, MD5 of its dvc.lock b848d3e5c16c1559af3485adbe682961
+
+b0: run 4bcf39bd3d4d4624a45b63704df6e840 (b0, FINISHED)
+    dvc_stage train@b0
+    git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, git_dirty false
+    evaluate.git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b1: run c79684ac6baf4bb9946070fc5e8961db (b1, FINISHED)
+    dvc_stage train@b1
+    git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, git_dirty false
+    evaluate.git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-basic: run e25b28b73c4145629d8f84d78d962f0c (lgbm-basic, FINISHED)
+    dvc_stage train@lgbm-basic
+    git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, git_dirty false
+    evaluate.git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-extended: run dfd493c6f2d14f26ab0a7907d8d576f3 (lgbm-extended, FINISHED)
+    dvc_stage train@lgbm-extended
+    git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, git_dirty false
+    evaluate.git_commit bc5a87ba75ff947359b0f76627e483710e5fa37c, evaluate.git_dirty false
+    train.deps: 10/10 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b0: OK
+b1: OK
+lgbm-basic: OK
+lgbm-extended: OK

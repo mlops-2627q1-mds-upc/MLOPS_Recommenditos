@@ -192,6 +192,45 @@ Paths do not: they stay in `recommenditos/config.py`, derived from the repositor
 This is a deliberate improvement on the demo, which keeps the same settings as Python constants in `config.py`.
 A parameter change reruns the stages that read it, `dvc params diff` shows what changed between two commits, and `dvc exp` can sweep them.
 
+Tuning a hyperparameter
+-----------------------
+
+A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+It exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
+It has two steps: queued `dvc exp` runs to **screen** the candidates, and `reports/analysis/tuning_sweep.py` to **decide**, by re-fitting the shortlist on the validation split.
+
+- **The split is validation.** Neither step runs anything after the `train` stage, so `evaluate` never reads the test split during a choice.
+  The test metrics of an adopted value are read once, by the committed `dvc repro`, after the choice is made.
+- **The metric is `validation_l1_log_price`**, which `train` logs to MLflow and writes into `model.json`.
+  It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot.
+- **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** `tuning_sweep.py` bootstraps every point's validation L1 difference from the committed point, paired and resampled by seller group because the split is grouped by seller (EDN-14), and widens the intervals by the max-statistic bootstrap until all of them hold together in 95 % of the draws.
+  A point is adopted only when its simultaneous interval lies entirely below zero.
+  A per-point 95 % interval is not enough: with eleven points no better than the committed one, the luckiest clears it in up to about one sweep in four.
+- **Every point is decided by early stopping.** A screening run with `metrics.early_stopped = 0` was cut off by the `n_estimators` ceiling, not by its curve; the decision step re-fits every point far past the ceiling, so the comparison is between early-stopped models (EDN-70).
+- **Screening is tracked apart from the ladder**, in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs.
+
+Screening is one queued experiment per point, targeted at the variant's `train` stage:
+
+```bash
+set -a; . ./.env; set +a   # the queued workspace is built from the commit, without the gitignored .env
+uv run dvc exp run --queue -n lr-0025 \
+  -S train.mlflow_experiment=recommenditos-price-tuning \
+  -S train.variants.lgbm-basic.params.learning_rate=0.025 \
+  train@lgbm-basic
+uv run dvc queue start -j 1   # one fit at a time, so the logged fit times stay comparable
+```
+
+Verified on 2026-10-05: the queued experiment runs `train@lgbm-basic` alone - the stages before it are skipped as unchanged and `evaluate` is never reached - and the worker inherits the exported tracking variables.
+Read the screening results in MLflow, not in `dvc exp show`: because `evaluate` does not run, every experiment carries its parent commit's `metrics.json`, so the test metrics `dvc exp show` prints are the committed model's and say nothing about the point.
+`uv run dvc exp remove <name>` discards an experiment once it has been read.
+
+The decision step does not read the screening runs back, although their bundles are kept - in MLflow under `model/` and in each experiment's DVC outputs.
+It re-fits the shortlist instead, because the paired comparison needs every validation row's prediction from each point and from the committed one, and a re-fit at a ceiling far past the curve gives every point its early-stopped model: the same trees as its screening run where that run early-stopped, and the model the committed ceiling cut off where it did not.
+Set the shortlist in the script's `LEARNING_RATES` and `NUM_LEAVES` and its `VARIANT`, and run it as its docstring says.
+It covers those two knobs only; tuning another one means extending its grid first.
+
+A value that passes is adopted like any other parameter change: edit `params.yaml`, run `dvc repro` with `RECOMMENDITOS_REQUIRE_TRACKING=1`, commit the lock and the metrics, and record the choice in the EDN with the interval behind it.
+
 From a run to its inputs
 ------------------------
 
