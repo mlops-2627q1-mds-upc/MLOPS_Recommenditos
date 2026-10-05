@@ -412,7 +412,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 
 | Property | Target | Measured |
 |---|---|---|
-| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **12.7 s** for the candidate `lgbm-basic`, 33.4 s for `lgbm-extended`, 50.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-05). Read as an order of magnitude and not a benchmark: that run shared the CPU with other work, and `lgbm-basic`, whose trees are identical to those of the previous tracked run, took 12.7 s here against 8.6 s there, which is the size of the effect |
+| Training time, chosen configuration, no hyperparameter search | at most 15 minutes on a laptop CPU (NFR-10) | **8.6 s** for the candidate `lgbm-basic`, 21.7 s for `lgbm-extended`, 32.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-05). Read as an order of magnitude and not a benchmark: an earlier run of the same code on the same day, sharing the CPU with other work, took 12.7 s for `lgbm-basic` with identical trees, which is the size of the effect |
 | Model artefact on disk | no target | 6.2 MB (`booster.txt`) for the candidate, 6.8 MB for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
@@ -494,17 +494,17 @@ The bold figures are the lowest of the ladder; they are not the candidate, which
 
 | Variant | Ladder step | Features | MdAPE | Within 20 % | Validation L1 (log price) | Trees | Fit time | Payload |
 |---|---|---|---|---|---|---|---|---|
-| `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.3 s | 19 KB |
-| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 3.7 s | 19 KB |
-| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.83 % | 89.7 % | 0.1005 | 1,000 | 12.7 s | 6.2 MB |
-| `lgbm-extended` | 4 | 162 | **6.32 %** | **90.3 %** | 0.0972 | 1,000 | 33.4 s | 6.8 MB |
+| `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.1 s | 19 KB |
+| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 1.6 s | 19 KB |
+| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.83 % | 89.7 % | 0.1005 | 1,000 | 8.6 s | 6.2 MB |
+| `lgbm-extended` | 4 | 162 | **6.32 %** | **90.3 %** | 0.0972 | 1,000 | 21.7 s | 6.8 MB |
 
 What the ladder says, and what it does not:
 
-- **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.50 pp** of MdAPE on a fully described car, and it is **1.77 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.01 % against 8.25 %, from the SC-06 sweep). It also costs 146 extra columns, 2.6x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
+- **What ladder step 4 measured, stated as what it now is: the extended feature set buys pooled accuracy only when the caller fills in the optional fields, and loses more than it buys when they do not.** It is worth **0.50 pp** of MdAPE on a fully described car, and it is **1.77 pp worse** than the basic set on a request carrying only the ten fields FR-01 requires (10.01 % against 8.25 %, from the SC-06 sweep). It also costs 146 extra columns, 2.5x the fit time and a 90-second `features` stage. So the answer to "what are the extended features worth" is conditional on the request, and for a component whose contract lets a caller omit 23 of its 33 inputs the conditional half is the one that decides: the candidate is `lgbm-basic` (EDN-62). Step 4 did its job by producing a number that could have gone either way, and the criteria, not the pooled figure, are what read it.
 - B0 reproduces the exploratory reference run below almost exactly (12.16 % against 11.9 %), and `lgbm-basic` likewise (6.83 % against 6.7 %), which is the cross-check that the pipeline is measuring what the notebook measured.
 - **`n_estimators: 1000` is binding, not a ceiling.** Both LightGBM variants used all 1,000 trees, so early stopping never fired on real data and both models were still improving when they ran out of budget. The hyperparameters are therefore *untuned*, in the specific sense that the one that matters most is set too low; raising it is a `params.yaml` change and a sweep, and it is the first thing to try before tuning anything else.
-- The whole four-variant ladder trains in **50.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: the previous tracked run measured 31.6 s for the same code, and `lgbm-basic`, whose trees are identical in both, took 8.6 s there and 12.7 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
+- The whole four-variant ladder trains in **32.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: an earlier run of the same code on the same day measured 50.0 s, and `lgbm-basic`, whose trees are identical in both, took 12.7 s there against 8.6 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
 
 #### Reference values
 
@@ -547,7 +547,7 @@ Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (
 | | |
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
-| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-05: 12.7 s of fitting for the candidate `lgbm-basic`, 50.0 s for the whole ladder. |
+| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-05: 8.6 s of fitting for the candidate `lgbm-basic`, 32.0 s for the whole ladder. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | _TBD, per training run from CodeCarbon._ |

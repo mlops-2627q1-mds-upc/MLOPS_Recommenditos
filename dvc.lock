@@ -242,8 +242,8 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/data/split_data.py
       hash: md5
       md5: deb2c8fd49fa74c9fb226b0973c29a08
@@ -323,8 +323,8 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/data/split_data.py
       hash: md5
       md5: deb2c8fd49fa74c9fb226b0973c29a08
@@ -406,16 +406,16 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 323358f6199d61f24d9ccdda2b10f323
       size: 54328
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: ce6d2dbd09e7eca7382fff24beb88c20
-      size: 10952
+      md5: ff7607e26bb1c8654d2c40b85c0bbe57
+      size: 10991
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -441,7 +441,7 @@ stages:
     outs:
     - path: models/b0
       hash: md5
-      md5: 8954caac68705e1dbce1244272070b18.dir
+      md5: 21c5327e7a07824177ddf18049e8297f.dir
       size: 40383
       nfiles: 3
   train@b1:
@@ -462,16 +462,16 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 323358f6199d61f24d9ccdda2b10f323
       size: 54328
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: ce6d2dbd09e7eca7382fff24beb88c20
-      size: 10952
+      md5: ff7607e26bb1c8654d2c40b85c0bbe57
+      size: 10991
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -498,7 +498,7 @@ stages:
     outs:
     - path: models/b1
       hash: md5
-      md5: 05e74abed9eb32b125fee0c7200f8fa4.dir
+      md5: 29bc60a93a2068261059591b57932646.dir
       size: 40495
       nfiles: 3
   train@lgbm-basic:
@@ -519,16 +519,16 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 323358f6199d61f24d9ccdda2b10f323
       size: 54328
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: ce6d2dbd09e7eca7382fff24beb88c20
-      size: 10952
+      md5: ff7607e26bb1c8654d2c40b85c0bbe57
+      size: 10991
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -557,7 +557,7 @@ stages:
     outs:
     - path: models/lgbm-basic
       hash: md5
-      md5: aeb2dee72b0df5c2f628f356ef30bc3a.dir
+      md5: b06b13a0f616e93082c5e0c5bbad1931.dir
       size: 6205995
       nfiles: 3
   train@lgbm-extended:
@@ -578,16 +578,16 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 323358f6199d61f24d9ccdda2b10f323
       size: 54328
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: ce6d2dbd09e7eca7382fff24beb88c20
-      size: 10952
+      md5: ff7607e26bb1c8654d2c40b85c0bbe57
+      size: 10991
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 7cc7bfa9fae9f288537f83272649b8b1
@@ -616,7 +616,7 @@ stages:
     outs:
     - path: models/lgbm-extended
       hash: md5
-      md5: 55b2c6acf5b9f6b48e2bc147a7944123.dir
+      md5: a5c884d59ad6ec24b2df6c57f768110a.dir
       size: 6839755
       nfiles: 3
   evaluate:
@@ -629,7 +629,7 @@ stages:
       nfiles: 13
     - path: models
       hash: md5
-      md5: 69fbf8642835556a032b0f7e6fb5116d.dir
+      md5: 79e84e492e6431490b1b132ed86c5284.dir
       size: 13126663
       nfiles: 13
     - path: recommenditos/config.py
@@ -638,8 +638,8 @@ stages:
       size: 1535
     - path: recommenditos/data/build_features.py
       hash: md5
-      md5: fa7c43675f2f8ab2777b79b66d9213fa
-      size: 37743
+      md5: c523577b14389525349e20244b4a8414
+      size: 38691
     - path: recommenditos/modeling/evaluate.py
       hash: md5
       md5: b3f8097d86b8a092c51ba82185b91dd4
@@ -747,6 +747,6 @@ stages:
       size: 1198
     - path: reports/metrics
       hash: md5
-      md5: fa4a3181c6dfde088c1e5c4fcde261d4.dir
+      md5: e62e8b3c2b00ae954c37a816dfa38428.dir
       size: 110762
       nfiles: 6
