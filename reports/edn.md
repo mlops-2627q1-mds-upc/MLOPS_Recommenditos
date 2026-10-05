@@ -1401,7 +1401,7 @@ How to add an entry:
   pyarrow is therefore the first place M5 should look if the image runs tight, but it is not a free saving: `b0`'s bundle carries a Parquet lookup table, and pandas 3 backs its `str` dtype with pyarrow whenever it is installed, so dropping it changes how every string column of a request is stored.
   The four committed bundles price their first five test rows identically in both environments, so the runtime set serves the same numbers rather than merely importing.
 
-  The full set's resolution did not move: `uv export --all-groups` lists the same 253 packages at the same versions before and after, and the only lock change is the project's own entry.
+  The full set's resolution did not move: `uv export --all-groups` lists the same 252 packages at the same versions before and after, the project itself aside, and the only lock change is the project's own entry.
   The guarantee is made permanent rather than measured once.
   Adding `import mlflow` to `model.py` made `make test-serving` fail with `ModuleNotFoundError: No module named 'mlflow'`, while the full suite would still have passed.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Solution generation
