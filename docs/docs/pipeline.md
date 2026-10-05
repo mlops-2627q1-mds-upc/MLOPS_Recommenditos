@@ -104,6 +104,44 @@ A categorical carries its level list, because a code is a level's position: two 
 `Schema.conform` therefore casts to the **declared** levels rather than inferring them from the frame in front of it, which is what lets a stage encode a subset, a rebuilt frame or a one-row request and get the numbering the model was fitted on.
 `build_features.FeatureSpace.load(directory, name=...)` is the one entry point for a consumer that needs the contract, the vocabulary or a frame cast against them.
 
+The supported makes
+-------------------
+
+The model is fitted, and the SC-01 to SC-06 gate measured, only on the makes the API serves ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+Three stages share that rule, and each has one job in it:
+
+- `split` **records** the list and writes it as `data/processed/supported_makes.json`, but removes no row.
+  It stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no row disappears without an artefact saying where it went.
+- `features` **applies** it, in `build_features.served_rows`, and is the only stage that does ([EDN-67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  It restricts all five frames - train, validation, calibration, test and the `ES` holdout - and it does so before the vocabulary is built, so the `make` levels, the equipment columns and the `model_version` levels are decided by served training rows alone.
+  It declares the artefact as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
+  It also refuses a supported make that no training row holds, naming it: `split` counts support over all four sets, so after a change to `seed` or to the threshold every seller of a make can land outside train, and the API would then accept a make the model has never seen.
+- `train` and `evaluate` **check** it, with `build_features.check_served_makes_only`, rather than filtering a second time.
+  Each refuses a matrix holding a make outside the list, a row with no make level, or a `make` level the list does not name, and says that the matrices and the list come from different runs.
+  A second filter would never remove a row from matrices `features` wrote; on any other matrices it would quietly repair the rows while keeping a feature space decided over another population, which is the one outcome worse than a failure.
+  `evaluate` takes the list out of the model's own metadata, so the evaluated population is checked against the trained one, and `check_make_levels_are_served` then refuses a per-make SC-04 segment outside it.
+
+EDN-48 named four guarantees this arrangement owes, and each has an owner and a test:
+
+1. The filter is applied to train, validation, calibration, test **and** the `ES` holdout.
+   **`features`**, asserted by `tests/test_features.py::test_every_frame_the_stage_writes_holds_only_supported_makes`.
+2. The filter is applied **before** any training-derived vocabulary or statistic is computed - the equipment multi-hot columns, a category encoding, a mean, a quantile.
+   **`features`**, asserted by `tests/test_features.py::test_the_vocabulary_is_decided_by_the_served_training_rows_alone`, whose training rows are built so that the `make` levels, the equipment columns and the `model_version` levels each come out differently if a single unserved row is counted.
+3. `evaluate`'s per-make segments are restricted to the listed makes, or SC-04 reports a segment the API answers with a 422.
+   **`evaluate`**, through `check_make_levels_are_served`.
+4. A test asserts that the frames reaching a model contain only supported makes, so the guarantee is checked rather than intended.
+   The two tests above, plus `tests/test_model.py::test_the_model_is_fitted_on_the_supported_makes_only` and `tests/test_pipeline.py::test_the_reported_population_is_the_served_population`.
+   Every one of them first asserts that its input holds an unsupported make, and the last two count against the frames `split` wrote rather than against the matrices, so none can pass by the filter being unnecessary.
+
+Measured on the real snapshot (2026-10-05), the filter removes 1,437 of the 99,326 split rows and moves every realised split share by at most 0.08 pp, so it does not disturb the split proportions.
+Per frame: train keeps 60,378 of 61,180 rows, validation 8,859 of 8,992, calibration 8,987 of 9,169 and test 19,665 of 19,985.
+Of the 6,079 `ES` holdout rows the holdout matrix keeps 5,979, which is EDN-14's count of the `ES` rows the API accepts under FR-04; the 100 it drops are requests the API refuses before the model sees them.
+The matrix is the holdout as the model receives it, and it is not what M6 replays: a request cannot be rebuilt from it, because its `country_code` is empty throughout (see below) and `registration_date` has become `age_years`, both fields FR-01 requires.
+The replay reads `data/processed/holdout_es.parquet`, which keeps all 6,079 rows, and has to filter to the supported makes itself or count the 100 refused requests as FR-04's 422s.
+The holdout's `country_code` stays empty in every one of those rows, because `ES` is still not a training level ([EDN-42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); the filter removes rows and leaves that encoding as it was.
+The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
+The problem they pose is a different one: the reported population would not be the served population.
+
 Parameters
 ----------
 
@@ -145,27 +183,6 @@ Known gaps
 ----------
 
 - `configure_gx` declares no `outs`, so it is a disconnected node in the graph and nothing forces it to run before `validate-data`. The demo has the same wart. Whoever implements the Great Expectations context should give the stage an output and make `validate-data` depend on it, the way `split` now depends on `validate-data`.
-- `data/processed/supported_makes.json` is applied by `train` and by `evaluate`'s pooled metrics, and **not yet** by `features` ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-  `split` deliberately records the scope instead of enforcing it: it stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no rows disappear without an artefact saying where they went.
-  `features` declares the artefact as a dependency and reads it before the vocabulary is built, which is the only point at which the restriction could still decide the level set, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
-  Four things the stages that turn a set into model input (#36, #37, #39) have to guarantee, none of them optional:
-
-    1. The filter is applied to train, validation, calibration, test **and** the `ES` holdout.
-       The holdout is the one people forget, and it is the set NFR-11 and FR-15 rest on.
-       **Train and validation: done** (`train`). **Test: done** for the pooled metrics (`evaluate`). **Calibration and holdout: open**, and they belong to the tickets that first read those sets - the conformal intervals of UC2 and the M6 replay.
-    2. The filter is applied **before** any training-derived vocabulary or statistic is computed - the equipment multi-hot columns, a category encoding, a mean, a quantile.
-       Fitting on rows the API will refuse puts makes the product cannot serve into the model's own inputs.
-       **Open, and it is `features`' obligation**: the equipment thresholds and every category's levels are still decided by all the training rows, so `make` has more levels than there are supported makes.
-       `train`'s restriction covers the model's own rows but not the vocabulary that encodes them, and the gap is visible in the stage log, which reports the level count against the supported count.
-    3. `evaluate`'s per-make segments are restricted to the listed makes, or SC-04 reports a segment the API answers with a 422.
-       **Done.** The stage restricts the test rows before it cuts them, taking the make list out of the model's own metadata so the evaluated population is by construction the trained one, and `check_make_levels_are_served` then refuses a per-make level outside that list, so the restriction is a checked property rather than an intention.
-    4. A test asserts that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
-       **Done** for the two that are applied: `tests/test_model.py::test_the_model_is_fitted_on_the_supported_makes_only` and `tests/test_pipeline.py::test_the_reported_population_is_the_served_population`, both of which first assert that the fixture holds an unsupported make, so neither can pass by the filter being unnecessary.
-
-    Measured on the real snapshot: the filter moves every realised share by at most 0.08 pp (99,326 rows to 97,889), so it does not disturb the split proportions.
-    Of the 6,079 holdout rows, 5,979 are a supported make and 100 are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04.
-    The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
-    The problem is a different one: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter.
 - A stage's `deps` and `params` cannot be conditional, so `download` declares both sources' inputs whichever one is selected. Under `download.source: zenodo`, editing `recommenditos/data/synthetic.py` or `download.rows` therefore reruns the stage as a 25-second re-read of the cached CSV that produces an identical Parquet. Dropping either would be worse, because a synthetic run would then not notice that its own generator or row count changed.
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one. The project's own source, `zenodo`, is pinned hard on the input and not all the way on the output: `download.md5` pins the *input* CSV, while the Parquet the stage writes embeds the pyarrow version and the pandas type metadata, so a pyarrow or pandas bump changes the output hash and invalidates the lock for everyone even though the data is identical. The `synthetic` source is reproducible within a fixed toolchain too, but it depends on one thing more: NumPy makes no promise that `default_rng` produces the same stream across releases, so a NumPy upgrade changes what it generates. Within one toolchain version both writes are byte-stable, which is what NFR-06 is measured against, and `dvc pull` sidesteps the question entirely for everyone who does not rerun the stage.

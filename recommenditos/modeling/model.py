@@ -124,9 +124,10 @@ class TrainingData:
     call issue #38's energy measurement has to wrap.
 
     `supported_makes` is here rather than beside the parameters because it is a
-    property of these rows: `train` restricts both frames to the makes the API
-    serves (EDN-48), and the list has to reach the model bundle so that the API
-    answers FR-04's scope check from the model it is serving.
+    property of these rows: `features` restricts both frames to the makes the API
+    serves and `train` checks that it did (EDN-48, EDN-67), and the list has to
+    reach the model bundle so that the API answers FR-04's scope check from the
+    model it is serving.
     """
 
     space: FeatureSpace

@@ -27,6 +27,8 @@ It does not forecast future prices.
 - **Supported makes:** makes with at least **300 listings** in the cleaned used-car data, counted after removing the `ES` holdout and before the split ([EDN-05](#decision-records)).
   The pipeline computes this list; it is not hard-coded.
   With the current data these are 11 makes covering 98.6 % of the used listings: BMW, Porsche, Mercedes-Benz, Audi, Alfa Romeo, Suzuki, Volvo, Honda, Hyundai, Aston Martin and Volkswagen.
+  The model is fitted and evaluated on these makes only, and every feature matrix - the `ES` holdout's included - holds no other, because the `features` stage restricts each frame before it decides any level or column ([EDN-48, EDN-67](#decision-records)).
+  The split itself stays lossless, so the listings of the other makes are still in its frames.
 - **Markets:** the model is trained on 7 countries (DE, IT, NL, BE, AT, FR, LU), with the country as a feature.
   All `ES` listings are held out as the new-market drift scenario ([EDN-03](#decision-records), project brief section 3.2); they join the training data only after the drift is confirmed and the model is retrained.
   The component accepts `ES` and treats it as an unknown country until then.
@@ -202,7 +204,9 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-22: drop listings registered after the reference date.
 - EDN-23: read the condition flags as one-sided assertions.
 - EDN-24: keep the pre-registered exclusion despite the unreliable flag.
+- EDN-48: `split` records the supported-make list and stays a lossless partition; the stages that build model input apply it.
 - EDN-58: an unmeasured criterion blocks the gate rather than passing it.
 - EDN-59: SC-06 masks input fields rather than feature columns.
 - EDN-60: which segments SC-04 may gate on is enforced in code.
 - EDN-62: `lgbm-basic` is the candidate, and SC-04's miss on cars over 20 years is accepted.
+- EDN-67: the `features` stage applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built.

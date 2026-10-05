@@ -7,7 +7,7 @@
   "data_source": "zenodo",
   "deployable_variant": null,
   "best_variant": "lgbm-extended",
-  "best_mdape": 0.06318484175102226,
+  "best_mdape": 0.06324586957136544,
   "variants": {
     "b0": {
       "estimator": "median_baseline",
@@ -32,8 +32,8 @@
     },
     "lgbm-extended": {
       "estimator": "lightgbm",
-      "mdape": 0.06318484175102226,
-      "within_20pct": 0.9040427154843631,
+      "mdape": 0.06324586957136544,
+      "within_20pct": 0.9028731248410883,
       "gate_passed": false,
       "gate_blocked_by": "sc04,sc06 failed; sc05 unmeasured"
     }

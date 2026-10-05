@@ -6,18 +6,21 @@ and each declares only its own key under `params:`. Changing one variant's
 hyperparameters therefore retrains that variant alone.
 
 What this module does is everything around the fit: read the matrices and their
-contract, restrict the rows to the makes the API serves, open one MLflow run,
-call `fit_variant`, write the bundle and log the run. The estimators themselves
-and the predict seam are in `model.py`, because `evaluate` depends on that file
-and must not depend on this one.
+contract, check that their rows are the makes the API serves, open one MLflow
+run, call `fit_variant`, write the bundle and log the run. The estimators
+themselves and the predict seam are in `model.py`, because `evaluate` depends on
+that file and must not depend on this one.
 
 Three properties are deliberate and each is tested.
 
 **The rows are the served population (EDN-48).** `split` stays a lossless
-partition and records which makes cleared EDN-05's threshold; this stage applies
-that list, so no make the API answers with a 422 is in the model's own training
-data. The list travels into the bundle, so the API reads the scope off the model
-it is serving.
+partition and records which makes cleared EDN-05's threshold; `features` applies
+that list to every frame before it builds the vocabulary (EDN-67), so no make
+the API answers with a 422 is in the model's training data or in the encoding
+it is fitted in. This stage checks that property on what it reads rather than
+filtering again, which would only ever matter on matrices from another run and
+there would hide the mismatch. The list travels into the bundle, so the API
+reads the scope off the model it is serving.
 
 **One variant is one MLflow run.** This stage creates it and records its id in
 `model.json`; `evaluate` resumes that run rather than opening its own, so the
@@ -35,11 +38,14 @@ import shutil
 import time
 
 from loguru import logger
-import pandas as pd
 import typer
 
 from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
-from recommenditos.data.build_features import FeatureSpace, read_supported_makes
+from recommenditos.data.build_features import (
+    FeatureSpace,
+    check_served_makes_only,
+    read_supported_makes,
+)
 from recommenditos.modeling.model import Model, TrainingData, fit_variant, load_model
 from recommenditos.pipeline import load_params, read_frame
 from recommenditos.tracking import Run, optional_run
@@ -77,61 +83,41 @@ def _fit(
 def read_matrices(
     input_dir: Path, feature_set: str, supported_makes: tuple[str, ...]
 ) -> TrainingData:
-    """The two matrices a fit may read, restricted to the supported makes.
+    """The two matrices a fit may read, checked to hold only the supported makes.
 
     The contract comes from the artefact beside the matrices rather than from
     `features.sets`: the equipment multi-hot columns and every category's levels
     are whatever the training rows decided, so a contract rebuilt from
     params.yaml would not describe the file it is validating.
+
+    Why the model is fitted on the supported makes at all (FR-04, EDN-05,
+    EDN-48): fitting on a make the product will not serve does not inflate a
+    metric - rare makes are harder, so a pooled figure over them is if anything
+    pessimistic - but it makes the reported population a different one from the
+    served population, and a number about cars nobody can ask about is not a
+    number about the product. It would also loosen the one external check the
+    numbers have: problem-spec section 8's reference values come from a run
+    whose documented scope is section 2's, supported makes included. That run's
+    code is not in the repository and it split 80/20 rather than 60/10/10/20, so
+    the model card reads the agreement with it as a cross-check, not as a
+    like-for-like comparison.
+
+    `features` applies the list (EDN-67); this function only checks it, for both
+    frames, because early stopping watches the validation split and a validation
+    set holding makes the API refuses would stop the fit on one population and
+    report a number about another.
     """
     space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
     frames = {}
     for split in (TRAIN_SPLIT, VALIDATION_SPLIT):
-        whole = read_frame(input_dir / feature_set / f"{split}.parquet", space.schema)
-        frames[split] = _supported_only(whole, supported_makes, split=split)
+        frames[split] = read_frame(input_dir / feature_set / f"{split}.parquet", space.schema)
+        check_served_makes_only(frames[split], supported_makes, name=split)
     return TrainingData(
         space=space,
         train=frames[TRAIN_SPLIT],
         validation=frames[VALIDATION_SPLIT],
         supported_makes=supported_makes,
     )
-
-
-def _supported_only(
-    frame: pd.DataFrame, supported_makes: tuple[str, ...], *, split: str
-) -> pd.DataFrame:
-    """`frame` without the makes the API refuses (FR-04, EDN-05, EDN-48).
-
-    Fitting on a make the product will not serve does not inflate a metric - rare
-    makes are harder, so a pooled figure over them is if anything pessimistic -
-    but it makes the reported population a different one from the served
-    population, and a number about cars nobody can ask about is not a number about
-    the product.
-
-    That is the whole reason, and it is not a comparability argument: problem-spec
-    section 8's reference values were measured on 96,831 listings with no make
-    filter, so they describe a different population than this one either way. The
-    model card's cross-check against them spans two populations and two split
-    schemes and is labelled as such.
-
-    `reset_index(drop=True)` so the frames a fit sees are indexed 0..n-1 whatever
-    was removed. Nothing here depends on the index, and leaving gaps in it would
-    make a later positional assumption wrong in a way that is invisible until it
-    is not.
-    """
-    kept = frame[frame["make"].isin(supported_makes)].reset_index(drop=True)
-    if kept.empty:
-        raise ValueError(
-            f"no {split} row is one of the {len(supported_makes)} supported make(s) "
-            f"({', '.join(supported_makes)}), so there is nothing to fit. The make list and "
-            f"the matrices have to come from the same `split` run."
-        )
-    removed = len(frame) - len(kept)
-    logger.info(
-        f"{split}: {len(kept):,} rows of {len(frame):,} are a supported make "
-        f"({removed:,} removed, {removed / len(frame):.1%})."
-    )
-    return kept
 
 
 def _logged_params(variant: str, settings: dict, data: TrainingData, *, seed: int) -> dict:
