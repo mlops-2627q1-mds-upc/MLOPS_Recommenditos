@@ -227,6 +227,7 @@ cython_debug/
 # request that touches a test or a notebook. The reviewed artefacts under reports/
 # (the data-validation summary, the metrics) are DVC stage outputs and stay tracked.
 /reports/junit.xml
+/reports/junit-serving.xml
 /reports/coverage.xml
 /reports/requirement-matrix.md
 /reports/requirement-matrix.json

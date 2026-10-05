@@ -48,8 +48,11 @@ test:
 # The API image installs `[project] dependencies` alone (EDN-47), so this builds
 # an environment with exactly that plus the `test` group and runs the serving
 # path from it. `--no-sync` because a plain `uv run` would install the default
-# groups into the environment this target exists to keep without them; and no
-# coverage, because one file's coverage of the package is not a number to read.
+# groups into the environment this target exists to keep without them.
+# `--noconftest` because tests/conftest.py imports whatever the rest of the suite
+# needs, and the check must constrain the modules tests/test_serving.py imports
+# and nothing else. No coverage, because one file's coverage of the package is
+# not a number to read, and a JUnit file of its own, so the full suite's is kept.
 SERVING_ENV = .venv-serving
 
 ## Run the serving tests from the runtime dependencies alone, as CI does
@@ -57,7 +60,8 @@ SERVING_ENV = .venv-serving
 test-serving:
 	UV_PROJECT_ENVIRONMENT=$(SERVING_ENV) uv sync --locked --no-default-groups --group test
 	UV_PROJECT_ENVIRONMENT=$(SERVING_ENV) RECOMMENDITOS_SERVING_RUNTIME=1 \
-		uv run --no-sync pytest tests/test_serving.py --no-cov
+		uv run --no-sync pytest --noconftest tests/test_serving.py --no-cov \
+		--junitxml=reports/junit-serving.xml
 
 
 ## Set up Python interpreter environment
