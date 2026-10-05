@@ -131,3 +131,9 @@ When it was not - `params.yaml` moved on without a relock, say - the first run r
 Either is fine; read the stage list it prints rather than expecting silence.
 
 See [The DVC pipeline](pipeline.md) for what the stages do and [Data versioning](data-versioning.md) for what to do after you change data.
+
+## Notebooks
+
+Notebooks run in the project environment, through `uv run jupyter lab`, and the `pre-commit install` of step 1 is what strips their outputs before a commit.
+Before a pull request that touches a notebook, run `make notebook-lint`; its first run builds Pynblint's own environment, which takes a few seconds.
+[Notebooks](notebooks.md) has the naming convention, the rules the lint enforces and how to run a notebook against the real data.

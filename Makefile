@@ -77,6 +77,24 @@ fixture:
 metrics:
 	uv run dvc metrics show
 
+## Lint every notebook with Pynblint, in its own locked environment (tools/pynblint-env)
+.PHONY: notebook-lint
+notebook-lint:
+	uv run --project tools/pynblint-env --locked python tools/notebook_lint.py
+
+# Expanded by make rather than by the shell: an unmatched glob would reach
+# `jupyter execute` as a literal file name, which it fails on with a traceback.
+NOTEBOOKS = $(wildcard notebooks/*.ipynb)
+
+## Run every notebook top to bottom on the real data (needs the 548 MB source CSV; not in CI)
+.PHONY: notebook-run
+notebook-run:
+ifeq ($(NOTEBOOKS),)
+	@echo "No notebook in notebooks/ to run."
+else
+	uv run jupyter execute $(NOTEBOOKS)
+endif
+
 
 # initial (Milestones 1-3, max 15 pages) or final (Milestones 1-6, max 30 pages)
 DELIVERABLE ?= initial

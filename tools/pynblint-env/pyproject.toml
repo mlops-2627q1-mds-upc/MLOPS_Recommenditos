@@ -1,0 +1,37 @@
+# The locked environment Pynblint runs in, apart from the project's own.
+#
+# Pynblint 0.1.6 pins typer<0.13 and ipython<9, which our uv.lock cannot satisfy,
+# so it cannot be a project dependency. A bare `uvx pynblint` would resolve a
+# fresh set of versions on every run, which makes the CI gate depend on whatever
+# was released that morning. This file and the uv.lock next to it pin the whole
+# tree instead, so a local `make notebook-lint` and the CI job run the same bytes.
+#
+# It is not a package and not a workspace member of the root project: nothing
+# imports it, and it only exists to be run as
+#
+#     uv run --project tools/pynblint-env --locked python tools/notebook_lint.py
+#
+# which is what `make notebook-lint` does. Refresh the lock with
+#
+#     uv lock --upgrade --project tools/pynblint-env
+#
+# and run `make notebook-lint` afterwards: the gate refuses to run when a new
+# Pynblint brings a rule that docs/docs/notebooks.md does not classify yet. Then
+# run tests/test_notebook_lint.py, whose real-Pynblint test fails when the answers
+# its other tests replay no longer match the release (see docs/docs/notebooks.md).
+
+[project]
+name = "pynblint-env"
+version = "0"
+description = "The locked environment tools/notebook_lint.py runs Pynblint in; not a package."
+requires-python = "~=3.12.0"
+dependencies = [
+    "pynblint==0.1.6",
+    # Pynblint pins typer but not click, and typer 0.12 crashes on click 8.2 and
+    # newer (released 2025-05-10) on every Python version, so without this cap
+    # the resolver picks a click that breaks the command line on start-up.
+    "click<8.2",
+]
+
+[tool.uv]
+package = false
