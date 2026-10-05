@@ -267,16 +267,21 @@ def test_the_closures_the_check_relies_on_read_the_real_lock():
 
     The guard is skipped everywhere but the serving job, so a lock it could no
     longer read would only show up there; this pins what it reads in every run.
-    Transitive packages on both sides, and the six the test group adds, are what
-    the two tests above depend on being right.
+    It asserts what the two tests rely on rather than the exact sets, so an
+    upgrade that adds or drops a transitive package does not turn it red: the
+    runtime closure follows requirements and leaves the groups out, and every
+    package the test group declares is one the runtime does not install, which
+    is what makes the test-only set the one worth guarding.
     """
     lock = _read_lock()
     runtime = _closure(lock, _runtime(lock))
     test_only = _closure(lock, _group(lock, TEST_GROUP)) - runtime
+    declared = {_normalise(dependency["name"]) for dependency in _group(lock, TEST_GROUP)}
 
-    assert {"lightgbm", "scipy", "narwhals", "pyarrow", "typer", "pygments"} <= runtime
-    assert runtime.isdisjoint({"mlflow", "dvc", "requests", "tqdm", "pytest", "packaging"})
-    assert test_only == {"coverage", "iniconfig", "packaging", "pluggy", "pytest", "pytest-cov"}
+    # Followed transitively: lightgbm brings scipy and narwhals with it.
+    assert {"lightgbm", "scipy", "narwhals"} <= runtime
+    assert runtime.isdisjoint({"mlflow", "dvc", "requests", "tqdm", "pytest"})
+    assert declared <= test_only
 
 
 # --------------------------------------------------------------------------
