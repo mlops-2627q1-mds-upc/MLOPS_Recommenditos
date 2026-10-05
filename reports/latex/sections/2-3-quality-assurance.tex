@@ -104,7 +104,7 @@ Three things go beyond asserting a threshold.
 
 \emph{Tests carry the requirement they verify.}
 A test declares its requirements with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req("NFR-08")}, and the marker is what CI turns into a requirement-to-test matrix, so traceability is generated from the tests rather than maintained as a table that goes stale (NFR-07).
-Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 51 tests; the matrix itself is built and published by CI on every run, and its gate is scoped to the milestone that owes each requirement its evidence (EDN-44).
+Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 52 tests; the matrix itself is built and published by CI on every run, and its gate is scoped to the milestone that owes each requirement its evidence (EDN-44).
 What a marker earns depends on what the specification says the evidence is: on an \textbf{[automated]} entry a test is that evidence, while on a \textbf{[manual]} entry the promised evidence is the drill the entry names, so a marker there records that a test touches the requirement and does not stand in for the drill (EDN-45).
 That is why the matrix reports NFR-06 as named by a test rather than verified by one: the download stage's pin and MD5 tests are evidence about reproducibility, and the evidence NFR-06 promises is a \texttt{dvc repro} re-run on a clean clone.
 No status in the matrix claims that a person judged the evidence sufficient, which is why NFR-07 keeps that review before each delivery.
