@@ -10,7 +10,6 @@ the real listings out of the repository itself (NFR-08).
 import hashlib
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import sys
 
@@ -231,7 +230,7 @@ else:
 _DVC_YAML = """\
 stages:
   prepare:
-    cmd: {python} stage.py prepare
+    cmd: '{python} stage.py prepare'
     deps:
       - stage.py
       - raw
@@ -244,7 +243,7 @@ stages:
       - small
       - large
     do:
-      cmd: {python} stage.py train ${{item}}
+      cmd: '{python} stage.py train ${{item}}'
       deps:
         - stage.py
         - prepared
@@ -307,9 +306,11 @@ def build_dvc_pipeline(root: Path) -> Path:
     (root / "raw" / "a.csv").write_text("audi,a4,2015\n", encoding="utf-8")
     (root / "raw" / "b.csv").write_text("bmw,320d,2018\n", encoding="utf-8")
     (root / "stage.py").write_text(_STAGE_SCRIPT, encoding="utf-8")
-    (root / "dvc.yaml").write_text(
-        _DVC_YAML.format(python=shlex.quote(sys.executable)), encoding="utf-8"
-    )
+    # Double quotes rather than `shlex.quote`: DVC runs a command through `$SHELL`
+    # on POSIX and through `cmd.exe` on Windows, and only double quotes mean the
+    # same to both. The YAML quotes the whole command in single quotes around it.
+    python = f'"{sys.executable}"'
+    (root / "dvc.yaml").write_text(_DVC_YAML.format(python=python), encoding="utf-8")
     git_in(root, "init", "--quiet")
     Repo.init(str(root)).close()
     (root / ".dvc" / "config").write_text(
