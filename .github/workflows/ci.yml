@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      serving: ${{ steps.filter.outputs.serving }}
       docs: ${{ steps.filter.outputs.docs }}
       report: ${{ steps.filter.outputs.report }}
     steps:
@@ -27,7 +28,7 @@ jobs:
         id: filter
         with:
           filters: |
-            code:
+            code: &code
               - "recommenditos/**"
               - "tests/**"
               # `tests/conftest.py` imports `tools.requirement_matrix` at module
@@ -43,6 +44,11 @@ jobs:
               - "params.yaml"
               - "dvc.lock"
               - ".github/workflows/ci.yml"
+            # The serving job runs `make test-serving`, so a change to that target
+            # alone has to run it too.
+            serving:
+              - *code
+              - "Makefile"
             docs:
               - "docs/**"
               - ".github/workflows/ci.yml"
@@ -153,9 +159,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        if: needs.changes.outputs.code == 'true'
+        if: needs.changes.outputs.serving == 'true'
       - uses: astral-sh/setup-uv@v10.1.0
-        if: needs.changes.outputs.code == 'true'
+        if: needs.changes.outputs.serving == 'true'
         with:
           python-version: "3.12"
           enable-cache: true
@@ -164,12 +170,12 @@ jobs:
           # every other job then restores.
           cache-suffix: serving
       - run: make test-serving
-        if: needs.changes.outputs.code == 'true'
+        if: needs.changes.outputs.serving == 'true'
       # Without `__pycache__`, so the figure is comparable to the installed size
       # EDN-47 records rather than whatever the test run happened to compile. It
       # includes the `test` group, a few MB that the image will not carry.
       - name: Publish the runtime's installed size to the job summary
-        if: needs.changes.outputs.code == 'true'
+        if: needs.changes.outputs.serving == 'true'
         run: |
           site=$(.venv-serving/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
           {

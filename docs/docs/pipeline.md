@@ -133,6 +133,8 @@ Working on a stage
 
 1. Read the contract your stage writes in `schema.py`, and `params.yaml` for the values your stage may not hard-code.
 2. Replace the stub body. Keep the module's public functions, because other stages and, later, the API import them: `hash_seller_group`, `assign_split`, `age_years`, `point_metrics`.
+   The API image installs only the serving runtime, so a module the API imports may only import what that runtime provides; [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies) lists the modules held to it.
+   `point_metrics` is not in one yet: `evaluate.py` imports MLflow through `tracking.py`, so it has to move before the API can use it.
 3. If your stage changes a column's type or replaces a column with something derived from it, say so on the schema rather than editing `schema.py`: `schema.with_dtype("weight_kg", "float64")` for a parsed column, `schema.drop([...]).extend([...])` for the equipment multi-hot columns. That keeps the change inside your module.
 4. Every stage takes its parameters file as an argument, so a test can vary a parameter without patching anything.
 5. Add tests against the fixture: a module of its own once the stage is more than a stub, as `preprocess` has `tests/test_preprocess.py`, otherwise `tests/test_data.py` or `tests/test_model.py`. Mark the requirement IDs a test verifies with `@pytest.mark.req("NFR-08")`.
