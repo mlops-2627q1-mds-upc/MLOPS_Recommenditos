@@ -50,15 +50,16 @@ def lock_inputs(lock: dict, stage: str, prefix: str) -> dict[str, str]:
 
 def compare(tags: dict, expected: dict, prefix: str) -> list[str]:
     actual = {name: value for name, value in tags.items() if name.startswith(f"{prefix}.deps.")}
-    problems = [f"{name} missing" for name in sorted(set(expected) - set(actual))]
-    problems += [f"{name} not declared" for name in sorted(set(actual) - set(expected))]
-    problems += [
-        f"{name} = {actual[name]}, lock {expected[name]}"
-        for name in sorted(set(actual) & set(expected))
-        if actual[name] != expected[name]
-    ]
-    matched = sum(actual.get(name) == value for name, value in expected.items())
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    differing = sorted(name for name in set(actual) & set(expected) if actual[name] != expected[name])
+    matched = len(expected) - len(missing) - len(differing)
     print(f"    {prefix}.deps: {matched}/{len(expected)} equal the lock")
+    problems = [f"{name} = {actual[name]}, the lock has {expected[name]}" for name in differing]
+    if missing:
+        problems.append(f"{len(missing)} of {len(expected)} {prefix}.deps tags missing")
+    if extra:
+        problems.append(f"{prefix}.deps tags for undeclared paths: {', '.join(extra)}")
     return problems
 
 
@@ -95,7 +96,7 @@ def main() -> int:
                 commit, dirty = tags.get(f"{prefix}git_commit"), tags.get(f"{prefix}git_dirty")
                 print(f"    {prefix}git_commit {commit}, {prefix}git_dirty {dirty}")
                 if dirty != "false":
-                    found.append(f"{prefix}git_dirty is {dirty}")
+                    found.append(f"{prefix}git_dirty {dirty or 'missing'}")
             if "dvc_lock_md5" in tags:
                 same = "equals" if tags["dvc_lock_md5"] == lock_md5 else "differs from"
                 print(f"    dvc_lock_md5 {tags['dvc_lock_md5']} {same} the committed lock's")
