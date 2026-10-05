@@ -83,6 +83,15 @@ requires-python = "~=3.12.0"
 # everything that produces or measures a model rather than serving one. Data
 # validation and energy measurement belong here too.
 pipeline = [
+    # Measures the energy and emissions of every `train` fit (NFR-10, issue #38,
+    # EDN-69). Imported by `recommenditos/modeling/energy.py`, which only the
+    # `train` and `compare-energy` stages import, neither of them on the serving
+    # path. The floor is the version whose behaviour on our machines was measured
+    # (reports/analysis/codecarbon_validity.py), and `<4` because what the logged
+    # numbers *mean* is the library's choice - which CPU power method it falls back
+    # to, its RAM power model, the CSV columns `energy.py` reads back - so a major
+    # release is a re-verification, not an upgrade.
+    "codecarbon>=3.3.1,<4",
     "dvc",
     # The value layer of the `validate-data` stage (#25). The floor is the version
     # whose expectations were checked against our pandas-3 frames, each on a frame

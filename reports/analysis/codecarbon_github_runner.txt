@@ -1,0 +1,39 @@
+What CodeCarbon 3.3.1 measures on a GitHub-hosted runner (ubuntu-latest), 2026-10-05.
+A temporary CI step on pull request #68, run https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37296406032 (job 111718610337),
+reverted before the pull request left draft. A 3 CPU-second busy loop, measured in process and in machine mode.
+Below: the step as run, then its log, unedited except for the CI timestamps and trailing whitespace.
+
+ls -la /sys/class/powercap/ 2>&1 | head -5 || true
+uv run python - <<'PY'
+import os, tempfile, time
+from codecarbon import OfflineEmissionsTracker
+import pandas as pd
+for mode in ("process", "machine"):
+    out = tempfile.mkdtemp()
+    t = OfflineEmissionsTracker(country_iso_code="ESP", tracking_mode=mode, measure_power_secs=15, output_dir=out, log_level="warning")
+    cpu0, wall0 = time.process_time(), time.perf_counter()
+    with t:
+        end = time.process_time() + 3
+        while time.process_time() < end:
+            pass
+    wall, cpu = time.perf_counter() - wall0, time.process_time() - cpu0
+    r = pd.read_csv(os.path.join(out, "emissions.csv")).iloc[-1]
+    h = next(h for h in t._hardware if type(h).__name__ == "CPU")
+    print(f"{mode}: method={h._mode} tdp={h._tdp} generic={h._is_generic_tdp} cpu_model={r['cpu_model']!r} cpu_count={r['cpu_count']} ram_gb={r['ram_total_size']:.1f} wall={wall:.2f}s cpu={cpu:.2f}s cpu_W={r['cpu_energy']*3.6e6/r['duration']:.2f} ram_W={r['ram_energy']*3.6e6/r['duration']:.2f} total_W={r['energy_consumed']*3.6e6/r['duration']:.2f}")
+PY
+total 0
+drwxr-xr-x  2 root root 0 Oct  5 10:26 .
+drwxr-xr-x 72 root root 0 Oct  5 10:24 ..
+[codecarbon INFO @ 10:26:39] offline tracker init
+[codecarbon WARNING @ 10:26:39] Multiple instances of codecarbon are allowed to run at the same time.
+[codecarbon WARNING @ 10:26:40] No CPU tracking mode found. Falling back on estimation based on TDP for CPU.
+ Linux OS detected: Please ensure RAPL files exist, and are readable, at /sys/class/powercap/intel-rapl/subsystem to measure CPU
+
+[codecarbon WARNING @ 10:26:40] No CPU tracking mode found. Falling back on CPU load mode.
+[codecarbon WARNING @ 10:26:43] Multiple instances of codecarbon are allowed to run at the same time.
+[codecarbon WARNING @ 10:26:43] No CPU tracking mode found. Falling back on estimation based on TDP for CPU.
+ Linux OS detected: Please ensure RAPL files exist, and are readable, at /sys/class/powercap/intel-rapl/subsystem to measure CPU
+
+[codecarbon WARNING @ 10:26:43] No CPU tracking mode found. Falling back on CPU load mode.
+process: method=cpu_load tdp=280.0 generic=False cpu_model='AMD EPYC 7763 64-Core Processor' cpu_count=4 ram_gb=15.6 wall=4.18s cpu=3.08s cpu_W=69.89 ram_W=9.92 total_W=79.80
+machine: method=cpu_load tdp=280.0 generic=False cpu_model='AMD EPYC 7763 64-Core Processor' cpu_count=4 ram_gb=15.6 wall=3.01s cpu=3.01s cpu_W=31.60 ram_W=10.00 total_W=41.60

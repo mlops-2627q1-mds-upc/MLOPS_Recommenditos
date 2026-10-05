@@ -387,9 +387,9 @@ One MLflow experiment, `params.yaml`'s `train.mlflow_experiment` (`recommenditos
 `train` creates the run and records its id in `model.json`; `evaluate` resumes that id and appends the test metrics and the gate verdict rather than opening a run of its own.
 That is deliberate: a run per DVC stage would scatter four variants over eight runs nothing joins, and the point of tracking is to be able to compare them.
 
-Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, for the LightGBM variants the trees kept, the rounds run and `early_stopped` as 1 or 0 (so `metrics.early_stopped = 0` finds every fit the ceiling ended), the model artefact under `model/` and the test metrics with the six criteria.
+Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the energy and emissions of the fit, for the LightGBM variants the trees kept, the rounds run and `early_stopped` as 1 or 0 (so `metrics.early_stopped = 0` finds every fit the ceiling ended), the model artefact under `model/` and the test metrics with the six criteria.
 Its parameters are every `params.yaml` key `dvc.yaml` declares for the `train` stage - the seed, `num_threads`, the estimator, the feature set and the hyperparameters, the last under the estimator's name - plus the variant's name and the shape of the training data; the experiment is the one declared key recorded as the run's experiment rather than as a parameter (NFR-14).
-The emissions of the fit are not among them yet; they arrive with issue #38.
+The energy metrics are `energy_kwh` (with its `cpu_energy_kwh` and `ram_energy_kwh` halves), `emissions_kg_co2eq`, `fit_seconds` and `fit_cpu_seconds`, and the parameters prefixed `codecarbon.` say how they were produced, including the CPU power method: those are facts about the machine rather than `params.yaml` keys, except `train.energy`'s three settings, which are declared. See [Environmental Impact](#environmental-impact) for what the figure is.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
 
 Every run is tagged with `variant`, `estimator`, `feature_set` and `dvc_stage`, and - by the tracking seam, for NFR-14 - with what produced it: `git_commit` and `git_dirty` for the fit, one `train.deps.<path>` per dependency of its `train` stage holding the hash `dvc.lock` records for it, and the same for the evaluation that appended to it, `evaluate.git_commit`, `evaluate.git_dirty` and `evaluate.deps.<path>` (EDN-74).
@@ -401,7 +401,7 @@ The comparable view of one pipeline state is the experiment's own table filtered
 tags.git_commit = '<the full SHA of the run you want>'
 ```
 
-with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.fit_seconds`.
+with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct`, `metrics.fit_seconds` and `metrics.energy_kwh`.
 That filter is what picks one chain out of the experiment: the four runs of a `dvc repro` share one commit, and a run from another commit is a different pipeline.
 Two things about it are worth knowing before the filter is believed, both checked on this ladder rather than assumed:
 
