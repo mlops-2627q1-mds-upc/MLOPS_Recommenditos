@@ -4,14 +4,17 @@ docs/docs/notebooks.md says why Pynblint cannot gate a build on its own. Each of
 those gaps would turn a finding into a green build without anyone noticing, so
 each has a test here.
 
-None of these tests needs Pynblint itself, which lives in its own environment
-(tools/pynblint-env). `main` takes the process runner as an argument, and
-`FakeTools` stands in for git and Pynblint with answers recorded from Pynblint
-0.1.6, so what is tested is what the gate does with an answer.
+Almost none of these tests needs Pynblint itself, which lives in its own
+environment (tools/pynblint-env). `main` takes the process runner as an argument,
+and `FakeTools` stands in for git and Pynblint with answers recorded from Pynblint
+0.1.6, so what is tested is what the gate does with an answer. One test at the end
+runs the real Pynblint from that environment, and is what keeps the recording
+honest.
 """
 
 from dataclasses import dataclass, field
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -596,4 +599,62 @@ def test_the_gate_lints_exactly_the_notebooks_git_would_commit(tmp_path):
         "notebooks/1.0-lh-untracked.ipynb",
         "notebooks/2.0-lh-upper.IPYNB",
         "reports/1.0-lh-staged.ipynb",
+    ]
+
+
+# --------------------------------------------------------------------------
+# The real Pynblint
+# --------------------------------------------------------------------------
+
+#: Run by the tool environment's interpreter: the gate's `main`, on the checkout
+#: named by the first argument. `-c` puts the working directory, the repository
+#: root, on the path, which is where `tools` is importable from.
+GATE_ON_A_CHECKOUT = (
+    "import sys; from pathlib import Path; from tools import notebook_lint; "
+    "sys.exit(notebook_lint.main(Path(sys.argv[1])))"
+)
+
+
+@pytest.mark.req("NFR-07")
+def test_the_real_pynblint_finds_what_the_recording_says_and_honours_the_policy(tmp_path):
+    """Every test above trusts FINDINGS, a recording of Pynblint 0.1.6, and this is
+    the one that checks it.
+
+    It runs the gate the way `make notebook-lint` does, from the locked tool
+    environment and with the repository's own rule table, but on a checkout of its
+    own that holds NOTEBOOK_WITH_FINDINGS. CI's notebook lint only ever sees a
+    clean notebook, so without this test nothing would notice a Pynblint, after a
+    lock upgrade, that stopped reporting what the recording says it reports.
+    The empty cell also makes the excluded `non-executed-cells` fire, so its
+    absence shows that the exclusions reach the real tool.
+    """
+    git(tmp_path, "init", "--quiet")
+    table = (notebook_lint.PROJ_ROOT / notebook_lint.POLICY_DOC).read_text(encoding="utf-8")
+    root = repository(
+        tmp_path, {notebook_lint.POLICY_DOC.as_posix(): table, NOTEBOOK: NOTEBOOK_WITH_FINDINGS}
+    )
+    # `uv run pytest` sets VIRTUAL_ENV to the project's environment, which uv would
+    # only warn about here, because `--project` names another one.
+    environment = {name: value for name, value in os.environ.items() if name != "VIRTUAL_ENV"}
+    tool_env = notebook_lint.PROJ_ROOT / "tools" / "pynblint-env"
+    command = ["uv", "run", "--project", str(tool_env), "--locked", "python"]
+    answer = subprocess.run(
+        [*command, "-c", GATE_ON_A_CHECKOUT, str(root)],
+        cwd=notebook_lint.PROJ_ROOT,
+        env=environment,
+        capture_output=True,
+        encoding="utf-8",
+        timeout=notebook_lint.TIMEOUT_SECONDS,
+        check=False,
+    )
+
+    assert answer.returncode == 1, answer.stdout + answer.stderr
+    payload = reports(root)[1]
+    assert payload["pynblint"] == "0.1.6"
+    assert [
+        (finding["rule"], [cell["index"] for cell in finding["cells"]], finding["recommendation"])
+        for finding in payload["findings"]
+    ] == [
+        (lint["slug"], [cell["index"] for cell in lint.get("cells", [])], lint["recommendation"])
+        for lint in FINDINGS["lints"]
     ]

@@ -80,6 +80,7 @@ Pynblint on its own cannot gate a build, so `make notebook-lint` runs it through
   It also refuses a table that enforces no rule, and one that enforces a repository rule, which would be reported as checked and never run (see below).
 
 To upgrade Pynblint, run `uv lock --upgrade --project tools/pynblint-env` and then `make notebook-lint`, and give every new rule a row here.
+Then run `uv run pytest tests/test_notebook_lint.py`: most of its tests replay answers recorded from Pynblint 0.1.6, and one runs the real Pynblint to check that recording, so when that one fails, record the answers again from the new release.
 
 ### Pynblint rules
 

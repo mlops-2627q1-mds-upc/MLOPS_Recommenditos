@@ -16,7 +16,9 @@
 #     uv lock --upgrade --project tools/pynblint-env
 #
 # and run `make notebook-lint` afterwards: the gate refuses to run when a new
-# Pynblint brings a rule that docs/docs/notebooks.md does not classify yet.
+# Pynblint brings a rule that docs/docs/notebooks.md does not classify yet. Then
+# run tests/test_notebook_lint.py, whose real-Pynblint test fails when the answers
+# its other tests replay no longer match the release (see docs/docs/notebooks.md).
 
 [project]
 name = "pynblint-env"
