@@ -98,7 +98,8 @@ It is the evidence behind the committed ceiling of 5,000.
 
 `tuning_sweep.py` is the evidence behind EDN-73, not a tuning run: a small grid of `learning_rate` and `num_leaves` for the candidate `lgbm-basic`, each point fitted with early stopping deciding the trees, and a paired bootstrap by seller group of whether the validation split can tell any point from the committed one.
 `tuning_sweep_results.txt` is its output (2026-10-05).
-It is also the tool the tuning protocol in `docs/docs/pipeline.md` names for its decision rule, because the paired interval needs every validation row's prediction from both models and neither DVC nor MLflow keeps them.
+It is also the decision step of the tuning protocol in `docs/docs/pipeline.md`: queued `dvc exp` runs screen a sweep, and this script re-fits the shortlist on validation and adopts a point only when its simultaneous interval, from a max-statistic bootstrap over all the points, lies below zero.
+It covers `learning_rate` and `num_leaves` only.
 
 Both import the `train` stage's own `read_matrices` and `fit_variant`, so the fits are the stage's fits, and both read the `train` and `validation` matrices only: the test split is never opened, because a choice made on test rows would leak them into the model the gate then judges.
 Run them from the repository root after `dvc pull`, with tracking off (`MLFLOW_TRACKING_URI= uv run python reports/analysis/<script>.py`).

@@ -13,6 +13,24 @@ bootstrap of the difference in validation L1 and in validation MdAPE, resampled 
 because the split is grouped by seller (EDN-14), so rows of one dealer move together, with the same
 draws for every point so the comparisons share their noise.
 
+Each difference gets two intervals. The per-point one answers "is this point better", one point at
+a time. The simultaneous one answers the question a sweep actually asks, "is any point better", and
+is the one the protocol in `docs/docs/pipeline.md` decides by: across many comparisons the luckiest
+point clears a per-point 95 % interval far more often than 2.5 % of the time - with eleven points
+no better than the committed one, about 24 % if the comparisons were independent and at most
+27.5 % by the union bound - so the simultaneous intervals are widened until all of them hold
+together in 95 % of the draws. That is the max-statistic bootstrap: each
+point's difference is standardised by its own bootstrap spread, the largest standardised deviation
+across the points is taken per draw, and its 95th percentile replaces a single interval's 1.96.
+
+It is also the decision step of that protocol, and it covers `learning_rate` and `num_leaves` only.
+The queued `dvc exp` runs of a sweep are for screening: they keep their bundles, in MLflow under
+`model/` and in each experiment's DVC outputs, but this script does not read them back. It re-fits
+the shortlist instead, set in `LEARNING_RATES` and `NUM_LEAVES`, at a ceiling far past the curve; a
+point whose queued run early-stopped below the committed ceiling gets the same trees here, and one
+the committed ceiling cut off gets its early-stopped model. The committed point is always fitted,
+whether or not the grid names it, because every difference is taken against it.
+
 It reads the `train` and `validation` matrices only, through the `train` stage's own
 `read_matrices`, and fits through `fit_variant`. The test split is never opened, so nothing here
 can make a later test number optimistic.
@@ -49,7 +67,9 @@ supported = read_supported_makes(FEATURES.parent)
 data = read_matrices(FEATURES, settings["feature_set"], supported)
 print(f"{VARIANT}: committed params {settings['params']}")
 print(f"seed {seed}, num_threads {num_threads}, exploratory budget {EXPLORATORY_BUDGET:,}")
-print(f"grid: learning_rate {LEARNING_RATES} x num_leaves {NUM_LEAVES}")
+committed = (settings["params"]["learning_rate"], settings["params"]["num_leaves"])
+points = sorted({*product(LEARNING_RATES, NUM_LEAVES), committed})
+print(f"grid: learning_rate {LEARNING_RATES} x num_leaves {NUM_LEAVES}, committed {committed}")
 
 # The seller groups of the validation rows, to resample them as the split drew them. The matrix
 # does not carry `seller_group_id`, so it is joined back from the split frame `features` read: the
@@ -66,7 +86,7 @@ errors: dict[tuple[float, int], np.ndarray] = {}
 relative: dict[tuple[float, int], np.ndarray] = {}
 
 print("\nlearning_rate  num_leaves  best round  rounds run  fit s   val L1(log)  val MdAPE")
-for learning_rate, num_leaves in product(LEARNING_RATES, NUM_LEAVES):
+for learning_rate, num_leaves in points:
     point = {
         **settings,
         "params": {
@@ -91,7 +111,6 @@ for learning_rate, num_leaves in product(LEARNING_RATES, NUM_LEAVES):
         + ("" if training["early_stopped"] else "  (budget bound)")
     )
 
-committed = (settings["params"]["learning_rate"], settings["params"]["num_leaves"])
 by_l1 = min(errors, key=lambda key: errors[key].mean())
 by_mdape = min(relative, key=lambda key: np.median(relative[key]))
 print(f"\ncommitted point {committed}; lowest validation L1 at {by_l1}, MdAPE at {by_mdape}")
@@ -114,14 +133,49 @@ for _ in range(BOOTSTRAP_DRAWS):
         l1_differences[key].append(l1[key] - l1[committed])
         mdape_differences[key].append(mdape[key] - mdape[committed])
 
-print("point minus committed: the difference, its 95 % interval, the share of draws it is better")
-for key in others:
-    l1_draws, mdape_draws = np.array(l1_differences[key]), np.array(mdape_differences[key])
-    l1_low, l1_high = np.percentile(l1_draws, [2.5, 97.5])
-    md_low, md_high = np.percentile(mdape_draws, [2.5, 97.5])
+
+def simultaneous(draws: np.ndarray, observed: np.ndarray) -> tuple[float, np.ndarray]:
+    """The max-statistic multiplier and each point's half-width at 95 % jointly."""
+    spread = draws.std(axis=0, ddof=1)
+    largest = np.max(np.abs(draws - observed) / spread, axis=1)
+    multiplier = float(np.percentile(largest, 95))
+    return multiplier, multiplier * spread
+
+
+l1_draws = np.array([l1_differences[key] for key in others]).T
+mdape_draws = np.array([mdape_differences[key] for key in others]).T
+l1_observed = np.array([errors[key].mean() - errors[committed].mean() for key in others])
+mdape_observed = np.array(
+    [np.median(relative[key]) - np.median(relative[committed]) for key in others]
+)
+l1_multiplier, l1_half = simultaneous(l1_draws, l1_observed)
+mdape_multiplier, mdape_half = simultaneous(mdape_draws, mdape_observed)
+
+print(
+    "\npoint minus committed: the difference, its per-point 95 % interval, the share of draws it"
+)
+print("is better in, and its simultaneous 95 % interval over all the points")
+for index, key in enumerate(others):
+    l1_low, l1_high = np.percentile(l1_draws[:, index], [2.5, 97.5])
+    md_low, md_high = np.percentile(mdape_draws[:, index], [2.5, 97.5])
     print(
-        f"  {key!s:12s} L1 {errors[key].mean() - errors[committed].mean():+.5f} "
-        f"[{l1_low:+.5f}, {l1_high:+.5f}] better {np.mean(l1_draws < 0):6.1%}   "
-        f"MdAPE {np.median(relative[key]) - np.median(relative[committed]):+.3%} "
-        f"[{md_low:+.3%}, {md_high:+.3%}] better {np.mean(mdape_draws < 0):6.1%}"
+        f"  {key!s:12s} L1 {l1_observed[index]:+.5f} [{l1_low:+.5f}, {l1_high:+.5f}] "
+        f"better {np.mean(l1_draws[:, index] < 0):6.1%}   MdAPE {mdape_observed[index]:+.3%} "
+        f"[{md_low:+.3%}, {md_high:+.3%}] better {np.mean(mdape_draws[:, index] < 0):6.1%}"
+    )
+print(
+    f"\nsimultaneous over {len(others)} points: multiplier {l1_multiplier:.2f} for L1 and "
+    f"{mdape_multiplier:.2f} for MdAPE, against 1.96 for one interval"
+)
+for index, key in enumerate(others):
+    l1_upper = l1_observed[index] + l1_half[index]
+    print(
+        f"  {key!s:12s} L1 [{l1_observed[index] - l1_half[index]:+.5f}, {l1_upper:+.5f}]   "
+        f"MdAPE [{mdape_observed[index] - mdape_half[index]:+.3%}, "
+        f"{mdape_observed[index] + mdape_half[index]:+.3%}]   "
+        + (
+            "adopt: the L1 interval lies below zero"
+            if l1_upper < 0
+            else "keep the committed value"
+        )
     )

@@ -1,17 +1,17 @@
-# reports/analysis/tuning_sweep.py on the real snapshot, 2026-10-05 (the matrices of main b26387a's dvc.lock); log lines removed
+# reports/analysis/tuning_sweep.py on the real snapshot, 2026-10-05 (the feature matrices of this branch's dvc.lock, unchanged since main b26387a); log lines removed
 lgbm-basic: committed params {'learning_rate': 0.05, 'num_leaves': 63, 'n_estimators': 5000, 'early_stopping_rounds': 50}
 seed 20251108, num_threads 1, exploratory budget 20,000
-grid: learning_rate (0.025, 0.05, 0.1) x num_leaves (31, 63, 127, 255)
+grid: learning_rate (0.025, 0.05, 0.1) x num_leaves (31, 63, 127, 255), committed (0.05, 63)
 
 learning_rate  num_leaves  best round  rounds run  fit s   val L1(log)  val MdAPE
-        0.025          31       4,066       4,116     21   0.10003      6.8861%
-        0.025          63       1,925       1,975     13   0.09996      6.9470%
-        0.025         127       1,326       1,376     15   0.10041      6.9525%
-        0.025         255       1,030       1,080     19   0.10098      6.9316%
-         0.05          31       2,495       2,545     12   0.10015      6.9684%
+        0.025          31       4,066       4,116     23   0.10003      6.8861%
+        0.025          63       1,925       1,975     14   0.09996      6.9470%
+        0.025         127       1,326       1,376     14   0.10041      6.9525%
+        0.025         255       1,030       1,080     20   0.10098      6.9316%
+         0.05          31       2,495       2,545     13   0.10015      6.9684%
          0.05          63       1,243       1,293      8   0.10027      6.9563%
          0.05         127         734         784      8   0.10114      6.9390%
-         0.05         255         451         501      9   0.10129      6.8801%
+         0.05         255         451         501      8   0.10129      6.8801%
           0.1          31         946         996      5   0.10122      6.9484%
           0.1          63         694         744      5   0.10124      6.9529%
           0.1         127         410         460      5   0.10167      7.0380%
@@ -19,7 +19,9 @@ learning_rate  num_leaves  best round  rounds run  fit s   val L1(log)  val MdAP
 
 committed point (0.05, 63); lowest validation L1 at (0.025, 63), MdAPE at (0.05, 255)
 validation rows 8,859, 2,784 seller groups, 2,000 draws
-point minus committed: the difference, its 95 % interval, the share of draws it is better
+
+point minus committed: the difference, its per-point 95 % interval, the share of draws it
+is better in, and its simultaneous 95 % interval over all the points
   (0.025, 31)  L1 -0.00024 [-0.00101, +0.00054] better  72.5%   MdAPE -0.070% [-0.186%, +0.072%] better  82.3%
   (0.025, 63)  L1 -0.00031 [-0.00086, +0.00025] better  86.2%   MdAPE -0.009% [-0.112%, +0.092%] better  55.6%
   (0.025, 127) L1 +0.00014 [-0.00056, +0.00087] better  33.4%   MdAPE -0.004% [-0.129%, +0.134%] better  49.1%
@@ -31,3 +33,16 @@ point minus committed: the difference, its 95 % interval, the share of draws it 
   (0.1, 63)    L1 +0.00097 [+0.00024, +0.00169] better   0.4%   MdAPE -0.003% [-0.118%, +0.140%] better  46.9%
   (0.1, 127)   L1 +0.00140 [+0.00054, +0.00230] better   0.1%   MdAPE +0.082% [-0.067%, +0.200%] better  15.9%
   (0.1, 255)   L1 +0.00233 [+0.00124, +0.00345] better   0.0%   MdAPE +0.063% [-0.076%, +0.215%] better  18.8%
+
+simultaneous over 11 points: multiplier 2.80 for L1 and 2.80 for MdAPE, against 1.96 for one interval
+  (0.025, 31)  L1 [-0.00136, +0.00088]   MdAPE [-0.254%, +0.113%]   keep the committed value
+  (0.025, 63)  L1 [-0.00109, +0.00047]   MdAPE [-0.155%, +0.136%]   keep the committed value
+  (0.025, 127) L1 [-0.00087, +0.00116]   MdAPE [-0.191%, +0.183%]   keep the committed value
+  (0.025, 255) L1 [-0.00066, +0.00209]   MdAPE [-0.241%, +0.192%]   keep the committed value
+  (0.05, 31)   L1 [-0.00129, +0.00105]   MdAPE [-0.180%, +0.204%]   keep the committed value
+  (0.05, 127)  L1 [-0.00023, +0.00196]   MdAPE [-0.193%, +0.158%]   keep the committed value
+  (0.05, 255)  L1 [-0.00039, +0.00244]   MdAPE [-0.278%, +0.125%]   keep the committed value
+  (0.1, 31)    L1 [-0.00024, +0.00214]   MdAPE [-0.220%, +0.205%]   keep the committed value
+  (0.1, 63)    L1 [-0.00008, +0.00202]   MdAPE [-0.191%, +0.184%]   keep the committed value
+  (0.1, 127)   L1 [+0.00013, +0.00267]   MdAPE [-0.109%, +0.273%]   keep the committed value
+  (0.1, 255)   L1 [+0.00078, +0.00387]   MdAPE [-0.144%, +0.270%]   keep the committed value
