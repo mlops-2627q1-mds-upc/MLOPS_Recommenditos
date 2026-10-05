@@ -1906,8 +1906,12 @@ How to add an entry:
   AI then laid out options A to F with a recommendation, and the owner chose A.
   AI also wrote the wrapper and its tests, test-first, and two further AI review passes, one on the code and one on the documents, found defects that were fixed before the pull request was opened.
   A mutation run showed that no test noticed when the gate stopped passing the exclusions to Pynblint; an enforced repository rule would have been reported as checked although it never runs on a single notebook; and a report of an unexpected shape exited 1, which reads as findings, instead of 2.
-  Each now has a test. The owner reviews the result in the pull request.
+  Each now has a test.
+  An independent AI review of the pull request then found two more: the Pynblint answers the tests replay were recorded once and never checked against the real tool, so a release that stopped reporting findings would have passed every test, and a report that could not be written exited 1, which reads as findings.
+  A test that runs the real Pynblint from the tool environment and a fix for the exit code followed.
+  The owner reviews the result in the pull request.
 - **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #41: a research run on Pynblint 0.1.6 in a scratch directory (rule catalogue, configuration, exit codes, isolation options with timings), then an architecture pass that turned the measurements into options with pros and cons; the owner was given the isolation and gate options with these measurements and chose the locked environment with the wrapper.
+  Claude Code review session on 2026-10-05 of PR #67, which ran the gate on deliberately broken copies of the notebook and checked the tests' recorded answers against the real Pynblint.
 - **Other evidence:** [`tools/pynblint-env/pyproject.toml`](../tools/pynblint-env/pyproject.toml), [`tools/notebook_lint.py`](../tools/notebook_lint.py), `tests/test_notebook_lint.py`, the `Notebook lint (Pynblint)` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); [EDN-65](#edn-65-the-pynblint-policy-enforce-what-can-fire-on-a-committed-notebook-and-show-execution-by-running-it); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
 - **In LaTeX:** no
 
