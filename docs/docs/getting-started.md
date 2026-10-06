@@ -28,9 +28,7 @@ If it fails with `go.mod requires go >= 1.24.11`, the Go on your `PATH` is too o
 
 ### On Windows
 
-Two things differ from Linux and macOS, and both fail later rather than here, so set them up now.
-
-**Line endings.** Git for Windows installs with `core.autocrlf=true`, which would check every file out with CRLF.
+Git for Windows installs with `core.autocrlf=true`, which would check every file out with CRLF.
 DVC hashes files byte for byte, so with CRLF every Python file `dvc.lock` records looks changed and `dvc repro` rebuilds the whole pipeline, download included.
 The repository's `.gitattributes` forces LF on checkout, so a clone made after it landed is already right.
 A clone made before it still has CRLF files in its working tree; Git rewrites them only when it touches them, so check them out again once, on a clean working tree:
@@ -41,12 +39,7 @@ git rm --cached -r -q . && git reset --hard
 
 `dvc status` then lists only stages that really changed.
 
-**Console encoding.** MLflow prints emoji when it logs a run, and the default Windows console code page cannot encode them, so step 6 stops with `UnicodeEncodeError: 'charmap' codec can't encode character`.
-Turn on Python's UTF-8 mode once for your user account and open a new terminal:
-
-```powershell
-setx PYTHONUTF8 1
-```
+Nothing else needs setting up: the stages write their JSON with LF line endings on every platform too, and CI runs the test suite on Windows as well as Linux.
 
 ## 2. Get a DagsHub access token
 
@@ -141,8 +134,6 @@ If a variable is missing, the command prints one line naming which ones and stop
 ERROR | MLflow is not configured: MLFLOW_TRACKING_USERNAME, MLFLOW_TRACKING_PASSWORD not set.
         Copy .env.template to .env and fill in your DagsHub credentials (see docs/docs/getting-started.md).
 ```
-
-A `UnicodeEncodeError` instead, on Windows, means `PYTHONUTF8` is not set in that terminal (see [On Windows](#on-windows)).
 
 All of that lives in `recommenditos/tracking.py`, which is the one place the project configures MLflow, so the `train` stage (#37) reaches DagsHub through exactly the setup you just proved.
 Note the consequence: with no tracking URI configured, nothing is logged anywhere.
