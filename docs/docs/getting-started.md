@@ -26,6 +26,28 @@ Run project commands through `uv run <command>` rather than activating the envir
 The slow one is gitleaks, which refuses a commit that contains a secret such as the token of step 2: pre-commit builds it from source, downloading Go first if you have none, which takes one to six minutes and a few hundred MB of disk, once (see [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#secrets)).
 If it fails with `go.mod requires go >= 1.24.11`, the Go on your `PATH` is too old: run `GOTOOLCHAIN=auto uv run pre-commit install-hooks` instead, or see [Local setup](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#local-setup) for a Go older than 1.21.
 
+### On Windows
+
+Two things differ from Linux and macOS, and both fail later rather than here, so set them up now.
+
+**Line endings.** Git for Windows installs with `core.autocrlf=true`, which would check every file out with CRLF.
+DVC hashes files byte for byte, so with CRLF every Python file `dvc.lock` records looks changed and `dvc repro` rebuilds the whole pipeline, download included.
+The repository's `.gitattributes` forces LF on checkout, so a clone made after it landed is already right.
+A clone made before it still has CRLF files in its working tree; Git rewrites them only when it touches them, so check them out again once, on a clean working tree:
+
+```bash
+git rm --cached -r -q . && git reset --hard
+```
+
+`dvc status` then lists only stages that really changed.
+
+**Console encoding.** MLflow prints emoji when it logs a run, and the default Windows console code page cannot encode them, so step 6 stops with `UnicodeEncodeError: 'charmap' codec can't encode character`.
+Turn on Python's UTF-8 mode once for your user account and open a new terminal:
+
+```powershell
+setx PYTHONUTF8 1
+```
+
 ## 2. Get a DagsHub access token
 
 Our DVC remote and our MLflow tracking server are the same DagsHub repository, <https://dagshub.com/recommenditos/MLOPS_Recommenditos> (EDN-19).
@@ -119,6 +141,8 @@ If a variable is missing, the command prints one line naming which ones and stop
 ERROR | MLflow is not configured: MLFLOW_TRACKING_USERNAME, MLFLOW_TRACKING_PASSWORD not set.
         Copy .env.template to .env and fill in your DagsHub credentials (see docs/docs/getting-started.md).
 ```
+
+A `UnicodeEncodeError` instead, on Windows, means `PYTHONUTF8` is not set in that terminal (see [On Windows](#on-windows)).
 
 All of that lives in `recommenditos/tracking.py`, which is the one place the project configures MLflow, so the `train` stage (#37) reaches DagsHub through exactly the setup you just proved.
 Note the consequence: with no tracking URI configured, nothing is logged anywhere.
