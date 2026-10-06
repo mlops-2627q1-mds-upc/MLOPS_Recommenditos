@@ -17,7 +17,7 @@
   Our own starting points: one experiment \texttt{recommenditos-price} (\texttt{train.mlflow\_experiment} in \texttt{params.yaml}), one run per variant of the experiment ladder (\texttt{b0}, \texttt{b1}, \texttt{lgbm-basic}, \texttt{lgbm-extended}), and the DagsHub repository of EDN-19 as tracking server.
 }
 
-\tbd{DRAFT by \texttt{@ulasawczuk}, to check and rewrite in own words}
+\tbd{DRAFT, owner \texttt{@ulasawczuk}, to check and rewrite in own words}
 
 Experiments are tracked in MLflow with the team's DagsHub repository as the shared tracking server (EDN-19), which is also the DVC remote, so a run and the data version it was trained on live in the same place.
 Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reached from a developer machine only: nothing in the serving path depends on MLflow being up (EDN-08).

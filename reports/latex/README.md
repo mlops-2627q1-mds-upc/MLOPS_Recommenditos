@@ -28,8 +28,8 @@ LaTeX sources for our two course deliverables:
   It writes one `\ednentry` file per entry into `edn/` and the list of them into `edn/entries.tex`, deletes the file of an entry whose title changed, and sets each entry's **In LaTeX** to yes in the Markdown.
   It is idempotent, and only the entries edited since the last run change; never edit the generated files.
 - **Rerun `make edn` after every change to reports/edn.md, in the same pull request**, and commit what it writes.
-  CI's report job runs `python3 tools/edn_latex.py --check`, which changes nothing and fails when a transfer would change a file, so **In LaTeX: yes** always means the entry is in the PDF exactly as the Markdown states it.
-  This applies to a new entry too: PR #68 has to run it for EDN-69.
+  The required Tests job runs `test_the_committed_latex_edn_is_what_the_notebook_generates` on every change to reports/edn.md or `edn/`, which fails, and blocks the merge, when a transfer would change a file; the report job runs the same check as `python3 tools/edn_latex.py --check`.
+  So **In LaTeX: yes** always means the entry is in the PDF exactly as the Markdown states it, and that holds for a new entry too.
   The official fields have no separate slot for alternatives, so they go into `rationale`, ahead of the reasoning that refers to them, and the block quote above an entry's fields, where the notebook records that a later entry amended it, is printed first as `note`.
   A missing required field stops the transfer with an error naming the entry, and the build with an error naming the field.
 
@@ -47,6 +47,7 @@ Re-measure them on the delivery commit, after the last merge that goes into it:
 - [ ] Split and validation figures, if a data stage ran: the dataset card and `reports/data-validation/summary.json`, in 2.1.2 and 2.3.4.
 - [ ] The pipeline figure, if `dvc.yaml` changed: `reports/latex/figures/pipeline.sh`.
 - [ ] The page count against the limit, and no placeholder left: `make report-submit`, which prints both and the space left on the last page.
+- [ ] Once the DRAFT boxes are gone, every page break: no heading orphaned at the bottom of a page (such as 2.3 with no text under it) and no figure or table pushed away from its text.
 
 ## Building with Docker (recommended)
 

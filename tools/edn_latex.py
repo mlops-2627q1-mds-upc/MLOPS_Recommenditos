@@ -10,10 +10,12 @@ transfer is idempotent: run twice on the same notebook it rewrites nothing, and
 run after an edit it changes the files of exactly the entries that changed.
 
 The rule it serves is that the LaTeX is never behind the notebook: whoever
-changes reports/edn.md runs `make edn` in the same pull request, and CI's report
-job runs `--check`, which changes nothing and fails when a transfer would. So an
-entry's **In LaTeX: yes**, which only the transfer writes, means that the entry
-is in the PDF exactly as the notebook states it.
+changes reports/edn.md runs `make edn` in the same pull request. `check` changes
+nothing and reports what a transfer would change; the required Tests job runs it
+as a test on every change to the notebook or its LaTeX, which blocks the merge,
+and CI's report job runs it as `--check`. So an entry's **In LaTeX: yes**, which
+only the transfer writes, means that the entry is in the PDF exactly as the
+notebook states it.
 
 It needs nothing beyond the standard library, so that CI can run the check
 without the project environment.

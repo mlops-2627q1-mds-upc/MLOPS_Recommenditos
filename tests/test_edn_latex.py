@@ -492,8 +492,9 @@ def test_a_reserved_id_is_skipped_until_its_entry_is_written(workspace):
 def test_the_committed_latex_edn_is_what_the_notebook_generates():
     """`In LaTeX: yes` has to mean that the entry is in the PDF as the notebook states it.
 
-    The same check runs in CI's report job, which also runs when only
-    reports/edn.md changed; this test names the problem in the test job too.
+    The test job runs on every change to reports/edn.md or reports/latex/edn/,
+    and it is a required check, so this is what keeps an out-of-sync EDN from
+    being merged; the report job runs the same check as `--check`.
     """
     entries = parse_notebook(EDN_MD.read_text(encoding="utf-8"))
     numbers = [entry.number for entry in entries]

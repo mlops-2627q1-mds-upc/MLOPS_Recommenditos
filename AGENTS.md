@@ -57,7 +57,7 @@ The course grades how we make engineering decisions and how we use AI in them, s
 
 [reports/edn.md](reports/edn.md) is the working source of the EDN.
 The LaTeX EDN ([reports/latex/edn/](reports/latex/edn/)) is generated from `reports/edn.md` by `make edn`, so never write or edit an entry directly in LaTeX.
-Run `make edn` in the same pull request as any change to `reports/edn.md`, new entries included; CI's report job fails when the LaTeX is behind.
+Run `make edn` in the same pull request as any change to `reports/edn.md`, new entries included; the required Tests job fails, and blocks the merge, when the LaTeX is behind.
 
 ## PDF Conversion
 

@@ -3,7 +3,7 @@
 This is where we record our EDN entries as we make decisions.
 `make edn` transfers the entries to the LaTeX EDN in [latex/edn/](latex/edn/), which becomes `MLOps_Recommenditos_EDN.pdf`.
 This file stays the only place an entry is written or edited; the LaTeX files are generated from it.
-Run `make edn` in the same pull request as any change to this file and commit what it writes: CI's report job fails when the LaTeX is behind.
+Run `make edn` in the same pull request as any change to this file and commit what it writes: the required Tests job fails, and blocks the merge, when the LaTeX is behind.
 
 What belongs here and what each field means: [references/Instruction_EDN_MLOps_v2026.md](../references/Instruction_EDN_MLOps_v2026.md).
 Record a decision when it meaningfully affects the ML system and could reasonably have gone differently, not every decision or every use of AI.
