@@ -345,15 +345,23 @@ def test_the_raw_fill_tolerance_is_the_one_params_yaml_sets(context, raw_frame, 
     assert not validate_frame(context, RAW, _without(raw_frame, "make", tolerated + 1))["passed"]
 
 
-def test_a_gap_preprocessing_introduces_is_reported_by_the_interim_suite(context, frames, params):
+@pytest.mark.parametrize("column", configure_gx.REQUIRED_FILLED_COLUMNS)
+def test_a_gap_preprocessing_introduces_is_reported_by_the_interim_suite(
+    context, frames, params, column
+):
     # The same rule on the cleaned frame, where it reports preprocessing emptying
     # a column, with the same tolerance as on the raw frame.
-    interim = _without(frames["interim"], "make", _tolerated_gaps(frames["interim"], params) + 1)
+    tolerated = _tolerated_gaps(frames["interim"], params)
+    interim = _without(frames["interim"], column, tolerated + 1)
     INTERIM_SCHEMA.validate(interim)
 
     found = validate_frame(context, INTERIM, interim)
-    assert not rule(found, NOT_NULL, "make")["success"]
-    assert rule(found, NOT_NULL, "make")["mostly"] == params["validate"]["required_filled_mostly"]
+    filled = rule(found, NOT_NULL, column)
+
+    assert not found["passed"]
+    assert not filled["success"]
+    assert filled["mostly"] == params["validate"]["required_filled_mostly"]
+    assert filled["unexpected_count"] == tolerated + 1
 
 
 @pytest.mark.parametrize("flag", ["has_full_service_history", "non_smoking", "is_rental"])
