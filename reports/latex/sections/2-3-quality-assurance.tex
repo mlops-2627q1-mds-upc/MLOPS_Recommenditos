@@ -38,7 +38,7 @@ CodeCarbon's sampling granularity does not match single-digit-millisecond events
 That is a deliberate loss of resolution, and it is written into the model card so that nobody reads the figure as something it is not.
 The same reasoning already constrains the design elsewhere: the serving image carries no GPU or deep-learning dependency, \texttt{shap} is kept out of it because importing the module alone pulls in 189\,MB of \texttt{numba} and \texttt{llvmlite} (EDN-11), and multilingual text embeddings were left off the experiment ladder because they conflict with a CPU-only image.
 
-Training the chosen configuration takes 8.3\,s and the whole ladder 37.6\,s at one thread, against NFR-10's 15 minutes; the energy per answer is measured in Milestone~4, over the NFR-03 load test.
+Training the chosen configuration takes 8.4\,s and the whole ladder 40\,s with \texttt{train.num\_threads} at 1 (before hyperparameter tuning), against NFR-10's 15 minutes; the energy per answer is measured in Milestone~4, over the NFR-03 load test.
 The emissions figures do not exist yet:
 \tbd{emissions and energy per training run for \texttt{b0}, \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, from CodeCarbon through MLflow (issue \#38)}
 \tbd{the energy-versus-error comparison across the ladder, and what it decided about the extended feature set}

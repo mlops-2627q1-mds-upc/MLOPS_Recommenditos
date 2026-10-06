@@ -97,7 +97,7 @@ Tracking is per file: \texttt{data/raw}, \texttt{data/interim} and \texttt{data/
 
 % One \texttt group per stage: spaces inside a single \texttt group are rigid,
 % so the whole chain could not be broken across lines and ran into the margin.
-The pipeline is \texttt{download} \textrightarrow{} \texttt{preprocess} \textrightarrow{} \texttt{validate-data} \textrightarrow{} \texttt{split} \textrightarrow{} \texttt{features} \textrightarrow{} \texttt{train} \textrightarrow{} \texttt{evaluate}, where \texttt{validate-data} also depends on the suites \texttt{configure\_gx} builds, and \texttt{features} and \texttt{train} iterate a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position (\cref{fig:pipeline}).
+The pipeline is \texttt{download} \textrightarrow{} \texttt{preprocess} \textrightarrow{} \texttt{validate-data} \textrightarrow{} \texttt{split} \textrightarrow{} \texttt{features} \textrightarrow{} \texttt{train} \textrightarrow{} \texttt{evaluate} \textrightarrow{} \texttt{compare-energy}, where \texttt{validate-data} also depends on the suites \texttt{configure\_gx} builds, and \texttt{features} and \texttt{train} iterate a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position (\cref{fig:pipeline}).
 Unlike the demo's, our \texttt{validate-data} stage fails the pipeline when an expectation fails instead of only logging the failure count.
 % figures/pipeline.pdf is drawn from dvc.yaml by figures/pipeline.sh; rerun it
 % after a change to the stages.

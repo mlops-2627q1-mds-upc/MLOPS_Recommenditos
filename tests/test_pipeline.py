@@ -9,6 +9,7 @@ synthetic fixture in a temporary directory, which covers the logic, and read
 """
 
 import json
+import shutil
 
 import pandas as pd
 import pytest
@@ -25,7 +26,8 @@ from recommenditos.data import (
     validate_data,
 )
 from recommenditos.data.split_data import SPLIT_NAMES
-from recommenditos.modeling import evaluate, train
+from recommenditos.modeling import compare_energy, evaluate, train
+from recommenditos.modeling.compare_energy import ComparisonError
 from recommenditos.schema import (
     INTERIM_SCHEMA,
     PROCESSED_SCHEMA,
@@ -46,6 +48,7 @@ STAGE_MODULES = {
     "features": "recommenditos.data.build_features",
     "train": "recommenditos.modeling.train",
     "evaluate": "recommenditos.modeling.evaluate",
+    "compare-energy": "recommenditos.modeling.compare_energy",
 }
 
 
@@ -79,8 +82,10 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     processed = root / "processed"
     features = processed / "features"
     models = root / "models"
+    emissions = root / "emissions"
     metrics_dir = root / "metrics"
     summary_path = root / "metrics.json"
+    figures = root / "figures"
     validation_path = root / "data-validation" / "summary.json"
     context_dir = root / "gx"
 
@@ -100,8 +105,9 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     for feature_set in params["features"]["sets"]:
         build_features.main(feature_set, processed, features, params_path)
     for variant in params["train"]["variants"]:
-        train.main(variant, features, models, params_path)
+        train.main(variant, features, models, params_path, emissions)
     evaluate.main(features, models, metrics_dir, summary_path, params_path)
+    compare_energy.main(models, emissions, metrics_dir, figures, params_path)
 
     return {
         "raw": raw_path,
@@ -109,8 +115,10 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
         "processed": processed,
         "features": features,
         "models": models,
+        "emissions": emissions,
         "metrics_dir": metrics_dir,
         "summary": summary_path,
+        "figures": figures,
         "validation": validation_path,
         "context": context_dir,
     }
@@ -404,6 +412,47 @@ def test_the_report_tables_carry_every_variant_and_exclude_the_price_buckets(pip
     assert (masked["criterion"] == "sc05").sum() == len(variants)
 
 
+def test_the_energy_comparison_carries_every_variant_in_the_columns_the_report_reads(
+    pipeline, params
+):
+    # The header as a line, for the same reason as the two tables above: a LaTeX
+    # table reads it positionally. The energy is CodeCarbon's figure for the fit
+    # that produced each model, and the error is `evaluate`'s for that model, so
+    # both halves are compared against the artefacts they came from.
+    table = pipeline["figures"] / compare_energy.TABLE_FILE
+    lines = table.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == ",".join(compare_energy.COLUMNS)
+
+    # `round_trip`, because pandas' default float parser is not exact and the
+    # file holds `repr` of every float.
+    rows = pd.read_csv(table, float_precision="round_trip")
+    assert list(rows["variant"]) == list(params["train"]["variants"])
+    for row in rows.itertuples():
+        metrics = json.loads((pipeline["metrics_dir"] / f"{row.variant}.json").read_text())
+        assert row.mdape == metrics["mdape"], row.variant
+        assert row.energy_wh > 0, row.variant
+        assert row.energy_wh == pytest.approx(row.cpu_energy_wh + row.ram_energy_wh), row.variant
+    # A basic and an extended variant both have optional fields to leave out.
+    assert rows["mdape_required_fields_only"].notna().all()
+    figure = (pipeline["figures"] / compare_energy.FIGURE_FILE).read_bytes()
+    assert figure.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_the_energy_comparison_refuses_metrics_measured_on_another_fit(pipeline, tmp_path, params):
+    # What a stale `reports/metrics` looks like: the record names a different
+    # MLflow run than the model it is joined to. No real run has this id, whether
+    # the fixture trained with tracking on or off.
+    metrics = tmp_path / "metrics"
+    shutil.copytree(pipeline["metrics_dir"], metrics)
+    variant = next(iter(params["train"]["variants"]))
+    record = json.loads((metrics / f"{variant}.json").read_text())
+    record["mlflow_run_id"] = "a-run-of-another-fit"
+    (metrics / f"{variant}.json").write_text(json.dumps(record))
+
+    with pytest.raises(ComparisonError, match="a-run-of-another-fit"):
+        compare_energy.variant_row(variant, pipeline["models"], pipeline["emissions"], metrics)
+
+
 def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
     # The course demo only logs the failure count, so a `dvc repro` there can
     # produce a model from data that never passed validation.
@@ -587,6 +636,21 @@ def test_the_suites_are_built_before_they_run(dvc_stages):
 def test_the_metrics_artefact_is_declared_so_dvc_metrics_diff_works(dvc_stages):
     declared = dvc_stages["evaluate"]["metrics"]
     assert any("metrics.json" in entry for entry in declared)
+
+
+def test_each_train_stage_owns_the_emissions_record_of_its_fit(dvc_stages):
+    # One file per variant, because two stages may not share an output, and
+    # uncached, so a retrain's energy is in the pull request diff. DVC deletes it
+    # before the stage runs, which is what makes CodeCarbon's append leave one row.
+    outs = dvc_stages["train"]["do"]["outs"]
+    assert {"reports/emissions/${key}.csv": {"cache": False}} in outs
+    assert "recommenditos/modeling/energy.py" in dvc_stages["train"]["do"]["deps"]
+    assert "train.energy" in dvc_stages["train"]["do"]["params"]
+
+
+def test_the_energy_comparison_is_built_from_the_artefacts_it_joins(dvc_stages):
+    deps = dvc_stages["compare-energy"]["deps"]
+    assert {"models", "reports/emissions", "reports/metrics"} <= set(deps)
 
 
 def _resolve(declared: str, definition: dict, params: dict) -> list[str]:

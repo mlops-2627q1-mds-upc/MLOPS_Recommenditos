@@ -439,14 +439,18 @@ stages:
       hash: md5
       md5: 436def00e39115a838a025a196670d03
       size: 38657
+    - path: recommenditos/modeling/energy.py
+      hash: md5
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
       size: 56292
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 64cf7587f1459a9194d97daa743c8095
-      size: 12364
+      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
+      size: 13923
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -466,6 +470,10 @@ stages:
     params:
       params.yaml:
         seed: 20251108
+        train.energy:
+          tracking_mode: process
+          country_iso_code: ESP
+          measure_power_secs: 15
         train.mlflow_experiment: recommenditos-price
         train.num_threads: 1
         train.variants.b0:
@@ -476,9 +484,13 @@ stages:
     outs:
     - path: models/b0
       hash: md5
-      md5: 2af77c82146629c3564d5508a78625bd.dir
-      size: 40467
+      md5: 39cb84b70ca483a337bc879e6617895d.dir
+      size: 40681
       nfiles: 3
+    - path: reports/emissions/b0.csv
+      hash: md5
+      md5: a8cb937733a6dba4272c8c10c3f77cd8
+      size: 896
   train@b1:
     cmd: python3 -m recommenditos.modeling.train b1
     deps:
@@ -499,14 +511,18 @@ stages:
       hash: md5
       md5: 436def00e39115a838a025a196670d03
       size: 38657
+    - path: recommenditos/modeling/energy.py
+      hash: md5
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
       size: 56292
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 64cf7587f1459a9194d97daa743c8095
-      size: 12364
+      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
+      size: 13923
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -526,6 +542,10 @@ stages:
     params:
       params.yaml:
         seed: 20251108
+        train.energy:
+          tracking_mode: process
+          country_iso_code: ESP
+          measure_power_secs: 15
         train.mlflow_experiment: recommenditos-price
         train.num_threads: 1
         train.variants.b1:
@@ -537,9 +557,13 @@ stages:
     outs:
     - path: models/b1
       hash: md5
-      md5: 37b495d328163bd27664f06d11ab283c.dir
-      size: 40579
+      md5: afa116e575b0d7445d7ff593d2d9474b.dir
+      size: 40784
       nfiles: 3
+    - path: reports/emissions/b1.csv
+      hash: md5
+      md5: 1202d1fec7353e39a2ebb62102511b84
+      size: 915
   train@lgbm-basic:
     cmd: python3 -m recommenditos.modeling.train lgbm-basic
     deps:
@@ -560,14 +584,18 @@ stages:
       hash: md5
       md5: 436def00e39115a838a025a196670d03
       size: 38657
+    - path: recommenditos/modeling/energy.py
+      hash: md5
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
       size: 56292
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 64cf7587f1459a9194d97daa743c8095
-      size: 12364
+      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
+      size: 13923
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -587,6 +615,10 @@ stages:
     params:
       params.yaml:
         seed: 20251108
+        train.energy:
+          tracking_mode: process
+          country_iso_code: ESP
+          measure_power_secs: 15
         train.mlflow_experiment: recommenditos-price
         train.num_threads: 1
         train.variants.lgbm-basic:
@@ -600,9 +632,13 @@ stages:
     outs:
     - path: models/lgbm-basic
       hash: md5
-      md5: 5dce5a358940a54a2ac54cdf55254e67.dir
-      size: 7659958
+      md5: 175d90eb59b47ed8a9649c4beaf71890.dir
+      size: 7660164
       nfiles: 3
+    - path: reports/emissions/lgbm-basic.csv
+      hash: md5
+      md5: d0d777eb57b781bd8978ba70f5eb55f0
+      size: 927
   train@lgbm-extended:
     cmd: python3 -m recommenditos.modeling.train lgbm-extended
     deps:
@@ -623,14 +659,18 @@ stages:
       hash: md5
       md5: 436def00e39115a838a025a196670d03
       size: 38657
+    - path: recommenditos/modeling/energy.py
+      hash: md5
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
       size: 56292
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 64cf7587f1459a9194d97daa743c8095
-      size: 12364
+      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
+      size: 13923
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -650,6 +690,10 @@ stages:
     params:
       params.yaml:
         seed: 20251108
+        train.energy:
+          tracking_mode: process
+          country_iso_code: ESP
+          measure_power_secs: 15
         train.mlflow_experiment: recommenditos-price
         train.num_threads: 1
         train.variants.lgbm-extended:
@@ -663,9 +707,13 @@ stages:
     outs:
     - path: models/lgbm-extended
       hash: md5
-      md5: f7b2c2b50c25f174a451ec2da69a7f67.dir
-      size: 10972727
+      md5: 7e84245f289403f9b8e1797537484701.dir
+      size: 10972939
       nfiles: 3
+    - path: reports/emissions/lgbm-extended.csv
+      hash: md5
+      md5: c4943500c8366153b47a2c359e9ef74a
+      size: 954
   evaluate:
     cmd: python3 -m recommenditos.modeling.evaluate
     deps:
@@ -676,8 +724,8 @@ stages:
       nfiles: 13
     - path: models
       hash: md5
-      md5: c74ef4e263ec3e51ecd27b84feb5ff26.dir
-      size: 18713766
+      md5: 1bffac0d59a6bfa8cbaadd6307b59c9e.dir
+      size: 18714603
       nfiles: 13
     - path: recommenditos/config.py
       hash: md5
@@ -798,6 +846,103 @@ stages:
       size: 1198
     - path: reports/metrics
       hash: md5
-      md5: 518fd3d61c6a31396b17646bc488e55f.dir
+      md5: 638e30899540cce5f997a833ea3a2af7.dir
       size: 110765
       nfiles: 6
+  compare-energy:
+    cmd: python3 -m recommenditos.modeling.compare_energy
+    deps:
+    - path: models
+      hash: md5
+      md5: 1bffac0d59a6bfa8cbaadd6307b59c9e.dir
+      size: 18714603
+      nfiles: 13
+    - path: recommenditos/config.py
+      hash: md5
+      md5: 2930e86c1b0156d9626ffb64ff0ee247
+      size: 1535
+    - path: recommenditos/data/build_features.py
+      hash: md5
+      md5: 436def00e39115a838a025a196670d03
+      size: 38657
+    - path: recommenditos/modeling/compare_energy.py
+      hash: md5
+      md5: 82bcb18ddb1aeb7fda9c139491d31e25
+      size: 11217
+    - path: recommenditos/modeling/energy.py
+      hash: md5
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
+    - path: recommenditos/modeling/evaluate.py
+      hash: md5
+      md5: 9f02b4a5fbef961a190f7fc02d29c80f
+      size: 52524
+    - path: recommenditos/modeling/model.py
+      hash: md5
+      md5: 8d5b73a96e2aaab78d698d15509ebf3a
+      size: 56292
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 1aeecabea6313a59af39005ae2827d8a
+      size: 2346
+    - path: recommenditos/provenance.py
+      hash: md5
+      md5: e5354e5943df6de94f1c80b7b7870a5e
+      size: 13695
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 743914aba71e40b41e720bcc2fdf63a4
+      size: 36483
+    - path: recommenditos/tracking.py
+      hash: md5
+      md5: 3da7f1d7d05f7f2a6b783a46fa9d1c29
+      size: 18951
+    - path: reports/emissions
+      hash: md5
+      md5: 61d9774bd88f8695780467a5f792b522.dir
+      size: 3692
+      nfiles: 4
+    - path: reports/metrics
+      hash: md5
+      md5: 638e30899540cce5f997a833ea3a2af7.dir
+      size: 110765
+      nfiles: 6
+    params:
+      params.yaml:
+        train.variants:
+          b0:
+            estimator: median_baseline
+            feature_set: basic
+            params:
+              age_bucket_years: 2
+          b1:
+            estimator: ridge
+            feature_set: basic
+            params:
+              alpha: 1.0
+              min_category_rows: 5
+          lgbm-basic:
+            estimator: lightgbm
+            feature_set: basic
+            params:
+              learning_rate: 0.05
+              num_leaves: 63
+              n_estimators: 5000
+              early_stopping_rounds: 50
+          lgbm-extended:
+            estimator: lightgbm
+            feature_set: extended
+            params:
+              learning_rate: 0.05
+              num_leaves: 63
+              n_estimators: 5000
+              early_stopping_rounds: 50
+    outs:
+    - path: reports/figures/energy-vs-error.csv
+      hash: md5
+      md5: 1715a3dc49c68b0eafbb0a876d923c31
+      size: 1193
+    - path: reports/figures/energy-vs-error.png
+      hash: md5
+      md5: 35a8650d123e860fcb3f33fd3ee6c6c1
+      size: 66922

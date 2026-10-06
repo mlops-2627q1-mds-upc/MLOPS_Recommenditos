@@ -122,6 +122,28 @@ It needs no data and no credentials: every token is generated and lives only in 
 Run it from the repository root with the gitleaks binary the CI job pins, `python reports/analysis/secret_scan_dagshub_token.py path/to/gitleaks`; it fetches detect-secrets through `uvx`.
 `secret_scan_dagshub_token_results.txt` is the output of the run recorded in EDN-71 (2026-10-05).
 
+## What CodeCarbon measures on our machines (EDN-69, issue #38)
+
+`codecarbon_validity.py` tests the assumption issue #38 was written on - that CodeCarbon *measures* the energy of a fit - before any figure is quoted.
+It asks which CPU power method CodeCarbon 3.3.1 falls back to when RAPL is root-only, whether its figure follows the CPU work of four different workloads in `process` and in `machine` mode, whether the offline tracker makes any network call, how completely `measure_power_secs` of 1 s and 15 s integrate a fit, what the tracker costs on the test fixture, and what `on_csv_write="append"` does to a DVC stage output.
+`codecarbon_validity_results.txt` is its output (2026-10-05), on a laptop other jobs were sharing, with the load average beside every row.
+`codecarbon_github_runner.txt` is the same question asked of a GitHub-hosted runner, through a temporary CI step on pull request #68, with the step and its log.
+Unlike the scripts below it needs no raw data: it uses the synthetic fixture and CodeCarbon itself.
+
+```bash
+uv run python reports/analysis/codecarbon_validity.py
+```
+
+`rapl_validation.py` is the one-off check EDN-69 chose instead of granting RAPL access permanently: it measures an idle baseline and three fits of each ladder variant with the RAPL counters themselves, with CodeCarbon's `cpu_load` estimate forced as the pipeline gets it, and with CodeCarbon's own RAPL figure, all around the same fit.
+It refuses to run on a busy machine, because RAPL counts the whole package, and when the counters are not readable it prints the command that makes them readable.
+`rapl_validation_results.txt` is its output.
+
+```bash
+sudo chmod a+r /sys/class/powercap/intel-rapl:*/energy_uj /sys/class/powercap/intel-rapl-mmio:*/energy_uj
+MLFLOW_TRACKING_URI= uv run python reports/analysis/rapl_validation.py > reports/analysis/rapl_validation_results.txt
+sudo chmod 0400 /sys/class/powercap/intel-rapl:*/energy_uj /sys/class/powercap/intel-rapl-mmio:*/energy_uj
+```
+
 Run them against the raw dataset, which is not in the repo (NFR-08; EDN-35 for where it does live).
 Use the `download` stage's own cache rather than a second 548 MB copy: `uv run dvc repro download`
 with `download.source: zenodo` puts the pinned file there, verified against `download.md5`, and

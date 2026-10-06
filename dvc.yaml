@@ -235,6 +235,13 @@ stages:
   # the hash this file's lock records for it (NFR-14, EDN-74). So a dependency
   # added here is traced from the run with no further change, and one the stage
   # reads without declaring it is missing from both.
+  #
+  # The second output is CodeCarbon's record of the fit (#38), one CSV per
+  # variant because two stages may not share an output. Not cached, so a
+  # retrain's energy figure shows up in the pull request diff the way
+  # `reports/metrics` does. CodeCarbon appends to it, and DVC deletes a stage's
+  # outputs before running it, so under `dvc repro` the file always holds exactly
+  # the one row of the fit that produced `models/${key}`.
   # ----------------------------------------------------------------------
   train:
     foreach: ${train.variants}
@@ -243,6 +250,7 @@ stages:
       deps:
         - recommenditos/modeling/train.py
         - recommenditos/modeling/model.py
+        - recommenditos/modeling/energy.py
         - recommenditos/tracking.py
         - recommenditos/provenance.py
         - recommenditos/data/build_features.py
@@ -255,9 +263,12 @@ stages:
         - seed
         - train.mlflow_experiment
         - train.num_threads
+        - train.energy
         - train.variants.${key}
       outs:
         - models/${key}
+        - reports/emissions/${key}.csv:
+            cache: false
 
   # ----------------------------------------------------------------------
   # evaluate: the metrics artefact and the SC-01 to SC-06 gate of NFR-01 (#39).
@@ -301,4 +312,42 @@ stages:
           cache: false
     metrics:
       - metrics.json:
+          cache: false
+
+  # ----------------------------------------------------------------------
+  # compare-energy: the ladder's training energy against its test error (#38).
+  #
+  # The table and the figure the report's energy section is about, built from
+  # the artefacts alone so that nobody draws them by hand: each model's own
+  # record of its fit, CodeCarbon's row for that fit, and `evaluate`'s metrics.
+  # A stage of its own rather than part of `evaluate`, so redrawing the figure
+  # does not rerun the evaluation. Both outputs are uncached, so a retrain's
+  # effect on them is in the pull request diff.
+  #
+  # `train.variants` is declared because the stage reads it, for which variants
+  # to compare and in what order; a change to one already reruns this through
+  # `models`.
+  # ----------------------------------------------------------------------
+  compare-energy:
+    cmd: python3 -m recommenditos.modeling.compare_energy
+    deps:
+      - recommenditos/modeling/compare_energy.py
+      - recommenditos/modeling/energy.py
+      - recommenditos/modeling/evaluate.py
+      - recommenditos/modeling/model.py
+      - recommenditos/tracking.py
+      - recommenditos/provenance.py
+      - recommenditos/data/build_features.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - models
+      - reports/emissions
+      - reports/metrics
+    params:
+      - train.variants
+    outs:
+      - reports/figures/energy-vs-error.csv:
+          cache: false
+      - reports/figures/energy-vs-error.png:
           cache: false

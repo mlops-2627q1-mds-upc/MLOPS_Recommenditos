@@ -387,9 +387,9 @@ One MLflow experiment, `params.yaml`'s `train.mlflow_experiment` (`recommenditos
 `train` creates the run and records its id in `model.json`; `evaluate` resumes that id and appends the test metrics and the gate verdict rather than opening a run of its own.
 That is deliberate: a run per DVC stage would scatter four variants over eight runs nothing joins, and the point of tracking is to be able to compare them.
 
-Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, for the LightGBM variants the trees kept, the rounds run and `early_stopped` as 1 or 0 (so `metrics.early_stopped = 0` finds every fit the ceiling ended), the model artefact under `model/` and the test metrics with the six criteria.
+Each run therefore carries the hyperparameters, the train and validation L1 in log space, the fit time, the energy and emissions of the fit, for the LightGBM variants the trees kept, the rounds run and `early_stopped` as 1 or 0 (so `metrics.early_stopped = 0` finds every fit the ceiling ended), the model artefact under `model/` and the test metrics with the six criteria.
 Its parameters are every `params.yaml` key `dvc.yaml` declares for the `train` stage - the seed, `num_threads`, the estimator, the feature set and the hyperparameters, the last under the estimator's name - plus the variant's name and the shape of the training data; the experiment is the one declared key recorded as the run's experiment rather than as a parameter (NFR-14).
-The emissions of the fit are not among them yet; they arrive with issue #38.
+The energy metrics are `energy_kwh` (with its `cpu_energy_kwh` and `ram_energy_kwh` halves), `emissions_kg_co2eq`, `fit_seconds` and `fit_cpu_seconds`, and the parameters prefixed `codecarbon.` say how they were produced, including the CPU power method: those are facts about the machine rather than `params.yaml` keys, except `train.energy`'s three settings, which are declared. See [Environmental Impact](#environmental-impact) for what the figure is.
 `train` logs **no metric in euros**: it must not touch the test set, and a train-set MdAPE would be a second implementation of the metric beside `evaluate`'s, so one run could carry two numbers that disagree.
 
 Every run is tagged with `variant`, `estimator`, `feature_set` and `dvc_stage`, and - by the tracking seam, for NFR-14 - with what produced it: `git_commit` and `git_dirty` for the fit, one `train.deps.<path>` per dependency of its `train` stage holding the hash `dvc.lock` records for it, and the same for the evaluation that appended to it, `evaluate.git_commit`, `evaluate.git_dirty` and `evaluate.deps.<path>` (EDN-74).
@@ -401,7 +401,7 @@ The comparable view of one pipeline state is the experiment's own table filtered
 tags.git_commit = '<the full SHA of the run you want>'
 ```
 
-with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct` and `metrics.fit_seconds`.
+with the columns `tags.variant`, `params.estimator`, `params.feature_set`, `metrics.mdape`, `metrics.within_20pct`, `metrics.fit_seconds` and `metrics.energy_kwh`.
 That filter is what picks one chain out of the experiment: the four runs of a `dvc repro` share one commit, and a run from another commit is a different pipeline.
 Two things about it are worth knowing before the filter is believed, both checked on this ladder rather than assumed:
 
@@ -570,7 +570,32 @@ Explanations are part of the product, not an afterthought: every valuation ships
 
 ## Environmental Impact
 
-Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (NFR-10), which issue #38 implements; the tracked runs carry their fit time but no emissions figure yet.
+CodeCarbon records the energy and emissions of every fit, and only of the fit, into `reports/emissions/<variant>.csv` and into the variant's MLflow run beside its accuracy (NFR-10, EDN-69).
+**The figure is an estimate, not a reading.**
+RAPL, the CPU's energy counter, is root-only on Linux since kernel 5.10, so on every machine we train on CodeCarbon falls back to its `cpu_load` model: 10 W for the RAM plus the CPU's TDP times the share of its logical CPUs the fit kept busy.
+On the i5-10210U the ladder is trained on, that is 15 W / 8 x the fit's CPU time plus 10 W x its wall time, so a single-threaded fit is charged 11.75 to 11.80 W for every second it runs, and the RAM constant is most of it.
+The real fits are charged 13 to 18 W for every second in the ladder run of 2026-10-06, because they use more than one thread although `train.num_threads` is 1: their CPU time is 1.6 to 2.2 times their wall time.
+The energies of two variants therefore follow their fit times closely (3.2 against 3.6 for `lgbm-extended` over `lgbm-basic`), which is a fair comparison of their cost when both come from one run on one machine, and nothing more: the same fit is charged more on a busy laptop, because it takes longer, and about 80 W per second on a GitHub runner, whose four vCPUs CodeCarbon gives a quarter of a 280 W server TDP each.
+Emissions are energy times the Spanish grid's 174.05 g CO2eq/kWh, pinned rather than geolocated so that an identical fit has identical emissions wherever it runs.
+Checked once against the RAPL counter on an idle laptop (`reports/analysis/rapl_validation.py`, 2026-10-06, before hyperparameter tuning), with an idle package draw of 6.6 W and three fits of each variant.
+The estimate's total is about 70 % of the counter's package energy for the three fitted variants and 112 % for `b0`, whose whole fit is about 1 J, and its CPU half is 27 % to 41 % of the energy above idle.
+The ranking and the ratios survive: `lgbm-extended` costs 2.97 times `lgbm-basic` by the counter and 2.97 times by the estimate.
+One variant's package energy varies by a factor of 1.3 to 2.1 between repeats, so only medians are quoted.
+
+The table is the tracked ladder run of 2026-10-06 on the i5-10210U laptop (8 logical CPUs, 15 GB RAM), before hyperparameter tuning, and is replaced when the ladder is re-run after tuning.
+
+| Variant | Fit time | Energy | Emissions | MdAPE, every field given | MdAPE, only the fields FR-01 requires |
+|---|---|---|---|---|---|
+| `b0` | 0.09 s | 0.0003 Wh | 0.06 mg CO2eq | 12.2 % | 12.2 % |
+| `b1` | 1.34 s | 0.0066 Wh | 1.15 mg CO2eq | 9.5 % | 10.7 % |
+| `lgbm-basic` | 8.42 s | 0.0342 Wh | 5.96 mg CO2eq | 6.8 % | 8.3 % |
+| `lgbm-extended` | 30.02 s | 0.1082 Wh | 18.82 mg CO2eq | 6.3 % | 10.3 % |
+
+`reports/figures/energy-vs-error.png` draws the same rows, built by the `compare-energy` stage from the artefacts rather than by hand.
+On this run `lgbm-extended` costs 3.2 times the energy of `lgbm-basic` for 0.55 percentage points of MdAPE, which is 0.07 Wh more in absolute terms and negligible on its own.
+It earns that only when the user supplies the extra fields: given only the fields FR-01 requires it is worse than `lgbm-basic` (10.3 % against 8.3 %).
+The whole ladder is 0.149 Wh, 26 mg CO2eq and 40 s of fitting, against NFR-10's 15 minutes.
+These are numbers from before hyperparameter tuning, and the conclusion is re-checked when the ladder is re-run.
 
 | | |
 |---|---|
@@ -578,9 +603,10 @@ Measured with CodeCarbon and logged to MLflow next to the accuracy of each run (
 | **Hours used** | Target: at most 15 minutes per training run of the chosen configuration, without hyperparameter search (NFR-10). Measured on the tracked run of 2026-10-06: 8.3 s of fitting for the candidate `lgbm-basic`, 37.6 s for the whole ladder. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
-| **Carbon emitted** | _TBD, per training run from CodeCarbon._ |
+| **Carbon emitted** | 0.149 Wh and 26 mg CO2eq for the whole ladder on 2026-10-06, before hyperparameter tuning, per variant in the table above: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
 
 Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02.
+Whether the VM exposes an energy counter is not known yet, so on the VM the figure is expected to be an estimate of the same kind.
 
 ## Technical Specifications
 
