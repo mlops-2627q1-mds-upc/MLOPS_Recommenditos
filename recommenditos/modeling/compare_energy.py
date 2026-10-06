@@ -21,9 +21,10 @@ what a stale `reports/metrics` would look like.
 **How to read the energy column.** On every machine we train on, CodeCarbon has no
 read access to an energy counter and estimates (`recommenditos/modeling/energy.py`
 says how): a constant 10 W for the RAM plus the CPU's TDP times the share of the
-machine's CPUs the fit kept busy. At `train.num_threads: 1` that makes the energy
-of a fit its duration times about 11.8 W on the i5-10210U, so the ratios between
-rows are fit-time ratios expressed in watt-hours, and a fit that shared the
+machine's CPUs the fit kept busy. That makes the energy
+of a fit its duration times 13 to 18 W on the i5-10210U (the fits use more than one
+thread although `train.num_threads` is 1), so the ratios between rows follow the
+fit-time ratios closely without equalling them, and a fit that shared the
 machine with other work is charged for the extra seconds it took. The table
 carries `cpu_power_method`, the fit times and the machine's CPU load during the
 fit beside the energy, so it says all of that itself.

@@ -18,12 +18,16 @@ of a meter:
 
     energy = 10 W x wall time + TDP / logical CPUs x process CPU time
 
-On the i5-10210U this was measured on (TDP 15 W, 8 logical CPUs), a LightGBM fit
-at `train.num_threads: 1` comes out at 11.75 to 11.80 W for every second it runs
-over repeated fits, and a process that only sleeps at 10.15 W. On a GitHub runner
+On the i5-10210U this was measured on (TDP 15 W, 8 logical CPUs), a single-threaded
+LightGBM fit in `codecarbon_validity.py` comes out at 11.75 to 11.80 W for every
+second it runs over repeated fits, and a process that only sleeps at 10.15 W. The
+real fits come out higher, 13 to 18 W for every second in the ladder run of
+2026-10-06, because they use more than one thread although `train.num_threads` is 1:
+their CPU time is 1.6 to 2.2 times their wall time. On a GitHub runner
 the same kind of fit is charged 79.8 W per second, because CodeCarbon divides the
 280 W TDP of a 64-core AMD EPYC 7763 by the four vCPUs the VM sees. So the energy
-of a fit is its duration times a machine-specific constant, and a figure is only
+of a fit is roughly its duration times a constant that depends on the machine and
+on how many threads the fit used, and a figure is only
 comparable with another from the same machine under the same load.
 
 That is why `fit_cpu_seconds` is recorded beside the energy: it is a
