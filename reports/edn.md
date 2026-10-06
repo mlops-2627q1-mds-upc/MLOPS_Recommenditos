@@ -2202,7 +2202,7 @@ How to add an entry:
   - **Dataframe assets, one checkpoint per frame.** A dataframe asset records no path, so the store works in every clone, and `validate-data` validates the frame its contract has just accepted instead of reading the 215 MB file twice. `Checkpoint.run` takes one set of batch parameters for all its validation definitions, so two frames need two checkpoints. The Data Docs are rendered once per stage run rather than by a checkpoint action, which would render the whole site once per frame.
   - **Results and Data Docs outside `gx/`.** They go to `reports/data-validation/results/` and `data-docs/`, `validate-data`'s own outputs. Written inside `gx/`, every validation would modify `configure_gx`'s output and `dvc status` would report that stage changed after every run.
   - **Generated contract expectations.** #25 puts the column schema and types in the suite; generating them from `schema.py` keeps it the one place the contract is written, and makes the Data Docs a complete statement of each frame. They pass whenever they are reached, because `Schema.validate` runs first, and they are weaker than it: Great Expectations compares only a column's scalar type, so it cannot tell nullable, extension or `object` dtypes from their counterparts. Measured, `datetime64[us]` passes `datetime64[ns]`, `boolean` passes `bool`, `Float64` passes `float64`, and `object` and `string[python]` pass `str`, so the declared dtype stays `schema.py`'s to check (EDN-31 found the datetime unit gap in Pandera too).
-  - **The fill-rate rule checks preprocessing, not the scrape.** The interim suite asserts filled the columns the raw contract declares non-null. A gap in a scrape cannot reach it: `download` writes through the raw contract, which fails on it first. So the rule catches preprocessing emptying a column; moving the scrape's measured fill rates out of the raw contract and into the raw suite as tolerant rules is [#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78).
+  - **The fill-rate rule checks preprocessing, not the scrape.** This was true when #25 merged: the interim suite asserted filled the columns the raw contract declared non-null, and a gap in a scrape failed `download` first. [#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78) moved those fill rates into the raw suite (EDN-77).
   - **No vacuous pass.** Every column rule holds over no rows, and Great Expectations skips missing values, so an empty frame or a bounded column that has emptied out would pass every rule that reads it. Both suites therefore check the row count against `validate.min_rows` and the fill rate of `registration_date` and `mileage_km_raw` against `validate.filled_mostly`, and `validate-data` refuses a suite with no expectations and a run with fewer results than expectations.
   - **The raw date rule on the parsed date.** Great Expectations types a bound as a number or a date: a text bound is parsed into a `date`, and comparing it with the raw file's text column raises. So the raw suite sees the published file with `registration_date` cast by the interim contract's own cast, and every other column untouched. It therefore flags exactly the rows the interim rule then removes.
   - **What was taken out of #25's list, and why.** An `is_used` / `offer_type` agreement rule would fail 18,108 of the published file's 113,708 used passenger-car rows by design (EDN-23). The supported-make list cannot be a rule here: `split` computes it after this stage, and the processed sets deliberately keep every make (EDN-48), so no frame `validate-data` sees is meant to satisfy it. Its guarantee is enforced where the list is applied, in `features` (EDN-67), and checked again by `train` and `evaluate`.
@@ -2561,6 +2561,41 @@ How to add an entry:
   The fixes and the tests, written to fail first, were AI's, and so was the analysis of the fifteen cross-drive failures the new job found.
 - **AI interaction evidence:** Claude Code session of 2026-10-06: the review of #73 and #75, in which the follow-ups were found, and the work on issue #84, in which the setup check was reproduced against DagsHub with a cp1252 stdout (exit 1, `UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f3c3'`) and the options were put to Lukas.
 - **Other evidence:** [issue #84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/84); [PR #85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85); the [failing run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37438994409) on the tests before the fix and the [passing run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37440411226) after it; [#73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/73), [#74](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/74); `.github/workflows/ci.yml`, job `test-windows`; [Contributing](../CONTRIBUTING.md), Before opening a PR.
+- **In LaTeX:** yes
+
+### EDN-77: The raw frame's measured fill rates are asserted by the Great Expectations suites, not promised by the raw contract
+
+- **Date:** 2026-10-06
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Data Quality, Data Validation
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** `make`, `body_type` and the four `equipment_*` lists are nullable in `RAW_SCHEMA`, as they already were in `INTERIM_SCHEMA`, so the contracts hold only structural nullability.
+  Both Great Expectations suites assert those six columns filled up to one tolerance, `validate.required_filled_mostly: 0.999`, in `params.yaml`.
+  The interim rule, which was hard, becomes the same tolerant rule.
+- **Alternatives considered:**
+  - **Option A (chosen): nullable in the raw contract, tolerant fill-rate rule in both suites, one shared tolerance.**
+    Pros: a gap in a scrape is reported by `validate-data` as a data-quality finding, with the rule named and the row count, instead of as a contract error in `download` that reads like a bug in our code; the raw contract keeps only what the file is structurally; one semantics on both frames, so a gap the raw suite tolerates does not then fail the interim suite.
+    Cons: a tolerated gap travels through `preprocess` as a null, which the interim contract already allowed; the interim rule no longer fails on a single value that preprocessing empties, only past 0.1 % of the rows.
+  - **Option B: keep the raw contract as it is and correct the wording only.**
+    Pros: no code change and no risk to the pipeline.
+    Cons: the pipeline stops in the wrong stage with the wrong kind of message, and the fill-rate rule keeps documenting a path no scrape can reach.
+  - **Option C: tolerant on raw, the interim rule stays hard.**
+    Pros: catches every value preprocessing empties.
+    Cons: contradicts the raw rule, because a gap the raw suite tolerates would then fail the interim suite, so the tolerance would never take effect.
+  - **Option D: tolerant on raw, a separate and stricter tolerance on interim.**
+    Pros: mirrors the two roles of the frames.
+    Cons: a second parameter for a distinction that nothing in the data currently needs.
+- **Rationale:** A contract answers "is this our bug", a suite answers "did the data change", and a fill rate is the second kind of question.
+  The raw contract answered it on the data's behalf, because the snapshot happens to fill these columns in every row, so the first gap in a future scrape would have stopped the pipeline in `download` and never reached the rule written for it.
+  Option A makes both frames say the same thing.
+  The tolerance of 0.999 follows `mileage_mostly`: far tighter than the 0.99 of `filled_mostly`, because these columns are filled in 100 % of the snapshot, yet it tolerates a few gaps as a finding and still fails a scrape that has lost a column.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI read the contract, both suites and every consumer of the raw frame, generated options A to D with their pros and cons, recommended A with the 0.999 tolerance, and implemented it with tests that fail on a missing `body_type` through `download`'s contract and through the `validate-data` stage.
+  Lukas chose A as recommended and asked for the decision to be recorded.
+  Issue #78 had already named the problem and the two open questions, the tolerance and the fate of the interim rule, which the options settle.
+- **AI interaction evidence:** Claude Code session of 2026-10-06: the options were put to Lukas with a recommendation before any code changed, and he chose "1A + 2A with 0.999" and asked for an EDN entry.
+- **Other evidence:** [issue #78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78), found in the review of [#76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76); [`recommenditos/schema.py`](../recommenditos/schema.py); [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), `REQUIRED_FILLED_COLUMNS`; [`tests/test_validate_data.py`](../tests/test_validate_data.py); [pipeline docs](../docs/docs/pipeline.md), Data validation; EDN-68 is the entry for #25, whose suites this changes.
 - **In LaTeX:** yes
 
 ## Template

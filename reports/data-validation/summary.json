@@ -3,7 +3,7 @@
     "passed": true,
     "rows": 118382,
     "contract": {
-      "expectations": 98,
+      "expectations": 92,
       "failed": []
     },
     "rules": [
@@ -12,6 +12,60 @@
         "min_value": 1000,
         "success": true,
         "observed_value": 118382
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "body_type",
+        "mostly": 0.999,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_comfort",
+        "mostly": 0.999,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_entertainment",
+        "mostly": 0.999,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_extra",
+        "mostly": 0.999,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "equipment_safety",
+        "mostly": 0.999,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
+      },
+      {
+        "expectation": "expect_column_values_to_not_be_null",
+        "column": "make",
+        "mostly": 0.999,
+        "success": true,
+        "element_count": 118382,
+        "unexpected_count": 0,
+        "unexpected_percent": 0.0
       },
       {
         "expectation": "expect_column_values_to_be_between",
@@ -73,6 +127,7 @@
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "body_type",
+        "mostly": 0.999,
         "success": true,
         "element_count": 105405,
         "unexpected_count": 0,
@@ -81,6 +136,7 @@
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "equipment_comfort",
+        "mostly": 0.999,
         "success": true,
         "element_count": 105405,
         "unexpected_count": 0,
@@ -89,6 +145,7 @@
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "equipment_entertainment",
+        "mostly": 0.999,
         "success": true,
         "element_count": 105405,
         "unexpected_count": 0,
@@ -97,6 +154,7 @@
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "equipment_extra",
+        "mostly": 0.999,
         "success": true,
         "element_count": 105405,
         "unexpected_count": 0,
@@ -105,6 +163,7 @@
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "equipment_safety",
+        "mostly": 0.999,
         "success": true,
         "element_count": 105405,
         "unexpected_count": 0,
@@ -113,6 +172,7 @@
       {
         "expectation": "expect_column_values_to_not_be_null",
         "column": "make",
+        "mostly": 0.999,
         "success": true,
         "element_count": 105405,
         "unexpected_count": 0,

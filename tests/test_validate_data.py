@@ -41,6 +41,7 @@ from recommenditos.data.validate_data import (
     validate_frame,
 )
 from recommenditos.data.validate_data import main as validate_main
+from recommenditos.pipeline import write_frame
 from recommenditos.schema import INTERIM_SCHEMA, RAW_SCHEMA
 
 DATE_RULE = ("expect_column_values_to_be_between", "registration_date")
@@ -294,18 +295,65 @@ def test_the_cleaned_suite_refuses_is_used(context, frames):
     assert not found["passed"]
 
 
-def test_a_gap_preprocessing_introduces_is_reported_by_the_interim_suite(context, frames):
-    # The two layers, side by side: the interim contract lets `make` be null, so
-    # this rule is what reports a gap in the cleaned frame. It is a check on
-    # preprocessing, not on the scrape: the raw contract declares `make` filled,
-    # so a gap in a future scrape already fails `download` with a contract error
-    # and never reaches this suite.
-    interim = frames["interim"].copy()
-    interim.loc[interim.index[0], "make"] = None
+def _without(frame: pd.DataFrame, column: str, count: int) -> pd.DataFrame:
+    """The frame with its first `count` values of a column gone."""
+    broken = frame.copy()
+    broken.loc[broken.index[:count], column] = None
+    return broken
+
+
+def _tolerated_gaps(frame: pd.DataFrame, params) -> int:
+    return int((1 - params["validate"]["required_filled_mostly"]) * len(frame))
+
+
+@pytest.mark.parametrize("column", configure_gx.REQUIRED_FILLED_COLUMNS)
+def test_a_gap_in_the_scrape_passes_the_contract_and_fails_the_raw_suite(
+    context, raw_frame, params, column
+):
+    # #78: the raw contract no longer promises the fill rate, so one missing
+    # value gets past `download`'s contract and is reported by `validate-data`
+    # with the rule named. Past the tolerance, since a single gap is tolerated.
+    broken = _without(raw_frame, column, _tolerated_gaps(raw_frame, params) + 1)
+    RAW_SCHEMA.validate(broken)
+
+    found = validate_frame(context, RAW, broken)
+    filled = rule(found, NOT_NULL, column)
+
+    assert not found["passed"]
+    assert not filled["success"]
+    assert filled["mostly"] == params["validate"]["required_filled_mostly"]
+    assert filled["unexpected_count"] == _tolerated_gaps(raw_frame, params) + 1
+
+
+def test_a_missing_body_type_fails_validate_data_not_download(built, frames, tmp_path, params):
+    # The path the issue describes, through the stages: `download` writes the
+    # frame, `validate-data` is what stops on it.
+    broken = _without(frames["raw"], "body_type", _tolerated_gaps(frames["raw"], params) + 1)
+    path = tmp_path / "raw.parquet"
+    write_frame(broken, path, RAW_SCHEMA)
+
+    with pytest.raises(DataValidationError, match="body_type"):
+        validate_main(path, frames["interim_path"], tmp_path / "summary.json", built["context"])
+
+
+def test_the_raw_fill_tolerance_is_the_one_params_yaml_sets(context, raw_frame, params):
+    # Just inside and just outside `validate.required_filled_mostly`.
+    tolerated = _tolerated_gaps(raw_frame, params)
+
+    assert tolerated > 0
+    assert validate_frame(context, RAW, _without(raw_frame, "make", tolerated))["passed"]
+    assert not validate_frame(context, RAW, _without(raw_frame, "make", tolerated + 1))["passed"]
+
+
+def test_a_gap_preprocessing_introduces_is_reported_by_the_interim_suite(context, frames, params):
+    # The same rule on the cleaned frame, where it reports preprocessing emptying
+    # a column, with the same tolerance as on the raw frame.
+    interim = _without(frames["interim"], "make", _tolerated_gaps(frames["interim"], params) + 1)
     INTERIM_SCHEMA.validate(interim)
 
     found = validate_frame(context, INTERIM, interim)
-    assert not rule(found, "expect_column_values_to_not_be_null", "make")["success"]
+    assert not rule(found, NOT_NULL, "make")["success"]
+    assert rule(found, NOT_NULL, "make")["mostly"] == params["validate"]["required_filled_mostly"]
 
 
 @pytest.mark.parametrize("flag", ["has_full_service_history", "non_smoking", "is_rental"])
