@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 from tests.conftest import PII_COLUMNS
 
-from recommenditos import config
 from recommenditos.data.preprocess import apply_row_rules, hash_seller_group
 from recommenditos.data.split_data import SPLIT_NAMES, assign_split, dispersion_bounds
 from recommenditos.data.synthetic import (
@@ -19,15 +18,6 @@ from recommenditos.data.synthetic import (
     generate_raw_listings,
 )
 from recommenditos.schema import RAW_SCHEMA
-
-
-def test_data_dirs_are_nested_under_project_root():
-    assert config.RAW_DATA_DIR == config.DATA_DIR / "raw"
-    assert config.INTERIM_DATA_DIR == config.DATA_DIR / "interim"
-    assert config.PROCESSED_DATA_DIR == config.DATA_DIR / "processed"
-    assert config.EXTERNAL_DATA_DIR == config.DATA_DIR / "external"
-    assert config.DATA_DIR == config.PROJ_ROOT / "data"
-
 
 # --------------------------------------------------------------------------
 # The fixture

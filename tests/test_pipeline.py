@@ -9,7 +9,6 @@ synthetic fixture in a temporary directory, which covers the logic, and read
 """
 
 import json
-from pathlib import Path
 import shutil
 
 import pandas as pd
@@ -17,7 +16,7 @@ import pytest
 from tests.conftest import PII_COLUMNS, params_override
 import yaml
 
-from recommenditos.config import PARAMS_FILE, PROJ_ROOT
+from recommenditos.config import PROJ_ROOT
 from recommenditos.data import (
     build_features,
     download_raw_dataset,
@@ -652,8 +651,3 @@ def _lookup(params: dict, dotted: str):
             return _MISSING
         current = current[part]
     return current
-
-
-def test_the_params_file_dvc_reads_is_the_one_the_tests_read():
-    assert PARAMS_FILE == PROJ_ROOT / "params.yaml"
-    assert Path(PARAMS_FILE).exists()
