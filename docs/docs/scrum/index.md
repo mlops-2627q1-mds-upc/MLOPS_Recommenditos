@@ -12,7 +12,7 @@ How the Recommenditos team runs Scrum for this project.
 
 ## Cadence
 
-We only meet in person once a week, during the Wednesday morning lab session.
+We only meet in person once a week, during the Tuesday morning lab session.
 We use that slot as our sync ceremony instead of a daily standup: everyone reports progress, raises blockers, and we plan the next tasks together.
 Between sessions, we work async and update each other in Discord as things happen, rather than on a fixed schedule.
 
@@ -30,8 +30,8 @@ Every issue carries one milestone label, one area label and an owner, so the boa
 
 - **Milestone labels** `M1` to `M6` name the course milestone the work belongs to.
 - **Area labels** `area:data`, `area:model`, `area:api`, `area:ci`, `area:docs` and `area:report` name the part of the project the work touches.
-- **GitHub milestones** group the issues by delivery: *1st delivery (M1-M3)*, due 2026-10-13, and *2nd delivery (M4-M6)*, due 2026-12-08.
-  Both dates are the report deadlines from the [lab schedule](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/references/MLOps-lab.md).
+- **GitHub milestones** group the issues by delivery: *1st delivery (M1-M3)*, due 2026-10-19, and *2nd delivery (M4-M6)*, whose due date is not announced yet.
+  The date is the report deadline on Atenea, which the course changed from the one in the [lab schedule](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/references/MLOps-lab.md).
 
 ## Roles
 
@@ -43,7 +43,7 @@ _Fill in who holds each role for the current sprint._
 
 ## Ceremonies
 
-- **Weekly Sync (Wednesday lab)** – our stand-in for the daily standup, since it's the only time the whole team is together. Covers Sprint Planning, a short demo of what's done, and a quick retrospective when there's something to discuss.
+- **Weekly Sync (Tuesday lab)** – our stand-in for the daily standup, since it's the only time the whole team is together. Covers Sprint Planning, a short demo of what's done, and a quick retrospective when there's something to discuss.
 - **Async check-ins** – ongoing progress updates and blockers posted in Discord throughout the week, not tied to a fixed time.
 
 ## Related pages
