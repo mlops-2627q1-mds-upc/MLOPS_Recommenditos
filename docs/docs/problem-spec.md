@@ -189,7 +189,8 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   This is a known risk for the basic feature set; the extended features or a scope change for classic cars must close it.
   The pipeline has since measured the segment at 16.77 % for the candidate model, and it has ruled the extended features out as the remedy: they make this segment 1.7 pp worse (18.45 %) while improving the pooled figure.
-  SC-04 is therefore recorded as missed rather than worked around, and the threshold stays where it is ([EDN-62](#decision-records)); see the [model card](model-card.md#results).
+  SC-04 is therefore recorded as missed rather than worked around, and the threshold stays where it is ([EDN-62](#decision-records)).
+  The miss is a permanent, accepted limitation of the model rather than open work ([EDN-75](#decision-records)); see the [model card](model-card.md#bias-risks-and-limitations).
 - SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
   The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,889 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
 
@@ -210,4 +211,5 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-59: SC-06 masks input fields rather than feature columns.
 - EDN-60: which segments SC-04 may gate on is enforced in code.
 - EDN-62: `lgbm-basic` is the candidate, and SC-04's miss on cars over 20 years is accepted.
+- EDN-75: that miss is a documented limitation of the model, and the threshold and scope stay as they are.
 - EDN-67: the `features` stage applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built.
