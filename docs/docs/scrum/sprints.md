@@ -52,10 +52,15 @@ record of how AI was involved.
 
 ## Sprint 2 planning notes (2026-09-29)
 
+> **Dates corrected on 2026-10-06** ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)). These notes were written against the course PDF's dates read as 2026 dates: the first report due 2026-10-13 and the M4a session on 2026-10-21, a Wednesday.
+> The first report is due 2026-10-19 at 23:59, the laboratory meets on Tuesdays, and the M4a session's date is not known yet.
+> Sprint 2 ends at the laboratory session on 2026-10-06.
+> The 2026-10-08 cut-off was set against 2026-10-13; the sprint 3 planning in [#94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/94) sets the new one.
+
 **Attendees:** @lukas2510, @kadameit, @W11W11W11, @michudud04, @ulasawczuk
 
 **Sprint goal:** a `dvc repro` that runs end to end, with the first experiments tracked in MLflow
-and the quality gate measurable. The first report covering milestones 1 to 3 is due 2026-10-19 and
+and the quality gate measurable. The first report covering milestones 1 to 3 is due 2026-10-13 and
 needs numbers that only a running pipeline produces.
 
 **How the work is cut.** The pipeline is sequential, so five people can only work on it in parallel
@@ -105,15 +110,20 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
 
 **Known risks carried into the sprint:**
 
-- Nobody has access to the FIB Virtech VM yet. If that is still true at the M4a lab, we raise it
-  with the teachers instead of planning further on it.
+- Nobody has access to the FIB Virtech VM yet. If that is still true at the M4a lab on 2026-10-21,
+  we raise it with the teachers instead of planning further on it.
 - The committed analysis outputs in `reports/analysis/` no longer reproduce now that #24 dropped the
   164 listings registered after the snapshot. They are cited as EDN evidence, so both scripts need
   one re-run against the new scope.
-- The first delivery on 2026-10-19 falls after sprint 2. Nothing in sprint 2 may slip past
+- The first delivery on 2026-10-13 falls into sprint 3. Nothing in sprint 2 may slip past
   2026-10-08 without the report losing the numbers it is meant to cite.
 
 ## Sprint 2 progress (2026-09-30)
+
+> **Dates corrected on 2026-10-06** ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)). This entry was written against the course PDF's dates read as 2026 dates: the first report due 2026-10-13 and the M4a session on 2026-10-21, a Wednesday.
+> The first report is due 2026-10-19 at 23:59, and the M4a session's date is not known yet.
+> The laboratory meets on Tuesdays, so the sprint boundary below does not move: sprint 2 ends at the laboratory session on 2026-10-06, and sprints stay Tuesday to Tuesday.
+> The 2026-10-08 cut-off was set against 2026-10-13; the sprint 3 planning in [#94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/94) sets the new one.
 
 Recorded on day 2 of the sprint from the merged pull requests and the closed issues, so the sprint 2 review has a trail to read rather than a week to reconstruct.
 
@@ -129,10 +139,11 @@ Recorded on day 2 of the sprint from the merged pull requests and the closed iss
 **What that unblocks.** [#33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33) to [#39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) and [#25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25) each waited on #32 and on nothing else, so every pipeline ticket can now be built in parallel against the schema and the fixture instead of against another branch.
 The board and its labels are in place as of this sprint, so the work can be filtered per milestone and per area.
 
-**Still open from planning.** Nobody has access to the FIB Virtech VM; if that holds at the M4a session it is raised with the teachers.
-The 2026-10-08 cut-off for pipeline work stands, because the first report has to cite measured numbers.
+**Still open from planning.** Nobody has access to the FIB Virtech VM; if that holds at the M4a session on 2026-10-21 it is raised with the teachers.
+The 2026-10-08 cut-off for pipeline work stands, because the first report is due 2026-10-13 and has to cite measured numbers.
 
-**Sprint boundary.** The sprint runs to the laboratory session on Tuesday 2026-10-06, so that Planning, Review and Retrospective happen where the whole team is present, and sprint 3 starts at that session, as the [working agreements](working-agreements.md) describe.
+**Sprint boundary.** The sprint runs to the laboratory session on 2026-10-07 rather than to Tuesday 2026-10-06, so that Planning, Review and Retrospective happen where the whole team is present, and sprint 3 starts at that session.
+This is the change the [working agreements](working-agreements.md) now describe, and it is **[proposed]** until the team confirms it in the laboratory.
 
 ## Retrospective notes
 
@@ -165,6 +176,12 @@ Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be
     - The board had no milestone labels, no area labels and no GitHub milestones until the last day
       of the sprint, and six tickets were still closed without any of them. The trace the course
       grades had to be assembled from the git history instead of being read off the board.
+    - The working agreements named a ceremony day that the lab schedule contradicts: they put
+      Planning in a Tuesday laboratory session while every session in the schedule is a Wednesday.
+      A page describing our own process was never checked against the document that fixes it.
+      *Withdrawn on 2026-10-06 ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)): the finding was wrong. The laboratory is on Tuesdays,
+      as the working agreements said; the Wednesday came from reading the course PDF's session
+      dates as 2026 dates.*
 - **Action items:**
     - Cut sprint 2 so that each ticket owns its own files, and land the shared contracts first
       (#32).
@@ -173,3 +190,6 @@ Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be
     - Every teammate owns at least one pipeline stage and writes the report section for it.
     - Give every ticket its milestone label, area label, GitHub milestone and owner when it is
       written, not when the sprint is reviewed.
+    - Hold the ceremonies in the Wednesday laboratory session and run the sprint from Wednesday to
+      Wednesday, so the plan is made where the whole team is present.
+      *Withdrawn on 2026-10-06 with the finding above; the sprint stays Tuesday to Tuesday.*

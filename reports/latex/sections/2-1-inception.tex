@@ -136,5 +136,5 @@ NFR-04 is written for this machine and budgets it: the API container stays below
 That the drift job must be separate is a hard constraint and not a preference, because Alibi Detect 0.13 requires \texttt{numpy<2} and \texttt{pandas<3} and pulls in transformers, OpenCV and scikit-image, so it cannot share an environment with the API; its Business Source Licence 1.1 also permits only non-production use.
 NFR-12 keeps the choice reversible by requiring the system to start on a fresh machine with one documented command and to need no paid service at run time, so nothing in the serving path is specific to this provider, and no GPU appears anywhere, which is also why the model family was chosen (EDN-02) and why \texttt{shap} is kept out of the serving image (EDN-11).
 
-The cost is recorded with a date rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
+The cost is recorded rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
 If that is still true at the Milestone~4a laboratory, we raise it with the teachers instead of planning further on it.

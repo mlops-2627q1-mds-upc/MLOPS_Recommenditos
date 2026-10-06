@@ -3,6 +3,8 @@
 \ednentry{
   id = {EDN-12},
   title = {Retraining and promotion are human-triggered, not automated},
+  note = {\textbf{Date corrected on 2026-10-06} (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97}{PR \#97}). Option A's cons name the M4-M6 presentation as Dec 9, the course PDF's date; it is on Dec 15.
+The argument and the decision are unchanged.},
   date = {2026-09-22},
   milestone = {M6: Monitoring},
   topic = {ML System Design, Model Performance},
@@ -12,7 +14,7 @@
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item \textbf{Option A: fully automated retraining and promotion.} A watcher on the drift job's output triggers \texttt{dvc repro} and opens the promotion PR automatically when drift is confirmed.
 \newline Pros: reads as more ``extended/innovative'' for the M6 System Design criterion; no manual step to forget.
-\newline Cons: needs new infrastructure (something connecting Alibi Detect's output to a CI trigger) built and debugged in the last two weeks before the Dec 15 presentation, exactly when there is the least slack to recover if it breaks; higher risk for a 5-person team with no prior automation of this kind in the project.
+\newline Cons: needs new infrastructure (something connecting Alibi Detect's output to a CI trigger) built and debugged in the last two weeks before the Dec 9 presentation, exactly when there is the least slack to recover if it breaks; higher risk for a 5-person team with no prior automation of this kind in the project.
 \item \textbf{Option B (chosen): human-triggered retraining and promotion.} The drift job surfaces the signal (Grafana); a team member runs the retrain and opens the PR once NFR-01's gate passes.
 \newline Pros: still fully closes the loop EDN-03 was built to demonstrate, and still satisfies the M6 rubric's ``enabling confident investigation and response'', a human response is a legitimate response, not a lesser one; far less new infrastructure, and safer to demo live; matches the team's size and the amount of time left before M6.
 \newline Cons: less visually impressive than full automation; a person has to actually notice the signal and act on it.

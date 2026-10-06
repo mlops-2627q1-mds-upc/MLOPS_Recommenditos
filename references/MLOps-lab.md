@@ -118,6 +118,9 @@ Very important:
 
 ## Schedule - Laboratory
 
+> **Note added by the team, not part of the converted course PDF:** read as 2026 dates, the dates in this table fall on Wednesdays, while this team's laboratory sessions are on Tuesdays, so they are not this edition's session dates.
+> The dates the course has announced are in the notes under Schedule - Feedback and Presentations and Schedule - Deliveries.
+
 | Session | Assignments / Outputs for each laboratory session | Tools                                                     | Date    | Delivery (one day before the session) |
 |---------|-----------------------------------------------------|------------------------------------------------------------|---------|-----------------------------------------|
 | 1       | Milestone 1 - Project kick-off and inception.        | GitHub repository creation (for model and dataset cards)   | Sep. 9  |                                          |
