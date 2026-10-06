@@ -97,7 +97,6 @@ On the commit this report was built from it reports no findings.
 The suite is Pytest with coverage measured on every run.
 On the commit this report was built from it is 681 tests, 677 passed and 4 skipped where they cannot apply, in about three minutes, at 98\,\% statement and branch coverage of \texttt{recommenditos/}.
 Coverage measures branches rather than only statements, so a half-tested conditional does not count as covered, and nothing is excluded from measurement except the \texttt{if \_\_name\_\_ == "\_\_main\_\_"} entry points, which Pytest never executes.
-One module sits at 0\,\%, \texttt{plots.py}, a Cookiecutter template stub that nothing imports yet; it is counted rather than excluded, so the number does not flatter itself.
 There is deliberately no \texttt{--cov-fail-under}: NFR-07 asks for 80\,\% on a delivery commit, which is when the number is read and acted on, and a per-pull-request gate would block merges while the suite is still being built.
 
 Three things go beyond asserting a threshold.

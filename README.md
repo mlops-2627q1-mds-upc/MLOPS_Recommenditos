@@ -88,11 +88,10 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
     │   ├── split_data.py              <- `split`
     │   ├── build_features.py          <- `features`
     │   └── synthetic.py               <- The generated test fixture
-    ├── modeling
-    │   ├── train.py   <- `train`
-    │   ├── evaluate.py <- `evaluate`
-    │   └── model.py   <- The estimators, and the load-and-predict seam
-    └── plots.py       <- Visualizations
+    └── modeling
+        ├── train.py   <- `train`
+        ├── evaluate.py <- `evaluate`
+        └── model.py   <- The estimators, and the load-and-predict seam
 ```
 
 One module per pipeline stage rather than the flat `dataset.py` / `features.py`
