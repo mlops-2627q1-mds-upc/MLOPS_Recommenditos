@@ -74,7 +74,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── references         <- Course material, data dictionaries and other references
 ├── reports            <- Report and EDN (LaTeX), metrics, generated figures
 ├── tests              <- Pytest test suite
-├── tools              <- Repository tooling: the requirement matrix, the notebook lint and its environment
+├── tools              <- Repository tooling: the requirement matrix, the notebook lint and its environment, the secret scan, the EDN transfer
 └── recommenditos      <- Source code of the package
     ├── config.py      <- Paths
     ├── schema.py      <- The data contract every stage reads and writes against

@@ -16,8 +16,8 @@ We build and deploy the ML component that answers that question: given a descrip
 It serves two use cases (project brief, section~2):
 
 \begin{itemize}
-  \item \textbf{UC1, car valuation.} The owner describes their car and receives a point estimate in euros, the model version that produced it, and the few properties that moved this car's price most, complete enough that the estimate can be recomputed from them (requirements FR-06 and FR-08).
-  \item \textbf{UC2, purchase guidance.} A buyer describes the car they are looking for, down to the make alone, and receives a typical price with a lower and an upper bound at a stated confidence level, plus comparable real listings to check it against (FR-02, FR-07 and FR-09).
+  \item \textbf{UC1, car valuation.} The owner describes their car and receives a point estimate in euros, the model version that produced it, and the few properties that moved this car's price most, enough to recompute the estimate from them (FR-06, FR-08).
+  \item \textbf{UC2, purchase guidance.} A buyer describes the car they are looking for, down to the make alone, and receives a typical price with bounds at a stated confidence level and comparable real listings to check it against (FR-02, FR-07, FR-09).
 \end{itemize}
 
 The learning task is supervised regression on $\log(\mathrm{price})$, transformed back with $\exp$, which estimates the median price of a car and so matches our median-based primary metric, the median absolute percentage error (MdAPE) (problem specification, sections~3 and~6).
@@ -25,45 +25,26 @@ We train on the AutoScout24 Car Listings Dataset (2025 snapshot), 118,382 listin
 The scope is used passenger cars (EDN-04) of the makes with at least 300 listings, currently 11 makes covering 98.6\,\% of the used listings (EDN-05); a car outside that scope is refused rather than estimated (FR-04).
 All Spanish listings are held out as a market the model has never seen, so that Milestone~6 can demonstrate drift detection and retraining on real data rather than on a simulated shift (EDN-03).
 
-In operation the component is a containerised API on the single CPU-only virtual machine the course provides, with 4\,GB of memory and 20\,GB of disk (EDN-17).
-The model that serves is a pipeline artefact baked into the image when CI builds it, so the version in service is verifiably the one the repository declares as released (FR-12, EDN-08).
-Every answer is recorded without personal data (FR-13, NFR-08), incoming traffic is compared with the training distribution window by window (FR-14), and retraining and promotion remain a human decision taken on that evidence (FR-15, EDN-12).
-What the component must do and which qualities it must have is written down as 16 functional and 15 non-functional requirements, each with an acceptance criterion, in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{docs/docs/requirements.md}}, and realised in the detail we build and test against, under the same IDs, in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{docs/docs/specification.md}} (EDN-27).
+In operation the component is a containerised API on the course's single CPU-only virtual machine, with 4\,GB of memory and 20\,GB of disk (EDN-17), serving the pipeline artefact that CI bakes into the image, so the version in service is verifiably the one the repository declares released (FR-12, EDN-08).
+Every answer is recorded without personal data (FR-13, NFR-08), traffic is compared with the training distribution window by window (FR-14), and retraining and promotion remain a human decision on that evidence (FR-15, EDN-12).
+The 16 functional and 15 non-functional requirements, each with an acceptance criterion, are in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{requirements.md}} and realised under the same IDs in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{specification.md}} (EDN-27).
 
 \paragraph{Success criteria.}
-A model is good enough to deploy when it meets all six criteria of \cref{tab:success-criteria} on the test set (EDN-06; SC-06 added by EDN-15).
+A model is good enough to deploy when it meets all six criteria on the test set (problem specification, section~8; EDN-06, SC-06 added by EDN-15): SC-01, an MdAPE of at most 9\,\%; SC-02, at least 85\,\% of the predictions within $\pm$20\,\% of the asking price; SC-03, an MdAPE at least 30\,\% below baseline B0, the median price per make, model and two-year age bucket; SC-04, at most 15\,\% MdAPE in every level of make, country, seller type, fuel category and age bucket that holds at least 500 test rows; SC-05, an empirical coverage between 88\,\% and 92\,\% for the nominal 90\,\% intervals of UC2, with full inputs and with make, model, registration date and mileage alone; and SC-06, an MdAPE at most 1.5 times the full-input one with any optional input field masked, and with all of them masked at once.
 They are measured after deduplication, with the Spanish listings removed and the remainder split by seller so that no seller appears in two sets (problem specification, section~5).
-NFR-01 makes them the release gate and sets no threshold of its own: the \texttt{evaluate} stage of the pipeline writes each criterion to \texttt{metrics.json} with its measured value and a pass or a fail, and a model that misses one is not deployed.
-Every threshold is a key under \texttt{evaluate.success\_criteria} in \texttt{params.yaml}, so the criteria are configuration the pipeline reads rather than numbers repeated in prose and in code.
+NFR-01 makes them the release gate and sets no threshold of its own: the \texttt{evaluate} stage reads every threshold from \texttt{evaluate.success\_criteria} in \texttt{params.yaml}, writes each criterion to \texttt{metrics.json} with its measured value and its verdict, and a model that misses one, or for which one cannot be measured yet, is not deployed (EDN-58).
 
-\begin{table}[ht]
-  \centering\small
-  \begin{tabularx}{\textwidth}{@{}lX@{}}
-    \toprule
-    ID & Criterion, measured on the test set \\
-    \midrule
-    SC-01 & MdAPE at most 9\,\%. \\
-    SC-02 & At least 85\,\% of the predictions within $\pm$20\,\% of the asking price. \\
-    SC-03 & MdAPE at least 30\,\% lower than baseline B0, the median price per make, model and two-year age bucket. \\
-    SC-04 & Every reported segment holding at least 500 test rows has MdAPE at most 15\,\%. The segments are make, country, seller type, fuel category and age bucket; price buckets are reported but excluded here, because they condition on the target, which is unknown at prediction time. \\
-    SC-05 & The nominal 90\,\% intervals of UC2 reach an empirical coverage between 88\,\% and 92\,\%, both for full inputs and for the partial-input scenario P1, in which only make, model, registration date and mileage are given. \\
-    SC-06 & With each optional input field masked on its own, and with all of them masked at once, the point model's MdAPE stays at or below 1.5 times its full-input MdAPE. Optional means every field that FR-01 does not require. \\
-    \bottomrule
-  \end{tabularx}
-  \caption{The success criteria of the project (problem specification, section~8).}
-  \label{tab:success-criteria}
-\end{table}
-
-The thresholds come from a one-off exploratory run on the final scope, in which the median baseline B0 reached 11.9\,\% MdAPE and 70.9\,\% of predictions within $\pm$20\,\%, and an untuned LightGBM 6.7\,\% and 90.6\,\%.
-They keep a margin to those values, so that they hold across seeds and splits, while still ruling out a model only marginally better than the baseline (EDN-06).
-The same run located the criterion we expect to fail first: cars older than 20 years reached 15.3\,\% MdAPE against SC-04's bound of 15\,\%.
-We recorded that as a known risk instead of loosening the criterion, because a gate that is set to what the model already does gates nothing.
-SC-04's per-segment breakdown, which includes country and seller type, also serves as this project's fairness check: the classification-oriented fairness metrics do not apply to a regression, so error parity across segments is the task-appropriate equivalent (problem specification, section~8).
-The gate result for the models of this delivery is \tbd{the SC-01 to SC-06 outcome from metrics.json}.
+The thresholds come from a one-off exploratory run on the final scope, in which baseline B0 reached 11.9\,\% MdAPE and 70.9\,\% within $\pm$20\,\% and an untuned LightGBM 6.7\,\% and 90.6\,\%, and keep a margin to those values, so that they hold across seeds and splits while still ruling out a model only marginally better than the baseline (EDN-06).
+The same run located the criterion we expect to fail first, cars older than 20 years at 15.3\,\% against SC-04's bound of 15\,\%, and we recorded that as a known risk instead of loosening the criterion, because a gate set to what the model already does gates nothing.
+SC-04's per-segment breakdown, country and seller type included, is also the project's fairness check, because classification fairness metrics do not apply to a regression and error parity across segments does (problem specification, section~8).
+On the test split of this delivery no variant passes the gate.
+The candidate \texttt{lgbm-basic} meets SC-01 at 6.81\,\%, SC-02 at 89.8\,\%, SC-03 at 44.0\,\% below B0 and SC-06 at 1.21 times, misses SC-04 on the risk named above, at 16.77\,\% over the 784 test cars older than 20 years, and has no SC-05 measurement until the UC2 intervals exist.
+We accept the miss rather than move the bound, and prefer \texttt{lgbm-basic} to the lower pooled MdAPE of \texttt{lgbm-extended}, 6.26\,\%, because only it meets SC-06 (EDN-62).
 
 \paragraph{Engineering focus.}
-The course grades how well the software engineering practices are applied, not how accurate the model is, so we deliberately spend our effort on clean and justified engineering rather than on model complexity (project brief, section~1).
-Five choices carry most of that weight, and the sections that follow show them at work rather than arguing them again here: everything configurable lives in \texttt{params.yaml} instead of Python constants, so a change reruns exactly the stages that read it and \texttt{dvc params diff} says what changed between two commits (EDN-30); a generated synthetic fixture and a \texttt{download.source} parameter keep \texttt{dvc repro} and the test suite green on a clean clone with no credentials, no 548\,MB download and no personal data in the Git history (EDN-33); a dedicated \texttt{evaluate} stage makes the release gate an artefact a person reads instead of an assertion buried in a test, which is what a human promotion decision needs (EDN-12); the train/validation/calibration/test split is grouped by seller because we measured that held-out dealers shift the feature distribution as much as a different country does (EDN-14, EDN-32); and CI builds a requirement-to-test matrix from Pytest markers, so every FR and NFR is traceable to the test that verifies it or is explicitly marked as verified by hand (NFR-07).
+The course grades how well the software engineering practices are applied, not how accurate the model is, so our effort goes into justified engineering rather than into model complexity (project brief, section~1).
+Five choices carry most of that weight, and the methodology shows each at work: everything configurable lives in \texttt{params.yaml}, so a change reruns exactly the stages that read it (EDN-30); a generated synthetic fixture keeps \texttt{dvc repro} and the tests green on a clean clone with no credentials and no personal data (EDN-33); a dedicated \texttt{evaluate} stage makes the release gate an artefact a person reads (EDN-12); the split is grouped by seller, because held-out dealers shift the features as much as another country does (EDN-14, EDN-32); and CI builds a requirement-to-test matrix from Pytest markers (NFR-07).
+The decisions behind them, and the role AI played in each, are recorded in our Engineering Decision Notebook, MLOps\_\TeamName\_EDN.pdf, which the methodology cites by entry ID.
 
 \subsection{Teammates' evaluation}
 \label{sec:teammates-evaluation}
@@ -116,14 +97,3 @@ Five choices carry most of that weight, and the sections that follow show them a
     \label{tab:catme-ratings}
   \end{table}
 \fi
-
-\subsection{Engineering Decision Notebook}
-\label{sec:edn}
-\guidance{
-  Not part of the course report template.
-  The course asks every team to keep an Engineering Decision Notebook (EDN) throughout the project (references/Instruction\_EDN\_MLOps\_v2026.md).
-  We keep it as a separate document built from the same sources (\texttt{edn.tex}); refer to its entries by ID in the methodology, e.g.\ \enquote{(EDN-03)}.
-}
-
-The relevant engineering decisions behind this work, and the role AI played in them, are recorded in our Engineering Decision Notebook (MLOps\_\TeamName\_EDN.pdf, delivered alongside this report).
-Methodology sections refer to its entries by ID.

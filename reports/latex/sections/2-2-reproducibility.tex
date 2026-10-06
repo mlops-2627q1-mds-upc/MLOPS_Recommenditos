@@ -15,7 +15,7 @@
   EDN entries here only for reproducibility decisions that go beyond what the course prescribes.
 }
 
-\tbd{DRAFT, owner \texttt{@W11W11W11}. This subsection down to the experiment-tracking heading is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words; the placeholders inside name what is still missing and where it comes from.}
+\tbd{DRAFT up to \cref{sec:m2-experiment-tracking}, owner \texttt{@W11W11W11}: to be checked and rewritten in the owner's own words.}
 
 \subsubsection{Project structure}
 \label{sec:m2-structure}
@@ -59,7 +59,7 @@ We also added \texttt{recommenditos/schema.py}, the structural contract for the 
 We follow GitHub Flow: \texttt{main} is always the released state, every change is a short-lived \texttt{feature/} or \texttt{fix/} branch off it, and it reaches \texttt{main} through a pull request.
 Branch protection blocks direct pushes, and squash merge is the only merge method enabled on the repository, so \texttt{main} carries exactly one commit per pull request and reads as a list of changes rather than of keystrokes.
 Conventional Commits are enforced twice on purpose, by a \texttt{commit-msg} hook locally and by a CI check on the pull request title, because with squash merge the title is what becomes the commit message, so the local hook alone would guard the wrong string.
-Eleven pre-commit hooks from four sources run before every commit and again in CI: \texttt{ruff-check --fix} and \texttt{ruff-format}, \texttt{nbstripout}, and the file-hygiene set (trailing whitespace, end-of-file newline, YAML and TOML syntax, merge-conflict markers, mixed line endings, and a 1\,MB ceiling on added files).
+Twelve pre-commit hooks from five sources run before every commit and again in CI, where a job of its own scans the whole history for secrets instead of the staged change (EDN-71): \texttt{ruff-check --fix} and \texttt{ruff-format}, \texttt{nbstripout}, \texttt{gitleaks}, and the file-hygiene set (trailing whitespace, end-of-file newline, YAML and TOML syntax, merge-conflict markers, mixed line endings, and a 1\,MB ceiling on every file).
 
 Four practices around that baseline are ours.
 
@@ -97,9 +97,16 @@ Tracking is per file: \texttt{data/raw}, \texttt{data/interim} and \texttt{data/
 
 % One \texttt group per stage: spaces inside a single \texttt group are rigid,
 % so the whole chain could not be broken across lines and ran into the margin.
-The pipeline is \texttt{download} \textrightarrow{} \texttt{preprocess} \textrightarrow{} \texttt{validate-data} \textrightarrow{} \texttt{split} \textrightarrow{} \texttt{features} \textrightarrow{} \texttt{train} \textrightarrow{} \texttt{evaluate}, where \texttt{validate-data} also depends on the suites \texttt{configure\_gx} builds, and \texttt{features} and \texttt{train} iterate a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position.
+The pipeline is \texttt{download} \textrightarrow{} \texttt{preprocess} \textrightarrow{} \texttt{validate-data} \textrightarrow{} \texttt{split} \textrightarrow{} \texttt{features} \textrightarrow{} \texttt{train} \textrightarrow{} \texttt{evaluate}, where \texttt{validate-data} also depends on the suites \texttt{configure\_gx} builds, and \texttt{features} and \texttt{train} iterate a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position (\cref{fig:pipeline}).
 Unlike the demo's, our \texttt{validate-data} stage fails the pipeline when an expectation fails instead of only logging the failure count.
-\tbd{the pipeline figure, from \texttt{dvc dag -{}-md} or \texttt{dvc dag -{}-dot}, rendered into \texttt{reports/latex/figures/}}
+% figures/pipeline.pdf is drawn from dvc.yaml by figures/pipeline.sh; rerun it
+% after a change to the stages.
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{pipeline}
+  \caption{The DVC pipeline as \texttt{dvc dag} draws it from \texttt{dvc.yaml}.}
+  \label{fig:pipeline}
+\end{figure}
 
 Four things about this go beyond running the tool.
 

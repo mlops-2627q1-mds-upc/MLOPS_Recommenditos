@@ -22,6 +22,9 @@ mlruns/
 # Their Markdown conversions live in references/.
 *.pdf
 *.docx
+# Except the report's figures: the LaTeX build includes them, and neither it nor CI
+# has DVC or Graphviz to redraw them (reports/latex/figures/pipeline.sh does).
+!reports/latex/figures/*.pdf
 
 # Mac OS-specific storage files
 .DS_Store

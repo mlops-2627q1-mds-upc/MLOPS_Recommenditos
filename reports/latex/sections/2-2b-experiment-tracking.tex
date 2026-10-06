@@ -17,12 +17,12 @@
   Our own starting points: one experiment \texttt{recommenditos-price} (\texttt{train.mlflow\_experiment} in \texttt{params.yaml}), one run per variant of the experiment ladder (\texttt{b0}, \texttt{b1}, \texttt{lgbm-basic}, \texttt{lgbm-extended}), and the DagsHub repository of EDN-19 as tracking server.
 }
 
-\tbd{DRAFT, owner \texttt{@ulasawczuk}. This sub-subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words. The tracking code is issue \#37 and is not merged yet, so everything here except the design is still to be measured; the placeholders name each missing piece.}
+\tbd{DRAFT, owner \texttt{@ulasawczuk}: to be checked and rewritten in the owner's own words.}
 
 Experiments are tracked in MLflow with the team's DagsHub repository as the shared tracking server (EDN-19), which is also the DVC remote, so a run and the data version it was trained on live in the same place.
 Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reached from a developer machine only: nothing in the serving path depends on MLflow being up (EDN-08).
 
-There is exactly one experiment, \texttt{recommenditos-price}, and one run per rung of the experiment ladder.
+There is exactly one experiment for the pipeline's runs, \texttt{recommenditos-price}, and one run per rung of the experiment ladder.
 Both are configuration rather than code: \texttt{params.yaml} holds the experiment name as \texttt{train.\allowbreak mlflow\_experiment}, and the four variants as a \texttt{train.\allowbreak variants} mapping that \texttt{dvc.yaml} iterates with \texttt{foreach}.
 The ladder is B0, the median price per make, model and two-year age bucket, which is the baseline SC-03 measures against; B1, a Ridge regression on $\log(\mathrm{price})$ as an interpretable depreciation baseline; \texttt{lgbm-basic}, the main model on the basic feature set; and \texttt{lgbm-extended}, the same model on the extended set, whose only purpose is to measure what equipment, history flags and appearance columns are worth.
 Adding a rung is therefore a change to \texttt{params.yaml}, and \texttt{dvc params diff} says what changed between two commits.
@@ -43,7 +43,23 @@ Every training run logs its CodeCarbon measurement alongside its metrics (NFR-10
 
 What is logged per run is the parameter subset the stage declares, the metrics of the problem specification (MdAPE as the primary metric, the shares within $\pm$10\,\% and $\pm$20\,\%, MAE in EUR, MAPE for comparability, and for the interval models the empirical coverage and the mean relative width), the emissions record, and the model artefact together with the feature-set name it was trained on.
 
-None of the runs exist yet, so the results are placeholders rather than numbers:
-\tbd{the run comparison table across \texttt{b0}, \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}: MdAPE, share within $\pm$20\,\%, MAE, training time and emissions per run, from \texttt{reports/metrics/} and MLflow once issue \#37 lands}
-\tbd{the URL of the \texttt{recommenditos-price} experiment on DagsHub, and a screenshot of its run comparison view}
-\tbd{what the ladder showed: whether the extended feature set earned its added complexity, and which variant was put forward for the gate}
+\Cref{tab:runs} compares the four runs of the committed pipeline state, which the experiment on DagsHub (\url{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}) holds as the runs tagged with the commit that state ran from, \texttt{bc5a87b}.
+\tbd{a screenshot of that run comparison view on DagsHub, which needs a login}
+
+\begin{table}[ht]
+  \centering\small
+  \begin{tabular}{@{}lrrrrr@{}}
+    \toprule
+    Run & MdAPE & Within $\pm$20\,\% & MAE (EUR) & Fit time & Emissions \tbd{\#68} \\
+    \midrule
+    \texttt{b0} & 12.16\,\% & 70.5\,\% & 9,388 & 0.1\,s & \\
+    \texttt{b1} & 9.52\,\% & 80.3\,\% & 7,499 & 1.3\,s & \\
+    \texttt{lgbm-basic} & 6.81\,\% & 89.8\,\% & 4,760 & 8.3\,s & \\
+    \texttt{lgbm-extended} & 6.26\,\% & 90.4\,\% & 4,651 & 27.9\,s & \\
+    \bottomrule
+  \end{tabular}
+  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and the four MLflow runs; fit times at one thread.}
+  \label{tab:runs}
+\end{table}
+
+The ladder answered its question conditionally: the extended set is worth 0.55 points of MdAPE on a fully described car, costs 146 more columns and 3.3 times the fit, and is 2.04 points worse, 10.30\,\% against 8.26\,\%, on a request with only the ten fields FR-01 requires, so it fails SC-06 and \texttt{lgbm-basic} is the variant put forward (EDN-62).
