@@ -605,7 +605,8 @@ These are numbers from before hyperparameter tuning, and the conclusion is re-ch
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | 0.149 Wh and 26 mg CO2eq for the whole ladder on 2026-10-06, before hyperparameter tuning, per variant in the table above: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
 
-Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02. On the VM it will be the same kind of estimate.
+Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02.
+Whether the VM exposes an energy counter is not known yet, so on the VM the figure is expected to be an estimate of the same kind.
 
 ## Technical Specifications
 

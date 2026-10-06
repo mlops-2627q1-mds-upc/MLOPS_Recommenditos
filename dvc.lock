@@ -441,8 +441,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/energy.py
       hash: md5
-      md5: 7078a7c6eeb13ad30eafa2f3fc748a6d
-      size: 20025
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
@@ -513,8 +513,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/energy.py
       hash: md5
-      md5: 7078a7c6eeb13ad30eafa2f3fc748a6d
-      size: 20025
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
@@ -586,8 +586,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/energy.py
       hash: md5
-      md5: 7078a7c6eeb13ad30eafa2f3fc748a6d
-      size: 20025
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
@@ -661,8 +661,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/energy.py
       hash: md5
-      md5: 7078a7c6eeb13ad30eafa2f3fc748a6d
-      size: 20025
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
       md5: 8d5b73a96e2aaab78d698d15509ebf3a
@@ -867,12 +867,12 @@ stages:
       size: 38657
     - path: recommenditos/modeling/compare_energy.py
       hash: md5
-      md5: f95609ba2b3db6d9f9f1dbe6128ddb38
-      size: 11203
+      md5: 82bcb18ddb1aeb7fda9c139491d31e25
+      size: 11217
     - path: recommenditos/modeling/energy.py
       hash: md5
-      md5: 7078a7c6eeb13ad30eafa2f3fc748a6d
-      size: 20025
+      md5: 4181349a90c714fa292280207dcb90ee
+      size: 20285
     - path: recommenditos/modeling/evaluate.py
       hash: md5
       md5: 9f02b4a5fbef961a190f7fc02d29c80f

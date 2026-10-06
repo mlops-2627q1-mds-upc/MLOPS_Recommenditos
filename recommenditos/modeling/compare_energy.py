@@ -22,7 +22,7 @@ what a stale `reports/metrics` would look like.
 read access to an energy counter and estimates (`recommenditos/modeling/energy.py`
 says how): a constant 10 W for the RAM plus the CPU's TDP times the share of the
 machine's CPUs the fit kept busy. That makes the energy
-of a fit its duration times 13 to 18 W on the i5-10210U (the fits use more than one
+of a fit approximately its duration times 13 to 18 W on the i5-10210U (the fits use more than one
 thread although `train.num_threads` is 1), so the ratios between rows follow the
 fit-time ratios closely without equalling them, and a fit that shared the
 machine with other work is charged for the extra seconds it took. The table

@@ -13,10 +13,14 @@ contributor's laptop and on a GitHub runner CodeCarbon falls back to its
 `cpu_load` model: the CPU draws the chip's TDP, looked up in CodeCarbon's own
 table, times the share of the machine's logical CPUs this process kept busy, and
 the RAM draws a constant 10 W, which is its floor of two DIMMs at 5 W for any x86
-machine. The energy of a fit is therefore a function of two times, not a reading
-of a meter:
+machine. The energy of a fit is therefore approximately a function of two times,
+not a reading of a meter:
 
     energy = 10 W x wall time + TDP / logical CPUs x process CPU time
+
+(approximately, because CodeCarbon samples the process's CPU time itself and
+integrates every `measure_power_secs`, so its CPU half differs by up to about 20 %
+from `fit_cpu_seconds`, the CPU time of the bracket `measure` takes around the fit.)
 
 On the i5-10210U this was measured on (TDP 15 W, 8 logical CPUs), a single-threaded
 LightGBM fit in `codecarbon_validity.py` comes out at 11.75 to 11.80 W for every

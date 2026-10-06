@@ -49,15 +49,15 @@ What is logged per run is the parameter subset the stage declares, the metrics o
   \centering\small
   \begin{tabular}{@{}lrrrrr@{}}
     \toprule
-    Run & MdAPE & Within $\pm$20\,\% & MAE (EUR) & Fit time & Emissions \tbd{\#68} \\
+    Run & MdAPE & Within $\pm$20\,\% & MAE (EUR) & Fit time & Emissions (mg CO$_2$eq) \\
     \midrule
-    \texttt{b0} & 12.16\,\% & 70.5\,\% & 9,388 & 0.1\,s & \\
-    \texttt{b1} & 9.52\,\% & 80.3\,\% & 7,499 & 1.3\,s & \\
-    \texttt{lgbm-basic} & 6.81\,\% & 89.8\,\% & 4,760 & 8.3\,s & \\
-    \texttt{lgbm-extended} & 6.26\,\% & 90.4\,\% & 4,651 & 27.9\,s & \\
+    \texttt{b0} & 12.16\,\% & 70.5\,\% & 9,388 & 0.1\,s & 0.06 \\
+    \texttt{b1} & 9.52\,\% & 80.3\,\% & 7,499 & 1.3\,s & 1.15 \\
+    \texttt{lgbm-basic} & 6.81\,\% & 89.8\,\% & 4,760 & 8.4\,s & 5.96 \\
+    \texttt{lgbm-extended} & 6.26\,\% & 90.4\,\% & 4,651 & 30.0\,s & 18.82 \\
     \bottomrule
   \end{tabular}
-  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and the four MLflow runs; fit times at one thread.}
+  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and the four MLflow runs; fit times and emissions from the tracked run of 2026-10-06, before hyperparameter tuning, with \texttt{train.num\_threads} at 1 (the fits still use more than one thread), emissions as CodeCarbon's estimate and not a meter reading.}
   \label{tab:runs}
 \end{table}
 

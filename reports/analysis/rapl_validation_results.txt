@@ -1,4 +1,4 @@
-2026-10-06 11:19, codecarbon 3.3.1, 8 logical CPUs, train.num_threads 1, load 2.06
+2026-10-06 11:19, codecarbon 3.3.1, 8 logical CPUs, train.num_threads 1, load 2.06 (read after the idle check had passed, which requires a 1-minute load of at most 2.0 when it starts)
 Readable zones: intel-rapl:0:package-0, intel-rapl:0:0:core, intel-rapl:0:1:uncore, intel-rapl:0:2:dram, intel-rapl:1:psys, intel-rapl-mmio:0:package-0, intel-rapl-mmio:0:0:dram
 
 == Idle draw, W (30 s with nothing running, before and after the fits) ==
