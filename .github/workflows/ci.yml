@@ -162,6 +162,28 @@ jobs:
             reports/junit.xml
             reports/coverage.xml
 
+  # The same suite on Windows, where one of us develops, because Linux cannot
+  # show what only Windows does: native paths with backslashes (#74), text files
+  # written with CRLF line endings and a console that cannot encode what a
+  # library prints (#84). A required check like `Tests` (EDN-75). The coverage
+  # and the test reports come from the Linux job; this one only has to pass.
+  test-windows:
+    name: Tests (Windows)
+    needs: changes
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
+      - uses: astral-sh/setup-uv@v10.1.0
+        if: needs.changes.outputs.code == 'true'
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+        if: needs.changes.outputs.code == 'true'
+      - run: uv run pytest
+        if: needs.changes.outputs.code == 'true'
+
   # The API image installs `[project] dependencies` alone (EDN-47), because
   # NFR-04 caps it at 1 GB. This is the one job that does not install the full
   # environment: `make test-serving` builds the runtime list plus the `test`
