@@ -23,7 +23,7 @@ It serves two use cases (project brief, section~2):
 The learning task is supervised regression on $\log(\mathrm{price})$, transformed back with $\exp$, which estimates the median price of a car and so matches our median-based primary metric, the median absolute percentage error (MdAPE) (problem specification, sections~3 and~6).
 We train on the AutoScout24 Car Listings Dataset (2025 snapshot), 118,382 listings with 75 columns from eight European countries, published on Zenodo under DOI \href{https://doi.org/10.5281/zenodo.17643343}{10.5281/zenodo.17643343} (EDN-01).
 The scope is used passenger cars (EDN-04) of the makes with at least 300 listings, currently 11 makes covering 98.6\,\% of the used listings (EDN-05); a car outside that scope is refused rather than estimated (FR-04).
-All Spanish listings are held out as a market the model has never seen, so that Milestone~6 can demonstrate drift detection and retraining on real data rather than on a simulated shift (EDN-03).
+All Spanish listings are held out as a market the model never sees, so that Milestone~6 demonstrates drift detection and retraining on real data, not on a simulated shift (EDN-03).
 
 In operation the component is a containerised API on the course's single CPU-only virtual machine, with 4\,GB of memory and 20\,GB of disk (EDN-17), serving the pipeline artefact that CI bakes into the image, so the version in service is verifiably the one the repository declares released (FR-12, EDN-08).
 Every answer is recorded without personal data (FR-13, NFR-08), traffic is compared with the training distribution window by window (FR-14), and retraining and promotion remain a human decision on that evidence (FR-15, EDN-12).
@@ -31,15 +31,15 @@ The 16 functional and 15 non-functional requirements, each with an acceptance cr
 
 \paragraph{Success criteria.}
 A model is good enough to deploy when it meets all six criteria on the test set (problem specification, section~8; EDN-06, SC-06 added by EDN-15): SC-01, an MdAPE of at most 9\,\%; SC-02, at least 85\,\% of the predictions within $\pm$20\,\% of the asking price; SC-03, an MdAPE at least 30\,\% below baseline B0, the median price per make, model and two-year age bucket; SC-04, at most 15\,\% MdAPE in every level of make, country, seller type, fuel category and age bucket that holds at least 500 test rows; SC-05, an empirical coverage between 88\,\% and 92\,\% for the nominal 90\,\% intervals of UC2, with full inputs and with make, model, registration date and mileage alone; and SC-06, an MdAPE at most 1.5 times the full-input one with any optional input field masked, and with all of them masked at once.
-They are measured after deduplication, with the Spanish listings removed and the remainder split by seller so that no seller appears in two sets (problem specification, section~5).
+They are measured on the deduplicated, seller-grouped test split, without the Spanish listings (problem specification, section~5).
 NFR-01 makes them the release gate and sets no threshold of its own: the \texttt{evaluate} stage reads every threshold from \texttt{evaluate.success\_criteria} in \texttt{params.yaml}, writes each criterion to \texttt{metrics.json} with its measured value and its verdict, and a model that misses one, or for which one cannot be measured yet, is not deployed (EDN-58).
 
 The thresholds come from a one-off exploratory run on the final scope, in which baseline B0 reached 11.9\,\% MdAPE and 70.9\,\% within $\pm$20\,\% and an untuned LightGBM 6.7\,\% and 90.6\,\%, and keep a margin to those values, so that they hold across seeds and splits while still ruling out a model only marginally better than the baseline (EDN-06).
 The same run located the criterion we expect to fail first, cars older than 20 years at 15.3\,\% against SC-04's bound of 15\,\%, and we recorded that as a known risk instead of loosening the criterion, because a gate set to what the model already does gates nothing.
 SC-04's per-segment breakdown, country and seller type included, is also the project's fairness check, because classification fairness metrics do not apply to a regression and error parity across segments does (problem specification, section~8).
-On the test split of this delivery no variant passes the gate.
+No variant passes the gate on this delivery's test split.
 The candidate \texttt{lgbm-basic} meets SC-01 at 6.81\,\%, SC-02 at 89.8\,\%, SC-03 at 44.0\,\% below B0 and SC-06 at 1.21 times, misses SC-04 on the risk named above, at 16.77\,\% over the 784 test cars older than 20 years, and has no SC-05 measurement until the UC2 intervals exist.
-We accept the miss rather than move the bound, and prefer \texttt{lgbm-basic} to the lower pooled MdAPE of \texttt{lgbm-extended}, 6.26\,\%, because only it meets SC-06 (EDN-62).
+We accept the miss rather than move the bound, and prefer the candidate to \texttt{lgbm-extended}, whose pooled MdAPE is lower, 6.26\,\%, but which misses SC-06 (EDN-62).
 
 \paragraph{Engineering focus.}
 The course grades how well the software engineering practices are applied, not how accurate the model is, so our effort goes into justified engineering rather than into model complexity (project brief, section~1).

@@ -17,7 +17,7 @@
   Our own starting points: one experiment \texttt{recommenditos-price} (\texttt{train.mlflow\_experiment} in \texttt{params.yaml}), one run per variant of the experiment ladder (\texttt{b0}, \texttt{b1}, \texttt{lgbm-basic}, \texttt{lgbm-extended}), and the DagsHub repository of EDN-19 as tracking server.
 }
 
-\tbd{DRAFT, owner \texttt{@ulasawczuk}: to be checked and rewritten in the owner's own words.}
+\tbd{DRAFT by \texttt{@ulasawczuk}, to check and rewrite in own words}
 
 Experiments are tracked in MLflow with the team's DagsHub repository as the shared tracking server (EDN-19), which is also the DVC remote, so a run and the data version it was trained on live in the same place.
 Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reached from a developer machine only: nothing in the serving path depends on MLflow being up (EDN-08).
@@ -39,12 +39,11 @@ The \texttt{evaluate} stage writes one JSON record per variant under \texttt{rep
 That is what lets the same numbers back the report, the model card and the promotion decision, which EDN-12 keeps in human hands.
 
 \emph{Energy sits next to accuracy in the same run.}
-Every training run logs its CodeCarbon measurement alongside its metrics (NFR-10), so the ladder answers whether a rung earned its energy and not only whether it was more accurate; that comparison is the subject of \cref{sec:m3-energy}.
+NFR-10 asks every training run to log its CodeCarbon measurement alongside its metrics, which issue \#38 implements, so that the ladder answers whether a rung earned its energy and not only whether it was more accurate; that comparison is the subject of \cref{sec:m3-energy}.
 
-What is logged per run is the parameter subset the stage declares, the metrics of the problem specification (MdAPE as the primary metric, the shares within $\pm$10\,\% and $\pm$20\,\%, MAE in EUR, MAPE for comparability, and for the interval models the empirical coverage and the mean relative width), the emissions record, and the model artefact together with the feature-set name it was trained on.
+What is logged per run is the parameter subset the stage declares, the metrics of the problem specification (MdAPE as the primary metric, the shares within $\pm$10\,\% and $\pm$20\,\%, MAE in EUR, MAPE for comparability, and for the interval models the empirical coverage and the mean relative width), the emissions record once issue \#38 adds it, and the model artefact together with the feature-set name it was trained on.
 
-\Cref{tab:runs} compares the four runs of the committed pipeline state, which the experiment on DagsHub (\url{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}) holds as the runs tagged with the commit that state ran from, \texttt{bc5a87b}.
-\tbd{a screenshot of that run comparison view on DagsHub, which needs a login}
+\Cref{tab:runs} compares the four runs of the committed pipeline state, which the \href{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}{experiment on DagsHub} lists when filtered on the commit they ran from, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/commit/bc5a87ba75ff947359b0f76627e483710e5fa37c}{\texttt{bc5a87b}}, which is on the branch of pull request \#77 rather than on \texttt{main}, where it was squash-merged as \texttt{df4879d}.
 
 \begin{table}[ht]
   \centering\small
@@ -62,4 +61,4 @@ What is logged per run is the parameter subset the stage declares, the metrics o
   \label{tab:runs}
 \end{table}
 
-The ladder answered its question conditionally: the extended set is worth 0.55 points of MdAPE on a fully described car, costs 146 more columns and 3.3 times the fit, and is 2.04 points worse, 10.30\,\% against 8.26\,\%, on a request with only the ten fields FR-01 requires, so it fails SC-06 and \texttt{lgbm-basic} is the variant put forward (EDN-62).
+The ladder answered its question conditionally: the extended set is worth 0.55 points of MdAPE on a fully described car and costs 146 more columns and 3.3 times the fit, but with only the ten fields FR-01 requires its MdAPE is 1.65 times its full-input figure, above SC-06's 1.5, so \texttt{lgbm-basic} is put forward (EDN-62).

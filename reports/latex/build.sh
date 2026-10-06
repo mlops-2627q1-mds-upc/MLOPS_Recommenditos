@@ -13,11 +13,13 @@ latexmk_run() {
 	latexmk -interaction=nonstopmode -halt-on-error "$@"
 }
 
-# Print page count and remaining \tbd placeholders of a finished build.
+# Print page count and remaining \tbd placeholders of a finished build, and for
+# a report the room left on its last page, which is the budget against the limit.
 summary() {
 	pages=$(sed -n 's/^Output written on .*(\([0-9]*\) pages\{0,1\}.*/\1/p' "build/$1.log")
 	tbd=$(grep 'Unfilled placeholder' "build/$1.log" | sort -u | wc -l | tr -d ' ')
-	echo ">>> reports/latex/build/$1.pdf: $pages pages, $tbd distinct unfilled placeholders"
+	spare=$(sed -n 's/^Report: space left on the last page: //p' "build/$1.log")
+	echo ">>> reports/latex/build/$1.pdf: $pages pages, $tbd distinct unfilled placeholders${spare:+, $spare left on the last page}"
 }
 
 # Intermediate files from another TeX Live version (e.g. Docker vs. a local

@@ -43,4 +43,11 @@
 
 \printbibliography[heading=bibintoc]
 
+% Logged for build.sh: the room left on the last page, which is how much the
+% sections can still grow before the report gains a page.
+\par
+\typeout{Report: space left on the last page:
+  \the\dimexpr\pagegoal-\pagetotal\relax\space
+  (about \the\numexpr\dimexpr\pagegoal-\pagetotal\relax/\baselineskip\relax\space lines)}
+
 \end{document}
