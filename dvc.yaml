@@ -336,6 +336,7 @@ stages:
       - recommenditos/modeling/evaluate.py
       - recommenditos/modeling/model.py
       - recommenditos/tracking.py
+      - recommenditos/provenance.py
       - recommenditos/data/build_features.py
       - recommenditos/config.py
       - recommenditos/schema.py
