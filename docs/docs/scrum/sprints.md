@@ -6,7 +6,7 @@ Record of each sprint's goal and outcome.
 | Sprint | Dates | Goal | Outcome |
 | ------ | ----- | ---- | ------- |
 | 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met. 16 pull requests of sprint 1 scope merged, 7 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, model card, problem specification and requirements written. The model card (#5, PR #30) landed on the last day, minutes after the review was written, so nothing was carried into sprint 2 but the Discord ticket (#15), which is set up and still open. |
-| 2      | 2026-09-29 - 2026-10-07 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | In progress |
+| 2      | 2026-09-29 - 2026-10-06 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | In progress |
 
 ## Sprint 1 planning notes (2026-09-22)
 
@@ -51,6 +51,11 @@ sprint. The Discord server (#15) is set up but its issue is still open.
 record of how AI was involved.
 
 ## Sprint 2 planning notes (2026-09-29)
+
+> **Dates corrected on 2026-10-06** ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)). These notes were written against the course PDF's dates read as 2026 dates: the first report due 2026-10-13 and the M4a session on 2026-10-21, a Wednesday.
+> The first report is due 2026-10-19 at 23:59, the laboratory meets on Tuesdays, and the M4a session's date is not known yet.
+> Sprint 2 ends at the laboratory session on 2026-10-06.
+> The 2026-10-08 cut-off was set against 2026-10-13; the sprint 3 planning in [#94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/94) sets the new one.
 
 **Attendees:** @lukas2510, @kadameit, @W11W11W11, @michudud04, @ulasawczuk
 
@@ -115,6 +120,11 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
 
 ## Sprint 2 progress (2026-09-30)
 
+> **Dates corrected on 2026-10-06** ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)). This entry was written against the course PDF's dates read as 2026 dates: the first report due 2026-10-13 and the M4a session on 2026-10-21, a Wednesday.
+> The first report is due 2026-10-19 at 23:59, and the M4a session's date is not known yet.
+> The laboratory meets on Tuesdays, so the sprint boundary below does not move: sprint 2 ends at the laboratory session on 2026-10-06, and sprints stay Tuesday to Tuesday.
+> The 2026-10-08 cut-off was set against 2026-10-13; the sprint 3 planning in [#94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/94) sets the new one.
+
 Recorded on day 2 of the sprint from the merged pull requests and the closed issues, so the sprint 2 review has a trail to read rather than a week to reconstruct.
 
 **Landed since planning:**
@@ -169,6 +179,9 @@ Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be
     - The working agreements named a ceremony day that the lab schedule contradicts: they put
       Planning in a Tuesday laboratory session while every session in the schedule is a Wednesday.
       A page describing our own process was never checked against the document that fixes it.
+      *Withdrawn on 2026-10-06 ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)): the finding was wrong. The laboratory is on Tuesdays,
+      as the working agreements said; the Wednesday came from reading the course PDF's session
+      dates as 2026 dates.*
 - **Action items:**
     - Cut sprint 2 so that each ticket owns its own files, and land the shared contracts first
       (#32).
@@ -179,3 +192,4 @@ Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be
       written, not when the sprint is reviewed.
     - Hold the ceremonies in the Wednesday laboratory session and run the sprint from Wednesday to
       Wednesday, so the plan is made where the whole team is present.
+      *Withdrawn on 2026-10-06 with the finding above; the sprint stays Tuesday to Tuesday.*

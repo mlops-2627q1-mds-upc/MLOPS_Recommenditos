@@ -5,12 +5,11 @@ Team conventions for how we work together on this project.
 
 ## Sprint
 
-- Sprint length: 1 week, Wednesday to Wednesday.
-- Sprint Planning, Review and Retrospective all happen in the Wednesday laboratory session, the only slot in the week where the whole team is together.
-  The [lab schedule](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/references/MLOps-lab.md) fixes those sessions, and every one of them falls on a Wednesday, from 2026-09-09 to 2026-12-16.
-- A delivery is due the day before the session it belongs to, so a freeze always lands on a Tuesday: the first report is due 2026-10-13 for the presentation on 2026-10-14.
-- Sprints 1 and 2 were run Tuesday to Tuesday and planned the day before the laboratory.
-  The boundary moves onto the laboratory session with sprint 3, which starts on 2026-10-07 (**[proposed]**, a marker the [project brief](../project-brief.md) defines).
+- Sprint length: 1 week, Tuesday to Tuesday.
+- Sprint Planning, Review and Retrospective all happen in the Tuesday laboratory session, the only slot in the week where the whole team is together.
+- The first report is due on 2026-10-19 at 23:59, the day before its presentation on 2026-10-20, so the 48-hour [freeze window](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#freeze-window-before-a-presentation) starts on 2026-10-18.
+  The second presentation is on 2026-12-15, and the due date of its report is not announced yet.
+  The course changed these dates from the ones in the [lab schedule](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/references/MLOps-lab.md).
 
 ## Git and PRs
 
@@ -25,7 +24,7 @@ Team conventions for how we work together on this project.
 
 ## Communication
 
-- No daily standup: the team is only together in person on Wednesdays, so that's our sync point.
+- No daily standup: the team is only together in person on Tuesdays, so that's our sync point.
 - Outside of the laboratory session, we work async and post progress updates in Discord as they happen.
 - Blockers are raised in Discord as soon as they come up, not saved for the next ceremony.
 

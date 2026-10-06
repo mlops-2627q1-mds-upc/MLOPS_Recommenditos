@@ -93,7 +93,7 @@ Its first update after training added the results of \cref{sec:goal}, the hyperp
 \guidance{
   \textbf{Template:} What tools have been selected, why, and how are they used?\\
   \textbf{Rubric (4 pts):} How effectively do our coordination and communication practices support collaboration and leave a useful trace of our progress?\\
-  Already in place (see \texttt{docs/docs/scrum/} and \texttt{CONTRIBUTING.md}): Scrum with GitHub Issues and a GitHub Projects board, Discord for async communication, a weekly sync in the Wednesday laboratory session instead of a daily standup, a Definition of Done, working agreements and a sprint log, issue and PR templates.
+  Already in place (see \texttt{docs/docs/scrum/} and \texttt{CONTRIBUTING.md}): Scrum with GitHub Issues and a GitHub Projects board, Discord for async communication, a weekly sync in the Tuesday laboratory session instead of a daily standup, a Definition of Done, working agreements and a sprint log, issue and PR templates.
   Show the trace: board screenshot, sprint log, linked issues and PRs.
 }
 
@@ -103,8 +103,7 @@ The process is written down in \href{https://github.com/mlops-2627q1-mds-upc/MLO
 Four adaptations are ours rather than the course's.
 
 \emph{The ceremonies are held where the whole team is present.}
-There is no daily standup, because the Wednesday laboratory session is the only slot with everybody in one room, so planning, review and retrospective all happen there and the sprint runs Wednesday to Wednesday.
-The first two sprints ran Tuesday to Tuesday, which the sprint~1 retrospective found to be a mistake: the working agreements named a ceremony day that the laboratory schedule contradicts, so the boundary moves onto the session with sprint~3.
+There is no daily standup, because the Tuesday laboratory session is the only slot with everybody in one room, so planning, review and retrospective all happen there and the sprint runs Tuesday to Tuesday.
 
 \emph{Every ticket is filterable, and that was learned the hard way.}
 Each issue carries a milestone label \texttt{M1} to \texttt{M6}, an area label such as \texttt{area:data} or \texttt{area:report}, a GitHub milestone per delivery and an owner.
@@ -137,5 +136,5 @@ NFR-04 is written for this machine and budgets it: the API container stays below
 That the drift job must be separate is a hard constraint and not a preference, because Alibi Detect 0.13 requires \texttt{numpy<2} and \texttt{pandas<3} and pulls in transformers, OpenCV and scikit-image, so it cannot share an environment with the API; its Business Source Licence 1.1 also permits only non-production use.
 NFR-12 keeps the choice reversible by requiring the system to start on a fresh machine with one documented command and to need no paid service at run time, so nothing in the serving path is specific to this provider, and no GPU appears anywhere, which is also why the model family was chosen (EDN-02) and why \texttt{shap} is kept out of the serving image (EDN-11).
 
-The cost is recorded with a date rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
-If that is still true at the Milestone~4a laboratory on 2026-10-21, we raise it with the teachers instead of planning further on it.
+The cost is recorded rather than glossed over: the machine is a single unattended host with no redundancy, which is what NFR-05 had to be rewritten around, and nobody on the team has access to it yet.
+If that is still true at the Milestone~4a laboratory, we raise it with the teachers instead of planning further on it.

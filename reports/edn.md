@@ -290,6 +290,9 @@ How to add an entry:
 
 ### EDN-12: Retraining and promotion are human-triggered, not automated
 
+> **Date corrected on 2026-10-06** ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)). Option A's cons name the M4-M6 presentation as Dec 9, the course PDF's date; it is on Dec 15.
+> The argument and the decision are unchanged.
+
 - **Date:** 2026-09-22
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** ML System Design, Model Performance
@@ -428,6 +431,10 @@ How to add an entry:
 
 ### EDN-17: Deployment target is the FIB Virtech VM
 
+> **Date corrected on 2026-10-06** ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)). The rationale dates the M4a lab 2026-10-21, a course PDF session date read as a 2026 date, which is a Wednesday.
+> The laboratory meets on Tuesdays and the M4a session's date is not known yet, so the trigger is that session, and "it has a date" in the rationale now reads "it has a trigger".
+> The decision is unchanged.
+
 - **Date:** 2026-09-29
 - **Milestone:** M4: Model Deployment
 - **Activity / Topic:** ML System Design, Deployment
@@ -440,7 +447,7 @@ How to add an entry:
   - **Option B: another cloud (AWS, DigitalOcean, Oracle Always Free or similar).**
     Pros: more headroom, and a free ARM tier exists at one provider.
     Cons: either paid or tied to a private account with payment details; the grading rewards nothing for the hosting choice; NFR-02 to NFR-04 would have to be re-derived for different hardware, and an ARM tier would also mean multi-architecture images.
-- **Rationale:** The requirements already named this VM in eight places (NFR-02, NFR-04, NFR-05, NFR-09, NFR-12, NFR-13 and the network warning), so the decision had been made by writing rather than by deciding, while the brief still listed the target as open. The reason the brief gave for keeping it open, that the stack is tight on 4 GB, has since been planned for in NFR-04, so the open point was stale. What stays genuinely open is not the target but what the VM's network allows, which the requirements already track with a fallback per requirement. Access is a task, not a decision, and it has a date: if nobody has access at the M4a lab on 2026-10-21, we raise it with the teachers.
+- **Rationale:** The requirements already named this VM in eight places (NFR-02, NFR-04, NFR-05, NFR-09, NFR-12, NFR-13 and the network warning), so the decision had been made by writing rather than by deciding, while the brief still listed the target as open. The reason the brief gave for keeping it open, that the stack is tight on 4 GB, has since been planned for in NFR-04, so the open point was stale. What stays genuinely open is not the target but what the VM's network allows, which the requirements already track with a fallback per requirement. Access is a task, not a decision, and it has a trigger: if nobody has access at the M4a lab on 2026-10-21, we raise it with the teachers.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** While reviewing PR #19, AI reported the brief and the requirements as contradicting each other on the deployment target. Asked to look again, it corrected its own framing: the `[proposed]` marker in the requirements refers to the performance numbers, not to the machine, and the requirements treat the VM as settled throughout, so the real issue was an implicit decision rather than a disagreement between two pages. It also pointed out that the brief's stated reason for leaving the point open is already covered by NFR-04. Lukas kept the change small and deliberately left the performance targets `[proposed]` until the first M4 load test.

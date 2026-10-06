@@ -118,6 +118,9 @@ Very important:
 
 ## Schedule - Laboratory
 
+> **Note added by the team, not part of the converted course PDF:** read as 2026 dates, the dates in this table fall on Wednesdays, while this team's laboratory sessions are on Tuesdays, so they are not this edition's session dates.
+> The dates the course has announced are in the notes under Schedule - Feedback and Presentations and Schedule - Deliveries.
+
 | Session | Assignments / Outputs for each laboratory session | Tools                                                     | Date    | Delivery (one day before the session) |
 |---------|-----------------------------------------------------|------------------------------------------------------------|---------|-----------------------------------------|
 | 1       | Milestone 1 - Project kick-off and inception.        | GitHub repository creation (for model and dataset cards)   | Sep. 9  |                                          |
@@ -233,11 +236,20 @@ Evaluation criteria:
 
 ## Schedule - Feedback and Presentations
 
+> **Note added by the team, not part of the converted course PDF:** the course has changed these dates.
+> The M1-M3 presentation is on 2026-10-20 and the M4-M6 presentation on 2026-12-15.
+> This team's laboratory sessions are on Tuesdays.
+
 - Presentations after every three milestones.
 - M1-M3 presentation (15 mins), 6th week - Oct. 14: focus on inception (ML component definition and success criteria), and model building: reproducibility & quality assurance
 - M4-M6 presentation (15 mins), 13th week - Dec. 9: focus on model deployment: API & CI/CD and monitoring
 
 ## Schedule - Deliveries
+
+> **Note added by the team, not part of the converted course PDF:** the course has changed these dates.
+> The 1st report (Milestones 1-3) is due on 2026-10-19 at 23:59 via Atenea: one team member submits one PDF of at most 20 MB, the current team report of at most 15 pages, in English, with a link to the code repository on the cover that the lecturer can open.
+> The due date of the 2nd report (Milestones 4-6) is not announced yet.
+> This team's laboratory sessions are on Tuesdays.
 
 - 1st report (Milestones 1-3): Oct. 13, 23:55 - via Atenea
 - 2nd report (Milestones 4-6): Dec. 8, 23:55 - via Atenea
