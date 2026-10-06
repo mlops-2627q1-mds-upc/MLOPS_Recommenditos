@@ -6,7 +6,8 @@ Record of each sprint's goal and outcome.
 | Sprint | Dates | Goal | Outcome |
 | ------ | ----- | ---- | ------- |
 | 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met. 16 pull requests of sprint 1 scope merged, 7 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, model card, problem specification and requirements written. The model card (#5, PR #30) landed on the last day, minutes after the review was written, so nothing was carried into sprint 2 but the Discord ticket (#15), which is set up and still open. |
-| 2      | 2026-09-29 - 2026-10-06 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | In progress |
+| 2      | 2026-09-29 - 2026-10-06 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | Met. The pipeline runs end to end on the real Zenodo snapshot with every stage implemented, tracked in MLflow on DagsHub and gated by SC-01 to SC-06, and CodeCarbon measures every training fit. 29 pull requests merged and 26 issues closed after planning. Hyperparameter tuning (#88) and the split strategy (#89) were not started and move into sprint 3. |
+| 3 | 2026-10-06 - 2026-10-13 | Fine-tune the model and measure its carbon emissions, so the numbers the first report quotes are final before the delivery on 2026-10-19. | In progress |
 
 ## Sprint 1 planning notes (2026-09-22)
 
@@ -145,6 +146,69 @@ The 2026-10-08 cut-off for pipeline work stands, because the first report is due
 **Sprint boundary.** The sprint runs to the laboratory session on 2026-10-07 rather than to Tuesday 2026-10-06, so that Planning, Review and Retrospective happen where the whole team is present, and sprint 3 starts at that session.
 This is the change the [working agreements](working-agreements.md) now describe, and it is **[proposed]** until the team confirms it in the laboratory.
 
+## Sprint 2 review (2026-10-06)
+
+Written from the merged pull requests and the closed issues, to be confirmed by the team in the laboratory session.
+
+**Done and merged:**
+
+- The pipeline skeleton and the processed-data contract ([#32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32)), then every stage on top of it: download ([#33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33)), preprocess ([#34](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/34)), split ([#35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35)), features ([#36](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/36)), train ([#37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37)) and evaluate ([#39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39)).
+- Great Expectations suites on the raw and the cleaned frame that fail the pipeline on a broken rule ([#25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25)).
+- The pipeline on the real Zenodo snapshot, with the artefacts pushed to DagsHub ([#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57), [#59](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/59)).
+- CodeCarbon around every training fit, with the model ladder compared by energy against error ([#38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38), EDN-69).
+- CI: requirement markers and the traceability matrix ([#40](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/40)), Pynblint ([#41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41)), gitleaks on every commit, grouped dependencies so the API image does not carry the training stack ([#61](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/61)), and the test suite on Windows ([#84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/84), EDN-75).
+- Early stopping now decides the LightGBM tree count under a 5,000-tree ceiling ([#64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64)), and every run's provenance tags identify a committed state ([#79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/79)).
+- DagsHub access, the board, its labels and milestones, and the coding-agent rule ([#42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42), [#43](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/43)).
+- The report's TeX Live image pulled from GHCR with a retry on the mirror ([PR #90](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/90)).
+- The course dates and the Tuesday lab corrected across the documents ([PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)).
+
+**Not done, moved into sprint 3:**
+
+- [#88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88): tune the LightGBM hyperparameters with a small recorded grid search.
+  [#64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64) closed with its "then tune the rest" part open, so the model card still calls the hyperparameters untuned.
+- [#89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89): reconsider the split strategy.
+- [#44](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/44): the first report, whose writing was planned for sprint 3 from the start.
+- Open pull requests that carry over: [#86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/86) (SC-04's accepted limitation) and [#98](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/98) (the interim suite's filled columns).
+
+**Risks from planning.**
+The committed analysis outputs reproduce again (EDN-29).
+Nobody having access to the FIB Virtech VM was not resolved, and the M4a session date is still to be confirmed.
+
+## Sprint 3 planning notes (2026-10-06)
+
+**Sprint goal:** fine-tune the model and measure its carbon emissions, so that the numbers the first report quotes are final before the delivery.
+The first report is due on 2026-10-19 at 23:59 and the M1-M3 presentation is on 2026-10-20.
+
+**Focus:**
+
+- **Fine-tuning.**
+  The grid search of [#88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), with the method decision recorded in the EDN before the search runs, and the split strategy of [#89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89).
+  Both move every number the report quotes, so they land first.
+- **Carbon emissions.**
+  Build on the CodeCarbon measurement of [#38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38) and EDN-69.
+  The ticket for this scope is still to be written, with an owner and the oracle that says when it is done.
+
+**Backlog:**
+
+| Issue | Title | Assignee |
+| ----- | ----- | -------- |
+| [#88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88) | Tune the LightGBM hyperparameters with a small recorded grid search | @kadameit |
+| [#89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89) | Reconsider the split strategy and choose one or more with reasons | unassigned |
+| [#96](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/96) | Test every column the interim suite keeps filled, not only make | @kadameit |
+| [#87](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/87) | The report build rebuilds TeX Live from a slow mirror whenever its layer cache is evicted | unassigned |
+| [#95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95) | Record the two EDN entries promised for the first delivery | @lukas2510 |
+| [#94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/94) | Close sprint 2 and plan sprint 3 around the new delivery dates | @lukas2510 |
+| [#44](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/44) | First report (M1-M3): write the sections, one owner per file | @lukas2510 |
+| [#93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/93) | Cut and submit the first delivery by 2026-10-19, 23:59 | @lukas2510 |
+| [#92](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/92) | Prepare the M1-M3 presentation for 2026-10-20 | @lukas2510 |
+
+**Dates:**
+
+- The sprint runs Tuesday to Tuesday, from 2026-10-06 to 2026-10-13.
+- **[proposed]** Pipeline work stops on 2026-10-13, the end of the sprint, so the report is finalised on numbers that no longer change.
+  The earlier cut-off of 2026-10-08 no longer applies, because it was set for a delivery on 2026-10-13.
+- The freeze window of [CONTRIBUTING.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md) starts on 2026-10-18, 48 hours before the presentation.
+
 ## Retrospective notes
 
 ### Sprint 1
@@ -193,3 +257,24 @@ Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be
     - Hold the ceremonies in the Wednesday laboratory session and run the sprint from Wednesday to
       Wednesday, so the plan is made where the whole team is present.
       *Withdrawn on 2026-10-06 with the finding above; the sprint stays Tuesday to Tuesday.*
+
+### Sprint 2
+
+Drafted from the sprint's record on 2026-10-06, to be confirmed by the team in the laboratory session.
+
+- **What went well:**
+    - The contract-first cut worked: once #32 landed, every stage was built against the schema and the fixture, and the pipeline ran on the real snapshot the next day.
+    - The Windows problems a teammate hit (CRLF in `dvc.lock`, a POSIX path in a test, MLflow's emoji on a cp1252 console) were each fixed, and the suite now runs on Windows in CI so they cannot return unnoticed.
+    - Claims were again checked against the data before they were written down, for example the raw fill rates that moved into the Great Expectations suites.
+- **What to improve:**
+    - The work is still unevenly distributed: 27 of the 29 pull requests merged since planning were authored under @lukas2510's account, 2 under @kadameit's, and 23 of the 26 closed issues were assigned to @lukas2510.
+      The laboratory grade carries an individual factor based on contributions, and the account that opens an agent's pull request does not show who did the thinking.
+    - EDN numbers were again taken without reserving them on `main` first (EDN-69 and EDN-75), after the sprint 1 retrospective made reserving them an action item.
+    - Two pull requests moved the lab from Tuesday to Wednesday because the course PDF's session dates were read as 2026 dates and never checked against the day the lab actually meets.
+      #97 corrected it.
+    - Tuning and the split strategy were left until after the pipeline worked, so they now sit in front of a delivery date.
+- **Action items:**
+    - Every teammate owns a ticket of sprint 3, and the owner opens the pull request from their own account.
+    - Reserve the EDN number on `main` in its own small pull request before the branch that needs it, and say so in the ticket.
+    - Check a date from a course document against the calendar before it is written into a plan.
+    - Land the changes that move the report's numbers (#88, #89) before 2026-10-13.
