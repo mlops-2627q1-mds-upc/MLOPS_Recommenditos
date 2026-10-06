@@ -13,9 +13,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 # The historic mirror is one university server that now and then drops a single
 # package download, so every step that reads from it is tried up to five times.
+# install-tl and tlmgr exit 0 after a failed download, which leaves an image
+# without its formats, so a step also counts as failed when it says so.
 RUN printf '%s\n' \
         '#!/bin/sh' \
-        'for i in 1 2 3 4 5; do "$@" && exit 0; echo "attempt $i failed: $*" >&2; sleep $((i * 15)); done' \
+        'for i in 1 2 3 4 5; do' \
+        '  "$@" > /tmp/retry.log 2>&1; rc=$?; cat /tmp/retry.log' \
+        '  [ $rc -eq 0 ] && ! grep -q "did not succeed" /tmp/retry.log && exit 0' \
+        '  echo "attempt $i failed: $*" >&2; sleep $((i * 15))' \
+        'done' \
         'exit 1' \
         > /usr/local/bin/retry \
     && chmod +x /usr/local/bin/retry
@@ -41,6 +47,9 @@ RUN retry tlmgr install \
         babel-english lm microtype xcolor booktabs tools enumitem etoolbox \
         fancyhdr listings tcolorbox pgf environ tikzfill pdfcol listingsutf8 \
         csquotes cleveref url
+# The formats are built while the packages install, and without them every
+# compilation fails, so fail the image build here and not in the report job.
+RUN test -f /opt/texlive/texmf-var/web2c/pdftex/pdflatex.fmt
 # We only compile with pdfLaTeX. Drop what it never reads to keep the image
 # slim: LuaTeX binaries and formats, font sources and metrics pdfTeX does not
 # use, and the tlmgr database (packages are installed above, never at run time).
