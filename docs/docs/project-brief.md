@@ -151,6 +151,8 @@ So the extended feature set is worth 0.55 pp on a fully described car - and 2.04
 The whole ladder fits in under a minute.
 Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-70), and `learning_rate` and `num_leaves` are deliberately not tuned, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
+Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-78).
+<!-- TODO #88: the outcome of the search, once run. -->
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
 Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) on top of quantile LightGBM models (e.g. 5 % / 95 %).

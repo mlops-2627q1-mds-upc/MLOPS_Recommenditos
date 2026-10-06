@@ -59,7 +59,13 @@ from recommenditos.modeling.energy import (
     FitMeasurement,
     measure,
 )
-from recommenditos.modeling.model import Model, TrainingData, fit_variant, load_model
+from recommenditos.modeling.model import (
+    ESTIMATORS,
+    Model,
+    TrainingData,
+    fit_variant,
+    load_model,
+)
 from recommenditos.pipeline import load_params, read_frame
 from recommenditos.tracking import Run, optional_run
 
@@ -117,7 +123,7 @@ def read_matrices(
     )
 
 
-def _logged_params(variant: str, data: TrainingData, params: dict) -> dict:
+def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     """What MLflow records about how this run was configured (NFR-14).
 
     Every params.yaml key `dvc.yaml` declares for this stage but one, plus the
@@ -140,6 +146,10 @@ def _logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     (`recommenditos/provenance.py`).
     `tests/test_model.py::test_a_run_records_every_parameter_its_stage_declares`
     reads the declared keys out of `dvc.yaml` and compares them with a real run.
+
+    Public because the hyperparameter search (`recommenditos/modeling/tune.py`)
+    logs each of its fits under the same names, from a copy of `params` with the
+    point's values in it, so a search run and a pipeline run share their columns.
     """
     settings = params["train"]["variants"][variant]
     return {
@@ -152,7 +162,16 @@ def _logged_params(variant: str, data: TrainingData, params: dict) -> dict:
         "n_train_rows": len(data.train),
         "n_validation_rows": len(data.validation),
         "n_supported_makes": len(data.supported_makes),
-        **{f"{settings['estimator']}.{key}": value for key, value in settings["params"].items()},
+        # The optional keys at the value the fit used, so a run whose params block
+        # leaves `min_child_samples` out still records the 20 it was fitted with,
+        # and a pipeline run lines up column for column with a search run (EDN-78).
+        **{
+            f"{settings['estimator']}.{key}": value
+            for key, value in {
+                **ESTIMATORS[settings["estimator"]].optional_hyperparameters,
+                **settings["params"],
+            }.items()
+        },
         **{f"energy.{key}": value for key, value in params["train"]["energy"].items()},
     }
 
@@ -161,6 +180,19 @@ def _log_the_run(
     run: Run, model: Model, *, cost: FitMeasurement, params: dict, directory: Path
 ) -> None:
     """Everything this stage tells MLflow about the run it just finished.
+
+    The fit's record, and the bundle under `model/`. The bundle is this stage's
+    alone: the hyperparameter search logs its fits through `log_fit` too, and
+    uploads none, because a point that is not adopted is never served.
+    """
+    log_fit(run, model, cost=cost, params=params, tags={"dvc_stage": f"train@{model.variant}"})
+    run.log_artifacts(directory, artifact_path=ARTIFACT_PATH)
+
+
+def log_fit(
+    run: Run, model: Model, *, cost: FitMeasurement, params: dict, tags: dict | None = None
+) -> None:
+    """The tags, parameters and metrics of one measured fit, without its bundle.
 
     No metric in euros. `train` must not touch the test set, and a train or
     validation MdAPE would be a second implementation of the metric beside
@@ -179,7 +211,7 @@ def _log_the_run(
             "variant": model.variant,
             "estimator": model.estimator,
             "feature_set": model.feature_set,
-            "dvc_stage": f"train@{model.variant}",
+            **(tags or {}),
         }
     )
     run.log_params(params)
@@ -195,7 +227,6 @@ def _log_the_run(
             **cost.metrics(),
         }
     )
-    run.log_artifacts(directory, artifact_path=ARTIFACT_PATH)
 
 
 @app.command()
@@ -255,7 +286,7 @@ def main(
         directory = output_dir / variant
         _replace_directory(directory)
         model.save(directory)
-        logged = {**_logged_params(variant, data, params), **cost.params()}
+        logged = {**logged_params(variant, data, params), **cost.params()}
         _log_the_run(run, model, cost=cost, params=logged, directory=directory)
 
     training = model.metadata["training"]

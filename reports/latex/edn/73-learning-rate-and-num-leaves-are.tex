@@ -3,6 +3,8 @@
 \ednentry{
   id = {EDN-73},
   title = {\texorpdfstring{\texttt{learning\_\allowbreak{}rate}}{learning\_rate} and \texorpdfstring{\texttt{num\_\allowbreak{}leaves}}{num\_leaves} are not tuned, and any later tuning follows a written protocol},
+  note = {\textbf{Extended by EDN-78} (2026-10-06, issue \#88): the protocol below now covers both LightGBM variants and \texttt{min\_\allowbreak{}child\_\allowbreak{}samples}, its decision step is \texttt{recommenditos/\allowbreak{}modeling/\allowbreak{}tune.\allowbreak{}py}, and every fit of a search is measured and tracked.
+This entry is kept as the record of the first sweep and of the protocol as it was written.},
   date = {2026-10-05},
   milestone = {M3: Quality Assurance},
   topic = {Hyperparameter Tuning, Evaluation Protocol, Experiment Tracking},
@@ -46,7 +48,8 @@ The max-statistic bootstrap reuses the paired, seller-grouped draws: each point'
 \texttt{dvc exp run -\allowbreak{}-\allowbreak{}queue} targeted at \texttt{train@\allowbreak{}<variant>} was run once on 2026-10-05 to check the protocol is executable as written: only \texttt{train@\allowbreak{}lgbm-\allowbreak{}basic} ran, the stages before it were skipped as unchanged, \texttt{evaluate} was never reached, and the queue worker inherited the exported tracking variables, which matters because the queued workspace is built from the commit and does not see the gitignored \texttt{.\allowbreak{}env}.
 It also showed one trap the protocol warns about: since \texttt{evaluate} does not run, every experiment carries its parent's \texttt{metrics.\allowbreak{}json}, so the test metrics \texttt{dvc exp show} prints belong to the committed model, not to the point.
 So the queued runs are for screening, read in MLflow, and the decision is the analysis script's: it re-fits the shortlist on the validation split rather than reading the screening runs' bundles back, which MLflow (under \texttt{model/\allowbreak{}}) and the experiments' DVC outputs do keep, because a re-fit far past the ceiling gives every point its early-stopped model -- the same trees where the screening run early-stopped, and the uncut model where the committed ceiling bound it.
-The script covers \texttt{learning\_\allowbreak{}rate} and \texttt{num\_\allowbreak{}leaves} only, and always fits the committed point, whether or not the grid names it.},
+The script covers \texttt{learning\_\allowbreak{}rate} and \texttt{num\_\allowbreak{}leaves} only, and always fits the committed point, whether or not the grid names it.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88}{\#88} moved its statistics into \texttt{recommenditos/\allowbreak{}modeling/\allowbreak{}tune.\allowbreak{}py}, which runs the decision step for any grid and records every fit, and extended the protocol to \texttt{lgbm-\allowbreak{}extended} and \texttt{min\_\allowbreak{}child\_\allowbreak{}samples} (EDN-78).},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted with modifications},
   assessment = {AI designed and ran the bounded sweep, added the paired, seller-grouped bootstrap so the question became ``can the validation split tell these apart'' rather than ``which number is lowest'', and extended the grid to \texttt{learning\_\allowbreak{}rate} 0.025 after the first run showed the lower learning rate was the only direction not clearly worse.

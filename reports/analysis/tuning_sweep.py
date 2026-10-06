@@ -35,6 +35,11 @@ It reads the `train` and `validation` matrices only, through the `train` stage's
 `read_matrices`, and fits through `fit_variant`. The test split is never opened, so nothing here
 can make a later test number optimistic.
 
+Since issue #88 the seller-group join, the paired bootstrap and the max-statistic intervals live in
+`recommenditos/modeling/tune.py`, which runs the protocol's decision step for any grid and records
+every fit (EDN-78), and this script imports them. The computation is unchanged - the same draws
+from the same seed, the same arithmetic - so the results file below still reproduces (EDN-29).
+
 Run from the repository root after `dvc pull`, with tracking off:
 
     MLFLOW_TRACKING_URI= uv run python reports/analysis/tuning_sweep.py
@@ -49,8 +54,15 @@ import numpy as np
 from recommenditos.data.build_features import read_supported_makes
 from recommenditos.modeling.model import fit_variant
 from recommenditos.modeling.train import read_matrices
-from recommenditos.pipeline import load_params, read_frame
-from recommenditos.schema import PROCESSED_SCHEMA
+from recommenditos.modeling.tune import (
+    Bootstrap,
+    mean_error,
+    median_error,
+    paired_bootstrap,
+    simultaneous,
+    validation_seller_groups,
+)
+from recommenditos.pipeline import load_params
 
 FEATURES = Path("data/processed/features")
 VARIANT = "lgbm-basic"
@@ -71,14 +83,8 @@ committed = (settings["params"]["learning_rate"], settings["params"]["num_leaves
 points = sorted({*product(LEARNING_RATES, NUM_LEAVES), committed})
 print(f"grid: learning_rate {LEARNING_RATES} x num_leaves {NUM_LEAVES}, committed {committed}")
 
-# The seller groups of the validation rows, to resample them as the split drew them. The matrix
-# does not carry `seller_group_id`, so it is joined back from the split frame `features` read: the
-# matrix keeps that frame's served rows in their order, which the row count checks.
-validation_frame = read_frame(FEATURES.parent / "validation.parquet", PROCESSED_SCHEMA)
-served = validation_frame[validation_frame["make"].isin(supported)].reset_index(drop=True)
-assert len(served) == len(data.validation), (len(served), len(data.validation))
-assert np.allclose(served["price"].to_numpy(), data.validation["price"].to_numpy())
-groups = served["seller_group_id"].to_numpy()
+# The seller groups of the validation rows, to resample them as the split drew them.
+groups = validation_seller_groups(FEATURES.parent, data, supported)
 
 log_price = data.validation["log_price"].to_numpy(dtype="float64")
 price = data.validation["price"].to_numpy(dtype="float64")
@@ -117,33 +123,16 @@ print(f"\ncommitted point {committed}; lowest validation L1 at {by_l1}, MdAPE at
 
 # Paired, by seller group: a draw resamples the groups with replacement, which gives every row
 # the number of times its group was drawn as a weight, and every point is scored on the same
-# weights.
-rng = np.random.default_rng(seed)
-unique, inverse = np.unique(groups, return_inverse=True)
-print(f"validation rows {len(groups):,}, {len(unique):,} seller groups, {BOOTSTRAP_DRAWS:,} draws")
-others = [key for key in sorted(errors) if key != committed]
-l1_differences = {key: [] for key in others}
-mdape_differences = {key: [] for key in others}
-for _ in range(BOOTSTRAP_DRAWS):
-    drawn = rng.integers(0, len(unique), size=len(unique))
-    weight = np.bincount(drawn, minlength=len(unique))[inverse]
-    l1 = {key: float((weight * errors[key]).sum() / weight.sum()) for key in errors}
-    mdape = {key: float(np.median(np.repeat(relative[key], weight))) for key in relative}
-    for key in others:
-        l1_differences[key].append(l1[key] - l1[committed])
-        mdape_differences[key].append(mdape[key] - mdape[committed])
-
-
-def simultaneous(draws: np.ndarray, observed: np.ndarray) -> tuple[float, np.ndarray]:
-    """The max-statistic multiplier and each point's half-width at 95 % jointly."""
-    spread = draws.std(axis=0, ddof=1)
-    largest = np.max(np.abs(draws - observed) / spread, axis=1)
-    multiplier = float(np.percentile(largest, 95))
-    return multiplier, multiplier * spread
-
-
-l1_draws = np.array([l1_differences[key] for key in others]).T
-mdape_draws = np.array([mdape_differences[key] for key in others]).T
+# weights. One generator per metric from the same seed, so both see the same draws.
+bootstrap = Bootstrap(groups, seed, BOOTSTRAP_DRAWS)
+print(
+    f"validation rows {len(groups):,}, {len(np.unique(groups)):,} seller groups, "
+    f"{BOOTSTRAP_DRAWS:,} draws"
+)
+errors = {key: errors[key] for key in sorted(errors)}
+relative = {key: relative[key] for key in sorted(relative)}
+others, l1_draws = paired_bootstrap(errors, committed, mean_error, bootstrap)
+_, mdape_draws = paired_bootstrap(relative, committed, median_error, bootstrap)
 l1_observed = np.array([errors[key].mean() - errors[committed].mean() for key in others])
 mdape_observed = np.array(
     [np.median(relative[key]) - np.median(relative[committed]) for key in others]
