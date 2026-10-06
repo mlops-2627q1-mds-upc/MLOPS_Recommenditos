@@ -438,12 +438,12 @@ jobs:
         if: needs.changes.outputs.report == 'true' && steps.pull.outputs.hit != 'true'
         with:
           context: reports/latex
-          tags: |
-            mlops-latex
-            ${{ steps.image.outputs.name }}
+          tags: ${{ steps.image.outputs.name }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           load: true
           push: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+      - run: docker tag "${{ steps.image.outputs.name }}" mlops-latex
+        if: needs.changes.outputs.report == 'true' && steps.pull.outputs.hit != 'true'
       - run: docker run --rm -v "$PWD/reports/latex:/report" mlops-latex initial
         if: needs.changes.outputs.report == 'true'
       - run: docker run --rm -v "$PWD/reports/latex:/report" mlops-latex final
