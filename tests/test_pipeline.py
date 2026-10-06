@@ -131,6 +131,35 @@ def test_the_pipeline_runs_end_to_end_without_data_or_credentials(pipeline):
     assert pipeline["summary"].exists()
 
 
+def test_every_json_file_the_stages_write_ends_its_lines_with_lf(pipeline):
+    """A stage writes the same bytes on Windows as on Linux (#84).
+
+    DVC hashes an output byte for byte, and `Path.write_text` turns "\\n" into
+    the platform's line separator unless it is told otherwise, so a JSON file
+    written on Windows had CRLF endings and a hash a Linux run never matches.
+    On Linux this cannot fail; the Windows job in CI is what gives it teeth.
+
+    Great Expectations' own files are left out: GE writes them, not a stage, and
+    its context is not reproducible byte for byte anyway, because every build
+    assigns fresh UUIDs (EDN-68).
+    """
+    root = pipeline["summary"].parent
+    written_by_gx = (
+        pipeline["context"],
+        root / "data-validation" / "results",
+        root / "data-validation" / "data-docs",
+    )
+    written = [
+        path
+        for path in root.rglob("*.json")
+        if not any(path.is_relative_to(directory) for directory in written_by_gx)
+    ]
+
+    assert pipeline["summary"] in written and pipeline["validation"] in written, written
+    crlf = [path.relative_to(root).as_posix() for path in written if b"\r\n" in path.read_bytes()]
+    assert not crlf, f"written with CRLF line endings: {crlf}"
+
+
 def test_every_stage_writes_a_contract_valid_frame(pipeline, params):
     INTERIM_SCHEMA.validate(pd.read_parquet(pipeline["interim"]))
     for name in (*SPLIT_NAMES, "holdout_es"):
