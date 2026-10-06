@@ -1,7 +1,8 @@
 % Engineering Decision Notebook (EDN), following the course instructions
-% (references/Instruction_EDN_MLOps_v2026.md). Entries are drafted in
-% reports/edn.md, then transferred to one file per entry in edn/ (copied from
-% edn/_template.tex) and added to the list at the bottom.
+% (references/Instruction_EDN_MLOps_v2026.md). Entries are written in
+% reports/edn.md and transferred by `make edn` (tools/edn_latex.py), rerun in
+% the same pull request as any change to it, which writes one file per entry
+% into edn/ and the list of them into edn/entries.tex.
 \documentclass[11pt, a4paper]{article}
 \input{preamble}
 
@@ -12,6 +13,9 @@
 % Keys mirror the fields of the course instructions. Required: id, title,
 % milestone, participants, decision, rationale, ai. Brace any value that
 % contains a comma or an equals sign. Values may span several paragraphs.
+% `note` is ours: it says that a later entry amended this one, or that its
+% evidence was corrected, and is printed first so it is read first. Each entry
+% is labelled with its id, so \hyperref[EDN-14]{...} links to it.
 \newtcolorbox{ednbox}[1]{
   breakable, enhanced, colback=white, colframe=black!60, boxrule=0.5pt,
   fonttitle=\bfseries, title={#1}, left=6pt, right=6pt,
@@ -19,8 +23,8 @@
 
 \ExplSyntaxOn
 \clist_const:Nn \c__edn_fields_clist
-  { id, title, date, milestone, topic, participants, decision, rationale,
-    ai, response, assessment, aievidence, evidence }
+  { id, title, note, date, milestone, topic, participants, decision,
+    rationale, ai, response, assessment, aievidence, evidence }
 \clist_const:Nn \c__edn_required_clist
   { id, title, milestone, participants, decision, rationale, ai }
 \clist_map_inline:Nn \c__edn_fields_clist
@@ -33,6 +37,14 @@
   {
     \tl_if_empty:cF { l__edn_#2_tl }
       { \item [#1] \tl_use:c { l__edn_#2_tl } }
+  }
+% The evidence fields are mostly links, paths and IDs, which justified text can
+% only space out into loose lines, so they are set ragged-right; the group and
+% the \par keep that from reaching the next field.
+\cs_new_protected:Npn \__edn_ragged_field:nn #1#2
+  {
+    \tl_if_empty:cF { l__edn_#2_tl }
+      { \item [#1] { \raggedright \tl_use:c { l__edn_#2_tl } \par } }
   }
 
 \NewDocumentCommand \ednentry { +m }
@@ -48,11 +60,13 @@
           }
       }
     \phantomsection
+    \exp_args:Nx \label { \l__edn_id_tl }
     \addcontentsline { toc } { section } { \l__edn_id_tl :~ \l__edn_title_tl }
     \begin { ednbox } { \l__edn_id_tl :~ \l__edn_title_tl }
       \begin { description }
         [ leftmargin = 4.3cm, labelwidth = 4.1cm, labelsep = 0.2cm,
           align = parleft, font = \small\bfseries, itemsep = 3pt ]
+        \__edn_field:nn { Note } { note }
         \__edn_field:nn { Date } { date }
         \__edn_field:nn { Milestone } { milestone }
         \__edn_field:nn { Activity~/~Topic } { topic }
@@ -62,8 +76,8 @@
         \__edn_field:nn { AI~involvement } { ai }
         \__edn_field:nn { Response~to~AI } { response }
         \__edn_field:nn { Assessment~of~the~AI~contribution } { assessment }
-        \__edn_field:nn { AI~interaction~evidence } { aievidence }
-        \__edn_field:nn { Other~evidence } { evidence }
+        \__edn_ragged_field:nn { AI~interaction~evidence } { aievidence }
+        \__edn_ragged_field:nn { Other~evidence } { evidence }
       \end { description }
     \end { ednbox }
     \group_end:
@@ -98,7 +112,7 @@ It does not list every decision or every use of AI, nor the use of tools the cou
 
 \guidance{
   Create an entry when a decision could reasonably have been made differently and the choice has meaningful consequences for the project.
-  Entries are written first in \texttt{reports/edn.md} and transferred here before a delivery: copy \texttt{edn/\_template.tex} to \texttt{edn/NN-short-slug.tex}, fill it in from the Markdown entry (alternatives with pros and cons go into the rationale) and add an \texttt{\textbackslash input} line below.
+  Entries are written in \texttt{reports/edn.md} and transferred here by \texttt{make edn}, rerun in the same pull request as any change to that file, which writes one file per entry into \texttt{edn/} (alternatives with pros and cons go into the rationale) and the \texttt{\textbackslash input} list into \texttt{edn/entries.tex}; never edit those files by hand.
   IDs are stable (EDN-01, EDN-02, \dots) so the report can refer to them; never renumber.
   Link issues, PRs and commits as other evidence.
   The example below is Example~3 of the course instructions and only shows in draft builds.
@@ -118,7 +132,7 @@ It does not list every decision or every use of AI, nor the use of tools the cou
   }
 \fi
 
-% Entries, oldest first.
-% \input{edn/01-short-slug}
+% Entries, oldest first, generated from reports/edn.md by `make edn`.
+\input{edn/entries}
 
 \end{document}

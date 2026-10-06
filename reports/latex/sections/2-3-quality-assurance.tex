@@ -10,7 +10,7 @@
   The testing strategy for code, data and model is a typical M3 EDN entry.
 }
 
-\tbd{DRAFT, owner \texttt{@michudud04}. Every paragraph of this subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words. Energy (issue \#38) and the model tests per success criterion (issues \#37, \#39) are not merged yet, so those parts are design plus placeholders.}
+\tbd{DRAFT, owner \texttt{@michudud04}, to rewrite; energy waits for \#38}
 
 \subsubsection{Energy efficiency awareness}
 \label{sec:m3-energy}
@@ -38,10 +38,10 @@ CodeCarbon's sampling granularity does not match single-digit-millisecond events
 That is a deliberate loss of resolution, and it is written into the model card so that nobody reads the figure as something it is not.
 The same reasoning already constrains the design elsewhere: the serving image carries no GPU or deep-learning dependency, \texttt{shap} is kept out of it because importing the module alone pulls in 189\,MB of \texttt{numba} and \texttt{llvmlite} (EDN-11), and multilingual text embeddings were left off the experiment ladder because they conflict with a CPU-only image.
 
-The figures themselves do not exist yet:
+Training the chosen configuration takes 8.3\,s and the whole ladder 37.6\,s at one thread, against NFR-10's 15 minutes; the energy per answer is measured in Milestone~4, over the NFR-03 load test.
+The emissions figures do not exist yet:
 \tbd{emissions and energy per training run for \texttt{b0}, \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, from CodeCarbon through MLflow (issue \#38)}
 \tbd{the energy-versus-error comparison across the ladder, and what it decided about the extended feature set}
-\tbd{the training time of the chosen configuration against NFR-10's 15-minute budget, and the average energy per answer from the NFR-03 load test}
 
 \subsubsection{Static code analysis}
 \label{sec:m3-static-analysis}
@@ -54,7 +54,7 @@ The figures themselves do not exist yet:
 
 Static analysis is ruff, as both linter and formatter, with the rule set \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import sorting and the Pylint-derived rules that cover the rubric's \enquote{Pylint or flake8}.
 The whole configuration lives in \texttt{pyproject.toml}, and ruff also lints the code cells of every notebook.
-On the commit this report was built from, \texttt{ruff format --check} reports 62 files already formatted and \texttt{ruff check} reports no findings.
+On the commit this report was built from, \texttt{ruff format --check} reports 69 files already formatted and \texttt{ruff check} reports no findings.
 
 Enabling the full rule set found two things.
 The rules produced exactly five findings, all \texttt{PLR2004} on the same Cookiecutter placeholder line in the five CLI stubs; the line was removed and the rule stayed enabled.
@@ -95,16 +95,16 @@ On the commit this report was built from it reports no findings.
 }
 
 The suite is Pytest with coverage measured on every run.
-On the commit this report was built from it is 87 tests, green, in about 8 seconds, at 94\,\% statement and branch coverage of \texttt{recommenditos/}.
+On the commit this report was built from it is 681 tests, 677 passed and 4 skipped where they cannot apply, in about three minutes, at 98\,\% statement and branch coverage of \texttt{recommenditos/}.
 Coverage measures branches rather than only statements, so a half-tested conditional does not count as covered, and nothing is excluded from measurement except the \texttt{if \_\_name\_\_ == "\_\_main\_\_"} entry points, which Pytest never executes.
-Two modules sit at 0\,\%, \texttt{plots.py} and \texttt{modeling/predict.py}, and both are Cookiecutter template stubs that nothing imports yet; they are counted rather than excluded, so the number does not flatter itself.
+One module sits at 0\,\%, \texttt{plots.py}, a Cookiecutter template stub that nothing imports yet; it is counted rather than excluded, so the number does not flatter itself.
 There is deliberately no \texttt{--cov-fail-under}: NFR-07 asks for 80\,\% on a delivery commit, which is when the number is read and acted on, and a per-pull-request gate would block merges while the suite is still being built.
 
 Three things go beyond asserting a threshold.
 
 \emph{Tests carry the requirement they verify.}
 A test declares its requirements with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req("NFR-08")}, and the marker is what CI turns into a requirement-to-test matrix, so traceability is generated from the tests rather than maintained as a table that goes stale (NFR-07).
-Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 52 tests; the matrix itself is built and published by CI on every run, and its gate is scoped to the milestone that owes each requirement its evidence (EDN-44).
+Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 63 tests; the matrix itself is built and published by CI on every run, and its gate is scoped to the milestone that owes each requirement its evidence (EDN-44).
 What a marker earns depends on what the specification says the evidence is: on an \textbf{[automated]} entry a test is that evidence, while on a \textbf{[manual]} entry the promised evidence is the drill the entry names, so a marker there records that a test touches the requirement and does not stand in for the drill (EDN-45).
 That is why the matrix reports NFR-06 as named by a test rather than verified by one: the download stage's pin and MD5 tests are evidence about reproducibility, and the evidence NFR-06 promises is a \texttt{dvc repro} re-run on a clean clone.
 No status in the matrix claims that a person judged the evidence sufficient, which is why NFR-07 keeps that review before each delivery.
@@ -120,8 +120,8 @@ The first round of tests could not see it, because they asserted that each case 
 The fix carries a test that asserts each case \emph{survives} the preprocessing rules instead, and the lesson, that a check has to sit where the value is consumed, is now in the working agreements.
 The same reasoning produced a second pair of tests around the quality gate: one asserts that the stub model does not pass it, and a second asserts that the gate still discriminates, because a gate that says no to everything would satisfy the first test.
 
-The model tests proper follow the train and evaluate stages: the six success criteria asserted per candidate model, invariance tests under small input perturbations, and the training-time check that the booster's own SHAP export matches \texttt{shap.TreeExplainer} exactly, which is what makes it safe to keep \texttt{shap} out of the serving image (EDN-11).
-\tbd{the model tests asserting SC-01 to SC-06, the invariance tests, and the test count and coverage on the delivery commit (issues \#37 and \#39)}
+The model tests that came with the train and evaluate stages test the gate rather than the model's numbers, which \texttt{evaluate} measures on the real test split (\cref{sec:goal}), and 21 of them carry NFR-01 and drive the gate with constructed models and records: the five measurable criteria pass and fail together, an unmeasured one blocks the gate, SC-03 to SC-05 report themselves unmeasured without their input, and SC-04's bounds sit at their edges, as unmarked tests pin SC-05's and SC-06's; others hold \texttt{predict\_eur} to its contract, such as one row predicting what the batch predicts for it and every prediction staying inside the training price range.
+Still to be written are invariance tests under small perturbations and the check that the booster's own SHAP export matches \texttt{shap.TreeExplainer}, on which keeping \texttt{shap} out of the serving image rests (EDN-11).
 
 \subsubsection{Data testing}
 \label{sec:m3-data-testing}

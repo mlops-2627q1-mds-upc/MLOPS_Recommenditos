@@ -7,7 +7,7 @@
 \subsection{Milestone 1: Inception}
 \label{sec:m1}
 
-\tbd{DRAFT, owner \texttt{@kadameit}. Every paragraph of this subsection is a draft written from the repository's own evidence and is waiting for its owner to check it and rewrite it in their own words; the placeholders inside name what is still missing and where it comes from.}
+\tbd{DRAFT, owner \texttt{@kadameit}, to check and rewrite in own words}
 
 \subsubsection{Selection of problem and requirements engineering for ML}
 \label{sec:m1-requirements}
@@ -39,7 +39,7 @@ Where a target still cannot be measured it carries a \textbf{[proposed]} marker 
 
 \emph{Traceability as a build artefact.}
 A test declares the requirements it verifies with a \texttt{@pytest.\allowbreak mark.\allowbreak req} marker and CI turns the markers into a requirement-to-test matrix, so every requirement is traceable to the test that verifies it or explicitly marked as verified by hand (NFR-07).
-Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 52 tests; the matrix itself is \tbd{the requirement-to-test matrix from CI (issue \#40), with the count of requirements covered automatically and by hand}.
+Five requirements carry markers today, NFR-01, NFR-06, NFR-07, NFR-08 and NFR-14, across 63 tests; of the 31 requirements the matrix finds 3 verified by a test, 2 named by one where a drill is promised, 10 further \textbf{[manual]} entries with their drill named, only NFR-15 of them due by Milestone~3, and 16 not due before Milestone~4, so all six due by Milestone~3 have their promised evidence.
 
 \subsubsection{Dataset card}
 \label{sec:m1-dataset-card}
@@ -63,8 +63,8 @@ The card says what each issue forbids: the target is an asking price and never a
 It also records what we do with the personal data instead of claiming to have removed the problem, namely that re-hosting the raw file on a public remote makes the team a publisher of that data in its own right (EDN-20, EDN-25, EDN-34), and it reports both readings of the upstream licence rather than resolving a contradiction that does not affect this project (EDN-21).
 
 Of the 118,382 listings, 110,013 fall in the used-passenger-car scope and 97,889 remain in the training scope once the price and registration-date rules, deduplication, the Spanish holdout and the make filter have run.
-Those are split 60/10/10/20 grouped by seller with the seed \texttt{20251108}, both pinned in \texttt{params.yaml} (EDN-32); the test share is the binding constraint, because SC-04 only checks a segment once it holds 500 test rows.
-The realised sizes are \tbd{the train, validation, calibration, test and holdout row counts from \texttt{dvc.lock} once the preprocess and split stages run on the real snapshot (issues \#34 and \#35)}.
+The split runs before the make filter, on the 99,326 non-Spanish listings, 60/10/10/20 grouped by seller with the seed \texttt{20251108}, both pinned in \texttt{params.yaml} (EDN-32); the test share is the binding constraint, because SC-04 only checks a segment once it holds 500 test rows.
+The realised sizes are 61,180 train, 8,992 validation, 9,169 calibration and 19,985 test rows beside the 6,079-row \texttt{ES} holdout, of which the supported makes keep 60,378, 8,859, 8,987, 19,665 and 5,979 (EDN-48, EDN-67).
 
 \subsubsection{Model card}
 \label{sec:m1-model-card}
@@ -74,8 +74,8 @@ The realised sizes are \tbd{the train, validation, calibration, test and holdout
   Update it in the final report once the model has changed.
 }
 
-The model card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{\texttt{docs/docs/model-card.md}}, written to the Hugging Face annotated template \cite{hf-model-card, mitchell2019modelcards}.
-It describes a supervised regression on $\log(\mathrm{price})$ with LightGBM as the main model and CatBoost as the challenger, against the baselines B0 and B1 (EDN-02), and it states on its first page that no trained artefact exists yet, so that no reader mistakes a plan for a measurement.
+The model card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{\texttt{docs/docs/model-card.md}}, written to the Hugging Face annotated template \cite{hf-model-card}.
+It describes a supervised regression on $\log(\mathrm{price})$ with LightGBM as the main model and CatBoost as the challenger, against the baselines B0 and B1 (EDN-02), and it states on its first page what is measured and that nothing is released, so that no reader mistakes a candidate for a release.
 Three choices distinguish it from the template it follows.
 
 \emph{It owns the model and links for everything else.}
@@ -86,7 +86,7 @@ Instead of a generic bias paragraph the card asks who pays for a wrong answer: t
 
 \emph{It names a gap in its own quality gate.}
 Volkswagen, Honda, Hyundai and Aston Martin clear the 300-listing support threshold and are therefore served, but a make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at a 20\,\% test share, and these four hold 348, 798, 548 and 360 listings, so for them the per-segment half of the gate is blind by construction and closing it is an open Milestone~3 task.
-The card's declared next update is the per-criterion results, the chosen hyperparameters, the artefact size, the training time and the CodeCarbon figures: \tbd{the measured SC-01 to SC-06 results and the training and artefact figures, from \texttt{metrics.json} and the MLflow runs (issues \#37 and \#39)}.
+Its first update after training added the results of \cref{sec:goal}, the hyperparameters, sizes and fit times: the candidate keeps \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63, untuned on evidence (EDN-73), with 1,243 trees chosen by early stopping under a 5,000-tree ceiling (EDN-70), a 7.6\,MB booster and an 8.3\,s fit.
 
 \subsubsection{Project coordination and communication}
 \label{sec:m1-coordination}
@@ -116,9 +116,9 @@ Passing checks gate the merge; a formal approval does not, because GitHub blocks
 A teammate still reads the change whenever one is free, and its author is responsible for its content whoever or whatever typed it.
 
 \emph{The trace is written into the repository, not left in chat.}
-\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{\texttt{docs/docs/scrum/sprints.md}} holds each sprint's goal, its planning notes with the assigned backlog, its review, its progress record and its retrospective, with every issue and pull request linked: sprint~1 closed 7 issues with 16 pull requests merged, and 34 engineering decisions are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{\texttt{docs/docs/scrum/sprints.md}} holds each sprint's goal, its planning notes with the assigned backlog, its review, its progress record and its retrospective, with every issue and pull request linked: sprint~1 closed 7 issues with 16 pull requests merged, and 72 engineering decisions are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
 The working agreements also carry a rule for coding agents, since the course grades how we use them: a ticket handed to an agent must have a local oracle, tests or \texttt{dvc repro} that tell it whether it is done, a ticket without one is done by a person, and an agent's claim decides nothing until it has been checked.
-\tbd{a screenshot of the project board at the end of sprint~2, placed in \texttt{reports/latex/figures/}}
+The board itself is linked on the cover.
 
 \subsubsection{Selection of the cloud provider}
 \label{sec:m1-cloud}

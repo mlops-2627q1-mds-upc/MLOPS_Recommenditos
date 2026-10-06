@@ -43,6 +43,12 @@ jobs:
               - "dvc.yaml"
               - "params.yaml"
               - "dvc.lock"
+              # The EDN and its generated LaTeX: a test asserts the LaTeX is what
+              # `make edn` generates from reports/edn.md, and this required job is
+              # what makes that gate a merge. The report job's own check is not a
+              # required one.
+              - "reports/edn.md"
+              - "reports/latex/edn/**"
               - ".github/workflows/ci.yml"
             # The serving job runs `make test-serving`, so a change to that target
             # alone has to run it too.
@@ -52,8 +58,13 @@ jobs:
             docs:
               - "docs/**"
               - ".github/workflows/ci.yml"
+            # reports/edn.md and its converter too: the report job checks that
+            # the LaTeX EDN is in sync with them, and a change to the notebook
+            # alone is exactly the change that leaves it behind.
             report:
               - "reports/latex/**"
+              - "reports/edn.md"
+              - "tools/edn_latex.py"
               - "Makefile"
               - ".github/workflows/ci.yml"
 
@@ -360,6 +371,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.report == 'true'
+      # The EDN PDF is built from reports/latex/edn/, which `make edn` generates
+      # from reports/edn.md; fail before the build when that is behind, so an
+      # entry marked "In LaTeX: yes" is always in the PDF as written. The
+      # converter needs only the standard library, so no project sync. The
+      # required Tests job runs the same check as a test, which is what blocks
+      # a merge; this step says it next to the PDF it concerns.
+      - name: Check the LaTeX EDN is in sync with reports/edn.md
+        if: needs.changes.outputs.report == 'true'
+        run: python3 tools/edn_latex.py --check
       - uses: docker/setup-buildx-action@v4
         if: needs.changes.outputs.report == 'true'
       - uses: docker/build-push-action@v7
