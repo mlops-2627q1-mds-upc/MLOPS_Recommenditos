@@ -46,7 +46,6 @@ before-and-after metrics are no longer comparable.
 
 from dataclasses import dataclass
 import hashlib
-import json
 import math
 from pathlib import Path
 
@@ -55,7 +54,7 @@ import pandas as pd
 import typer
 
 from recommenditos.config import INTERIM_DATA_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
-from recommenditos.pipeline import load_params, read_frame, write_frame
+from recommenditos.pipeline import load_params, read_frame, write_frame, write_json
 from recommenditos.schema import INTERIM_SCHEMA, PROCESSED_SCHEMA
 
 #: The sets `split` writes, besides the country holdout.
@@ -242,7 +241,7 @@ def write_supported_makes(
         "counted_over_rows": int(counted_over),
         "supported_makes": makes,
     }
-    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    write_json(document, path)
     logger.success(f"Wrote {len(makes)} supported make(s) to {path}.")
 
 

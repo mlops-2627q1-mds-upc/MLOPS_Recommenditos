@@ -81,7 +81,7 @@ from recommenditos.data.build_features import (
     equipment_feature_name,
 )
 from recommenditos.modeling.model import Model, load_model
-from recommenditos.pipeline import load_params, read_frame
+from recommenditos.pipeline import load_params, read_frame, write_json
 from recommenditos.tracking import resume_run
 
 #: Every criterion NFR-01 gates on. A variant is deployable only when all six
@@ -1162,7 +1162,7 @@ def main(
         record["gate_passed"] = gate_passed(record)
         record["gate_blocked_by"] = gate_blocked_by(record)
         path = metrics_dir / f"{variant}.json"
-        path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        write_json(record, path)
         logger.info(
             f"{variant}: MdAPE {record['mdape'] * _PERCENT:.1f} %, gate "
             f"{'passed' if record['gate_passed'] else 'blocked by ' + record['gate_blocked_by']}"
@@ -1181,7 +1181,7 @@ def main(
         _MASKED_INPUT_FIELDS,
     )
     summary = gate_summary(records, data_source=params["download"]["source"])
-    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    write_json(summary, summary_path)
     logger.success(
         f"Gate on {summary['data_source']} data: "
         f"{summary['n_variants_passing']}/{summary['n_variants']} variants pass; "
