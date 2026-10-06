@@ -54,6 +54,8 @@ computed, and tested, without an MLflow server; `recommenditos/tracking.py` puts
 them on the runs.
 """
 
+from collections.abc import Iterator
+from contextlib import chdir, contextmanager
 import os
 from pathlib import Path
 import subprocess
@@ -143,7 +145,7 @@ def declared_inputs(stage: str, root: Path | None = None) -> tuple[str, ...]:
 
     Nothing is hashed, so this answers on a clone that has not pulled the data.
     """
-    with Repo(str(root or PROJ_ROOT)) as repo:
+    with _dvc_repo(root or PROJ_ROOT) as repo:
         target = _find_stage(repo, stage)
         return tuple(_lock_path(dep, target) for dep in _path_dependencies(target))
 
@@ -163,11 +165,27 @@ def stage_inputs(stage: str, root: Path | None = None) -> dict[str, str]:
     `params.yaml` at the commit, which a clean tree guarantees is the file the
     stage read, and `train` also logs its own as the run's parameters.
     """
-    with Repo(str(root or PROJ_ROOT)) as repo:
+    with _dvc_repo(root or PROJ_ROOT) as repo:
         target = _find_stage(repo, stage)
         return {
             _lock_path(dep, target): dep.get_hash().value for dep in _path_dependencies(target)
         }
+
+
+@contextmanager
+def _dvc_repo(root: Path) -> Iterator[Repo]:
+    """`root`'s DVC repository, opened and read with `root` as the current directory.
+
+    DVC resolves each `dvc.yaml` relative to the current directory, and on
+    Windows a path on another drive has no relative form: from `C:`, reading a
+    repository on `D:` fails with `ValueError: path is on mount 'D:', start on
+    mount 'C:'`, and `train` would lose its tracking over it (#84). GitHub's
+    Windows runners are laid out exactly so, with the checkout on `D:` and the
+    temporary directory on `C:`. The stages are single-threaded, so changing the
+    directory for the length of the read affects nothing else.
+    """
+    with chdir(root), Repo(str(root)) as repo:
+        yield repo
 
 
 def _find_stage(repo: Repo, stage: str) -> PipelineStage:
@@ -246,20 +264,20 @@ def dvc_written_paths(root: Path | None = None) -> tuple[str, ...]:
     there). So the first run of a new stage is reported dirty, until its entry is
     committed, rather than every edit to the root `.gitignore` going unreported.
     """
-    root = root or PROJ_ROOT
+    paths: set[str] = set()
     try:
-        repo = Repo(str(root))
+        with _dvc_repo(root or PROJ_ROOT) as repo:
+            for stage in repo.index.stages:
+                if isinstance(stage, PipelineStage):
+                    paths.add(os.path.splitext(stage.dvcfile.path)[0] + ".lock")
+                paths.update(
+                    out.fs_path for out in stage.outs if out.is_in_repo and not out.use_cache
+                )
+            return tuple(
+                sorted(Path(os.path.relpath(path, repo.root_dir)).as_posix() for path in paths)
+            )
     except NotDvcRepoError:
         return ()
-    paths: set[str] = set()
-    with repo:
-        for stage in repo.index.stages:
-            if isinstance(stage, PipelineStage):
-                paths.add(os.path.splitext(stage.dvcfile.path)[0] + ".lock")
-            paths.update(out.fs_path for out in stage.outs if out.is_in_repo and not out.use_cache)
-        return tuple(
-            sorted(Path(os.path.relpath(path, repo.root_dir)).as_posix() for path in paths)
-        )
 
 
 def _git(root: Path, *args: str) -> str | None:

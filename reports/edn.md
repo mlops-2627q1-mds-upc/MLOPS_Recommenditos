@@ -2521,6 +2521,48 @@ How to add an entry:
 - **Other evidence:** [issue #79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/79); [PR #80](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80); [`recommenditos/provenance.py`](../recommenditos/provenance.py) and `recommenditos/tracking.py`; [`tests/test_provenance.py`](../tests/test_provenance.py) and the NFR-14 tests of `tests/test_tracking.py`; [`reports/analysis/run_provenance_check.py`](analysis/run_provenance_check.py) and [its results](analysis/run_provenance_check_results.txt); [The DVC pipeline](../docs/docs/pipeline.md), From a run to its inputs; [specification](../docs/docs/specification.md) NFR-14; [EDN-55](#edn-55-evaluate-resumes-the-run-train-created-instead-of-opening-its-own), [EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean).
 - **In LaTeX:** yes
 
+### EDN-75: The test suite also runs on Windows in CI, as a required check
+
+- **Date:** 2026-10-06
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Testing Strategy, CI/CD
+- **Participants:** @lukas2510, decided by the repository owner; the Windows failures that prompted it were found by @kadameit
+- **Decision:** CI runs the whole test suite on `windows-latest` as well as on Linux, for every change that can affect it, as the job `Tests (Windows)`, and the job is a required check like `Tests`.
+  Coverage and the test reports still come from the Linux job alone.
+- **Alternatives considered:**
+  - **Option A (chosen): a required Windows job.**
+    Pros: a Windows-only failure is found on Windows, before the merge, by whoever opens the pull request, instead of after it by whoever happens to develop on Windows; it covers every failure mode the suite can reach, including ones nobody has thought of yet; and it costs nothing in money, because the repository is public.
+    Cons: every code pull request waits for a second runner, which took 374 s against the Linux job's 214 s on the pull request that added it; a test that is flaky only on Windows blocks every merge until it is fixed; and a test that starts processes or touches paths has to be written for both platforms, as the local MLflow server of `tests/test_tracking.py` had to be stopped with `taskkill /T` on Windows and by process group on POSIX.
+  - **Option B: the same job, not required.**
+    Pros: a Windows-only flake can never block a merge.
+    Cons: a red check that does not block is a red check people learn to merge past, so a regression still reaches `main` and is found where it is found today, by the next person on Windows.
+  - **Option C: emulate Windows in the Linux suite.**
+    Tests that run with a cp1252 stdout, or that patch text-mode writes to translate to CRLF.
+    Pros: no second runner and no added wait.
+    Cons: an emulation covers only the failure modes it was written for.
+    It would not have found the cross-drive failure below, which nobody knew of, nor #74, and the CRLF part could only be emulated by patching `Path.write_text`, which tests the patch rather than the platform.
+  - **Option D: keep relying on contributors who develop on Windows to run the suite there.**
+    Pros: no cost at all.
+    Cons: it is how #73, #74 and #84 were found, each after the code had merged, and it depends on one person running the suite and reading the result.
+- **Rationale:** one of us develops on Windows, so the project has to work there, and NFR-06 asks that a clean clone reproduces the pipeline, which on Windows it did not: every JSON artefact came out with CRLF line endings and a different hash, and the MLflow setup check of the getting-started page crashed on an emoji it could not print (#84).
+  Only a job on the platform itself catches such failures without knowing them in advance, and only a required one keeps them off `main`.
+
+  The first run of the job made the case on its own.
+  On the commit that added the two tests for #84 before the fix, Linux failed one test, the setup check against a local MLflow server with a cp1252 stdout, while Windows failed seventeen: that test, the line-ending test, which cannot fail on Linux, and fifteen tests that failed with `ValueError: path is on mount 'D:', start on mount 'C:'`.
+  GitHub's Windows runners check the repository out on `D:` and keep the temporary directory on `C:`, and DVC resolves `dvc.yaml` relative to the current directory, which has no relative form across drives.
+  The same failure hits any contributor whose clone and current directory are on different drives, and it turned tracking off in `train`: `recommenditos/provenance.py` now reads a DVC repository with its root as the current directory.
+  After the fixes, both jobs pass the same 679 tests.
+
+  The wait was accepted: the Windows job runs in parallel with the others, so a code pull request waits about two and a half minutes longer for its last required check, 374 s instead of the Linux job's 214 s.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI reviewed and merged Kevin's #73 and #75, then traced the two Windows failures #73 left open to their causes: the seven JSON writes that relied on the platform's line separator, and MLflow's own `sys.stdout.write` of the run link after an emoji, which also fails a stage under `RECOMMENDITOS_REQUIRE_TRACKING=1`.
+  It reproduced the console failure end to end before fixing it, by running the setup check against DagsHub with `PYTHONIOENCODING=cp1252`, generated options A to C with their pros and cons, recommended A, and Lukas chose A as recommended; option D is the status quo, added here for completeness.
+  The fixes and the tests, written to fail first, were AI's, and so was the analysis of the fifteen cross-drive failures the new job found.
+- **AI interaction evidence:** Claude Code session of 2026-10-06: the review of #73 and #75, in which the follow-ups were found, and the work on issue #84, in which the setup check was reproduced against DagsHub with a cp1252 stdout (exit 1, `UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f3c3'`) and the options were put to Lukas.
+- **Other evidence:** [issue #84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/84); [PR #85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85); the [failing run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37438994409) on the tests before the fix and the [passing run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37440411226) after it; [#73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/73), [#74](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/74); `.github/workflows/ci.yml`, job `test-windows`; [Contributing](../CONTRIBUTING.md), Before opening a PR.
+- **In LaTeX:** yes
+
 ## Template
 
 ```markdown

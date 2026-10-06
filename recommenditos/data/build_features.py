@@ -55,7 +55,7 @@ import typer
 
 from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR
 from recommenditos.data.split_data import SPLIT_NAMES
-from recommenditos.pipeline import load_params, read_frame, write_frame
+from recommenditos.pipeline import load_params, read_frame, write_frame, write_json
 from recommenditos.schema import (
     FEATURE_SPACE_FILE,
     PROCESSED_SCHEMA,
@@ -756,7 +756,7 @@ def _write_feature_space(directory: Path, schema: Schema, vocabulary: Vocabulary
     directory.mkdir(parents=True, exist_ok=True)
     space = {"schema": schema.to_dicts(), "vocabulary": vocabulary.to_dict()}
     path = directory / FEATURE_SPACE_FILE
-    path.write_text(json.dumps(space, indent=2) + "\n", encoding="utf-8")
+    write_json(space, path)
     logger.success(f"Wrote {path}.")
 
 
