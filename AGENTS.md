@@ -56,7 +56,7 @@ The course grades how we make engineering decisions and how we use AI in them, s
    Link the evidence (issue, PR, commit, experiment).
 
 [reports/edn.md](reports/edn.md) is the working source of the EDN.
-Entries are only transferred to the LaTeX EDN ([reports/latex/edn/](reports/latex/edn/)) before a delivery, so never write new entries directly in LaTeX.
+Entries are only transferred to the LaTeX EDN ([reports/latex/edn/](reports/latex/edn/)) before a delivery, by `make edn`, which generates those files from `reports/edn.md`, so never write or edit an entry directly in LaTeX.
 
 ## PDF Conversion
 

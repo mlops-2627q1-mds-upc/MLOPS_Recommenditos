@@ -1,7 +1,8 @@
 # Engineering Decision Notebook (working copy)
 
 This is where we record our EDN entries as we make decisions.
-Before each delivery, the entries are transferred to the LaTeX EDN in [latex/edn/](latex/edn/), which becomes `MLOps_Recommenditos_EDN.pdf`.
+Before each delivery, `make edn` transfers the entries to the LaTeX EDN in [latex/edn/](latex/edn/), which becomes `MLOps_Recommenditos_EDN.pdf`.
+This file stays the only place an entry is written or edited; the LaTeX files are generated from it.
 
 What belongs here and what each field means: [references/Instruction_EDN_MLOps_v2026.md](../references/Instruction_EDN_MLOps_v2026.md).
 Record a decision when it meaningfully affects the ML system and could reasonably have gone differently, not every decision or every use of AI.
@@ -17,7 +18,8 @@ How to add an entry:
 - Record the alternatives with their pros and cons even when the choice looked obvious.
   They are the evidence that the decision was actually weighed.
 - Review AI conversation excerpts before quoting or linking them; never include personal or sensitive data.
-- Set **In LaTeX** to "yes" once the entry has been transferred to `latex/edn/`.
+- Leave **In LaTeX** at "no": `make edn` sets it to "yes" when it transfers the entry to `latex/edn/`.
+  A heading with no fields yet is a reservation and is not transferred.
 
 ## Entries
 
@@ -41,7 +43,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI profiled the raw dataset (row/column counts, country and brand distribution, missingness, known data issues) and summarized the trade-off against smaller generic alternatives; the team reviewed those facts and confirmed the choice in today's sprint planning.
 - **AI interaction evidence:** Dataset profiling and trade-off summary in `docs/docs/project-brief.md` §3.1 and §2 (2026-09-22), confirmed in today's sprint planning session.
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13), [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-02: Model family: gradient boosting (LightGBM as main model)
 
@@ -66,7 +68,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI laid out the alternatives and the CPU/size/explainability constraints behind the "why gradient boosting" rationale in the project brief; the team reviewed and confirmed the choice, including keeping CatBoost as a challenger rather than the main model, in today's sprint planning.
 - **AI interaction evidence:** Modelling plan and "Why gradient boosting" write-up in `docs/docs/project-brief.md` §4 (2026-09-22), confirmed in today's sprint planning session.
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-03: New-market drift scenario: hold out AutoScout24 Spain instead of using DataMarket
 
@@ -91,7 +93,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The three options came from our own feasibility check. AI (Claude Code) explained the trade-offs against the M6 rubric and recommended Option A with `ES` as the held-out country (smaller training loss than `IT`), keeping `country` as a feature with unseen countries treated as unknown, and an optional synthetic drift scenario with a controlled cause. We accepted it because it answers the supervisor's concern with evidence, keeps the pipeline to one data source, and lets M6 show both input drift and performance degradation.
 - **AI interaction evidence:** Claude Code session, 2026-09-22: prompt "explain this to me again and give me a recommendation [...] what is feasible for our project and still in the scope of the course" on project brief §3.2; the response compared options A-C against the M6 rubric and recommended A with `ES`.
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13), project brief §3.2 (`docs/docs/project-brief.md`).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-04: Model scope: used passenger cars only
 
@@ -113,7 +115,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI profiled the data (counts of new, pre-registered and transporter listings), ran the comparison on both scopes and recommended option A. Lukas checked that the numbers came from the real dataset and accepted the recommendation because the accuracy argument was neutral and the product argument decisive.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while working on issue #2: prompt "Which listings are in scope for the model (car type)?" with options A and B and the exploratory results; Lukas chose option A.
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md), section 2; [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-05: Supported makes: minimum listing support per make
 
@@ -138,7 +140,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI counted the listings per make after scoping and deduplication, compared thresholds of 200, 300 and 500, and recommended option A. Lukas accepted it because it states the dataset's brand skew openly instead of hiding it behind a warning.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while working on issue #2: prompt "How do we handle the 25 makes, many of which have very few listings?" with options A to C; Lukas chose option A.
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md), section 2; [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-06: Success criteria for the price model
 
@@ -163,7 +165,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI ran the exploratory baseline and LightGBM models, proposed the criteria with concrete thresholds and recommended option A. Lukas accepted it because the thresholds are tied to measured values. After the decision, AI's per-segment check found that the proposed SC-04 is not yet met for cars older than 20 years; the criterion was kept as agreed and the gap documented.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while working on issue #2: prompt "Which kind of success criteria?" with options A to C and the exploratory results; Lukas chose option A.
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md), sections 6 to 8; [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-07: Raw data hosting: import from Zenodo, never push to our own remote
 
@@ -188,7 +190,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** While reviewing PR #19 for SOTA fit and course requirements, AI noticed that `NFR-08`'s "never re-hosted" wording silently settled the brief's open `dvc import-url` question without going through the EDN process, and that the project's own `data-versioning.md` example contradicted it. Asked for a recommendation, AI laid out options A and B with pros and cons, recommended A on privacy and data-minimization grounds, and flagged that `dvc import-url` alone does not prevent a re-push and needs a CI check to be enforceable. Lukas reviewed the reasoning and confirmed option A. On 2026-09-23, asked whether NFR-08 was overkill, AI proposed `push: false` on the output instead of that CI check against the DagsHub remote, and verified it in a scratch repository with DVC 3.67.1: without the field `dvc push` uploads the imported file, with it the remote stays empty, also after a `dvc update` from a changed source. The same test showed that in a fresh clone `dvc repro` does not re-fetch an imported file and a plain `dvc pull` exits with an error, while `dvc update` does fetch it, which corrected the instructions in `data-versioning.md`. Lukas accepted the change of mechanism; the decision itself stayed the same.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI flagged the NFR-08/brief contradiction, explained it in detail on request, then gave a recommendation and cited data-minimization and Zenodo DOI immutability as the SOTA rationale for option A; Lukas replied "yes please do so". Claude Code session on 2026-09-23: Lukas asked (translated from German) "NFR-08 privacy, does that still need adjusting? how would you adjust it so it is no longer excessive", AI proposed `push: false` with the scratch-repository evidence; Lukas replied "yes please do that".
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-08; [specification](../docs/docs/specification.md) NFR-08 and "Decisions pending confirmation"; [Data versioning](../docs/docs/data-versioning.md); [project brief](../docs/docs/project-brief.md) section 3.3; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-08: Model loading: bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime
 
@@ -213,7 +215,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** While reviewing PR #19, AI first flagged that FR-12's runtime registry pull (option A) worked against NFR-05 and NFR-12 and recommended option B. Asked to weigh that against the project's actual scope and tools, AI checked `references/course-demos.md`, found the demo's own recipe pulls the model via DVC rather than MLflow, cross-referenced the rubric's point weights, and revised its recommendation to option C, naming the trade-off (MLflow registry no longer in the deployment path) explicitly. Lukas reviewed the reasoning and confirmed option C.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI recommended option B, Lukas asked "considering our project scope and the tools we will use is this the best option for us?", AI re-derived the recommendation from `references/course-demos.md` and the rubric weights and proposed option C instead; Lukas replied "yes please do that".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-12; [project brief](../docs/docs/project-brief.md) section 5 (target architecture); [references/course-demos.md](../references/course-demos.md) "API and deployment (M4)"; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-09: Bump to Python 3.12, to use real SHAP instead of a workaround
 
@@ -235,7 +237,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** While reviewing PR #19, AI proposed option A as a way around the Python 3.11/SHAP 0.52 conflict documented in the brief. Asked to check whether the version could be bumped instead, AI verified this empirically (a scratch `uv lock`/`uv sync` under 3.12 with the full planned dependency set, plus a functional `TreeExplainer` test) rather than relying on PyPI metadata alone, found no blocker, and presented both options with the empirical evidence. Lukas reviewed it and chose to bump.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI first recommended `pred_contrib` as a workaround, Lukas asked "please check if we can bump our python version," AI ran an empirical `uv lock`/`uv sync`/import/functional check under Python 3.12 with the full planned stack, found no blocker, and reported the evidence; Lukas replied "ok please then bump the version in the PR an adjust the requriemnt."
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-08; [project brief](../docs/docs/project-brief.md) section 6 (tooling constraints); `pyproject.toml`, `.github/workflows/ci.yml`; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-10: Availability target replaced by recovery time plus a presentation-window commitment
 
@@ -260,7 +262,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** During the PR #19 review, AI had already flagged that Prometheus's `up` metric cannot observe the host going down and that Better Uptime was missing from the docs despite being a named M6 course tool. Asked directly what availability target would actually be feasible given the single-VM, no-redundancy deployment, AI proposed the three-part split (recovery time, presentation window, monitored general period) with rationale grounded in the M6 rubric wording and the deployment's real constraints, and named option B as a weaker alternative. Lukas reviewed it and confirmed the split.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: Lukas said "i dont like that [99% uptime]. what NFR that goes in the uptime direction is feasible with our system and constraints?"; AI proposed the three-part split and the addition of Better Uptime; Lukas replied "ok do that."
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-05; [specification](../docs/docs/specification.md) NFR-05; [project brief](../docs/docs/project-brief.md) section 5 (target architecture) and section 7 (milestones); [MLOps-lab.md](../references/MLOps-lab.md) session 11; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-11: Keep `shap` out of the API image; serving uses the booster's native SHAP export
 
@@ -282,7 +284,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI had proposed the native-export approach earlier in the PR #19 review, before EDN-09 was decided. Asked whether it was still relevant after the Python 3.12 bump, AI separated the two motivations (version conflict, now resolved; image size, still open), then built real Docker images for both options and a deletion test to confirm `numba`/`llvmlite` are unconditional, rather than assuming it from documentation. Asked whether this was the best option or if there were better ones, AI additionally ruled out a leaner Docker build (does not work, proven by the deletion test) and dropping per-instance SHAP entirely (would weaken FR-08 and lose the course's stated M3 credit for using SHAP), and pointed out CatBoost's equivalent native support. Lukas reviewed the evidence and confirmed option B.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI's original `pred_contrib` suggestion predated the Python 3.12 bump; Lukas asked "is this still relevant?", AI re-derived it with concrete measurements; Lukas asked "is this what we would want? or are there better options?", AI built real Docker images (702 MB vs. 486 MB) and ruled out the alternatives; Lukas replied "ok apply it."
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-08; [project brief](../docs/docs/project-brief.md) section 6 (tooling constraints); [EDN-09](#edn-09-bump-to-python-312-to-use-real-shap-instead-of-a-workaround); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-12: Retraining and promotion are human-triggered, not automated
 
@@ -304,7 +306,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** While reviewing PR #19, AI noted that the retrain-after-drift plan in the brief had never become a testable requirement, unlike everything else on the requirements page, and that EDN-08 had already defined the promotion and rollback mechanism without it being referenced by any FR. Asked whether this and a related NFR-11 tightening were still relevant and worth doing, AI confirmed both were unaddressed, proposed the NFR-11 fix directly (no real alternative to weigh), and for retraining, named the automation-level choice as a genuine decision, laid out both options with the project's timeline as the deciding factor, and recommended the human-triggered option. Lukas confirmed it.
 - **AI interaction evidence:** Claude Code session on 2026-09-22 while reviewing PR #19: AI's original review had flagged both the trivially-passable NFR-11 and the missing retraining requirement; Lukas asked whether they were still relevant and whether they were overkill, AI confirmed relevance for both and recommended the human-triggered option for retraining with reasoning tied to the M6 timeline; Lukas replied "yes."
 - **Other evidence:** [requirements](../docs/docs/requirements.md) FR-14, FR-15, NFR-01, NFR-11; [specification](../docs/docs/specification.md) FR-14 and FR-15; [project brief](../docs/docs/project-brief.md) section 3.2 (`ES` new-market drift scenario) and section 5 (target architecture); [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket), [EDN-08](#edn-08-model-loading-bake-into-the-api-image-via-dvc-pull-at-ci-build-time-not-the-mlflow-registry-at-runtime); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-13: Keep the `/feedback` endpoint, but reachable only from inside the Compose network
 
@@ -329,7 +331,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** During the review of PR #19, AI flagged that FR-10 carried `[open]` and `[decided]` markers in the same row and that four other requirements silently depended on it, then laid out options A to C with the M6 rubric wording and the likely NAT setup of the Virtech VM as the deciding factors, and recommended keeping the endpoint while making it internal. Asked to explain the recommendation in more detail, AI also named the counter-argument itself (the labels are simulated, so a critic could call the endpoint a facade) and the mitigation (state plainly in the report that traffic and labels are replayed). Lukas reviewed the reasoning and accepted the recommendation.
 - **AI interaction evidence:** Claude Code session on 2026-09-23 while reviewing PR #19: AI recommended keeping `/feedback` and combining it with internal-only exposure; Lukas asked "erkläre mir FR-10 genauer und warum du das eine vorschlägst", AI explained the delayed-label mechanism, the dependencies and the three options; Lukas replied "ok ich mag deine empfehlung ändere es so".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-10, FR-14, NFR-09; [project brief](../docs/docs/project-brief.md) sections 3.2 and 5; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket), [EDN-12](#edn-12-retraining-and-promotion-are-human-triggered-not-automated); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-14: NFR-11's drift control is an i.i.d. sample, not a seller-grouped one
 
@@ -363,7 +365,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** While reviewing PR #19, AI flagged NFR-11 as the one requirement that makes an unverified claim about the data rather than about the system. Asked for an in-depth feasibility check, AI downloaded the raw dataset from the Zenodo DOI, reproduced the scope, deduplication and split protocol, emulated alibi-detect's `TabularDrift` with scipy after confirming its tests, defaults and Bonferroni rule against the v0.13 source (including that it does no NaN handling, so missing indicators had to be added), and ran 200 trials per window size. It reported that the first half of the requirement passes with margin and the second half fails, ran two controlled cross-checks to separate a detector fault from a data property (i.i.d. split, reference size), and tested and then rejected its own effect-size remedy on the measurements. Lukas reviewed the evidence and chose option D.
 - **AI interaction evidence:** Claude Code session on 2026-09-23 while reviewing PR #19: Lukas asked "NFR-11 please make an in depth analysis if this is feasible [...] we need to be really sure about this"; AI ran the measurement described above, reported the pass, the failure and the limits of the study, proposed options A to D and recommended D; Lukas replied "yes please".
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-11; [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_check.py`, `nfr11_diag.py`, `nfr11_results.json`, run of 2026-09-23); [project brief](../docs/docs/project-brief.md) section 3.2; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-15: UC1 required fields after measuring the fill rates, plus SC-06 for absent optional fields
 
@@ -398,7 +400,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** Asked which decisions had to be settled before PR #19 could be merged, AI named FR-01's open item first and called it a merge blocker. Asked to re-examine that, it downloaded the raw dataset from the Zenodo DOI, reproduced the scope, deduplication and make filter (which matched the brief's 11 makes as a cross-check), measured the per-field fill rates, and then corrected two of its own claims: the item does not block code that exists, because there is no pipeline yet, and FR-01 already promised a masked-input check, so the real gap was that the check had no threshold and no link to NFR-01's gate. It also reframed the requirement as mixing contract and mechanism, which is what made a clean split possible. Lukas accepted the recommendation and the field list; the modification is that the mechanism question stays open on purpose instead of being decided together with the contract.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked (translated from German) "which things urgently still need deciding in requirements.md before we can merge, and why?", then "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is"; AI measured the fill rates, revised its own analysis, proposed options A to E and recommended D with SC-06 in the gate; Lukas replied "I like your recommendation, please change it that way in the PR".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-01; [problem specification](../docs/docs/problem-spec.md) SC-06; [reports/analysis/](analysis/) (`fillrates.py`, run of 2026-09-29); [project brief](../docs/docs/project-brief.md) section 4; [EDN-06](#edn-06-success-criteria-for-the-price-model); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-16: Separate `/predict` and `/price-range` instead of one valuation endpoint
 
@@ -420,7 +422,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** Asked to re-examine the split before merging PR #19, AI first called it a merge blocker and then withdrew that: no test or report cites FR-06 or FR-07 yet, so the practical cost of deciding later starts with the M4 API tests, not with the merge. It found that the two endpoints do not differ in their output, since FR-07 already returns the point estimate, and contributed the monitoring argument above, which had not been written down anywhere. Lukas kept the scope deliberately small and dropped AI's further suggestions (a shared base schema stated in the requirement, a combined convenience endpoint) as implementation detail or as unnecessary for a course project.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked (translated from German) "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is" about the endpoint split, and after the recommendation replied "I do not want overkill, it should stay simple, it is only a university course".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-06, FR-07, FR-09; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-17: Deployment target is the FIB Virtech VM
 
@@ -442,7 +444,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** While reviewing PR #19, AI reported the brief and the requirements as contradicting each other on the deployment target. Asked to look again, it corrected its own framing: the `[proposed]` marker in the requirements refers to the performance numbers, not to the machine, and the requirements treat the VM as settled throughout, so the real issue was an implicit decision rather than a disagreement between two pages. It also pointed out that the brief's stated reason for leaving the point open is already covered by NFR-04. Lukas kept the change small and deliberately left the performance targets `[proposed]` until the first M4 load test.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: after Lukas asked (translated from German) "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is" about the deployment target, AI recommended fixing the VM as the target with a dated trigger for the missing access, and Lukas replied "yes do that".
 - **Other evidence:** [Specification](../docs/docs/specification.md) section 2 and NFR-04; [project brief](../docs/docs/project-brief.md) section 5; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-18: Unseen countries and models are accepted with a warning, not rejected
 
@@ -464,7 +466,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI pointed out that this item was already prejudiced by EDN-03 and cost nothing to confirm, which is why it stayed unmarked longer than necessary. No further analysis was needed.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: AI noted that FR-05 was (translated from German) "in fact already prejudged by EDN-03" and recommended lifting it to `[decided]`; Lukas replied "do that".
 - **Other evidence:** [requirements](../docs/docs/requirements.md) FR-05 and FR-04; [specification](../docs/docs/specification.md) FR-05; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-19: Which DagsHub repository the team uses as DVC remote and MLflow server
 
@@ -523,7 +525,7 @@ How to add an entry:
   This is the second decision in the same week reached on a premise nobody had checked, after "the DagsHub repository is private" in the first version of EDN-07 on the issue #3 branch, and in both cases the check that settled it took one API call and was available before the decision rather than after it. The pattern, not either individual fix, is the thing worth carrying into the working agreements: state the premise a decision rests on, and verify it, before recording the decision.
 - **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: the comparison and the recommendation for pauadal03 followed "isn't this our DagsHub repo, the one that matches our GitHub repo?" and "why did that repo score worst?"; the retraction followed "I think pauadal03 is one of our lecturers - is it bad that everything now has to go through them?".
 - **Other evidence:** [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [issue #10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/10), EDN-20, EDN-25, roster in `docs/docs/scrum/index.md`.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-20: The DagsHub remote stays public
 
@@ -556,7 +558,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found that the privacy premise of the raw-data decision was false, using a control repository to show that anonymous refusal does not distinguish public from private, and put both ways out to Lukas without recommending either, since the trade-off is about how open the team wants to be rather than a technical question. Lukas decided to keep the repository public. The finding is what changed the outcome here; the decision itself was not AI's to make.
 - **AI interaction evidence:** Claude Code session on 2026-09-29, prompts translated from German: after the finding was presented with the two options ("either mark switches it to private ... or you keep it public and write that honestly into the raw-data entry"), Lukas answered "we keep it public".
 - **Other evidence:** EDN-19, EDN-25, [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-21: Report the upstream licence contradiction instead of resolving it
 
@@ -584,7 +586,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the contradiction while re-validating PR #22, and in doing so corrected its own earlier review, which had asserted that the card's restrictive wording was simply wrong and contradicted the MIT licence recorded in the project brief. Fetching the Zenodo API record showed that both statements come from the same source, so the card's author had not made a mistake and the project brief's flat "License: MIT" was itself incomplete. AI laid out the four options above and recommended option A. The team accepted the recommendation but rejected the accompanying suggestion to contact the author, on the grounds that it is disproportionate for a university project.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 while reviewing PR #22. AI fetched `https://zenodo.org/api/records/17643343` and reported that `metadata.license.id` is `mit-license` while the description text welcomes use for research, education and analysis, which reads as narrower than MIT; it then flagged the choice as EDN-worthy rather than deciding it. Lukas replied, in German, that the team should not be pedantic and should simply take the recommendation, since this is a small university-course project, which settled option A and ruled out option D.
 - **Other evidence:** [PR #22](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/22), the Licensing section of [the dataset card](../docs/docs/dataset-card.md), Zenodo record [10.5281/zenodo.17643343](https://doi.org/10.5281/zenodo.17643343).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-22: Drop listings registered after the age reference date
 
@@ -621,7 +623,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI profiled the 164 rows, laid out the four options above and recommended dropping them, together with the split between a hard expectation on the processed data and a `mostly` bound on the raw data. Lukas accepted the recommendation because the dropped share is negligible and the invariant is worth more than the rows.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 while analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI presented the options as a decision question, Lukas chose "drop them".
 - **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), [problem specification](../docs/docs/problem-spec.md) section 2.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-23: Read the condition flags as one-sided assertions instead of encoding them three-valued
 
@@ -649,7 +651,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The three-valued encoding was AI's own earlier proposal, written into issue #25. On re-reading the issue, AI argued against it: it showed that `{True, NaN}` and `{True, False}` are informationally identical for the tree models we use, so the encoding would add complexity without any effect on the model, and recommended fixing the interpretation instead. Lukas accepted the reversal because the argument was concrete rather than stylistic.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI presented the options as a decision question, Lukas chose "keep them binary".
 - **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), [problem specification](../docs/docs/problem-spec.md) section 4.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-24: Keep the pre-registered exclusion although the flag behind it is unreliable
 
@@ -674,7 +676,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the contradiction between its own change in PR #24 and EDN-04 while checking whether issue #25 was still current, and reported that the scope filter itself, not only the feature set, is affected by the unreliable flag. It laid out the three options and recommended keeping EDN-04. Lukas accepted it, because reopening a settled scope decision for an effect EDN-04 had already measured as negligible is not worth it.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI reported the contradiction unprompted and presented the options as a decision question; Lukas chose to keep EDN-04.
 - **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), EDN-04, [problem specification](../docs/docs/problem-spec.md) section 2.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-25: Raw data acquisition: track with `dvc add` and push to our DagsHub remote
 
@@ -710,7 +712,7 @@ How to add an entry:
   The error is recorded rather than quietly fixed, because the decision stands while the reason given for it did not: B is still the right option, but on the grounds in the rationale above rather than on a privacy mitigation that never existed. Verified on 2026-09-29 against a known-public control repository and a repository that does not exist, both of which answer anonymously exactly like ours.
 - **AI interaction evidence:** Claude Code session on 2026-09-26 while working on issue #3: prompt "How should the raw AutoScout24 file get into DVC (PII handling)?" with options A to C and the recommendation for A; Mark chose B, reason "because it follows the demo".
 - **Other evidence:** [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3), pointer file `data/raw/autoscout24_dataset_20251108.csv.dvc`, [data versioning conventions](../docs/docs/data-versioning.md), project brief §3.3, EDN-07, EDN-19, EDN-20, EDN-36.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison
 
@@ -750,6 +752,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** A reviewing agent reported that the control clause fails at window 100 and proposed stating window 1,000. A second agent argued that the window was the wrong lever, because the false alarms come from `model`, and recommended excluding it while keeping window 100; Lukas chose that option. The measurement then refuted it: the control improves from 5.4 to 2.2 flagged windows of 20 but stays above the promised 1, and the three-feature clause fails in one run in five at window 100 either way. Two claims in that recommendation were also wrong and are recorded rather than quietly dropped: `model` was described as having roughly 10,000 levels, where it has 349 in the reference (84,171 is `model_version`, a different column), and the reviewing agent's control figure at window 1,000 was 0.6 of 20 against the 1.4 measured here, a difference that decides whether the clause holds with `model` kept. The argument that a 349-level chi-square against a 100-row window is under-powered survived the measurement; its effect was simply smaller than claimed. Lukas then chose the combination, which is the only configuration that was demonstrated to work.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: a peer agent's review of PR #19 reported the control failure and proposed window 1,000; this session verified the finding by inspection, argued for excluding `model` instead, and Lukas chose that. After the measurement refuted it, this session reported the four measured configurations and recommended the combination, which Lukas chose.
 - **Other evidence:** [requirements](../docs/docs/requirements.md) NFR-11; [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_model_excluded.py`, `nfr11_model_excluded_results.json`, run of 2026-09-29); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** yes
 
 ### EDN-27: Separate the requirements from their specification, keeping one set of FR/NFR IDs
 
@@ -774,7 +777,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** Lukas relayed the feedback and asked for a more abstract version, with the explicit constraint that the existing analysis must not be lost. AI confirmed the criticism against the actual page and proposed the split into two levels, which the team accepted. Its first execution went further than asked and replaced the requirements with user stories; Lukas corrected this, because the course material, the report template and the existing IDs all speak of functional and non-functional requirements, and the stories had been meant as orientation only. AI then reworked the page to the agreed form. The abstraction of each requirement and the acceptance criteria are its proposal and were reviewed by the team.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 (prompts were in German, translated here): Lukas relayed the feedback as "we got feedback on the requirements. The lecturer said they are too technical, they are more of a specification. He would rather have them like user stories, more abstract. Can you do that, but please also write a spec so the work was not for nothing", and after AI delivered user stories corrected it with "user stories were only meant as orientation for you. We still want to call them functional and non-functional requirements. But as said they should not be so technical, rather more abstract, and should not fix architecture decisions yet".
 - **Other evidence:** [Requirements](../docs/docs/requirements.md); [Specification](../docs/docs/specification.md); [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-28: One module per DVC stage, deviating from the flat Cookiecutter layout
 
@@ -799,7 +802,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** Asked whether the sprint plan matched the course demo repository, AI read the demo's file tree and its `dvc.yaml` rather than relying on the existing notes, and reported that the demo splits one module per stage while our repository still carried the flat template. It connected that to the parallelisation problem the sprint was being cut around, laid out the three options with the trade-offs above and recommended A. Lukas reviewed the comparison and chose A. The contribution was useful mainly because it checked the demo directly instead of arguing from the template's documentation.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 during sprint 2 planning: Lukas gave the demo repository's URL and asked whether the planned milestones and tickets fit it; AI fetched its tree and `dvc.yaml`, reported what to adopt and what we deliberately add, and presented the three layout options; Lukas chose the demo layout.
 - **Other evidence:** [sprint 2 planning notes](../docs/docs/scrum/sprints.md); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32); [references/course-demos.md](../references/course-demos.md); [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-29: The drift job runs at a significance level of 0.005, not 0.05
 
@@ -837,7 +840,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI re-ran the committed evidence after EDN-22 landed, found that EDN-26's configuration no longer held, and did not simply restate the number. It identified that the Bonferroni construction makes the family-wise false-alarm rate equal to the significance level, which is what the control clause promises, and wrote a measurement that separates split-to-split variability from the threshold by computing each trial's p-values once and evaluating them at several levels. It recommended 0.005 over 0.01 on the grounds that 0.01's maximum sits exactly on the promise. Lukas delegated the choice and accepted the recommendation. This is the third time a measurement has refuted a written form of NFR-11, which is itself the argument for measuring a requirement before committing to it rather than after.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: after the scope correction AI reported that EDN-26's configuration measured 2.3 flagged control windows of 20 instead of 0.7, explained the Bonferroni coupling, ran `nfr11_alpha_sweep.py` over three splits and four significance levels, and recommended 0.005; Lukas replied "ohne team mache das was du recommendest".
 - **Other evidence:** [specification](../docs/docs/specification.md) NFR-11; [reports/analysis/](analysis/) (`nfr11_alpha_sweep.py`, `nfr11_alpha_sweep_results.json`, `nfr11_alpha_sweep_results.txt`, run of 2026-09-29); [EDN-26](#edn-26-nfr-11s-window-is-1000-requests-and-model-is-excluded-from-the-drift-comparison); [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date); [PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-30: Pipeline configuration lives in `params.yaml`, not in `config.py`
 
@@ -862,7 +865,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI read the demo repository's `dvc.yaml` and `config.py` directly rather than from our notes, reported that the demo declares neither `params` nor `metrics` on any stage, and measured the consequence in a throwaway DVC repository: with a coarse `params:` declaration a single changed hyperparameter retrained every variant, and with a per-item declaration it retrained one. Lukas reviewed the measurement and accepted the recommendation.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 while building the pipeline skeleton: AI built a scratch DVC repository, ran `dvc repro` and `dvc status` under both declaration styles, and pasted the outputs showing one stage rerunning instead of three.
 - **Other evidence:** [`params.yaml`](../params.yaml); [`dvc.yaml`](../dvc.yaml); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-31: The processed-data contract is a hand-written `schema.py`, not Pandera
 
@@ -887,7 +890,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI ran the compatibility experiments rather than arguing from documentation: it installed Pandera, Great Expectations and pyarrow against our pandas 3.0.6 and measured what survives a Parquet round trip, finding that an `object` string column silently becomes `str` across the boundary (so a schema declaring `object` passes upstream and fails downstream), that Pandera ignores the datetime unit entirely, and that the Great Expectations store regenerates with different UUIDs on every run. Those three measurements are what decided the option, and none of them was predictable from the documentation. Lukas was given the three options with these findings and chose A.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: AI ran the probes in a scratch environment, reported the before/after dtype table for the Parquet round trip and the sixteen declared-versus-actual datetime combinations Pandera accepts, and recommended the hand-written contract; Lukas chose it.
 - **Other evidence:** [`recommenditos/schema.py`](../recommenditos/schema.py); [`tests/test_schema.py`](../tests/test_schema.py); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-32: Split proportions 60/10/10/20 and the project seed
 
@@ -912,7 +915,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the coupling the ticket did not mention: it read `make_support_results.txt`, noticed that its sensitivity table was computed at an assumed 20 % test share while the four-way split was still unpinned, and pointed out that pinning a smaller test share would invalidate a number already published in the model card. It laid out the three options against that constraint and recommended A. Lukas accepted.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: asked to pin the split, AI reported the per-make sensitivity thresholds from the committed analysis output and framed the three options around the 15 % floor they imply.
 - **Other evidence:** [`params.yaml`](../params.yaml); [reports/analysis/make_support_results.txt](analysis/make_support_results.txt); [dataset card](../docs/docs/dataset-card.md); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-33: A generated synthetic fixture, and a `download.source` parameter so the skeleton runs without the raw file
 
@@ -941,7 +944,7 @@ How to add an entry:
   The first implementation was wrong in a way worth recording, because it is the failure mode this project's working agreements warn about. Every edge-case row was built as a copy of one body row, which made most of them duplicates of it on the deduplication key and gave all of them that row's country. Preprocessing would therefore have deleted several of the cases the fixture exists to provide, and at the project's own seed the whole block inherited `ES` and would have been diverted into the holdout, so the train, validation, calibration and test frames that four tickets build against would have contained none of them. Nothing in the first round of tests could see it: they asserted that each case was present in the raw frame, which was true. A second agent, asked to attack the change rather than describe it, reproduced the fault, and the fix now carries a test that asserts each case *survives* the preprocessing rules rather than merely existing. The lesson is the one already in the working agreements: an agent's claim decides nothing until it is checked, and the check has to be at the point where the value is consumed.
 - **AI interaction evidence:** Claude Code session on 2026-09-29: AI presented the three options with the parallel-work and PII consequences of each and recommended A; Lukas chose it. The generated distribution was then checked against the dataset card's published make and country shares.
 - **Other evidence:** [`recommenditos/data/synthetic.py`](../recommenditos/data/synthetic.py); [`tests/test_data.py`](../tests/test_data.py); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-34: The derived raw Parquet keeps its PII columns and is pushed like any other stage output
 
@@ -972,7 +975,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the question in the first place, while reviewing the pipeline skeleton: the `download` stage's output had inherited EDN-25's acceptance without anyone noticing that EDN-25 had only ever weighed the CSV. Its first write-up estimated the Parquet at "roughly another 550 MB"; asked to explain the trade-off, it measured instead and reported 215.3 MB, of which the PII columns are 3.1 MB, which moved the argument off storage entirely. It also found, while explaining, a reproducibility flaw in its own earlier suggestion of `push: false` and withdrew it. It recommended C as the clean option and A as defensible; Lukas chose A as the cheapest of the two it stood behind. The modification is that the cost of A is written down here rather than treated as settled by EDN-25.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 and 2026-09-30: the question was raised in the review of PR #48, the sizes were measured against the Zenodo file, and the four options were laid out with the reproducibility catch in B; Lukas replied "mache die einfachste variante die du recommendest".
 - **Other evidence:** [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-35: The `download` stage owns `data/raw/`, and the published CSV is a local cache outside the DAG
 
@@ -1024,7 +1027,7 @@ How to add an entry:
   Lukas kept the mechanism and required the rationale to be rewritten so that it rests on the cost of the 548.6 MB hash and on the check the stage already performs, rather than on a limitation that does not exist, and required the consequence to be recorded.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33), which produced the first option table in the body of [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); a second Claude Code session the same day reviewing that PR adversarially, which produced the `persist` finding and the recoverability consequence; Lukas directed that the entry be corrected rather than the mechanism changed.
 - **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the `download` stage in `dvc.yaml` and the `download` block of `params.yaml`; [Data versioning](../docs/docs/data-versioning.md), "Raw data"; `tests/test_download.py`; EDN-25, EDN-34, EDN-36.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-36: Retire EDN-25's `dvc add` pointer, so we no longer host a copy of the raw CSV
 
@@ -1060,7 +1063,7 @@ How to add an entry:
   Lukas accepted the mechanism and required the rule about `dvc gc --all-commits` to be documented as part of the same change.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33) and verifying the remote by authenticated request; a second Claude Code session the same day reviewing [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54), which reported the `dvc gc` exposure.
 - **Other evidence:** [Issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33); [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54); the deleted pointer `data/raw/autoscout24_dataset_20251108.csv.dvc`; [Data versioning](../docs/docs/data-versioning.md), "Raw data" and "Never run `dvc gc` without `--all-commits`"; EDN-07, EDN-20, EDN-25, EDN-34, EDN-35.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-37: The seller group key stays an unsalted hash, and the residual risk is disclosed
 
@@ -1099,6 +1102,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The claim had been escalating rather than weakening: `preprocess.py` said "the hash is one-way", `schema.py` said "never reversible to the name", and the description of PR #56 called the rule airtight, none of which anybody had tested. An adversarial review of that PR built the dictionary from the published file and reported the two counts above, together with the timing and the observation that the truncation is irrelevant to a dictionary attack. It laid out the three options with the reproducibility cost of a pepper and the artefact-boundary cost of dropping the column, and recommended keeping the hash and correcting the claims. Lukas accepted that, and the reasoning that settled it is his: the split must stay reproducible without secrets, and the dealer identity is already recoverable by joining on the columns we publish, so the hash is a grouping key and nothing more.
 - **AI interaction evidence:** Claude Code session on 2026-09-30, reviewing PR #56 against the real snapshot: AI was asked to attack the stage's own claims, measured the inversion of all 30,717 group ids, reported that the one-wayness claim was false, and presented keeping the hash, peppering it and dropping the column as the three options; Lukas decided to keep the unsalted hash and to state the residual risk instead.
 - **Other evidence:** [`recommenditos/data/preprocess.py`](../recommenditos/data/preprocess.py) (`hash_seller_group`); [`recommenditos/schema.py`](../recommenditos/schema.py) (`seller_group_id`); [dataset card](../docs/docs/dataset-card.md); [EDN-20](#edn-20-the-dagshub-remote-stays-public); [EDN-25](#edn-25-raw-data-acquisition-track-with-dvc-add-and-push-to-our-dagshub-remote); [issue #34](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/34); [PR #56](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/56).
+- **In LaTeX:** yes
 ### EDN-39: The split's size gate is four rules with an unconditional floor, not one bound derived from the realised data
 
 - **Date:** 2026-09-30
@@ -1131,7 +1135,7 @@ How to add an entry:
   The modification is option D. The review asked for the bound to be derived from a declared expectation about concentration; that was tried and measured, and it is either looser than what it replaces or tight enough to fail sound splits, so the declared expectation became its own rule instead. Recording that is the point: the reviewer's prescription was not simply adopted, it was tested and the part that did not survive measurement was replaced by something that did.
 - **AI interaction evidence:** Claude Code adversarial review of PR #53 on 2026-09-30, with a 13-mutation scorecard and a reproduction of each exploit; the fixing session re-ran every exploit against the new gate and measured the 2,000-seed sweep that chose the constants.
 - **Other evidence:** [`reports/analysis/split_gate.py`](analysis/split_gate.py) and its committed output; [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py); [`tests/test_split.py`](../tests/test_split.py); [EDN-32](#edn-32-split-proportions-60101020-and-the-project-seed); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 
 ### EDN-40: The `ES` holdout stays row-selected, so a cross-border dealer is reported rather than moved
@@ -1158,7 +1162,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The adversarial review of PR #53 found the conflict, which the pull request never mentioned, and measured that it occurs 91 and 898 times in the two fixtures the tests run on while occurring 0 times on the real snapshot - the combination that explains why it was invisible. It also identified the mechanism, that both disjointness tests iterate the split names and therefore exclude the holdout by construction. It offered both resolutions and accepted either, provided the invariant became visible. Lukas chose the row selection, because EDN-03 owns the definition of the holdout and option A would have changed a figure already published for no gain on the real data.
 - **AI interaction evidence:** Claude Code adversarial review of PR #53 on 2026-09-30, which measured the cross-border counts in both fixtures and on the real snapshot and named the conflict between EDN-03 and EDN-14.
 - **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py) (`cross_holdout_sellers`); [`tests/test_split.py`](../tests/test_split.py); [`reports/analysis/split_gate.py`](analysis/split_gate.py); [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-41: `model_version` becomes the leading token of the normalised trim plus a frequency floor
 
@@ -1192,7 +1196,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The normalisation and the frequency floor were AI's own proposal in the `features` ticket, and the overstated justification was AI's wording. An adversarial review, also by AI, measured the collisions on the real column and showed the claim was false for most of the data; it proposed B and C as cheap improvements and asked for them to be implemented only if they measured better. They were then measured, and both were rejected on their own numbers - which is the part worth recording, because the suggestion was plausible enough that it would have been accepted without the measurement. Lukas accepted keeping A with the corrected justification.
 - **AI interaction evidence:** Claude Code session on 2026-09-30: an adversarial review of [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55) reported that "the docstring's claim that the leading token is the one that names the trim is true for Audi and Porsche body styles and false for the German premium engine codes, which are the bulk of the data", and asked for the two variants to be evaluated and implemented "only if it is clearly better on the real data and you can show the numbers". The numbers are in `reports/analysis/extended_features_results.txt`.
 - **Other evidence:** [`reports/analysis/extended_features.py`](analysis/extended_features.py) and its results file (2026-09-30); [model card](../docs/docs/model-card.md) "Feature space"; [problem specification](../docs/docs/problem-spec.md) section 4; [EDN-15](#edn-15-uc1-required-fields-after-measuring-the-fill-rates-plus-sc-06-for-absent-optional-fields); [issue #36](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/36); [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-42: A categorical value the training rows never saw becomes missing, and the holdout's country is allowed to vanish
 
@@ -1220,7 +1224,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** An adversarial review found the empty column by running the stage on the real snapshot and checking every column of every split, and established that `country_code` is the only column fully null in the holdout and not also fully null in training. It read the situation as faithful to the drift scenario rather than as a bug, and recommended documenting it in three places rather than changing the encoding, explicitly declining to drop the column or to add a level because those are modelling changes nobody had asked for. That framing is what made this an entry rather than a patch.
 - **AI interaction evidence:** Claude Code session on 2026-09-30, adversarial review of [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55): "this is faithful to the drift scenario rather than a defect, because `ES` is held out by construction, so the model genuinely has never seen that market, and EDN-18 already requires an unseen value to be accepted rather than rejected. What is unacceptable is that nothing says so."
 - **Other evidence:** [`recommenditos/data/build_features.py`](../recommenditos/data/build_features.py) (`_warn_about_unobserved_columns`); [`tests/test_features.py`](../tests/test_features.py) (`test_the_holdout_country_is_missing_throughout_its_matrix_on_purpose`); [problem specification](../docs/docs/problem-spec.md) section 2; [EDN-03](#edn-03-new-market-drift-scenario-hold-out-autoscout24-spain-instead-of-using-datamarket); [EDN-18](#edn-18-unseen-countries-and-models-are-accepted-with-a-warning-not-rejected); [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-43: The persisted contract carries a categorical's level list, and refuses to infer one
 
@@ -1245,7 +1249,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The lossy artefact was AI's own design in the `features` ticket, and an adversarial review by AI found it, reproduced all three consequences by execution and named the two tickets that would walk into it. The modification is the shape of the fix: the review suggested either putting the levels in the contract or having the schema take them from the vocabulary, and the first was chosen because it is the only one that also lets `validate` check them. The `Column` invariant and the single `FeatureSpace` entry point were added on top, so that the property holds by construction rather than by review.
 - **AI interaction evidence:** Claude Code session on 2026-09-30, adversarial review of [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55): the review reported that "`Schema.conform` INFERS a categorical's levels from the data" and "`Vocabulary` does hold the levels, but the only function that applies them is private, so a consumer holding the loaded `Schema` and a frame has no correct way to cast", with a reproduction of each case.
 - **Other evidence:** [`recommenditos/schema.py`](../recommenditos/schema.py); [`tests/test_schema.py`](../tests/test_schema.py); [EDN-02](#edn-02-model-family-gradient-boosting-lightgbm-as-main-model); [EDN-31](#edn-31-the-processed-data-contract-is-a-hand-written-schemapy-not-pandera); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39); [PR #55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-44: The traceability gate is milestone-scoped, and its expected-coverage set is a validated YAML file
 
@@ -1273,7 +1277,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI laid out A to D with the trade-offs and recommended A, and implemented it. An adversarial AI review of that implementation then found, by execution rather than by reading, that the gate could be loosened three ways without a reviewable statement, and that the enforced set was positional in the YAML. That finding is the modification: the validated milestone order and the tests that pin the gate's parameters were not in the first design and are the reason the decision is defensible as written.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30: the options were laid out and A implemented for issue #40; a second, adversarial review session reproduced each loosening route by running the generator against a modified file and reported the exit codes, and the fixes were then verified the same way.
 - **Other evidence:** [issue #40](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/40); [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `tools/expected_coverage.yaml`; `DUE_AT_M3` in `tests/test_requirement_matrix.py`.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-45: A `req` marker is verification only where the specification says a test is the evidence
 
@@ -1301,7 +1305,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** An adversarial AI review found the flaw and proved it by execution, naming the test whose body asserts that two files exist and the covering test whose own comment says four of the six criteria are still null. A second AI session generated A to D, recommended A over C on the grounds that C needs a heuristic, and implemented it. The modification is in the markers rather than the tool: AI's first instinct was to strip NFR-01's markers so the requirement reads as uncovered, which would have thrown away real evidence and turned the M3 gate red with nothing to fix; instead the marker moved onto the test that keeps SC-04 to SC-06 from ever counting as met, and the residual over-claim is stated in the pull request rather than hidden.
 - **AI interaction evidence:** Claude Code adversarial review of PR #51 on 2026-09-30, which reproduced the finding by running the generator and reading the covering tests; the follow-up session laid out A to D and verified each fix by re-running the reproduction.
 - **Other evidence:** [PR #51](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/51); `Entry.status` and `Entry.has_the_promised_evidence` in `tools/requirement_matrix.py`; the status table in `CONTRIBUTING.md`; [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) for the SC-04 to SC-06 thresholds.
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-46: DagsHub credentials live in two gitignored stores, and the token is entered twice
 
@@ -1334,7 +1338,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI established by execution that DVC has no environment-variable route, which is the fact the whole decision rests on, and it wrote the two-store walkthrough. An adversarial review of that work, also by AI, then found three things the first pass had asserted rather than checked: that the `.env` scoping was not repository-local, so the review's own "fresh clone" verification had in fact been running on the parent checkout's credentials; that `mlflow.db` was neither gitignored nor prevented; and that the documented newcomer command printed a traceback where the page promised a message. All three were reproduced before being fixed. The modification is that the template lost the `DAGSHUB_*` block, which the first pass had defended as documentation, once the review showed nothing reads it.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30: the DVC environment-variable question was settled by running `dvc status -c` with and without the variables exported; the review findings were each reproduced before any fix, including a probe showing `find_dotenv` resolving to a `.env` three directories above a credential-free worktree.
 - **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-15 in [the specification](../docs/docs/specification.md), which held this as part of NFR-09 when this entry was written ([EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean)).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-47: The serving runtime is `[project] dependencies`, and everything else is a PEP 735 dependency group
 
@@ -1421,7 +1425,7 @@ How to add an entry:
   Each is fixed and covered by a break-it check; the review also caught that narwhals had been called optional when lightgbm and scikit-learn both require it.
 - **AI interaction evidence:** Claude Code sessions on 2026-10-05 implementing issue #61 and reviewing PR #69: the import trace and the footprint run committed under `reports/analysis/`, the before/after `uv export --all-groups` comparison, the injected imports that turned `make test-serving` red, and the review's reproduction of the conftest failure by merging #68's head into this branch.
 - **Other evidence:** [issue #61](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/61); [PR #69](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/69); `pyproject.toml`; [`reports/analysis/runtime_footprint.py`](analysis/runtime_footprint.py) and [its output](analysis/runtime_footprint_results.txt); [`reports/analysis/serving_imports.py`](analysis/serving_imports.py) and [its output](analysis/serving_imports_results.txt); `tests/test_serving.py`; `make test-serving` and the `Serving runtime` job in `.github/workflows/ci.yml`; the Dependencies section of [CONTRIBUTING.md](../CONTRIBUTING.md); NFR-04 in [the specification](../docs/docs/specification.md); [EDN-08](#edn-08-model-loading-bake-into-the-api-image-via-dvc-pull-at-ci-build-time-not-the-mlflow-registry-at-runtime), [EDN-11](#edn-11-keep-shap-out-of-the-api-image-serving-uses-the-boosters-native-shap-export), [EDN-28](#edn-28-one-module-per-dvc-stage-deviating-from-the-flat-cookiecutter-layout).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-48: `split` records the supported-make list and stays a lossless partition; the downstream stages apply it
 
@@ -1458,7 +1462,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found that the skeleton contained evidence for both readings and that the two documents behind them disagree, rather than implementing one and moving on: `schema.py` and `preprocess.py` place the filter in `split`, while problem-spec section 5 and EDN-05 place it at the API. It laid out the options with the irreversibility argument that decided it, and flagged the choice as an EDN candidate before acting on it. It also measured the consequences instead of asserting them, which is what produced the 0.08 pp share shift and the 5,979 of 6,079 holdout figure, and it corrected its own earlier framing that the out-of-scope rows would inflate the metrics once it checked the direction of the effect. Lukas confirmed option C.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30 while implementing and then adversarially reviewing issue #35: the first flagged the two readings and asked for a decision rather than choosing silently; the adversarial review verified the numbers and found that the obligation existed only in the pull request body, with issues #36, #37 and #39 mentioning the make list nowhere at all.
 - **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py); the `supported_makes.json` dependency on the `features` stage in [`dvc.yaml`](../dvc.yaml); [pipeline docs](../docs/docs/pipeline.md), "The supported makes", for the four downstream guarantees; [`reports/analysis/split_gate.py`](analysis/split_gate.py) for the 0.08 pp and 5,979 measurements; [EDN-05](#edn-05-supported-makes-minimum-listing-support-per-make); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [EDN-39](#edn-39-the-splits-size-gate-is-four-rules-with-an-unconditional-floor-not-one-bound-derived-from-the-realised-data); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-49: No bias correction on the log-to-euro inverse transform
 
@@ -1487,7 +1491,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI raised the retransformation question unprompted, named the two standard corrections and argued from the target functional rather than from convention, which is the argument that decides it. Its first write-up carried the effect sizes from a different run (0.5 to 2.2 pp) as if they were ours; those were re-measured on the real snapshot and are an order of magnitude smaller, so the entry now claims what this project measured and says that the effect is small. The direction of the effect - worse on every variant - reproduced.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the smearing factor and the paired MdAPE per variant were computed on the real snapshot in a scratchpad run of the whole chain, with the numbers reproduced in the model card.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.predict_eur` and `MedianBaselineModel`; [model card](../docs/docs/model-card.md), Training Procedure, Training; `tests/test_model.py::test_predict_log_price_is_exactly_the_log_of_predict_eur`; [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-50: One-hot encoding for the Ridge baseline only, against EDN-02's "no one-hot"
 
@@ -1529,7 +1533,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI spotted the apparent conflict with EDN-02 before writing the estimator and flagged it as an EDN candidate rather than resolving it silently, and its reading - that EDN-02 is about the tree family - is the one the entry records. It was overruled on the threshold: it recommended 30 on the strength of a measurement from another run and asserted the value was free at real scale. Sweeping it here showed folding is not free and that its pathology did not reproduce, so the value is 5 and the entry says what the evidence actually supports.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the threshold sweep was run on the fixture and then on the real snapshot, and the "unseen model and country" probe was re-measured at both scales before the recommended value was changed.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `RidgeModel`; the `min_category_rows` comment in [`params.yaml`](../params.yaml); [model card](../docs/docs/model-card.md), Training Procedure, Training; `tests/test_model.py::test_an_unseen_category_is_treated_as_missing_not_an_error`; [EDN-02](#edn-02-model-family-gradient-boosting-lightgbm-as-main-model); [EDN-18](#edn-18-unseen-countries-and-models-are-accepted-with-a-warning-not-rejected); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-51: Mean fill plus a per-feature missingness indicator for the Ridge numerics, which is not imputation
 
@@ -1563,7 +1567,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI identified that the obvious construction would make SC-06 measure its own imputation, which is a subtle failure that would have produced a passing criterion and a wrong conclusion, and it named `features="all"` as the fix and flagged the whole construction as an EDN candidate because of how it reads. It also proposed the test for it. The test it proposed was then shown, by mutating the implementation, to pass either way on this fixture, and it was replaced with one that fills a column first; that correction came from the mutation exercise rather than from the design.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the mutation battery run before the pull request recorded `MissingIndicator(features="all")` to `MissingIndicator()` as a surviving mutation, which is what produced the replacement test.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `RidgeModel` and `_ridge_pipeline`; `tests/test_model.py::test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature` and `::test_a_numeric_feature_complete_in_training_still_gets_an_indicator`; [model card](../docs/docs/model-card.md), Training Procedure, Training; [EDN-15](#edn-15-uc1-required-fields-after-measuring-the-fill-rates-plus-sc-06-for-absent-optional-fields); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-52: `predict_eur` bounds every prediction to the training price range
 
@@ -1597,7 +1601,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI proposed the clip and the float-limit argument for applying it in log space, which is the part that makes the interface's promise structural. Its justifying measurement did not hold up: the 487,417 EUR case it cited is inside the training range and would never be clipped, which was found by measuring the range instead of assuming it. Re-measuring over the whole test split produced the case that does justify the clip, and the entry and the code now claim that one and explicitly disclaim the other. AI also proposed the test; the test was strengthened to replace the estimator with one returning an absurd log price, so that it fails when the clip is removed rather than depending on how far a particular fit happens to extrapolate.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the unbounded predictions of all four variants were computed over the real test split, and the make-only probe was re-run at both data scales before the justification in the entry was rewritten.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.predict_eur` and the range guard in `Model.__init__`; `tests/test_model.py::test_a_prediction_that_would_overflow_is_bounded_to_the_training_range`, `::test_a_training_price_range_that_cannot_bound_a_price_is_refused` and the range assertions in `::test_predict_eur_contract`; [model card](../docs/docs/model-card.md), Training Procedure, Training; [PR #62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-53: `train.num_threads` is pinned to 1, trading fit speed for a machine-independent artefact
 
@@ -1639,7 +1643,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI identified that LightGBM records the thread count in the artefact, which is the fact the whole decision rests on, and proposed pinning it. Three of its supporting claims were wrong and were corrected by measuring. That `deterministic=True` and `force_row_wise=True` are what make the trees thread-independent: they are not at this size, the trees are identical with the flags off, though the flags do change which trees are built. That pinning to 1 costs nothing at real scale: it costs about 1.5x the fit against a pin of 2 to 4. And then the correction to that correction - the entry's own second version stated the cost against 2 to 4 as if that were what the default does, and put eight threads at real scale under "not measured". Measuring it reversed the comparison that matters: against the default the pin is free or a gain. The entry now names which alternative the cost is against, and the code comments were rewritten to match.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: `booster.txt` was hashed with the `[num_threads: N]` line normalised away across four thread counts and both settings of the determinism flags. The thread sweep was then redone during the review of pull request #62, as medians of three fits at 1, 2, 4 and 8 threads on both LightGBM variants at real scale on an idle machine, after a first attempt was discarded for having shared the machine with a test run - which is also how the size of the variance at 8 threads came to light.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `LightGBMModel.fit`; the `num_threads` comment in [`params.yaml`](../params.yaml); `tests/test_model.py::test_num_threads_is_pinned_from_params`, which trains at a value the project does not use so a hard-coded 1 would fail it, and `::test_the_payload_of_a_refit_is_byte_identical`; [model card](../docs/docs/model-card.md), Training Procedure, Determinism; [requirements](../docs/docs/requirements.md) NFR-06 and NFR-10; [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-54: Tracking degrades silently when it is not configured, with an environment variable to make it fatal
 
@@ -1675,7 +1679,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI identified that the existing helper's fail-fast behaviour, which EDN-46 chose deliberately for a credential check, is the wrong behaviour for a pipeline stage, and that the obvious repair - a local fallback - would put a database in the repository root under MLflow 3.16's changed default. It proposed the null-object handle so the branch exists once rather than in front of every log call, and the environment variable so the quiet default stays falsifiable. It also used the variable in its own live verification rather than only testing it, which is what showed the hatch earns its place.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the DagsHub verification was run with `RECOMMENDITOS_REQUIRE_TRACKING=1` and the throwaway experiment deleted afterwards; the `mlruns` leak was found by the new `models/` guard in `tests/conftest.py` failing.
 - **Other evidence:** [`recommenditos/tracking.py`](../recommenditos/tracking.py), `optional_run`, `Run` and `DisabledRun`; `tests/test_model.py::test_a_tracking_failure_does_not_fail_training`, `::test_require_tracking_makes_a_failure_fatal`, `::test_tracking_is_disabled_without_a_tracking_uri` and `::test_require_tracking_refuses_a_model_with_no_run_to_resume`; the `FORBIDDEN_PATHS` guard in [`tests/conftest.py`](../tests/conftest.py); [EDN-46](#edn-46-dagshub-credentials-live-in-two-gitignored-stores-and-the-token-is-entered-twice); [EDN-57](#edn-57-the-mlflow-retry-budget-is-pinned-to-three-requests); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-55: `evaluate` resumes the run `train` created instead of opening its own
 
@@ -1706,7 +1710,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The resumption design came out of a negotiation between the agents working on issues #37 and #39 rather than from one of them, which is also where the context-manager requirement came from - the #39 side pointed out that one stage covering four variants would otherwise leak a run across variants. AI then verified the result against the real server instead of asserting it, including the run count before and after resuming, which is the assertion that distinguishes this option from option A.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30 designing and implementing issues #37 and #39: the seam was agreed between the two over three rounds, and the live DagsHub verification of the run count, the parameters, the tags and the uploaded artefacts was run in a throwaway experiment that was deleted afterwards.
 - **Other evidence:** [`recommenditos/tracking.py`](../recommenditos/tracking.py), `resume_run`; [`recommenditos/modeling/train.py`](../recommenditos/modeling/train.py) and [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py); `tests/test_model.py::test_one_variant_is_one_run_that_evaluate_appends_to`; [model card](../docs/docs/model-card.md), Training Procedure, Experiment tracking; [EDN-54](#edn-54-tracking-degrades-silently-when-it-is-not-configured-with-an-environment-variable-to-make-it-fatal); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-56: The model bundle carries its own provenance, so `models/` is deliberately not byte-reproducible
 
@@ -1735,7 +1739,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI raised the trade as an explicit decision rather than letting a timestamp drift into an artefact unremarked, which is the failure mode this repository has already had once with a test run's validation summary. It named the alternative that preserves byte stability and the cost of that alternative, and it separated the reproducibility that is claimed from the reproducibility that is not, then wrote the test so that the exclusion of `model.json` is visible in the assertion instead of being silently absent.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: two fits of each variant were compared byte for byte in a scratchpad before the test was written, and the payload files were confirmed identical while `model.json` differed.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `fit_variant` and `Model.save`; `tests/test_model.py::test_the_payload_of_a_refit_is_byte_identical` and `::test_training_is_reproducible`; [requirements](../docs/docs/requirements.md) NFR-06; [EDN-08](#edn-08-model-loading-bake-into-the-api-image-via-dvc-pull-at-ci-build-time-not-the-mlflow-registry-at-runtime); [EDN-55](#edn-55-evaluate-resumes-the-run-train-created-instead-of-opening-its-own); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-57: The MLflow retry budget is pinned to three requests
 
@@ -1767,7 +1771,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The 246-second figure came out of a measurement AI ran because a test against an unreachable server had not returned, rather than from the design, which had listed "does a bogus URI fail fast?" as an open question. AI swept the budget to find the knee instead of picking a number. Its first write-up claimed the default would eat NFR-10's training budget; checking the requirement's wording showed it budgets one configuration rather than the ladder, and the entry now says what the numbers support and explicitly disclaims the stronger version.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the retry sweep against a closed port produced 246.48 s, 13.68 s, 4.33 s, 0.12 s and 0.00 s for 5, 3, 2, 1 and 0 retries, and the same measurement is why the tests pin the budget to 0.
 - **Other evidence:** [`recommenditos/tracking.py`](../recommenditos/tracking.py), the `MLFLOW_HTTP_REQUEST_MAX_RETRIES` default; `tests/test_model.py::_point_at_an_unreachable_server`; [requirements](../docs/docs/requirements.md) NFR-10; [EDN-54](#edn-54-tracking-degrades-silently-when-it-is-not-configured-with-an-environment-variable-to-make-it-fatal); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-58: An unmeasured success criterion blocks the gate, and the artefact says how close the model is anyway
 
@@ -1795,7 +1799,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI laid out the four readings of an unmeasurable criterion and recommended A, with the argument that option C weakens the gate more the more criteria are outstanding. The part that was worth more than the recommendation was the measurement behind option D: AI ran the split and the segment cut at three data scales before writing any of the stage, found that no level clears 500 rows on the pytest fixture, and concluded that the vacuous reading would be the one CI exercised and that a test asserting `sc04_passed is None` there would be satisfied by an implementation that returned `None` unconditionally. That is the trap the second `evaluate` run in `tests/test_pipeline.py` exists for, and it came out of the measurement rather than out of the design. The modification was to the leaf count: an earlier proposal also put `sc04_worst_segment` and the per-field sweep into `metrics.json`, which was moved to `reports/metrics/<variant>.json` to keep `dvc metrics show` at 24 columns.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30 designing and then implementing issue #39. The design session measured the split and segment sizes at 416, 3,695 and 22,551 test rows and reported "SC-04's 500-row rule is not measurable at all on the 2,000-row pytest fixture; zero levels qualify, the largest is `seller_type=Dealer` at 345 rows"; it also validated the proposed `metrics.json` shape against `dvc metrics show` and `dvc metrics diff` in a throwaway DVC repository before the shape was fixed.
 - **Other evidence:** [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py), `evaluate_sc04`, `evaluate_sc05`, `gate_passed`, `gate_blocked_by` and `_check_every_criterion_is_decided`; `tests/test_model.py::test_sc04_is_not_measured_rather_than_vacuously_met_when_no_level_qualifies`, `::test_an_unmeasured_criterion_blocks_the_gate_rather_than_passing_it`, `::test_a_criterion_added_to_the_list_without_a_measurement_fails_the_stage`; `tests/test_pipeline.py::test_sc04_is_measured_as_soon_as_a_segment_level_is_large_enough`; [problem specification](../docs/docs/problem-spec.md) section 8; [EDN-06](#edn-06-success-criteria-for-the-price-model), [EDN-12](#edn-12-retraining-and-promotion-are-human-triggered-not-automated), [EDN-33](#edn-33-a-generated-synthetic-fixture-and-a-downloadsource-parameter-so-the-skeleton-runs-without-the-raw-file); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-59: SC-06 masks API input fields, not feature columns, and an absent field's value follows EDN-23
 
@@ -1824,7 +1828,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the `age_years` defect in the written criterion before any code was written, by computing the naive set difference and noticing it yields seven optional fields for the basic set where EDN-15 states six; two independent sessions found it separately, which is the cross-check that it is a defect in the specification rather than a reading of it. AI also proposed option D and wrote it into the design as settled, and the reversal to option A came from checking it against EDN-23 and against the persisted contract, where it fails outright. That is the part of the contribution that was rejected, and it is worth recording as rejected: the argument for `pd.NA` was about what a reviewer would expect to see rather than about this data, and EDN-23 had already answered it with measurements. The per-dtype rule, the two mapping assertions and the "raise on an encoding you do not recognise" rule were accepted as proposed.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30 on issues #37 and #39. The #39 design session reported "the naive set difference yields 7 optional fields for `basic` where EDN-15 says 6, and the spurious one is `age_years`, the single most important feature in the model", and separately measured the mapping against a simulated post-#36 matrix to show the optional-field count is stable at 23. The same session recommended the nullable-boolean masking of option D; the implementation session checked it against EDN-23 and against `Schema._null_problems`, found that it raises `SchemaError`, and implemented `False`.
 - **Other evidence:** [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py), `input_field_columns`, `optional_input_fields`, `sc06_scenarios` and `masking_sweep`; [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.mask_absent` and `Model.columns_of`, which this entry defers to for the value and calls for the expansion; `params.yaml`, `evaluate.input_field_to_feature`; `tests/test_model.py::test_the_optional_fields_of_the_basic_set_are_the_six_of_edn15`, `::test_an_equipment_field_covers_every_multi_hot_column_it_produced`, `::test_every_feature_column_is_claimed_by_exactly_one_input_field` and `::test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is`; [problem specification](../docs/docs/problem-spec.md) section 8 and [specification](../docs/docs/specification.md) FR-01, both reworded by this decision; [EDN-15](#edn-15-uc1-required-fields-after-measuring-the-fill-rates-plus-sc-06-for-absent-optional-fields), [EDN-23](#edn-23-read-the-condition-flags-as-one-sided-assertions-instead-of-encoding-them-three-valued); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-60: Which segments may gate is enforced in code that fails, not by a rule in a document
 
@@ -1852,7 +1856,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI proposed the target-conditioned constant and the "absence of a required field" exclusion, and measured the price-bucket profile that shows why the exclusion matters rather than asserting that it does. Two modifications were made to what it proposed. Its construction passed an `eligible=False` flag into the row builder for the price-bucket rows, which leaves the exclusion dependent on the caller passing the flag; the flag was removed and the builder now reads the segment's own name, so the exclusion holds however the rows are built. And it did not propose the third check at all: the requirement that a segment be a required input field came from asking what makes the `"(missing)"` exclusion correct, which turned out to be an assumption nothing enforced.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 designing issue #39, which measured the price-bucket breakdown at 22,551 test rows and reported "the U shape is the regression-to-the-mean artefact of conditioning on the target, not a fairness finding, and the 490k MAE in the top bucket would dominate any aggregate"; and the implementation session on the same day, which replaced the `eligible` flag with the name-based rule while reducing the row builder's argument count.
 - **Other evidence:** [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py), `TARGET_CONDITIONED_SEGMENTS`, `criterion_segments`, `_sc04_eligibility` and `check_make_levels_are_served`; `tests/test_model.py::test_a_target_conditioned_segment_cannot_become_a_criterion`, `::test_a_segment_over_an_optional_input_field_is_refused`, `::test_a_price_bucket_row_is_reported_and_cannot_count`, `::test_sc04_refuses_rows_from_a_segment_it_may_not_gate`, `::test_a_per_make_level_the_api_would_reject_is_refused`; `reports/metrics/segments.csv`; [model card](../docs/docs/model-card.md), the per-segment breakdown; [EDN-48](#edn-48-split-records-the-supported-make-list-and-stays-a-lossless-partition-the-downstream-stages-apply-it); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-61: An omitted equipment list is the empty list, and the seam owns the masking
 
@@ -1883,7 +1887,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The question was found by an adversarial review of pull request #62, which spotted the contradiction and the masking trap and recommended option A. A second AI pass argued the other way from the contract wording, EDN-15 and `encode_equipment`, recommended option B and implemented it. The repository owner overruled that on the ground neither pass had weighed: the training data contains no null equipment column, so option B hands the model a state it was never fitted on, while option A hands it one that 2.76 % of its training rows are. The semantic argument was about what the source could express, the distributional one about what the model can answer, and the second decides it. AI also produced a wrong supporting number for option B - a 0.09 % metric gap between the rules - which turned out to be its own measurement error and is corrected in this entry. What survived from AI is the shared helper and the `columns_of` expansion, which are the durable part and are unaffected by the direction.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 reviewing pull request #62 and on 2026-10-01 applying the owner's ruling. The 0.09 % gap AI first reported was traced to its own probe script masking a second column, `has_full_service_history`, in the "absent" frame and not in the "empty" one: the real figures are 6.3297 % for that flag alone, 6.8975 % for `equipment_comfort` under either rule, and 6.8982 % for the two together, which is the number that was mistaken for an equipment effect. Re-measured per field on the full test split, the two rules are bit-identical.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.mask_absent`, `Model.columns_of` and `Model._align`; [`recommenditos/data/build_features.py`](../recommenditos/data/build_features.py), `_equipment_columns` and `encode_equipment`; `tests/test_model.py::test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is` and `::test_predict_eur_does_not_raise_with_every_optional_field_absent`; [EDN-15](#edn-15-uc1-required-fields-after-measuring-the-fill-rates-plus-sc-06-for-absent-optional-fields); [EDN-23](#edn-23-read-the-condition-flags-as-one-sided-assertions-instead-of-encoding-them-three-valued); [EDN-51](#edn-51-mean-fill-plus-a-per-feature-missingness-indicator-for-the-ridge-numerics-which-is-not-imputation); [pull request #62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-62: `lgbm-basic` is the candidate, and SC-04's miss on cars over 20 years is accepted rather than worked around
 
@@ -1916,7 +1920,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** The finding is AI's, and it was not the one anybody was looking for. Two sessions measured SC-06 independently - the implementer of issue #39 and the reviewer of issue #37 - and agreed to four decimal places on every variant, which is why the numbers were trusted. The implementer then noticed what the all-at-once scenario *is*, namely a required-fields-only request, and that comparing the two variants on it inverts the ladder's ranking; that step is what turned a criterion result into a decision. AI recommended option A for both halves and raised options C, D and E as things it would not decide on its own, which is the right boundary: which model the API serves and which cars the product covers are not conclusions to draw from a metrics file. Two of its numbers were corrected before they were used: an expected single-field failure on `has_full_service_history` (predicted at 1.399x) measured at 1.002x on real data and was reported as not reproducing rather than as confirmed, and `b1`'s figures were re-measured after it turned out the available models had been fitted at a stale `min_category_rows`.
 - **AI interaction evidence:** Claude Code sessions on 2026-09-30 implementing and reviewing issues #37 and #39. The masking sweep over 19,665 real test rows produced 1.208x for `lgbm-basic` and 1.584x for `lgbm-extended`, reproduced independently by both sessions, and `reports/metrics/masked-inputs.csv` carries the per-field table behind those two numbers. The owner was given options A to E with these measurements and chose A.
 - **Other evidence:** [model card](../docs/docs/model-card.md), Results and the experiment ladder; `reports/metrics/masked-inputs.csv` and `reports/metrics/segments.csv`; [problem specification](../docs/docs/problem-spec.md) section 8; [EDN-06](#edn-06-success-criteria-for-the-price-model), [EDN-15](#edn-15-uc1-required-fields-after-measuring-the-fill-rates-plus-sc-06-for-absent-optional-fields), [EDN-59](#edn-59-sc-06-masks-api-input-fields-not-feature-columns-and-an-absent-fields-value-follows-edn-23); [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-63: `metrics.json` carries the data source and the fitted estimator, at the cost of five more columns
 
@@ -1946,7 +1950,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** Issue #57 had already identified the defect and asked for the source and the estimator in `metrics.json`, so the problem was not AI's to find. What AI contributed is the shape and the two things that make it hold: declaring `download.source` under the stage's `params:` rather than reading an undeclared key, and noticing that the test fixture would start mislabelling its own artefacts as soon as the project's source flipped. The second one is the kind of defect this project has repeatedly produced - a claim the code does not back - and it would have shipped as a passing test suite.
 - **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #57: the four options were laid out against the existing docstring's 24-leaf constraint, and the fixture's mislabelling was found by asking what `params["download"]["source"]` would resolve to inside the test run rather than inside the pipeline.
 - **Other evidence:** [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py), `gate_summary` and `_evaluate_variant`; `tests/test_pipeline.py::test_the_metrics_artefacts_say_which_data_and_which_estimator_produced_them`; `metrics.json`; [EDN-12](#edn-12-retraining-and-promotion-are-human-triggered-not-automated), [EDN-33](#edn-33-a-generated-synthetic-fixture-and-a-downloadsource-parameter-so-the-skeleton-runs-without-the-raw-file); [issue #57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-64: Pynblint runs from its own locked environment, and a wrapper that reads its JSON report is the gate
 
@@ -2001,7 +2005,7 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #41: a research run on Pynblint 0.1.6 in a scratch directory (rule catalogue, configuration, exit codes, isolation options with timings), then an architecture pass that turned the measurements into options with pros and cons; the owner was given the isolation and gate options with these measurements and chose the locked environment with the wrapper.
   Claude Code review session on 2026-10-05 of PR #67, which ran the gate on deliberately broken copies of the notebook and checked the tests' recorded answers against the real Pynblint.
 - **Other evidence:** [`tools/pynblint-env/pyproject.toml`](../tools/pynblint-env/pyproject.toml), [`tools/notebook_lint.py`](../tools/notebook_lint.py), `tests/test_notebook_lint.py`, the `Notebook lint (Pynblint)` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); [EDN-65](#edn-65-the-pynblint-policy-enforce-what-can-fire-on-a-committed-notebook-and-show-execution-by-running-it); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-65: The Pynblint policy: enforce what can fire on a committed notebook, and show execution by running it
 
@@ -2059,7 +2063,7 @@ How to add an entry:
   An AI review of the documents then found two holes in the first version of this policy, both closed before the pull request was opened: nothing stopped a `keep_output` flag from carrying outputs past nbstripout, and `make notebook-run`, the stand-in for the excluded execution rules, passed even when a dataset card figure did not reproduce.
 - **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #41: a rule-by-rule experiment on stripped and unstripped sample notebooks, an architecture pass that produced the policy table and options A to G, the owner's choice among them, and a document review that added option H and the two fixes above.
 - **Other evidence:** [Notebooks](../docs/docs/notebooks.md), the rule table; [`notebooks/1.0-lh-dataset-card-profiling.ipynb`](../notebooks/1.0-lh-dataset-card-profiling.ipynb); `tests/test_notebook_lint.py`; [specification](../docs/docs/specification.md) NFR-07; [EDN-64](#edn-64-pynblint-runs-from-its-own-locked-environment-and-a-wrapper-that-reads-its-json-report-is-the-gate); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-66: NFR-06 and NFR-09 are each split in two, and each ID keeps the half its citations mean
 
@@ -2110,7 +2114,7 @@ How to add an entry:
   An independent AI review of the pull request rejected that, because it left NFR-14 reported as verified by a test while its parameter clause was unmet, and the fix was made in this pull request, test first, which is the modification.
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #60: `grep -rn "NFR-0[69]"` over the documents, the report, the tests, the tools and the package, each hit classified by the half it means, and `git grep` counts on `main` for the figures above; the requirement matrix rebuilt after the split, with NFR-14 verified by five tests and NFR-15 verified by hand; `test_a_run_records_every_parameter_its_stage_declares` run against the unchanged `train.py` first, failing for all four variants on `num_threads` alone.
 - **Other evidence:** [issue #60](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/60) and its comment on NFR-06; [PR #70](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/70); [requirements](../docs/docs/requirements.md) and [specification](../docs/docs/specification.md) NFR-06, NFR-09, NFR-14 and NFR-15; `tools/expected_coverage.yaml`; `DUE_AT_M3` in `tests/test_requirement_matrix.py`; [EDN-27](#edn-27-separate-the-requirements-from-their-specification-keeping-one-set-of-frnfr-ids) for the one ID space, [EDN-44](#edn-44-the-traceability-gate-is-milestone-scoped-and-its-expected-coverage-set-is-a-validated-yaml-file), [EDN-45](#edn-45-a-req-marker-is-verification-only-where-the-specification-says-a-test-is-the-evidence), [EDN-46](#edn-46-dagshub-credentials-live-in-two-gitignored-stores-and-the-token-is-entered-twice), [EDN-56](#edn-56-the-model-bundle-carries-its-own-provenance-so-models-is-deliberately-not-byte-reproducible), [EDN-71](#edn-71-secrets-are-scanned-by-gitleaks-before-every-commit-and-over-the-whole-history-in-ci-with-a-rule-of-our-own-for-the-dagshub-token).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-67: `features` applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built
 
@@ -2169,6 +2173,7 @@ How to add an entry:
   The independent review of PR #71 on the same day found the replay argument and the untrained-make diagnosis, and reproduced the second with a training split holding only BMW against the list BMW and Audi.
   The measurement behind the numbers is `reports/analysis/served_vocabulary_results.txt` and the ladder re-run the committed `dvc.lock` records, tracked as one MLflow run per variant.
 - **Other evidence:** [issue #63](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/63); [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71); [`recommenditos/data/build_features.py`](../recommenditos/data/build_features.py) (`served_rows`, `check_served_makes_only`); `tests/test_features.py::test_every_frame_the_stage_writes_holds_only_supported_makes` and `::test_the_vocabulary_is_decided_by_the_served_training_rows_alone`; [`reports/analysis/served_vocabulary.py`](analysis/served_vocabulary.py) and its results file (2026-10-05); [pipeline docs](../docs/docs/pipeline.md), "The supported makes"; [model card](../docs/docs/model-card.md), "Feature space" and the ladder; [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one), [EDN-42](#edn-42-a-categorical-value-the-training-rows-never-saw-becomes-missing-and-the-holdouts-country-is-allowed-to-vanish), [EDN-48](#edn-48-split-records-the-supported-make-list-and-stays-a-lossless-partition-the-downstream-stages-apply-it).
+- **In LaTeX:** yes
 
 ### EDN-68: The Great Expectations store is a cached build product, the suites are generated from the contract, and each rule sits on the frame where it can hold
 
@@ -2209,7 +2214,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI implemented #25 and proposed every choice above, with the alternatives, after testing three assumptions before building on them, each of which changed the design. Running every expectation kind on a satisfying and a breaking frame showed that Great Expectations works on pandas 3 but cannot bound a text date. Measuring what the store writes across two builds turned "commit `gx/`", the demo's layout and the stub's own plan, into a cached output. Checking each listed rule against the point in the DAG where it runs found that the supported-make rule could not mean anything there, which the issue, `schema.py` and `docs/docs/pipeline.md` all still assumed. Lukas confirmed the setup as proposed. An independent AI review of PR #76 then found four things the first version got wrong, all fixed before merge: the fill-rate rule was described as catching a scrape gap that the raw contract already stops at `download`; a zero-row frame, an emptied bounded column or an empty suite passed vacuously; the type blind spots were understated as two, while `object`, `string[python]` and `Float64` pass as well; and the generated not-null checks had no test, so deleting them passed the suite.
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #25: throwaway probes on the fixture and the real snapshot before any stage code, the store measurement, and the options above presented with a recommendation, which Lukas confirmed; then an independent AI review of PR #76, whose findings are listed above.
 - **Other evidence:** [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py) and [`recommenditos/data/validate_data.py`](../recommenditos/data/validate_data.py), whose docstrings give each rule's reason; [`tests/test_validate_data.py`](../tests/test_validate_data.py); [`reports/analysis/gx_probe.py`](analysis/gx_probe.py) and [`gx_fingerprint_cost.py`](analysis/gx_fingerprint_cost.py) with their results; [`reports/data-validation/summary.json`](data-validation/summary.json); [pipeline docs](../docs/docs/pipeline.md), "Data validation"; [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date), [EDN-23](#edn-23-read-the-condition-flags-as-one-sided-assertions-instead-of-encoding-them-three-valued), [EDN-31](#edn-31-the-processed-data-contract-is-a-hand-written-schemapy-not-pandera), [EDN-48](#edn-48-split-records-the-supported-make-list-and-stays-a-lossless-partition-the-downstream-stages-apply-it); [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-70: `n_estimators` is a ceiling of 5,000 that early stopping stays under, not a tree count
 
@@ -2274,7 +2279,7 @@ How to add an entry:
   And it found, by probing lightgbm 4.7's early-stopping callback, that the code comment explaining the `best_iteration_ or num_trees()` fallback was wrong and that the record could not tell a binding ceiling from early stopping, which is why `early_stopped` and `boosting_rounds` were added with tests at the `train` seam.
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #64: the exploratory fits are `reports/analysis/early_stopping_ceiling.py` and its results file; the committed run is the `dvc.lock` of PR #77, tracked as one MLflow run per variant in `recommenditos-price` with `best_iteration`, `boosting_rounds` and `early_stopped` logged.
 - **Other evidence:** [issue #64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64); [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77); [`params.yaml`](../params.yaml), `train.variants`; [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `LightGBMModel.fit`; `tests/test_model.py::test_a_lightgbm_record_says_early_stopping_ended_the_fit`, `::test_early_stopped_is_decided_by_the_patience_not_by_the_best_round` and `::test_a_budget_early_stopping_never_reaches_is_recorded_as_a_budget_that_bound`; [`reports/analysis/early_stopping_ceiling.py`](analysis/early_stopping_ceiling.py) and [`tuning_sweep.py`](analysis/tuning_sweep.py) with their results files (2026-10-05); [model card](../docs/docs/model-card.md), Training and the ladder; [EDN-53](#edn-53-trainnum_threads-is-pinned-to-1-trading-fit-speed-for-a-machine-independent-artefact), [EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-71: Secrets are scanned by gitleaks before every commit and over the whole history in CI, with a rule of our own for the DagsHub token
 
@@ -2333,7 +2338,7 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #60: the token's shape was read from the gitignored `.env` as length and character classes only, without printing the value; fake tokens of that shape were planted and scanned with both tools (`reports/analysis/secret_scan_dagshub_token.py` and its results file); gitleaks-action's licence terms were read from its README and the repository's owner type from the GitHub API; the hook's install cost was measured with `/usr/bin/time` on a clean pre-commit cache, once with Go removed from the path and once with Go 1.27 on it; and a token committed with `--no-verify` and deleted in the next commit was confirmed caught by the history scan.
   The canary and each blinding variant were run in a container with git 2.45, because the laptop's git 2.34 predates `--remerge-diff`; what an older Go does with gitleaks' `go.mod` was checked the same way with Go 1.22.
 - **Other evidence:** [issue #60](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/60); [PR #70](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/70); `.gitleaks.toml`; `tools/secret_scan.py`; the `secret-scan` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) and the gitleaks hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml); [`reports/analysis/secret_scan_dagshub_token.py`](analysis/secret_scan_dagshub_token.py) and [its results](analysis/secret_scan_dagshub_token_results.txt); [specification](../docs/docs/specification.md) NFR-15; the Secrets section of [CONTRIBUTING.md](../CONTRIBUTING.md#secrets); [EDN-46](#edn-46-dagshub-credentials-live-in-two-gitignored-stores-and-the-token-is-entered-twice), [EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-72: The mileage range is a tolerant check on both frames, not a preprocessing filter
 
@@ -2358,7 +2363,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI found the conflict by running the suites on the real snapshot, where a hard interim rule failed the stage on the three rows, and laid out the options instead of choosing one inside the Great Expectations work. It measured option A with the real stages rather than estimating it, which is where the MdAPE deltas come from, and recommended B for this PR. Lukas chose B.
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #25: the failing run, the measurement and the options were presented as a decision question in the session's report; Lukas answered "keep the tolerant check".
 - **Other evidence:** [`reports/analysis/mileage_scope.py`](analysis/mileage_scope.py) and its results; [`reports/data-validation/summary.json`](data-validation/summary.json); [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), `_mileage_in_range`; [EDN-22](#edn-22-drop-listings-registered-after-the-age-reference-date), [EDN-68](#edn-68-the-great-expectations-store-is-a-cached-build-product-the-suites-are-generated-from-the-contract-and-each-rule-sits-on-the-frame-where-it-can-hold); [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-73: `learning_rate` and `num_leaves` are not tuned, and any later tuning follows a written protocol
 
@@ -2414,7 +2419,7 @@ How to add an entry:
   The rule became simultaneous, the sweep was re-run with the max-statistic intervals, and the conclusion did not change: a simultaneous interval is only wider, so "no point distinguishable" holds a fortiori.
 - **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #64: the sweep's output is `reports/analysis/tuning_sweep_results.txt`; the options and the recommendation were reported to Lukas with those numbers, and he chose A.
 - **Other evidence:** [issue #64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64); [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77); [`reports/analysis/tuning_sweep.py`](analysis/tuning_sweep.py) and its results file (2026-10-05); [pipeline docs](../docs/docs/pipeline.md), "Tuning a hyperparameter"; [model card](../docs/docs/model-card.md), Hyperparameters as trained; [`params.yaml`](../params.yaml), `train.variants.lgbm-basic`; [problem specification](../docs/docs/problem-spec.md) section 5; [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count), [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ### EDN-74: A run is tagged with the hashes of its own stage's inputs, and `git_dirty` ignores what DVC writes itself
 
@@ -2472,7 +2477,7 @@ How to add an entry:
   An independent AI review of the pull request reproduced the evidence and found the subdirectory regression, two overstated claims - that every hash retrieves its input from the remote, and that a hand edit of the validation summary would show in a run - and three smaller gaps: a dependency path MLflow refuses as a tag key, a failed `git status` read as a clean tree, and a test pipeline without a parameter; each was fixed, test first where there was code, before merging, which is the modification.
 - **AI interaction evidence:** Claude Code sessions on 2026-10-05: the independent review of PR #70, whose measurement is the body of issue #79, and the implementation of issue #79, in which the issue's scenario was reproduced on a three-stage pipeline with `main`'s `run_provenance` (every stage tagged dirty, the digests of the lock before the run and of two mid-run locks), the new tests were confirmed to fail on `main`, where the module they test does not exist, and the check script was run against DagsHub before and after the re-run.
 - **Other evidence:** [issue #79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/79); [PR #80](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80); [`recommenditos/provenance.py`](../recommenditos/provenance.py) and `recommenditos/tracking.py`; [`tests/test_provenance.py`](../tests/test_provenance.py) and the NFR-14 tests of `tests/test_tracking.py`; [`reports/analysis/run_provenance_check.py`](analysis/run_provenance_check.py) and [its results](analysis/run_provenance_check_results.txt); [The DVC pipeline](../docs/docs/pipeline.md), From a run to its inputs; [specification](../docs/docs/specification.md) NFR-14; [EDN-55](#edn-55-evaluate-resumes-the-run-train-created-instead-of-opening-its-own), [EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean).
-- **In LaTeX:** no
+- **In LaTeX:** yes
 
 ## Template
 

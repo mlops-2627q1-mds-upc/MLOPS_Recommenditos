@@ -12,7 +12,7 @@ LaTeX sources for our two course deliverables:
 |------|-----------------|
 | `config.tex` | Team name, members, links and contact. The only place to edit cover page facts. |
 | `sections/` | One file per report section; `2-N-*.tex` is Milestone N. |
-| `edn/` | One EDN entry per file, copied from `edn/_template.tex`. |
+| `edn/` | One EDN entry per file and their list, `entries.tex`, all generated from [reports/edn.md](../edn.md) by `make edn`. |
 | `figures/` | Figures for the report (`../figures/` is searched too). |
 | `references.bib` | Bibliography (biblatex + biber, IEEE style). |
 | `preamble.tex` | Shared packages, build flags and the `\guidance` / `\tbd` helpers. |
@@ -24,10 +24,11 @@ LaTeX sources for our two course deliverables:
 - `\tbd{...}` marks a placeholder.
   It renders in red in every build, and `make report-submit` counts the ones left.
 - Refer to EDN entries by ID in the report, e.g. "(EDN-03)".
-- EDN entries are written first in [reports/edn.md](../edn.md) and only transferred here before a delivery.
-  To transfer one, copy `edn/_template.tex` to `edn/NN-short-slug.tex`, fill it in from the Markdown entry and add `\input{edn/NN-short-slug}` at the end of `edn.tex`.
-  The official fields have no separate slot for alternatives, so summarise them with their pros and cons in `rationale`.
-  Missing required fields stop the build with an error naming the field.
+- EDN entries are written in [reports/edn.md](../edn.md), and only there, and transferred here before a delivery with `make edn` (`tools/edn_latex.py`).
+  It writes one `\ednentry` file per entry into `edn/` and the list of them into `edn/entries.tex`, deletes the file of an entry whose title changed, and sets each entry's **In LaTeX** to yes in the Markdown.
+  It is idempotent, so the final delivery reruns it and only the entries edited since change; never edit the generated files.
+  The official fields have no separate slot for alternatives, so they go into `rationale`, ahead of the reasoning that refers to them, and the block quote above an entry's fields, where the notebook records that a later entry amended it, is printed first as `note`.
+  A missing required field stops the transfer with an error naming the entry, and the build with an error naming the field.
 
 ## Building with Docker (recommended)
 

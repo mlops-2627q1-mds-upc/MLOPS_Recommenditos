@@ -127,6 +127,11 @@ report:
 report-submit:
 	reports/latex/build.sh $(DELIVERABLE)
 
+## Transfer the EDN entries of reports/edn.md into reports/latex/edn/ (before a delivery)
+.PHONY: edn
+edn:
+	$(PYTHON_INTERPRETER) -m tools.edn_latex
+
 ## Same as `make report`, but inside Docker (no local LaTeX needed)
 .PHONY: report-docker
 report-docker:
