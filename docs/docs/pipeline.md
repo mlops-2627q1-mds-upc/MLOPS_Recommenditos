@@ -244,7 +244,8 @@ uv run python -m recommenditos.modeling.tune lgbm-extended \
 A sweep id is used once: a second run under it is refused, both when its files exist and when the MLflow experiment already holds runs tagged with it, which is what an interrupted sweep leaves behind; rerun it under a fresh id.
 The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
 Commit each sweep's `reports/tuning/` files before running the next sweep: every run is tagged `git_dirty` when the tree holds a change, an untracked file included (EDN-74), which is also why a sweep keeps its own files in a temporary directory until its last run has closed.
-On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, which took 127 s of fitting, and its verdict should repeat EDN-73's.
+On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, and it did when the search ran on 2026-10-06: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
+All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their results are in `reports/tuning/` and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-78).
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:
 

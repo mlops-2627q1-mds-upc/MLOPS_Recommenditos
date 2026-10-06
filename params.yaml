@@ -307,17 +307,21 @@ train:
       estimator: lightgbm
       feature_set: basic
       params:
-        # Not tuned, on evidence rather than by omission: a 12-point grid of these
-        # two around their values is flat on the validation split, and no point of
-        # it is distinguishable from them (EDN-73,
-        # reports/analysis/tuning_sweep_results.txt). A new value goes through the
+        # Searched and kept, on evidence rather than by omission: a 12-point grid
+        # of these two around their values is flat on the validation split, and no
+        # point of it is distinguishable from them (EDN-73,
+        # reports/analysis/tuning_sweep_results.txt). Issue #88's search repeated
+        # that grid exactly and then swept `min_child_samples`, with the same
+        # verdict (EDN-78, reports/tuning/88-lgbm-basic-lr-leaves.txt and
+        # 88-lgbm-basic-min-child-samples.txt). A new value goes through the
         # protocol in docs/docs/pipeline.md, "Tuning a hyperparameter", whose
         # decision step is `python -m recommenditos.modeling.tune` (EDN-78).
         learning_rate: 0.05
         num_leaves: 63
         # `min_child_samples` is not named here on purpose: it is an optional key at
         # LightGBM's default of 20, which is what this variant fits with, and it is
-        # written here only if a search adopts another value (EDN-78).
+        # written here only if a search adopts another value (EDN-78); issue #88's
+        # search over 5, 10, 20, 50 and 100 kept 20.
         # A ceiling for early stopping, not a tree count: early stopping on the
         # validation split decides how many trees the model keeps (EDN-70). At
         # 1,000 the ceiling decided instead, for both LightGBM variants. With no
@@ -347,7 +351,10 @@ train:
       feature_set: extended
       params:
         # As `lgbm-basic`, including the optional `min_child_samples`. EDN-73
-        # swept only `lgbm-basic`; issue #88's search covers this variant too.
+        # swept only `lgbm-basic`; issue #88's search swept this variant on its
+        # own feature set too and kept all three values (EDN-78,
+        # reports/tuning/88-lgbm-extended-lr-leaves.txt and
+        # 88-lgbm-extended-min-child-samples.txt).
         learning_rate: 0.05
         num_leaves: 63
         # The same ceiling as `lgbm-basic`, for the reasons given there.
