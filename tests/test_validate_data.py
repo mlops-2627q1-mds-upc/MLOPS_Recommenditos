@@ -27,11 +27,13 @@ from recommenditos.config import PARAMS_FILE
 from recommenditos.data import gx_context_configuration as configure_gx
 from recommenditos.data import validate_data
 from recommenditos.data.gx_context_configuration import (
+    BOUNDED_NULLABLE_COLUMNS,
     CONTRACT,
     INTERIM,
     KIND,
     RAW,
     RAW_AS_VALIDATED,
+    RULE,
 )
 from recommenditos.data.preprocess import main as preprocess_main
 from recommenditos.data.validate_data import (
@@ -49,6 +51,17 @@ PRICE_RULE = ("expect_column_values_to_be_between", "price")
 COLUMN_LIST = "expect_table_columns_to_match_ordered_list"
 NOT_NULL = "expect_column_values_to_not_be_null"
 ROW_COUNT = "expect_table_row_count_to_be_between"
+
+#: The columns the raw contract fills and the interim contract lets be null,
+#: which the interim suite asserts preprocessing keeps filled.
+KEPT_FILLED = (
+    "make",
+    "body_type",
+    "equipment_comfort",
+    "equipment_entertainment",
+    "equipment_extra",
+    "equipment_safety",
+)
 
 #: A registration date after the 2025-11-08 reference date, as the raw file
 #: writes one. 137 of the 164 such dates in the snapshot are in January 2026.
@@ -294,18 +307,37 @@ def test_the_cleaned_suite_refuses_is_used(context, frames):
     assert not found["passed"]
 
 
-def test_a_gap_preprocessing_introduces_is_reported_by_the_interim_suite(context, frames):
-    # The two layers, side by side: the interim contract lets `make` be null, so
-    # this rule is what reports a gap in the cleaned frame. It is a check on
-    # preprocessing, not on the scrape: the raw contract declares `make` filled,
-    # so a gap in a future scrape already fails `download` with a contract error
-    # and never reaches this suite.
+def test_the_interim_suite_keeps_filled_exactly_the_columns_the_raw_contract_fills(context):
+    # Written out rather than derived, because the suite derives the list from
+    # the two contracts: a contract change that silently dropped a column from
+    # it would pass a derived assertion. Hard, unlike the two fill rates of the
+    # bounded columns, which carry `validate.filled_mostly`.
+    kept = {
+        e.column: e.mostly
+        for e in context.suites.get(INTERIM).expectations
+        if e.meta.get(KIND) == RULE
+        and e.expectation_type == NOT_NULL
+        and e.column not in BOUNDED_NULLABLE_COLUMNS
+    }
+
+    assert sorted(kept) == sorted(KEPT_FILLED)
+    assert set(kept.values()) == {1}
+
+
+@pytest.mark.parametrize("column", KEPT_FILLED)
+def test_a_gap_preprocessing_introduces_is_reported_by_the_interim_suite(context, frames, column):
+    # The two layers, side by side: the interim contract lets these columns be
+    # null, so this rule is what reports a gap in the cleaned frame. It is a
+    # check on preprocessing, not on the scrape: the raw contract declares them
+    # filled, so a gap in a future scrape already fails `download` with a
+    # contract error and never reaches this suite.
     interim = frames["interim"].copy()
-    interim.loc[interim.index[0], "make"] = None
+    interim.loc[interim.index[0], column] = None
     INTERIM_SCHEMA.validate(interim)
 
     found = validate_frame(context, INTERIM, interim)
-    assert not rule(found, "expect_column_values_to_not_be_null", "make")["success"]
+    assert not found["passed"]
+    assert rule(found, NOT_NULL, column)["unexpected_count"] == 1
 
 
 @pytest.mark.parametrize("flag", ["has_full_service_history", "non_smoking", "is_rental"])
