@@ -66,6 +66,15 @@ os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
 # ask for it.
 os.environ.setdefault("MLFLOW_HTTP_REQUEST_MAX_RETRIES", "3")
 
+# Against a tracking server, MLflow ends every run by writing the run's link to
+# stdout after an emoji. A console that cannot encode one - cp1252, which is what
+# a Windows console defaults to - raises a UnicodeEncodeError there, after the
+# run has landed: step 6 of the getting-started page exits 1, and a stage under
+# RECOMMENDITOS_REQUIRE_TRACKING=1 fails after its fit (#84). So MLflow's own
+# line is off, and `_log_run_link` logs the same link without the emoji when the
+# run opens. `setdefault`, like the two above.
+os.environ.setdefault("MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT", "1")
+
 from loguru import logger
 import mlflow
 import typer
@@ -155,7 +164,23 @@ def tracked_run(experiment: str, run_name: str | None = None) -> Iterator[mlflow
     """
     configure_tracking(experiment)
     with mlflow.start_run(run_name=run_name, tags=run_tags()) as run:
+        _log_run_link(run)
         yield run
+
+
+def _log_run_link(run: mlflow.ActiveRun) -> None:
+    """Say where the run can be seen, which MLflow is told not to print.
+
+    The link MLflow itself would have printed, logged when the run opens rather
+    than when it ends, so that a long fit can be watched while it runs. Only for
+    a server: a local store has no page to link to.
+    """
+    uri = mlflow.get_tracking_uri().rstrip("/")
+    if uri.startswith(("http://", "https://")):
+        logger.info(
+            f"MLflow run {run.info.run_name}: "
+            f"{uri}/#/experiments/{run.info.experiment_id}/runs/{run.info.run_id}"
+        )
 
 
 class Run:
@@ -289,13 +314,16 @@ def resume_run(run_id: str | None) -> Iterator[Run]:
     # loaded afterwards.
     if _require_tracking():
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-        with mlflow.start_run(run_id=run_id, tags=resumed_run_tags()):
+        with mlflow.start_run(run_id=run_id, tags=resumed_run_tags()) as run:
+            _log_run_link(run)
             yield Run(run_id)
         return
 
     def reopen() -> AbstractContextManager[mlflow.ActiveRun]:
         mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-        return mlflow.start_run(run_id=run_id, tags=resumed_run_tags())
+        run = mlflow.start_run(run_id=run_id, tags=resumed_run_tags())
+        _log_run_link(run)
+        return run
 
     with _degrading(
         reopen, on_failure=lambda cause: f"could not resume MLflow run {run_id} ({cause})."

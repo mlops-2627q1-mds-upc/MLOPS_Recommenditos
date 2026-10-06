@@ -77,12 +77,11 @@ milestones:
       # decided with that split, so the delivery review is what notices if they
       # are still missing then.
       - NFR-09
-      # Energy efficiency is an M3 practice and the emissions half is M3 work
-      # (issue #38), but the specification's evidence for NFR-10 also names the
-      # energy-per-request figure from the NFR-03 load test, which needs the API.
-      # Booked M4 because that is the first milestone at which the entry can be
-      # complete; the emissions half still lands in M3 and the delivery review is
-      # what notices if it has not.
+      # Energy efficiency is an M3 practice and the emissions half is M3 work,
+      # done in issue #38 and named by a test, but the specification's evidence
+      # for NFR-10 also names the energy-per-request figure from the NFR-03 load
+      # test, which needs the API. Booked M4 because that is the first milestone
+      # at which the entry can be complete.
       - NFR-10
 
   - milestone: M5

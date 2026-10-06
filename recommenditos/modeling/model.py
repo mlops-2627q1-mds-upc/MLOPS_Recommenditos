@@ -54,6 +54,7 @@ from sklearn.pipeline import FeatureUnion, Pipeline, make_pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
 from recommenditos.data.build_features import FeatureSpace, equipment_feature_name
+from recommenditos.pipeline import write_json
 from recommenditos.schema import FEATURE_SPACE_FILE, Schema
 
 #: The name every prediction Series carries, so a frame that has been joined
@@ -459,9 +460,7 @@ class Model:
     def save(self, directory: Path) -> None:
         """Write the whole bundle: the record, the feature space and the payload."""
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / MODEL_FILE).write_text(
-            json.dumps(self.metadata, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json(self.metadata, directory / MODEL_FILE)
         # A copy of the `features` stage's own artefact rather than a second,
         # model-shaped rendering of the same facts. It is what `load_model`,
         # `read_feature_space` and the API already know how to read, and one file
@@ -470,9 +469,7 @@ class Model:
             "schema": self.space.schema.to_dicts(),
             "vocabulary": self.space.vocabulary.to_dict(),
         }
-        (directory / FEATURE_SPACE_FILE).write_text(
-            json.dumps(space, indent=2) + "\n", encoding="utf-8"
-        )
+        write_json(space, directory / FEATURE_SPACE_FILE)
         self._save_payload(directory)
         logger.success(f"Wrote the {self.variant!r} bundle to {directory}.")
 

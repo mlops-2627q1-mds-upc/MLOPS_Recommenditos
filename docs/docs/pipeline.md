@@ -50,10 +50,11 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `validate-data` | `recommenditos/data/validate_data.py` | `reports/data-validation/`: the summary, the validation results and the Data Docs; a failed expectation fails the pipeline |
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
-| `train` | `recommenditos/modeling/train.py` | `models/<variant>/` |
+| `train` | `recommenditos/modeling/train.py` | `models/<variant>/`, `reports/emissions/<variant>.csv` |
 | `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs}.csv` |
+| `compare-energy` | `recommenditos/modeling/compare_energy.py` | `reports/figures/energy-vs-error.{csv,png}` |
 
-`features` and `evaluate` have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
+`features`, `evaluate` and `compare-energy` have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
 Its text model needs no feature engineering, and it asserts its metric threshold inside `tests/test_model.py` instead of producing a metrics artefact, which is not enough for the gate [NFR-01](specification.md) describes.
 `metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 29 leaves (28 of them rendered while `deployable_variant` is null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
 Five of those leaves are not measurements but provenance - `data_source` and each variant's `estimator` - because a number is only readable as a result once the file says which data produced it and which model answered.
@@ -61,6 +62,12 @@ Five of those leaves are not measurements but provenance - `data_source` and eac
 
 Two stages iterate a mapping in `params.yaml` with `foreach`, so they are named after the item rather than its position: `features@basic`, `train@lgbm-extended`.
 Each declares only its own slice under `params:`, so changing one variant's hyperparameters retrains that variant and no other.
+
+`train` measures the energy of its fit with CodeCarbon and nothing else of the stage (issue #38, EDN-69).
+CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached so that a retrain's energy is in the pull request diff, and into the MLflow run beside the accuracy metrics `evaluate` appends.
+CodeCarbon appends to that file, and DVC deletes a stage's outputs before running it, so after `dvc repro` it holds exactly the one row of the fit that produced the model; a run outside DVC appends a row, and the model's `model.json` names its own by CodeCarbon's run id.
+`compare-energy` joins each model, its emissions row and its metrics on those ids into the table and figure the report's energy section cites.
+On the machines we train on, the figure is CodeCarbon's estimate from the CPU's TDP and the fit's CPU time plus a constant for the RAM, not a meter reading: `recommenditos/modeling/energy.py` says how to read it.
 
 The contract
 ------------
@@ -157,7 +164,7 @@ A suite with no expectations, or a run that returns fewer results than its suite
 | `registration_date` at or before the reference date (EDN-22) | tolerated up to `validate.raw_mostly` | hard | `reference_date` |
 | `price` inside the training range | - | hard | `preprocess.price_min_eur`, `preprocess.price_max_eur` |
 | `mileage_km_raw` inside the range FR-03 accepts | tolerated up to `validate.mileage_mostly` | tolerated up to `validate.mileage_mostly` | `validate.mileage_min_km`, `validate.mileage_max_km` |
-| Filled wherever the raw contract declares the column filled | through the contract, which fails `download` on a gap | hard: a check on preprocessing, since a scrape gap never gets this far ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)) | `schema.py` |
+| `make`, `body_type` and the four equipment lists filled ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)) | tolerated up to `validate.required_filled_mostly`: a gap in a scrape is reported here, not as a contract error in `download` | tolerated up to `validate.required_filled_mostly`: a check on preprocessing | `params.yaml` |
 | At least `validate.min_rows` rows, and `registration_date` and `mileage_km_raw` filled up to `validate.filled_mostly` | asserted | asserted | `params.yaml` |
 | `has_full_service_history`, `non_smoking`, `is_rental` boolean and non-null (EDN-23) | through the contract | through the contract | `schema.py` |
 

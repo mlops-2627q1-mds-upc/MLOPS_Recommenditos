@@ -11,7 +11,7 @@ run, call `fit_variant`, write the bundle and log the run. The estimators
 themselves and the predict seam are in `model.py`, because `evaluate` depends on
 that file and must not depend on this one.
 
-Three properties are deliberate and each is tested.
+Four properties are deliberate and each is tested.
 
 **The rows are the served population (EDN-48).** `split` stays a lossless
 partition and records which makes cleared EDN-05's threshold; `features` applies
@@ -25,7 +25,15 @@ reads the scope off the model it is serving.
 **One variant is one MLflow run.** This stage creates it and records its id in
 `model.json`; `evaluate` resumes that run rather than opening its own, so the
 experiment holds four runs, each carrying its hyperparameters, its artefact,
-issue #38's energy figures and issue #39's test metrics and gate verdict.
+the energy and emissions of its fit and issue #39's test metrics and gate
+verdict.
+
+**Only the fit is measured (NFR-10, issue #38).** `energy.measure` wraps
+`fit_variant` and nothing else, and CodeCarbon's row for that fit is written to
+`reports/emissions/<variant>.csv`. What the figure is - an estimate from the
+CPU's TDP and the process's CPU time, not a meter reading, on every machine we
+train on - is `recommenditos/modeling/energy.py`'s to say, and EDN-69 records why
+it is measured the way it is.
 
 **Training works with no credentials and no network.** `optional_run` degrades
 to a handle that logs nothing, because the test suite and a fresh clone have to
@@ -35,7 +43,6 @@ for the runs whose numbers are cited.
 
 from pathlib import Path
 import shutil
-import time
 
 from loguru import logger
 import typer
@@ -45,6 +52,12 @@ from recommenditos.data.build_features import (
     FeatureSpace,
     check_served_makes_only,
     read_supported_makes,
+)
+from recommenditos.modeling.energy import (
+    EMISSIONS_DIR,
+    EnergySettings,
+    FitMeasurement,
+    measure,
 )
 from recommenditos.modeling.model import Model, TrainingData, fit_variant, load_model
 from recommenditos.pipeline import load_params, read_frame
@@ -62,22 +75,6 @@ VALIDATION_SPLIT = "validation"
 ARTIFACT_PATH = "model"
 
 app = typer.Typer()
-
-
-def _fit(
-    variant: str, settings: dict, data: TrainingData, *, seed: int, num_threads: int
-) -> tuple[Model, float]:
-    """The measured section: the fit, and nothing else.
-
-    TODO(#38): wrap exactly this call with CodeCarbon's `EmissionsTracker` and
-    return the emissions alongside the model. Nothing else in this module
-    allocates compute worth measuring, which is what makes "only the fit is
-    measured" true rather than approximate, and the two log calls in `main` that
-    the energy metrics and the hardware parameters belong to are marked there.
-    """
-    started = time.perf_counter()
-    model = fit_variant(variant, settings, data, seed=seed, num_threads=num_threads)
-    return model, time.perf_counter() - started
 
 
 def read_matrices(
@@ -120,9 +117,7 @@ def read_matrices(
     )
 
 
-def _logged_params(
-    variant: str, settings: dict, data: TrainingData, *, seed: int, num_threads: int
-) -> dict:
+def _logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     """What MLflow records about how this run was configured (NFR-14).
 
     Every params.yaml key `dvc.yaml` declares for this stage but one, plus the
@@ -136,7 +131,8 @@ def _logged_params(
 
     `num_threads` is logged although the trees do not depend on it, because
     LightGBM writes it into `booster.txt` (EDN-53), so it changes the artefact
-    and DVC reruns the stage for it.
+    and DVC reruns the stage for it. `train.energy` is logged as `energy.*`, as it
+    stands in params.yaml, because it decides what the run's energy figure means.
 
     The stage logs its own parameters because only it knows which keys it
     declared; the commit and the hashes of the stage's inputs are the same
@@ -145,22 +141,24 @@ def _logged_params(
     `tests/test_model.py::test_a_run_records_every_parameter_its_stage_declares`
     reads the declared keys out of `dvc.yaml` and compares them with a real run.
     """
+    settings = params["train"]["variants"][variant]
     return {
         "variant": variant,
         "estimator": settings["estimator"],
         "feature_set": settings["feature_set"],
-        "seed": seed,
-        "num_threads": num_threads,
+        "seed": params["seed"],
+        "num_threads": params["train"]["num_threads"],
         "n_features": len(data.space.schema.feature_names),
         "n_train_rows": len(data.train),
         "n_validation_rows": len(data.validation),
         "n_supported_makes": len(data.supported_makes),
         **{f"{settings['estimator']}.{key}": value for key, value in settings["params"].items()},
+        **{f"energy.{key}": value for key, value in params["train"]["energy"].items()},
     }
 
 
 def _log_the_run(
-    run: Run, model: Model, *, fit_seconds: float, params: dict, directory: Path
+    run: Run, model: Model, *, cost: FitMeasurement, params: dict, directory: Path
 ) -> None:
     """Everything this stage tells MLflow about the run it just finished.
 
@@ -169,6 +167,10 @@ def _log_the_run(
     `evaluate.point_metrics`, so one run could carry two numbers that disagree.
     The absolute error in log space is what early stopping reads, so it is the
     honest thing for this stage to report.
+
+    The energy figures are metrics of this run and the way they were produced is
+    its parameters, so `evaluate`'s test metrics land beside them in the same row
+    of the experiment's table (EDN-55).
     """
     training = model.metadata["training"]
     early_stopped = training.get("early_stopped")
@@ -190,8 +192,7 @@ def _log_the_run(
             # 1 or 0 rather than a tag, so `metrics.early_stopped = 0` finds every
             # run whose `n_estimators` budget ended the fit, beside the other metrics.
             "early_stopped": None if early_stopped is None else float(early_stopped),
-            "fit_seconds": fit_seconds,
-            # TODO(#38): the energy metrics of the fit belong in this call.
+            **cost.metrics(),
         }
     )
     run.log_artifacts(directory, artifact_path=ARTIFACT_PATH)
@@ -203,11 +204,15 @@ def main(
     input_dir: Path = PROCESSED_DATA_DIR / "features",
     output_dir: Path = MODELS_DIR,
     params_path: Path = PARAMS_FILE,
+    energy_dir: Path = EMISSIONS_DIR,
 ):
     params = load_params(params_path)
     settings = params["train"]["variants"][variant]
     seed = params["seed"]
     num_threads = params["train"]["num_threads"]
+    # Before the matrices are read, so a misconfigured measurement fails the
+    # stage before any work is done rather than after the fit it was to measure.
+    energy = EnergySettings.from_params(params["train"]["energy"])
 
     # Beside the split frames rather than beside the matrices, because that is
     # where `split` writes it and `features` reads it. Derived from `input_dir`
@@ -217,7 +222,29 @@ def main(
     data = read_matrices(input_dir, settings["feature_set"], supported_makes)
 
     with optional_run(params["train"]["mlflow_experiment"], variant) as run:
-        model, fit_seconds = _fit(variant, settings, data, seed=seed, num_threads=num_threads)
+        # The measured section: the fit, and nothing else. `fit_variant` is the
+        # one call in this module that allocates compute worth measuring, which is
+        # what makes "only the fit is measured" true rather than approximate - the
+        # matrices are read above, and the MLflow round trips and the bundle are
+        # written below, all outside the tracker. One expression, so nothing can
+        # drift into the measured section by being written on the next line.
+        model, cost = measure(
+            lambda: fit_variant(variant, settings, data, seed=seed, num_threads=num_threads),
+            name=variant,
+            settings=energy,
+            output_file=energy_dir / f"{variant}.csv",
+        )
+        # What only this stage knows about the fit, kept with the model the way
+        # the MLflow run id is (EDN-56). The run id is the key into the emissions
+        # CSV, which is how the energy comparison joins a figure to the model it
+        # was measured on instead of trusting that the two files are from one run.
+        model.metadata["fit"] = {
+            "seconds": cost.fit_seconds,
+            "cpu_seconds": cost.fit_cpu_seconds,
+            "codecarbon_run_id": cost.run_id,
+            "cpu_power_method": cost.cpu_power_method,
+            "cpu_tdp_w": cost.cpu_tdp_w,
+        }
         model.metadata["mlflow"] = {
             "experiment": params["train"]["mlflow_experiment"],
             "tracking_mode": run.mode,
@@ -228,14 +255,13 @@ def main(
         directory = output_dir / variant
         _replace_directory(directory)
         model.save(directory)
-        logged = _logged_params(variant, settings, data, seed=seed, num_threads=num_threads)
-        # TODO(#38): the hardware parameters of the measurement belong in `logged`.
-        _log_the_run(run, model, fit_seconds=fit_seconds, params=logged, directory=directory)
+        logged = {**_logged_params(variant, data, params), **cost.params()}
+        _log_the_run(run, model, cost=cost, params=logged, directory=directory)
 
     training = model.metadata["training"]
     logger.success(
         f"{variant}: fitted {settings['estimator']!r} on {training['n_train_rows']:,} rows in "
-        f"{fit_seconds:.2f} s, validation L1(log price) "
+        f"{cost.fit_seconds:.2f} s, validation L1(log price) "
         f"{training['validation_l1_log_price']:.4f}."
     )
     # The load, not the fitted object: what `evaluate` and the API will use is

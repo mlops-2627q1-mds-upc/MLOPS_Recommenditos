@@ -427,9 +427,13 @@ def _cast_levels(series: pd.Series, levels: "tuple[str, ...]") -> pd.Series:
 #
 # Dtypes and nullability are measured on the Zenodo file with MD5
 # b23a122cc51baf7de39f449193ff0d28, which is the file data/raw/*.dvc points at.
-# The 22 columns marked not-null are the fully populated ones the dataset card
-# reports. Nothing here is a modelling choice; it is what the upstream file is,
-# and a change to it should fail the `download` stage loudly.
+# The columns marked not-null are the ones the file cannot leave empty
+# structurally: identifiers, the target, the scope flags and the `bool` columns.
+# `make`, `body_type` and the four equipment lists are filled in every row of
+# this snapshot, but that is a measured fill rate, so they are nullable here and
+# the raw Great Expectations suite asserts them with a tolerance (#78). Nothing
+# here is a modelling choice; it is what the upstream file is, and a change to
+# its structure should fail the `download` stage loudly.
 # --------------------------------------------------------------------------
 RAW_SCHEMA = Schema(
     name="raw",
@@ -446,7 +450,7 @@ RAW_SCHEMA = Schema(
         Column("price_net", "float64", True, "Excluded: derived from the target."),
         Column("price_vat_rate", "float64", True, "Excluded: derived from the target."),
         Column("vin", "str", True, "Vehicle identification number. PII."),
-        Column("make", "str", False, "Manufacturer. Required by the scope check (FR-04)."),
+        Column("make", "str", True, "Manufacturer. Required by the scope check (FR-04)."),
         Column("model", "str", True, "Model name."),
         Column("model_version", "str", True, "Free-text trim; normalised in the extended set."),
         Column("german_hsn_tsn", "str", True, "German type key. Excluded: identifier."),
@@ -455,7 +459,7 @@ RAW_SCHEMA = Schema(
         Column("registration_date", "str", True, "First registration, always the 1st of a month."),
         Column("production_year", "float64", True, "Excluded: 18.8 % filled."),
         Column("vehicle_type", "str", False, "Car or Transporter. Constant after scoping."),
-        Column("body_type", "str", False, "Body style."),
+        Column("body_type", "str", True, "Body style."),
         Column("nr_seats", "float64", True, "Number of seats."),
         Column("nr_doors", "float64", True, "Number of doors."),
         Column("body_color", "str", True, "Normalised exterior colour."),
@@ -485,12 +489,10 @@ RAW_SCHEMA = Schema(
         Column("fuel_cons_comb_l100_wltp_km", "float64", True, "Excluded: sparse."),
         Column("fuel_cons_electric_comb_l100_wltp_km", "float64", True, "Excluded: sparse."),
         Column("co2_emission_grper_wltp_km", "float64", True, "Excluded: sparse."),
-        Column(
-            "equipment_comfort", "str", False, "Python-repr list; '[]' when empty, never null."
-        ),
-        Column("equipment_entertainment", "str", False, "Python-repr list, never null."),
-        Column("equipment_extra", "str", False, "Python-repr list, never null."),
-        Column("equipment_safety", "str", False, "Python-repr list, never null."),
+        Column("equipment_comfort", "str", True, "Python-repr list; '[]' when empty."),
+        Column("equipment_entertainment", "str", True, "Python-repr list."),
+        Column("equipment_extra", "str", True, "Python-repr list."),
+        Column("equipment_safety", "str", True, "Python-repr list."),
         Column("is_used", "bool", False, "Excluded: contradicts offer_type (EDN-23)."),
         Column("is_new", "bool", False, "Excluded: constant after scoping."),
         Column(
@@ -599,15 +601,15 @@ def _as_interim(column: Column) -> Column:
     timestamp and EDN-22's "registered after the snapshot" rule is a date
     comparison rather than a string one.
 
-    Nullability becomes *structural* rather than measured. In the raw contract
-    a column is non-null because the published file happens to fill it; here it
+    Nullability is *structural* here, and is in the raw contract too: a column
     is non-null only when it cannot be otherwise - a `bool` column, because the
-    dtype has no way to represent a missing value. `make` and `body_type` are
+    dtype has no way to represent a missing value - or when the raw contract
+    says so for a structural reason, such as `price`. `make` and `body_type` are
     filled in every row of the snapshot, but that is a fill rate, and a fill
-    rate is an expectation for the Great Expectations suite to assert with a
-    tolerance, not a promise this contract should make on the data's behalf. If
-    it made it, one missing `body_type` in a future scrape would fail five
-    stages with a message that reads like a bug in our code.
+    rate is an expectation for the Great Expectations suites to assert with a
+    tolerance, not a promise a contract should make on the data's behalf. If it
+    made it, one missing `body_type` in a future scrape would fail a stage with
+    a message that reads like a bug in our code.
     """
     if column.name == "registration_date":
         return replace(column, dtype="datetime64[ns]", nullable=True)

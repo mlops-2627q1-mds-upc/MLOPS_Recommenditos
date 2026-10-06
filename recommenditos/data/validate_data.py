@@ -43,7 +43,6 @@ DVC outputs beside it.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-import json
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +63,7 @@ from recommenditos.data.gx_context_configuration import (
     RAW_AS_VALIDATED,
     VALIDATION_SUMMARY_FILE,
 )
-from recommenditos.pipeline import read_frame
+from recommenditos.pipeline import read_frame, write_json
 from recommenditos.schema import INTERIM_SCHEMA, RAW_SCHEMA, Schema, SchemaError
 
 #: How many decimals of `unexpected_percent` the summary keeps. Enough to tell
@@ -274,7 +273,7 @@ def main(
     # than only a traceback in the DVC log.
     context.build_data_docs()
     summary_path.parent.mkdir(parents=True, exist_ok=True)
-    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    write_json(summary, summary_path)
 
     failed = {name: failures(entry) for name, entry in summary.items() if not entry["passed"]}
     if failed:

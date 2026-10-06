@@ -203,7 +203,7 @@ Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/ML
 Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [specification](specification.md) FR-12).
 Deployment target **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, one semester), which is what every target in the [specification](specification.md) is written for.
 It is tight on 4 GB, and that is planned for rather than left open: NFR-04 gives the drift job its own scheduled container, caps Prometheus by retention size and the logs by rotation, and keeps 4 GB of disk free.
-Nobody has access yet; if that is still true at the M4a lab on 2026-10-21, we raise it with the teachers instead of planning on further.
+Nobody has access yet; if that is still true at the M4a lab, we raise it with the teachers instead of planning on further.
 
 Open points:
 
@@ -247,10 +247,11 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 | M5 | Packaging: containers, CI/CD | Docker, Docker Compose, GitHub Actions | 15 |
 | M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Better Uptime, Alibi Detect | 10 |
 
-Deliveries (via Atenea, 23:55):
+Deliveries (via Atenea), with the dates as the course changed them from the [lab schedule](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/references/MLOps-lab.md); the laboratory sessions are on Tuesdays:
 
-- **1st report (M1-M3): 2026-10-13**, max 15 pages; presentation on 2026-10-14.
-- **2nd report (M4-M6): 2026-12-08**, max 30 pages; presentation on 2026-12-09.
+- **1st report (M1-M3): 2026-10-19, 23:59**, max 15 pages; presentation on 2026-10-20.
+  One team member submits one PDF of at most 20 MB, in English, with a link to the code repository on the cover that the lecturer can open.
+- **2nd report (M4-M6): due date not announced yet**, max 30 pages; presentation on 2026-12-15.
 
 ## 8. Decisions and the EDN
 

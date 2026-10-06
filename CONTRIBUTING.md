@@ -129,6 +129,9 @@ It runs every notebook top to bottom on the real data, which CI cannot do becaus
 There is no coverage gate on a PR, so a number below 80 % does not fail anything.
 NFR-07 of the requirements asks for 80 % on a delivery commit, and that is when we read the number and act on it.
 
+CI runs the same suite on Windows too, as the required check `Tests (Windows)` ([EDN-75](reports/edn.md)), because one of us develops there.
+So neither code nor tests may assume POSIX: compare a path with `str(path)` rather than a `/`-separated literal, write text with `newline="\n"` (`write_json` in `recommenditos/pipeline.py` does it for JSON), and print nothing a cp1252 console cannot encode.
+
 `make test-serving` builds `.venv-serving/` from `uv.lock` with the runtime dependencies and the `test` group, and runs `tests/test_serving.py` from it.
 It loads that file and the modules in the table above, and nothing else: pytest runs with `--noconftest`, so what `tests/conftest.py` imports for the rest of the suite cannot fail the check.
 It fails when a serving module imports a group's package, when the serving path imports a module only the `test` group installs, such as `packaging`, and when the environment holds anything beyond the runtime and the `test` group.

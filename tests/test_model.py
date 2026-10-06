@@ -27,6 +27,7 @@ import json
 from pathlib import Path
 import shutil
 from statistics import median
+import time
 
 import lightgbm
 from loguru import logger
@@ -41,6 +42,7 @@ from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, Vocabulary, read_supported_makes
 from recommenditos.modeling import train
+from recommenditos.modeling.energy import read_record
 from recommenditos.modeling.evaluate import (
     ALL_OPTIONAL_FIELDS,
     CRITERIA,
@@ -155,8 +157,14 @@ def trained(matrices: dict) -> dict:
         for name in REQUIRED_ENV_VARS:
             environment.delenv(name, raising=False)
         for variant in _variants():
-            train.main(variant, matrices["features"], models, PARAMS_FILE)
-    return {"dir": models, "models": {name: load_model(models / name) for name in _variants()}}
+            train.main(
+                variant, matrices["features"], models, PARAMS_FILE, matrices["root"] / "emissions"
+            )
+    return {
+        "dir": models,
+        "emissions": matrices["root"] / "emissions",
+        "models": {name: load_model(models / name) for name in _variants()},
+    }
 
 
 @pytest.fixture(scope="session")
@@ -240,6 +248,7 @@ def test_model_json_declares_the_seam(trained: dict, spaces: dict):
             "training",
             "versions",
             "mlflow",
+            "fit",
             "trained_at",
         }, variant
         schema = spaces[record["feature_set"]].schema
@@ -928,7 +937,13 @@ def test_a_budget_early_stopping_never_reaches_is_recorded_as_a_budget_that_boun
     reported: list[str] = []
     sink = logger.add(reported.append, format="{message}", level="WARNING")
     try:
-        train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+        train.main(
+            "lgbm-basic",
+            matrices["features"],
+            tmp_path / "models",
+            overridden,
+            tmp_path / "emissions",
+        )
     finally:
         logger.remove(sink)
 
@@ -1007,7 +1022,9 @@ def test_early_stopped_is_decided_by_the_patience_not_by_the_best_round(
     }
     overridden = params_override(tmp_path, params, train={**params["train"], "variants": variants})
 
-    train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+    train.main(
+        "lgbm-basic", matrices["features"], tmp_path / "models", overridden, tmp_path / "emissions"
+    )
 
     record = json.loads(
         (tmp_path / "models" / "lgbm-basic" / MODEL_FILE).read_text(encoding="utf-8")
@@ -1031,7 +1048,9 @@ def test_num_threads_is_pinned_from_params(
         monkeypatch.delenv(name, raising=False)
     overridden = params_override(tmp_path, params, train={**params["train"], "num_threads": 3})
 
-    train.main("lgbm-basic", matrices["features"], tmp_path / "models", overridden)
+    train.main(
+        "lgbm-basic", matrices["features"], tmp_path / "models", overridden, tmp_path / "emissions"
+    )
 
     booster = (tmp_path / "models" / "lgbm-basic" / "booster.txt").read_text(encoding="utf-8")
     assert "[num_threads: 3]" in booster
@@ -1287,10 +1306,10 @@ def test_a_refit_does_not_leave_the_previous_estimator_beside_the_new_one(
         monkeypatch.delenv(name, raising=False)
     models = tmp_path / "models"
 
-    train.main("lgbm-basic", matrices["features"], models, PARAMS_FILE)
+    train.main("lgbm-basic", matrices["features"], models, PARAMS_FILE, tmp_path / "emissions")
     # The same output directory, under a variant that writes a different payload.
     shutil.move(models / "lgbm-basic", models / "b1")
-    train.main("b1", matrices["features"], models, PARAMS_FILE)
+    train.main("b1", matrices["features"], models, PARAMS_FILE, tmp_path / "emissions")
 
     assert {path.name for path in (models / "b1").iterdir()} == {
         MODEL_FILE,
@@ -1319,7 +1338,9 @@ def test_a_bundle_that_cannot_be_read_back_fails_the_training_run(
     monkeypatch.setattr(MedianBaselineModel, "_save_payload", lambda self, directory: None)
 
     with pytest.raises(FileNotFoundError, match="lookup.parquet"):
-        train.main("b0", matrices["features"], tmp_path / "models", PARAMS_FILE)
+        train.main(
+            "b0", matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
+        )
 
     # The fit itself did finish and the record is on disk, so the read-back is
     # what failed rather than the training.
@@ -1415,7 +1436,13 @@ def test_training_refuses_matrices_built_against_another_make_list(
     makes.write_text(json.dumps(record), encoding="utf-8")
 
     with pytest.raises(ValueError, match="No Such Make"):
-        train.main("b0", tmp_path / "processed" / "features", tmp_path / "models", PARAMS_FILE)
+        train.main(
+            "b0",
+            tmp_path / "processed" / "features",
+            tmp_path / "models",
+            PARAMS_FILE,
+            tmp_path / "emissions",
+        )
 
 
 def test_require_tracking_refuses_a_model_with_no_run_to_resume(monkeypatch):
@@ -1486,7 +1513,9 @@ def test_a_tracking_failure_does_not_fail_training(
     """
     _point_at_an_unreachable_server(monkeypatch)
 
-    train.main("b0", matrices["features"], tmp_path / "models", PARAMS_FILE)
+    train.main(
+        "b0", matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
+    )
 
     record = json.loads((tmp_path / "models" / "b0" / MODEL_FILE).read_text(encoding="utf-8"))
     assert record["mlflow"]["tracking_mode"] == "disabled"
@@ -1503,7 +1532,9 @@ def test_require_tracking_makes_a_failure_fatal(matrices: dict, tmp_path: Path, 
     monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
 
     with pytest.raises(Exception, match="127.0.0.1"):
-        train.main("b0", matrices["features"], tmp_path / "models", PARAMS_FILE)
+        train.main(
+            "b0", matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
+        )
 
 
 @pytest.mark.req("NFR-14")
@@ -1535,7 +1566,9 @@ def test_one_variant_is_one_run_that_evaluate_appends_to(
     monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
 
     try:
-        train.main("b0", matrices["features"], tmp_path / "models", PARAMS_FILE)
+        train.main(
+            "b0", matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
+        )
         record = json.loads((tmp_path / "models" / "b0" / MODEL_FILE).read_text(encoding="utf-8"))
         assert record["mlflow"]["tracking_mode"] == "enabled"
         run_id = record["mlflow"]["run_id"]
@@ -1577,11 +1610,29 @@ def test_one_variant_is_one_run_that_evaluate_appends_to(
 
 
 #: What a `train` run records besides the keys `dvc.yaml` declares for its stage:
-#: which variant it is, and the shape of the data those keys were applied to.
+#: which variant it is, the shape of the data those keys were applied to, and the
+#: machine and library behind its energy figure.
 #: Listed so that the comparison below is an equality, and a parameter nobody
 #: declared cannot reach the run unnoticed either.
 NOT_DECLARED_TRAIN_PARAMS = frozenset(
-    {"variant", "n_features", "n_train_rows", "n_validation_rows", "n_supported_makes"}
+    {
+        "variant",
+        "n_features",
+        "n_train_rows",
+        "n_validation_rows",
+        "n_supported_makes",
+        # How the energy figure was produced (EDN-69). Facts about the machine and
+        # the library rather than `params.yaml` keys - nobody sets a CPU model -
+        # and logged because an estimate from a TDP and a counter reading are not
+        # comparable, so a run has to say which its figure is. The settings that
+        # *are* keys, `train.energy`, are declared and logged as `energy.*`.
+        "codecarbon.version",
+        "codecarbon.cpu_power_method",
+        "codecarbon.cpu_tdp_w",
+        "codecarbon.cpu_model",
+        "codecarbon.cpu_count",
+        "codecarbon.ram_total_size_gb",
+    }
 )
 
 
@@ -1648,7 +1699,9 @@ def test_a_run_records_every_parameter_its_stage_declares(
     monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
 
     try:
-        train.main(variant, matrices["features"], tmp_path / "models", PARAMS_FILE)
+        train.main(
+            variant, matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
+        )
         record = json.loads((tmp_path / "models" / variant / MODEL_FILE).read_text("utf-8"))
         client = mlflow.MlflowClient(tracking_uri=store)
         run = client.get_run(record["mlflow"]["run_id"])
@@ -1668,6 +1721,126 @@ def test_a_run_records_every_parameter_its_stage_declares(
         "the run carries a parameter that is neither declared nor the data's shape"
     )
     assert {name: logged.get(name) for name in expected} == expected
+
+
+@pytest.mark.req("NFR-10")
+def test_every_training_run_records_its_emissions_beside_its_accuracy(
+    matrices: dict, tmp_path: Path, monkeypatch
+):
+    """NFR-10's first clause: every training run records the emissions of its fit.
+
+    In the run that also receives the test metrics (EDN-55), so the energy and
+    the accuracy of one variant are one row of the experiment's table; with the
+    method behind the figure as parameters, because an estimate from a TDP and a
+    meter reading are not comparable; and with the same numbers as the CSV row the
+    model names, so MLflow and the artefact cannot disagree.
+
+    The requirement is **[manual]** in the specification: its other half is the
+    API's energy per request from the NFR-03 load test, which no test can reach.
+    """
+    before = mlflow.get_tracking_uri()
+    store = f"sqlite:///{tmp_path / 'mlflow.db'}"
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", store)
+    monkeypatch.setenv("MLFLOW_TRACKING_USERNAME", "someone")
+    monkeypatch.setenv("MLFLOW_TRACKING_PASSWORD", "a-token")
+    monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
+    monkeypatch.chdir(tmp_path)
+
+    try:
+        train.main(
+            "lgbm-basic",
+            matrices["features"],
+            tmp_path / "models",
+            PARAMS_FILE,
+            tmp_path / "emissions",
+        )
+        record = json.loads(
+            (tmp_path / "models" / "lgbm-basic" / MODEL_FILE).read_text(encoding="utf-8")
+        )
+        run_id = record["mlflow"]["run_id"]
+        with resume_run(run_id) as resumed:
+            resumed.log_metrics({"mdape": 0.25})
+
+        run = mlflow.MlflowClient(tracking_uri=store).get_run(run_id)
+    finally:
+        mlflow.set_tracking_uri(before)
+
+    measured = read_record(
+        tmp_path / "emissions" / "lgbm-basic.csv", record["fit"]["codecarbon_run_id"]
+    )
+    metrics = run.data.metrics
+    assert metrics["energy_kwh"] == measured["energy_consumed"]
+    assert metrics["emissions_kg_co2eq"] == measured["emissions"]
+    assert metrics["cpu_energy_kwh"] + metrics["ram_energy_kwh"] == pytest.approx(
+        metrics["energy_kwh"]
+    )
+    assert metrics["fit_seconds"] == record["fit"]["seconds"]
+    assert metrics["fit_cpu_seconds"] == record["fit"]["cpu_seconds"]
+    assert metrics["mdape"] == 0.25
+    params = run.data.params
+    assert params["energy.tracking_mode"] == "process"
+    assert params["energy.country_iso_code"] == "ESP"
+    assert params["codecarbon.cpu_power_method"] == record["fit"]["cpu_power_method"]
+    assert {"codecarbon.version", "codecarbon.cpu_model", "codecarbon.cpu_count"} <= set(params)
+
+
+def test_only_the_fit_is_measured(matrices: dict, tmp_path: Path, monkeypatch):
+    """Reading the matrices and writing the bundle happen outside the tracker.
+
+    Both are made to take two seconds, which a fit of `b0` on the fixture never
+    does, so a tracker opened before the read or closed after the write would
+    record a duration of at least two seconds. CodeCarbon's duration is compared
+    against the call to `fit_variant` timed from inside, which is the section the
+    issue asks to be measured and nothing more.
+    """
+    for name in REQUIRED_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    timed: dict = {}
+    read, save, fit = train.read_matrices, Model.save, train.fit_variant
+
+    def slow_read(*args, **kwargs):
+        time.sleep(2)
+        return read(*args, **kwargs)
+
+    def slow_save(self, directory):
+        time.sleep(2)
+        return save(self, directory)
+
+    def timed_fit(*args, **kwargs):
+        started = time.perf_counter()
+        model = fit(*args, **kwargs)
+        timed["seconds"] = time.perf_counter() - started
+        return model
+
+    monkeypatch.setattr(train, "read_matrices", slow_read)
+    monkeypatch.setattr(Model, "save", slow_save)
+    monkeypatch.setattr(train, "fit_variant", timed_fit)
+
+    train.main(
+        "b0", matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
+    )
+
+    record = json.loads((tmp_path / "models" / "b0" / MODEL_FILE).read_text(encoding="utf-8"))
+    measured = read_record(tmp_path / "emissions" / "b0.csv", record["fit"]["codecarbon_run_id"])
+    assert measured["duration"] < 2
+    assert measured["duration"] >= timed["seconds"]
+    assert record["fit"]["seconds"] == pytest.approx(timed["seconds"], abs=0.05)
+
+
+def test_each_bundle_names_the_energy_record_of_its_own_fit(trained: dict):
+    """`model.json` carries the CodeCarbon run id, and the CSV holds that one fit.
+
+    The id is what the energy comparison joins on, so a record left over from
+    another fit cannot be read as this model's cost. One row per file because the
+    fixture writes into a fresh directory, which is what `dvc repro` gives the
+    stage by deleting its outputs first.
+    """
+    for variant, model in trained["models"].items():
+        path = trained["emissions"] / f"{variant}.csv"
+        assert len(pd.read_csv(path)) == 1, variant
+        measured = read_record(path, model.metadata["fit"]["codecarbon_run_id"])
+        assert measured["project_name"] == variant
+        assert measured["tracking_mode"] == "process"
 
 
 def test_resume_run_without_a_run_id_does_nothing(caplog):

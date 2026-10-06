@@ -3,9 +3,12 @@
 Keeping the read and the write here means the contract discipline is applied in
 one place instead of eight. `write_frame` conforms before it writes and
 `read_frame` validates after it reads, so a stage that breaks the contract fails
-in its own run rather than three stages later.
+in its own run rather than three stages later. `write_json` is here for the same
+reason: every JSON artefact is written the one way that hashes the same on every
+platform.
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -47,3 +50,13 @@ def write_frame(frame: pd.DataFrame, path: Path, schema: Schema) -> pd.DataFrame
     conformed.to_parquet(path, index=False)
     logger.success(f"Wrote {len(conformed):,} rows to {path} as {schema.name!r}.")
     return conformed
+
+
+def write_json(document: Any, path: Path) -> None:
+    """Write `document` as indented JSON, with LF line endings on every platform.
+
+    DVC hashes an output byte for byte, and `Path.write_text` turns "\\n" into
+    the platform's line separator unless it is told otherwise, so without
+    `newline` a run on Windows writes CRLF and a hash no Linux run produces (#84).
+    """
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8", newline="\n")

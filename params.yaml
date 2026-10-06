@@ -218,6 +218,13 @@ validate:
   # rows is flagged instead of silently cleaned. The cleaned frame asserts it
   # hard, because preprocessing has dropped them by then.
   raw_mostly: 0.99
+  # The share of rows `make`, `body_type` and the four equipment lists must
+  # fill, on both frames. They are filled in every row of the snapshot, but
+  # that is a measured rate and not a structural property, so the contracts
+  # leave them nullable and this is the tolerance the suites assert (#78). It
+  # lets a handful of gaps through as a reported finding and fails a scrape
+  # that has lost a column.
+  required_filled_mostly: 0.999
 
 train:
   # One MLflow experiment; each variant below is one run in it (#37).
@@ -241,6 +248,25 @@ train:
   # (0.33 s at 1 thread, 28.6 s at 8), because OpenMP's overhead dominates
   # whenever there is little work per thread.
   num_threads: 1
+  # How CodeCarbon measures the fit (NFR-10, issue #38, EDN-69). Only the fit is
+  # measured, and `recommenditos/modeling/energy.py` says what the figure is: on a
+  # machine where RAPL is root-only, which is every Linux machine we train on, it
+  # is CodeCarbon's estimate from the CPU's TDP and the process's CPU time plus a
+  # constant 10 W for the RAM, not a meter reading.
+  energy:
+    # The fit's own CPU time, not the whole machine's load: measured on a shared
+    # laptop, `machine` mode charged a sleeping process 4.5 W of CPU, `process` 0.3 W.
+    tracking_mode: process
+    # The grid the emissions are computed against, pinned so that an identical fit
+    # has identical emissions wherever it runs, and so that measuring needs no
+    # geolocation call. Spain, because the team trains in Barcelona; CodeCarbon's
+    # factor for it is 174.05 g CO2eq/kWh (Our World in Data, 2023).
+    country_iso_code: ESP
+    # How often power samples are integrated into energy. CodeCarbon's default
+    # rather than the demo's 1 s, which races the tracker's own shutdown: measured
+    # against CodeCarbon's own model, 1 s gave 0.86x to 1.07x on a LightGBM fit and
+    # up to 4.31x on a busy loop, 15 s gave 0.987x to 0.993x on the same fit.
+    measure_power_secs: 15
   # `dvc.yaml` iterates this mapping with `foreach`, so the stages are named
   # `train@b0`, `train@lgbm-basic` and so on, and each declares only its own
   # key under `params:`. Changing one variant therefore retrains that variant

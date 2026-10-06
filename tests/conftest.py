@@ -21,6 +21,7 @@ import yaml
 
 from recommenditos.config import METRICS_FILE, MODELS_DIR, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
 from recommenditos.data.synthetic import generate_raw_listings
+from recommenditos.modeling.energy import EMISSIONS_DIR
 from recommenditos.pipeline import load_params
 
 #: Small enough to keep the suite fast, large enough that a seller-grouped
@@ -75,6 +76,10 @@ def _repo_artefacts_stay_untouched():
     # Data Docs files named after its run time.
     listed = (MODELS_DIR, VALIDATION_DIR)
     listings_before = {directory: _listing(directory) for directory in listed}
+    # By content, like the context: CodeCarbon *appends* to these, so a test
+    # that trained without redirecting `energy_dir` leaves the file list as it
+    # was and adds a row to a git-tracked record of the real ladder's energy.
+    emissions_before = _tree_digest(EMISSIONS_DIR)
     already_there = [path for path in FORBIDDEN_PATHS if path.exists()]
 
     yield
@@ -91,6 +96,9 @@ def _repo_artefacts_stay_untouched():
             f"the test suite wrote into {directory}"
         )
     assert _tree_digest(GX_DIR) == context_before, f"the test suite rebuilt {GX_DIR}"
+    assert _tree_digest(EMISSIONS_DIR) == emissions_before, (
+        f"the test suite wrote an energy measurement into {EMISSIONS_DIR}"
+    )
 
     appeared = sorted(
         str(path) for path in FORBIDDEN_PATHS if path.exists() and path not in already_there

@@ -3,7 +3,9 @@
 No test here reaches DagsHub: the point of the helper is what it does *before*
 the network is touched, and the tests that let MLflow run point it at a SQLite
 database under `tmp_path`. The suite therefore still passes on a clean clone
-with no credentials (see `tests/conftest.py`).
+with no credentials (see `tests/conftest.py`). The one exception to "no server"
+is a local MLflow server on localhost, for the behaviour MLflow shows only over
+HTTP.
 
 One database is shared by the whole module rather than created per test. Each
 fresh MLflow store pays for creating and migrating a schema, which was most of
@@ -11,11 +13,17 @@ this module's runtime; the tests stay independent by using a different
 experiment name each, which is the only state they care about.
 """
 
+from collections.abc import Iterator
 import os
 from pathlib import Path
+import re
 import shutil
+import signal
+import socket
 import subprocess
 import sys
+import time
+import urllib.request
 
 from dvc.repo import Repo
 from loguru import logger
@@ -321,6 +329,118 @@ def test_every_provenance_tag_of_the_pipeline_is_a_key_mlflow_accepts():
     for key in keys:
         validation._validate_tag_name(key)
         assert len(key) <= validation.MAX_ENTITY_KEY_LENGTH, key
+
+
+# --------------------------------------------------------------------------
+# Against a local server
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def tracking_server(tmp_path_factory) -> Iterator[str]:
+    """A real MLflow tracking server on localhost, which is what DagsHub is to MLflow.
+
+    Started once for the module, because it takes about ten seconds. Its job
+    queue is switched off: that is what makes the server spawn worker processes
+    of its own, and nothing here submits a job.
+    """
+    root = tmp_path_factory.mktemp("mlflow-server")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    url = f"http://127.0.0.1:{port}"
+    server = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "mlflow",
+            "server",
+            "--backend-store-uri",
+            f"sqlite:///{root / 'mlflow.db'}",
+            "--artifacts-destination",
+            str(root / "artifacts"),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--workers",
+            "1",
+        ],
+        cwd=root,
+        env={**os.environ, "MLFLOW_SERVER_ENABLE_JOB_EXECUTION": "false"},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        # Ignored on Windows, where `_stop_process_tree` does not need it.
+        start_new_session=True,
+    )
+    try:
+        _wait_until_healthy(server, url)
+        yield url
+    finally:
+        _stop_process_tree(server)
+
+
+def _wait_until_healthy(server: subprocess.Popen, url: str, timeout: float = 120) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if server.poll() is not None:
+            pytest.fail(f"the MLflow server exited with {server.returncode} before it served")
+        try:
+            with urllib.request.urlopen(f"{url}/health", timeout=1):
+                return
+        except OSError:
+            time.sleep(0.2)
+    pytest.fail(f"the MLflow server did not answer on {url} within {timeout:.0f} s")
+
+
+def _stop_process_tree(process: subprocess.Popen) -> None:
+    """Stop `mlflow server` and the uvicorn process it serves from.
+
+    A plain `terminate()` stops only the parent and leaves uvicorn holding the
+    port, so the whole tree goes: by process group on POSIX, with `taskkill /T`
+    on Windows, which has no process groups to signal.
+    """
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True, check=False
+        )
+    else:
+        os.killpg(process.pid, signal.SIGTERM)
+    process.wait(timeout=30)
+
+
+def test_the_setup_check_survives_a_console_that_cannot_encode_emoji(tracking_server: str):
+    """Step 6 of the getting-started page, in a Windows console (#84).
+
+    Against an HTTP server MLflow ends a run by writing its link to stdout after
+    an emoji, and cp1252, the code page a Windows console defaults to, cannot
+    encode one: the run landed and the command still exited 1 with a
+    `UnicodeEncodeError`. `PYTHONIOENCODING` gives the subprocess that console on
+    any platform. The link has to survive the fix, because it is the quickest
+    way to the run the check has just logged.
+    """
+    environment = {
+        **os.environ,
+        "MLFLOW_TRACKING_URI": tracking_server,
+        "MLFLOW_TRACKING_USERNAME": "someone",
+        "MLFLOW_TRACKING_PASSWORD": "a-token",
+        "PYTHONIOENCODING": "cp1252",
+    }
+    completed = subprocess.run(
+        [sys.executable, "-m", "recommenditos.tracking"],
+        cwd=PROJ_ROOT,
+        env=environment,
+        capture_output=True,
+        encoding="cp1252",
+        errors="replace",
+        check=False,
+    )
+
+    output = completed.stdout + completed.stderr
+    assert completed.returncode == 0, output
+    assert re.search(
+        rf"{re.escape(tracking_server)}/#/experiments/\d+/runs/[0-9a-f]{{32}}", output
+    ), f"the setup check no longer prints the run's link:\n{output}"
 
 
 # --------------------------------------------------------------------------

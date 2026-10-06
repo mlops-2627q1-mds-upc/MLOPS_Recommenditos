@@ -1,0 +1,86 @@
+python 3.12.13, codecarbon 3.3.1, lightgbm 4.7.0, 2026-10-05 12:48
+
+== 1. What CodeCarbon picks without RAPL, and 2. whether it tracks the work ==
+
+CodeCarbon 3.3.1, CPU model 'Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz', 8 logical CPUs, RAM 15.4 GB
+CPU power method: cpu_load, TDP 15.0 W (generic fallback: False)
+RAPL energy_uj readable: False
+
+What CodeCarbon logs at WARNING and above:
+  - Multiple instances of codecarbon are allowed to run at the same time.
+  - RAPL - Permission denied reading RAPL file /sys/class/powercap/intel-rapl/subsystem/intel-rapl-mmio/intel-rapl-mmio:0/energy_uj. You can grant read permission with: sudo chmod -R a+r /sys/class/powercap/*
+  - No CPU tracking mode found. Falling back on estimation based on TDP for CPU.
+  - No CPU tracking mode found. Falling back on CPU load mode.
+
+Average power over each workload (energy / duration). `cpu_vs_model` is the CPU energy over TDP / logical CPUs x process CPU time:
+   mode            workload  wall_s  cpu_s  cpu_W  ram_W  total_W  cpu_vs_model  g_per_kWh  load_1min
+process               sleep    9.37   0.34   0.26   9.89    10.15          3.30     174.05       12.2
+process busy loop, 1 thread    8.06   8.02   1.51   9.94    11.45          0.81     174.05       11.8
+process  LightGBM, 1 thread    4.46   4.52   1.87   9.85    11.73          0.98     174.05       11.2
+process LightGBM, 4 threads    2.76  10.01   6.73   9.78    16.51          0.99     174.05       10.9
+machine               sleep    8.02   0.02   4.51  10.00    14.51           NaN     174.05       10.7
+machine busy loop, 1 thread    8.01   7.97   3.15  10.00    13.15          1.69     174.05       10.2
+machine  LightGBM, 1 thread    3.16   3.14   1.97  10.00    11.97          1.05     174.05        9.4
+machine LightGBM, 4 threads    1.76   6.99   4.11  10.00    14.11          0.55     174.05        8.9
+
+== 4. measure_power_secs: how completely a fit is integrated ==
+
+ measure_power_secs            workload  repeat  duration_s  cpu_vs_model  ram_vs_model  total_W
+                1.0 busy loop, 1 thread       0        8.40         0.547         4.306    44.09
+                1.0 busy loop, 1 thread       1        8.23         0.810         0.836     9.48
+                1.0 busy loop, 1 thread       2        8.21         0.822         0.713     8.20
+                1.0  LightGBM, 1 thread       0       11.44         1.068         0.873    10.07
+                1.0  LightGBM, 1 thread       1       10.48         0.878         0.863     9.83
+                1.0  LightGBM, 1 thread       2       10.22         0.963         0.951    10.87
+                1.0 LightGBM, 4 threads       0        4.44         0.929         0.874    14.48
+                1.0 LightGBM, 4 threads       1        4.48         0.868         0.898    14.25
+                1.0 LightGBM, 4 threads       2        4.02         0.887         0.905    14.86
+               15.0 busy loop, 1 thread       0        8.12         0.998         0.985    11.70
+               15.0 busy loop, 1 thread       1        8.17         1.004         0.979    11.71
+               15.0 busy loop, 1 thread       2        8.21         1.014         0.975    11.71
+               15.0  LightGBM, 1 thread       0        4.65         0.989         0.990    11.78
+               15.0  LightGBM, 1 thread       1        4.84         0.993         0.991    11.80
+               15.0  LightGBM, 1 thread       2        3.82         0.989         0.987    11.75
+               15.0 LightGBM, 4 threads       0        3.09         0.812         0.973    14.98
+               15.0 LightGBM, 4 threads       1        1.94         0.987         0.972    16.95
+               15.0 LightGBM, 4 threads       2        1.85         0.991         0.979    17.12
+
+Range per setting (min to max over the three repeats):
+                                        cpu_min  cpu_max  ram_min  ram_max  total_W_min  total_W_max
+measure_power_secs workload
+1.0                LightGBM, 1 thread     0.878    1.068    0.863    0.951         9.83        10.87
+                   LightGBM, 4 threads    0.868    0.929    0.874    0.905        14.25        14.86
+                   busy loop, 1 thread    0.547    0.822    0.713    4.306         8.20        44.09
+15.0               LightGBM, 1 thread     0.989    0.993    0.987    0.991        11.75        11.80
+                   LightGBM, 4 threads    0.812    0.991    0.972    0.979        14.98        17.12
+                   busy loop, 1 thread    0.998    1.014    0.975    0.985        11.70        11.71
+
+== 5. Tracker overhead on the test fixture ==
+
+First tracker in a fresh process, import included: 1.85 s
+
+      variant  n_train_rows     how  median_s  min_s  max_s
+           b0           744    bare     0.048  0.044  0.055
+           b0           744 tracked     0.081  0.079  0.105
+           b1           744    bare     0.103  0.091  0.113
+           b1           744 tracked     0.154  0.146  0.185
+   lgbm-basic           744    bare     0.191  0.161  0.210
+   lgbm-basic           744 tracked     0.237  0.218  0.256
+lgbm-extended           744    bare     0.227  0.210  0.269
+lgbm-extended           744 tracked     0.280  0.269  0.283
+
+Median cost of tracking one fit (tracked - bare), seconds:
+variant
+b0               0.033
+b1               0.051
+lgbm-basic       0.046
+lgbm-extended    0.053
+
+== 6. on_csv_write='append' on a DVC stage output ==
+
+after three `dvc repro --force`: declared.csv holds 1 row(s)
+after three `dvc repro --force`: persisted.csv holds 3 row(s)
+
+== 3. Network calls made by the offline tracker ==
+
+0 attempt(s): []

@@ -83,15 +83,13 @@ What the suites check, and where each rule of issue #25 lives:
   preprocessing does not apply it, so the published file's three readings above
   1,000,000 km reach the cleaned frame, and the rule reports them on both frames
   while still failing on a systematic break.
-- **A check on preprocessing: the columns the raw contract fills stay filled.**
-  The interim contract relaxes nullability to what is structurally necessary
-  (`schema._as_interim`), so the interim suite asserts `make`, `body_type` and
-  the four equipment lists filled. That rule cannot fire on a scrape: the raw
-  contract declares the same columns non-null, and `download` writes through
-  it, so a gap in a future scrape fails `download` with a contract error and
-  never reaches this suite. What it catches is preprocessing itself emptying a
-  column. Moving the scrape's fill rates out of the raw contract and into the
-  raw suite, as tolerant rules, is #78.
+- **The fill rate of the columns the published file fills in every row**, from
+  `validate.required_filled_mostly`, on both frames: `make`, `body_type` and the
+  four equipment lists. Both contracts leave them nullable, because that is a
+  measured fill rate and not a structural property (#78). On the raw frame the
+  rule reports a gap in a scrape, with the rule named and the row count, in
+  this stage rather than as a contract error in `download`; on the cleaned
+  frame it reports preprocessing emptying a column.
 - **No vacuous pass.** Every column rule holds over no rows and Great
   Expectations skips missing values, so an empty frame, or a bounded column
   that has emptied out, would pass every rule that reads it. Both suites
@@ -178,6 +176,18 @@ RAW_AS_VALIDATED: Schema = RAW_SCHEMA.with_dtype(
 #: non-null in both contracts already.
 BOUNDED_NULLABLE_COLUMNS: tuple[str, ...] = ("registration_date", "mileage_km_raw")
 
+#: The columns the published file fills in every row, which both contracts leave
+#: nullable because that is a measured fill rate (#78). Each suite asserts them
+#: filled up to `validate.required_filled_mostly`.
+REQUIRED_FILLED_COLUMNS: tuple[str, ...] = (
+    "make",
+    "body_type",
+    "equipment_comfort",
+    "equipment_entertainment",
+    "equipment_extra",
+    "equipment_safety",
+)
+
 app = typer.Typer()
 
 
@@ -243,6 +253,24 @@ def _mileage_in_range(params: dict[str, Any]) -> gxe.Expectation:
     )
 
 
+def _required_filled(params: dict[str, Any], *, where: str) -> list[gxe.Expectation]:
+    """The fill rate of every column the published file fills in every row."""
+    mostly = params["validate"]["required_filled_mostly"]
+    return [
+        gxe.ExpectColumnValuesToNotBeNull(
+            column=column,
+            mostly=mostly,
+            notes=(
+                f"The published file fills this column in every row, but that is a measured "
+                f"fill rate, so the contract leaves it nullable and this rule asserts it up "
+                f"to `validate.required_filled_mostly`. {where}"
+            ),
+            meta={KIND: RULE},
+        )
+        for column in REQUIRED_FILLED_COLUMNS
+    ]
+
+
 def _not_vacuous(params: dict[str, Any]) -> list[gxe.Expectation]:
     """The row count, and the fill rate of every column a bounded rule reads."""
     bounds = params["validate"]
@@ -275,6 +303,7 @@ def raw_suite(params: dict[str, Any]) -> gx.ExpectationSuite:
         expectations=[
             *contract_expectations(RAW_AS_VALIDATED),
             *_not_vacuous(params),
+            *_required_filled(params, where="On the raw frame it reports a gap in the scrape."),
             _registered_by_the_reference_date(params, mostly=mostly),
             _mileage_in_range(params),
         ],
@@ -282,29 +311,16 @@ def raw_suite(params: dict[str, Any]) -> gx.ExpectationSuite:
 
 
 def interim_suite(params: dict[str, Any]) -> gx.ExpectationSuite:
-    """The cleaned frame: its contract, what preprocessing keeps filled, and the hard rules."""
+    """The cleaned frame: its contract, the fill rates, and the hard rules."""
     scope = params["preprocess"]
-    filled = [
-        gxe.ExpectColumnValuesToNotBeNull(
-            column=column.name,
-            notes=(
-                "A check on preprocessing. The raw contract declares this column non-null, "
-                "so a gap in a scrape fails `download` before it gets here; a gap here "
-                "means preprocessing emptied the column."
-            ),
-            meta={KIND: RULE},
-        )
-        for column in INTERIM_SCHEMA.columns
-        if column.nullable
-        and column.name in RAW_SCHEMA.names
-        and not RAW_SCHEMA.column(column.name).nullable
-    ]
     return gx.ExpectationSuite(
         name=INTERIM,
         expectations=[
             *contract_expectations(INTERIM_SCHEMA),
             *_not_vacuous(params),
-            *filled,
+            *_required_filled(
+                params, where="On the cleaned frame it reports preprocessing emptying a column."
+            ),
             _registered_by_the_reference_date(params, mostly=1.0),
             gxe.ExpectColumnValuesToBeBetween(
                 column="price",
