@@ -390,6 +390,9 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.report == 'true'
@@ -402,16 +405,45 @@ jobs:
       - name: Check the LaTeX EDN is in sync with reports/edn.md
         if: needs.changes.outputs.report == 'true'
         run: python3 tools/edn_latex.py --check
-      - uses: docker/setup-buildx-action@v4
+      # The image is published to GHCR under a tag that hashes the Dockerfile, so
+      # the job pulls it and only builds (TeX Live from a single historic mirror,
+      # about 20 minutes) the first time a Dockerfile exists. Nothing here lives in
+      # the Actions cache, which GitHub evicts at 10 GB and which the report build
+      # therefore must not depend on. A pull request from a fork has a read-only
+      # token, so it builds without pushing.
+      - name: Name the image after the Dockerfile
+        id: image
         if: needs.changes.outputs.report == 'true'
-      - uses: docker/build-push-action@v7
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          hash="$(sha256sum reports/latex/Dockerfile | cut -c1-16)"
+          echo "name=ghcr.io/$repo/latex:${{ matrix.arch }}-$hash" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v4
         if: needs.changes.outputs.report == 'true'
         with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull the published image
+        id: pull
+        if: needs.changes.outputs.report == 'true'
+        run: |
+          if docker pull "${{ steps.image.outputs.name }}"; then
+            docker tag "${{ steps.image.outputs.name }}" mlops-latex
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-buildx-action@v4
+        if: needs.changes.outputs.report == 'true' && steps.pull.outputs.hit != 'true'
+      - uses: docker/build-push-action@v7
+        if: needs.changes.outputs.report == 'true' && steps.pull.outputs.hit != 'true'
+        with:
           context: reports/latex
-          tags: mlops-latex
+          tags: ${{ steps.image.outputs.name }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           load: true
-          cache-from: type=gha,scope=latex-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=latex-${{ matrix.arch }}
+          push: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+      - run: docker tag "${{ steps.image.outputs.name }}" mlops-latex
+        if: needs.changes.outputs.report == 'true' && steps.pull.outputs.hit != 'true'
       - run: docker run --rm -v "$PWD/reports/latex:/report" mlops-latex initial
         if: needs.changes.outputs.report == 'true'
       - run: docker run --rm -v "$PWD/reports/latex:/report" mlops-latex final

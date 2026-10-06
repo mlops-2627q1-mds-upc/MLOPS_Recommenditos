@@ -84,6 +84,10 @@ The first run downloads and installs TeX Live and takes a few minutes; after tha
 The image (~240 MB) contains only a minimal, pinned TeX Live 2025, so everyone gets identical PDFs.
 If a new LaTeX package is needed, add it to the `tlmgr install` list in the `Dockerfile`.
 
+CI does not build the image on every run.
+It pulls `ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/latex:<arch>-<hash of the Dockerfile>`, and builds and pushes that tag only when it does not exist yet, which is the first CI run after the `Dockerfile` changes.
+So a change to the `Dockerfile` makes the first run of its pull request slow (TeX Live comes from a single historic mirror, so the download is retried), and every run after it, on any branch, fast.
+
 ## Building without Docker
 
 With a local TeX Live installation that has `latexmk` and `biber`, run from the repository root:
