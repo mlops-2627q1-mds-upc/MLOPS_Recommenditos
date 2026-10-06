@@ -2481,6 +2481,43 @@ How to add an entry:
 - **Other evidence:** [issue #79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/79); [PR #80](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80); [`recommenditos/provenance.py`](../recommenditos/provenance.py) and `recommenditos/tracking.py`; [`tests/test_provenance.py`](../tests/test_provenance.py) and the NFR-14 tests of `tests/test_tracking.py`; [`reports/analysis/run_provenance_check.py`](analysis/run_provenance_check.py) and [its results](analysis/run_provenance_check_results.txt); [The DVC pipeline](../docs/docs/pipeline.md), From a run to its inputs; [specification](../docs/docs/specification.md) NFR-14; [EDN-55](#edn-55-evaluate-resumes-the-run-train-created-instead-of-opening-its-own), [EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean).
 - **In LaTeX:** yes
 
+### EDN-75: SC-04's miss on cars over 20 years is a documented limitation of the model, not open work
+
+- **Date:** 2026-10-06
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Model Evaluation (the NFR-01 gate), Documenting Limitations
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** SC-04 stays missed for cars over 20 years (16.77 % MdAPE over 784 test rows against the 15 % bar, candidate `lgbm-basic`), and the model card, the problem specification and the report state it as an accepted limitation of the model.
+  Neither the threshold nor the scope changes, and no further modelling effort goes into closing it.
+  EDN-62 decided that the miss is accepted rather than worked around, but the model card and the problem specification still described it as open work ("an open task", "for a later ticket"), which contradicted that decision.
+  This entry settles the status: it is finished, and it is a limitation a user of the model has to be told about.
+- **Alternatives considered:**
+  - **Option A (chosen): accept the miss and document it as a limitation.**
+    Pros: it is the honest reading of the measurement, it keeps the bar where EDN-06 set it, and it spends no time on a segment that is 4 % of the test rows when the course grades the MLOps practices and not the accuracy of the model.
+    The evidence that more modelling would not help is already in the repository: the extended features make the segment worse (17.78 %, EDN-62), a ceiling raised until early stopping decides moves it by 0.35 pp (EDN-70) and the tuning grid is flat (EDN-73).
+    Cons: the quality gate of NFR-01 stays blocked on SC-04 for every variant, so the candidate is not formally deployable until the gate itself is addressed, and a reader sees a failed criterion in the report.
+  - **Option B: bound the training scope by age, as EDN-04 bounds price.**
+    Pros: the criterion would pass.
+    Cons: it passes by removing the rows it fails on, and it is a product decision about who the component serves, which a missed criterion cannot justify (EDN-62, option D).
+  - **Option C: raise the threshold for this segment, for example to 18 %.**
+    Pros: the gate would be green for SC-04.
+    Cons: nothing was learned about the bar, only about the model, so it is a criterion adjusted to its result (EDN-62, option E).
+  - **Option D: keep it open and look for a remedy, such as a segment-specific model.**
+    Pros: it might close the gap.
+    Cons: the segment has 784 test rows grouped by seller, so a 1.8 pp gap is of the order of the sampling noise, and there is no evidence yet that any feature or model carries the missing information.
+    A remedy would be effort without a way to tell whether it worked.
+- **Rationale:** The measurement leaves no lever that is both honest and cheap, and a limitation that is stated is more useful to the report and to a user than a criterion quietly reshaped.
+  Old cars span ordinary used cars and collector pieces whose asking price depends on condition and provenance, and the data has no condition field, so the remaining error is mostly information the model is never given (our reading, not measured).
+  The limitation is written where a reader looks for it, in the model card's Bias, Risks, and Limitations, with the size of the effect and what a user must take from it.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI read the measured metrics, EDN-62, EDN-70 and EDN-73, explained SC-04 and what its percentage means, and recommended accepting the miss and finding the open-work wording that contradicted EDN-62.
+  Lukas chose option A, giving the reason that the course grades the MLOps cycle and not the model.
+  AI wrote the documentation changes; the numbers come from `reports/metrics/lgbm-basic.json` and were not recomputed.
+- **AI interaction evidence:** Claude Code session on 2026-10-06 in which Lukas asked whether the error target is reachable and then asked for the miss to be accepted and documented.
+- **Other evidence:** [model card](../docs/docs/model-card.md), Bias, Risks, and Limitations and Results; [problem specification](../docs/docs/problem-spec.md) section 8; `reports/metrics/lgbm-basic.json` and `reports/metrics/segments.csv`; [EDN-06](#edn-06-success-criteria-for-the-price-model), [EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around), [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count), [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
+- **In LaTeX:** yes
+
 ## Template
 
 ```markdown
