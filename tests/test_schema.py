@@ -175,11 +175,13 @@ def test_the_interim_contract_carries_the_target_and_the_group_key():
     assert {"price", "log_price", "seller_group_id"}.issubset(INTERIM_SCHEMA.names)
 
 
-def test_interim_nullability_is_structural_not_a_fill_rate():
+def test_nullability_is_structural_not_a_fill_rate():
     # `body_type` and `make` are filled in every row of the published
-    # snapshot, but that is an expectation for the Great Expectations suite to
-    # assert with a tolerance, not a promise this contract makes. A bool column
-    # is non-null because the dtype cannot hold a missing value at all.
+    # snapshot, but that is an expectation for the Great Expectations suites to
+    # assert with a tolerance (#78), not a promise either contract makes. A bool
+    # column is non-null because the dtype cannot hold a missing value at all.
+    for name in ("make", "body_type", "equipment_comfort", "equipment_safety"):
+        assert RAW_SCHEMA.column(name).nullable, name
     assert INTERIM_SCHEMA.column("body_type").nullable
     assert INTERIM_SCHEMA.column("make").nullable
     assert INTERIM_SCHEMA.column("equipment_comfort").nullable

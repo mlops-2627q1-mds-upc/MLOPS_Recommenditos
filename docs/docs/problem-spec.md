@@ -152,7 +152,7 @@ It is stated here as a named field list because two requirements and one criteri
 
 SC-04 is a statement about a **level** (`make=BMW`) rather than about a segmenting variable, since `make` as a whole holds every test row.
 A level that represents the absence of a *required* input field is reported with its metrics but excluded from the criterion, because FR-01 refuses such a request with a 422, so the level cannot occur at serving time at all: it is a data-quality finding, not a population the deployed component can be asked about.
-For `make` and `body_type`, the two required fields the published file fills in every row, the raw contract rules it out: a scrape with a gap there fails the `download` stage. Measuring the other required fields' fill rates as tolerant rules instead is [#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78).
+For `make` and `body_type`, the two required fields the published file fills in every row, neither contract rules a gap out, because that is a measured fill rate and not a structural property ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)). The raw suite asserts both filled up to `validate.required_filled_mostly`, so a scrape with a gap there fails `validate-data` with the rule named, and does not fail `download` with a contract error.
 When no level reaches the row minimum, SC-04 is reported as **not measured** rather than as met.
 "Every level satisfies P" is vacuously true over an empty set, and reporting that as a pass would claim a check nobody ran.
 

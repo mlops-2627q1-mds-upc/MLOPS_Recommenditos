@@ -218,6 +218,13 @@ validate:
   # rows is flagged instead of silently cleaned. The cleaned frame asserts it
   # hard, because preprocessing has dropped them by then.
   raw_mostly: 0.99
+  # The share of rows `make`, `body_type` and the four equipment lists must
+  # fill, on both frames. They are filled in every row of the snapshot, but
+  # that is a measured rate and not a structural property, so the contracts
+  # leave them nullable and this is the tolerance the suites assert (#78). It
+  # lets a handful of gaps through as a reported finding and fails a scrape
+  # that has lost a column.
+  required_filled_mostly: 0.999
 
 train:
   # One MLflow experiment; each variant below is one run in it (#37).

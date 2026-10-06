@@ -164,7 +164,7 @@ A suite with no expectations, or a run that returns fewer results than its suite
 | `registration_date` at or before the reference date (EDN-22) | tolerated up to `validate.raw_mostly` | hard | `reference_date` |
 | `price` inside the training range | - | hard | `preprocess.price_min_eur`, `preprocess.price_max_eur` |
 | `mileage_km_raw` inside the range FR-03 accepts | tolerated up to `validate.mileage_mostly` | tolerated up to `validate.mileage_mostly` | `validate.mileage_min_km`, `validate.mileage_max_km` |
-| Filled wherever the raw contract declares the column filled | through the contract, which fails `download` on a gap | hard: a check on preprocessing, since a scrape gap never gets this far ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)) | `schema.py` |
+| `make`, `body_type` and the four equipment lists filled ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)) | tolerated up to `validate.required_filled_mostly`: a gap in a scrape is reported here, not as a contract error in `download` | tolerated up to `validate.required_filled_mostly`: a check on preprocessing | `params.yaml` |
 | At least `validate.min_rows` rows, and `registration_date` and `mileage_km_raw` filled up to `validate.filled_mostly` | asserted | asserted | `params.yaml` |
 | `has_full_service_history`, `non_smoking`, `is_rental` boolean and non-null (EDN-23) | through the contract | through the contract | `schema.py` |
 
