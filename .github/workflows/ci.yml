@@ -52,8 +52,13 @@ jobs:
             docs:
               - "docs/**"
               - ".github/workflows/ci.yml"
+            # reports/edn.md and its converter too: the report job checks that
+            # the LaTeX EDN is in sync with them, and a change to the notebook
+            # alone is exactly the change that leaves it behind.
             report:
               - "reports/latex/**"
+              - "reports/edn.md"
+              - "tools/edn_latex.py"
               - "Makefile"
               - ".github/workflows/ci.yml"
 
@@ -360,6 +365,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.report == 'true'
+      # The EDN PDF is built from reports/latex/edn/, which `make edn` generates
+      # from reports/edn.md; fail before the build when that is behind, so an
+      # entry marked "In LaTeX: yes" is always in the PDF as written. The
+      # converter needs only the standard library, so no project sync.
+      - name: Check the LaTeX EDN is in sync with reports/edn.md
+        if: needs.changes.outputs.report == 'true'
+        run: python3 tools/edn_latex.py --check
       - uses: docker/setup-buildx-action@v4
         if: needs.changes.outputs.report == 'true'
       - uses: docker/build-push-action@v7

@@ -10,7 +10,7 @@ something else, and the transfer tests hold it to the second.
 Nothing here runs LaTeX: the report job of CI builds edn.tex from the committed
 files, which is the check that the output compiles. The tests read small
 notebooks written for the rule they show, and the one test that reads the
-repository's own notebook only renders it.
+repository's own notebook checks that the committed LaTeX is what it generates.
 """
 
 import textwrap
@@ -21,9 +21,12 @@ from tools.edn_latex import (
     EDN_MD,
     ENTRY_LIST_NAME,
     GENERATED_MARKER,
+    LATEX_EDN_DIR,
     REPO_URL,
     Context,
     EdnError,
+    check,
+    main,
     parse_notebook,
     render_entry,
     render_inline,
@@ -113,6 +116,28 @@ def test_a_field_given_twice_is_refused():
     text = notebook(entry_md() + "- **Decision:** Something else.\n")
     with pytest.raises(EdnError, match="appears twice"):
         parse_notebook(text)
+
+
+def test_a_section_heading_between_entries_is_refused_rather_than_ending_the_section():
+    """It would end the section there and drop every entry below it."""
+    text = notebook(entry_md(1), "## Notes\n", entry_md(2))
+    with pytest.raises(EdnError, match=r"line \d+: the heading '## Notes'.*EDN-02"):
+        parse_notebook(text)
+
+
+def test_the_template_in_a_code_block_after_the_entries_is_not_an_entry():
+    """The real template is a fenced block whose example heading has a number."""
+    template = "\n## Template\n\n```markdown\n### EDN-99: An example\n```\n"
+    assert [entry.id for entry in parse_notebook(notebook(entry_md(), after=template))] == [
+        "EDN-01"
+    ]
+
+
+def test_a_fenced_code_block_in_an_entry_is_refused():
+    """The renderer has no verbatim block, so it would typeset the code as prose."""
+    fenced = entry_md(Rationale="Because:\n\n  ```python\n  x = 1\n  ```")
+    with pytest.raises(EdnError, match=r"EDN-01, reports/edn.md line \d+: a fenced code block"):
+        parse_notebook(notebook(fenced))
 
 
 def test_two_entries_with_one_id_are_refused():
@@ -303,6 +328,13 @@ def test_an_optional_field_that_does_not_apply_is_left_out():
     assert "assessment = {AI profiled the file.}" in rendered
 
 
+def test_an_error_deep_in_a_field_names_the_entry():
+    """A broken table row knows nothing of its entry; the message still names it."""
+    broken = entry_md(Rationale="Measured:\n\n  | a | b |\n  |---|---|\n  | 1 |")
+    with pytest.raises(EdnError, match=r"^EDN-01: a table row has 1 cells, its header 2$"):
+        _render(notebook(broken))
+
+
 def test_a_generated_file_says_where_its_source_is():
     rendered = _render(notebook(entry_md()))
     assert rendered.splitlines()[:3] == [GENERATED_MARKER, DO_NOT_EDIT, r"\ednentry{"]
@@ -398,6 +430,48 @@ def test_a_stale_generated_file_goes_and_a_hand_written_one_stays(workspace):
     assert (latex_dir / "hand-written.tex").exists()
 
 
+def test_the_check_changes_nothing_and_names_what_a_transfer_would(workspace):
+    """CI's report job runs it, so an edit without `make edn` cannot be merged."""
+    edn_md, latex_dir = workspace
+    edn_md.write_text(notebook(entry_md(1)), "utf-8")
+    transfer(edn_md, latex_dir)
+    assert check(edn_md, latex_dir) == []
+
+    edn_md.write_text(edn_md.read_text().replace("Use the dataset.", "Use it."), "utf-8")
+    edn_md.write_text(edn_md.read_text() + "\n" + entry_md(2), "utf-8")
+    before = {path.name: path.read_text() for path in latex_dir.iterdir()}
+    notebook_before = edn_md.read_text()
+
+    assert check(edn_md, latex_dir) == [
+        "01-entry-number-1.tex would be written",
+        "02-entry-number-2.tex would be written",
+        f"{ENTRY_LIST_NAME} would be written",
+        "edn.md would get In LaTeX: yes on an entry",
+    ]
+    assert {path.name: path.read_text() for path in latex_dir.iterdir()} == before
+    assert edn_md.read_text() == notebook_before
+
+
+def test_the_check_exits_non_zero_only_when_out_of_sync(workspace, capsys):
+    edn_md, latex_dir = workspace
+    edn_md.write_text(notebook(entry_md(1)), "utf-8")
+    arguments = ["--edn-md", str(edn_md), "--latex-dir", str(latex_dir)]
+
+    assert main([*arguments, "--check"]) == 1
+    assert "run `make edn`" in capsys.readouterr().out
+    assert main(arguments) == 0
+    assert main([*arguments, "--check"]) == 0
+
+
+def test_a_notebook_that_cannot_be_transferred_exits_non_zero_and_says_why(workspace, capsys):
+    edn_md, latex_dir = workspace
+    edn_md.write_text(notebook(entry_md(Rationale=None)), "utf-8")
+
+    assert main(["--edn-md", str(edn_md), "--latex-dir", str(latex_dir)]) == 1
+    assert "EDN-01" in capsys.readouterr().err
+    assert list(latex_dir.glob("0*.tex")) == []
+
+
 def test_a_reserved_id_is_skipped_until_its_entry_is_written(workspace):
     """IDs are reserved on main as a bare heading before the branch is opened."""
     edn_md, latex_dir = workspace
@@ -415,14 +489,14 @@ def test_a_reserved_id_is_skipped_until_its_entry_is_written(workspace):
 # --------------------------------------------------------------------------
 
 
-def test_every_entry_of_the_repositorys_notebook_renders():
-    """Whatever an entry on main uses, the converter has to be able to say it."""
+def test_the_committed_latex_edn_is_what_the_notebook_generates():
+    """`In LaTeX: yes` has to mean that the entry is in the PDF as the notebook states it.
+
+    The same check runs in CI's report job, which also runs when only
+    reports/edn.md changed; this test names the problem in the test job too.
+    """
     entries = parse_notebook(EDN_MD.read_text(encoding="utf-8"))
-    written = [entry for entry in entries if not entry.is_reservation]
-    known = frozenset(entry.id for entry in written)
     numbers = [entry.number for entry in entries]
 
     assert numbers == sorted(numbers), "entries are kept oldest first"
-    for entry in written:
-        rendered = render_entry(entry, known).replace(r"\{", "").replace(r"\}", "")
-        assert rendered.count("{") == rendered.count("}"), entry.id
+    assert check(EDN_MD, LATEX_EDN_DIR) == [], "run `make edn` and commit what it writes"

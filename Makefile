@@ -127,7 +127,7 @@ report:
 report-submit:
 	reports/latex/build.sh $(DELIVERABLE)
 
-## Transfer the EDN entries of reports/edn.md into reports/latex/edn/ (before a delivery)
+## Transfer the EDN entries of reports/edn.md into reports/latex/edn/ (after every change to it)
 .PHONY: edn
 edn:
 	$(PYTHON_INTERPRETER) -m tools.edn_latex

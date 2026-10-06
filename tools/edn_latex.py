@@ -1,14 +1,22 @@
 """Transfer the Engineering Decision Notebook from reports/edn.md into LaTeX.
 
 reports/edn.md is where an EDN entry is written and the only place it is ever
-edited (AGENTS.md). Before a delivery the entries are transferred into
-reports/latex/edn/, one `\\ednentry` file per entry, which edn.tex builds into
+edited (AGENTS.md). This module transfers the entries into reports/latex/edn/,
+one `\\ednentry` file per entry, which edn.tex builds into
 MLOps_Recommenditos_EDN.pdf. With some seventy entries, most of them with nested
 alternatives, links and amendment notes, a transfer by hand would be the slowest
-step of a delivery and the one most likely to drift from the source, so this
-module does it, and it is idempotent: run twice on the same notebook it rewrites
-nothing, and run after an edit it changes the files of exactly the entries that
-changed. The final delivery reruns it rather than redoing the first one's work.
+step of a delivery and the one most likely to drift from the source. The
+transfer is idempotent: run twice on the same notebook it rewrites nothing, and
+run after an edit it changes the files of exactly the entries that changed.
+
+The rule it serves is that the LaTeX is never behind the notebook: whoever
+changes reports/edn.md runs `make edn` in the same pull request, and CI's report
+job runs `--check`, which changes nothing and fails when a transfer would. So an
+entry's **In LaTeX: yes**, which only the transfer writes, means that the entry
+is in the PDF exactly as the notebook states it.
+
+It needs nothing beyond the standard library, so that CI can run the check
+without the project environment.
 
 What a run does, in order:
 
@@ -18,8 +26,9 @@ What a run does, in order:
   drops text quietly is worse than none;
 * renders the Markdown each field holds - the subset the notebook uses, which
   is paragraphs, nested bullet lists, pipe tables, block quotes, and inline
-  code, bold, italics, links and autolinks - and refuses a character pdfLaTeX
-  could not typeset, so the failure names the entry instead of a TeX log line;
+  code, bold, italics, links and autolinks - and refuses what it would not
+  render faithfully, such as a fenced code block or a character pdfLaTeX cannot
+  typeset, so the failure names the entry instead of a TeX log line;
 * writes one file per entry as `edn/NN-slug.tex` and the `\\input` list as
   `edn/entries.tex`, and deletes a generated entry file that no entry produces
   any more (a renamed title changes the slug);
@@ -49,14 +58,13 @@ skipped with a warning rather than treated as an error, and transferred by the
 first run after it has been written.
 """
 
+import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
 import posixpath
 import re
+import sys
 import unicodedata
-
-from loguru import logger
-import typer
 
 # Derived from this file's location, like tools/requirement_matrix.py does: the
 # notebook and the LaTeX are files of the checkout the tool runs in.
@@ -118,6 +126,9 @@ OUTPUT_KEYS = (
 )
 
 ENTRIES_HEADING = "## Entries"
+#: How a fenced code block opens, which the notebook's entries may not use: the
+#: renderer has no verbatim block, and it would typeset the code as prose.
+FENCES = ("```", "~~~")
 ENTRY_HEADING = re.compile(r"^### (EDN-(\d+)): (.+?)\s*$")
 FIELD_LINE = re.compile(r"^- \*\*(?P<label>[^*]+?):\*\*(?: (?P<rest>.*))?$")
 EDN_ANCHOR = re.compile(r"^#edn-(\d+)\b")
@@ -251,7 +262,14 @@ def parse_notebook(text: str) -> list[Entry]:
     for index in range(start, len(lines)):
         line = lines[index]
         if line.startswith("## "):
+            _check_no_entry_after(lines, index)
             break
+        if line.lstrip().startswith(FENCES):
+            where = f"{current.id}, " if current else ""
+            raise EdnError(
+                f"{where}reports/edn.md line {index + 1}: a fenced code block cannot be "
+                "transferred; write the code inline, one span per line"
+            )
         heading = ENTRY_HEADING.match(line)
         if heading:
             current = Entry(
@@ -280,6 +298,28 @@ def parse_notebook(text: str) -> list[Entry]:
                     f"field(s) {', '.join(missing)}"
                 )
     return entries
+
+
+def _check_no_entry_after(lines: list[str], index: int) -> None:
+    """Refuse a `## ` heading that would end the Entries section early.
+
+    The section ends at the next `## ` heading, which is the template's. One
+    added between two entries would end it there instead and silently drop every
+    entry below it, so an entry heading after it, outside a code block such as
+    the template's, is an error.
+    """
+    in_fence = False
+    for later in range(index + 1, len(lines)):
+        if lines[later].lstrip().startswith(FENCES):
+            in_fence = not in_fence
+            continue
+        heading = None if in_fence else ENTRY_HEADING.match(lines[later])
+        if heading:
+            raise EdnError(
+                f"reports/edn.md line {index + 1}: the heading {lines[index]!r} ends the "
+                f"{ENTRIES_HEADING!r} section, so {heading[1]} on line {later + 1} would be "
+                "dropped; entries take `### ` headings and nothing else"
+            )
 
 
 def _parse_line(entry: Entry, line: str, index: int, open_field: list[str] | None):
@@ -738,6 +778,17 @@ def _render_title(title: str, context: Context) -> str:
 
 def render_entry(entry: Entry, known_ids: frozenset[str]) -> str:
     """The `\\ednentry{...}` file for one entry, header included."""
+    try:
+        return _render_entry(entry, known_ids)
+    except EdnError as error:
+        # Some checks know the entry and some, deep in a table or a link, do not;
+        # either way the message names it once.
+        if str(error).startswith(f"{entry.id}:"):
+            raise
+        raise EdnError(f"{entry.id}: {error}") from error
+
+
+def _render_entry(entry: Entry, known_ids: frozenset[str]) -> str:
     context = Context(known_ids=known_ids, entry_id=entry.id)
     values: dict[str, str] = {"id": entry.id, "title": _render_title(entry.title, context)}
     if entry.note:
@@ -802,12 +853,29 @@ def _set_in_latex(lines: list[str], entries: list[Entry]) -> list[str]:
     return updated
 
 
-def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> TransferResult:
-    """Transfer every written entry of `edn_md` into `latex_dir`."""
-    text = edn_md.read_text(encoding="utf-8")
+@dataclass
+class Plan:
+    """What the LaTeX EDN and the notebook should hold, computed without writing."""
+
+    entries: list[Entry]
+    #: Every generated file, by name inside the LaTeX directory, with its content.
+    files: dict[str, str]
+    #: The notebook as it should read, with `In LaTeX: yes` on every entry.
+    notebook: str
+
+    @property
+    def transferred(self) -> list[str]:
+        return [entry.id for entry in self.entries if not entry.is_reservation]
+
+    @property
+    def skipped(self) -> list[str]:
+        return [entry.id for entry in self.entries if entry.is_reservation]
+
+
+def plan(text: str) -> Plan:
+    """Render the notebook `text` into the files and the notebook a transfer leaves."""
     entries = parse_notebook(text)
     written_entries = [entry for entry in entries if not entry.is_reservation]
-    skipped = [entry.id for entry in entries if entry.is_reservation]
     known_ids = frozenset(entry.id for entry in written_entries)
 
     files = {f"{entry.slug}.tex": render_entry(entry, known_ids) for entry in written_entries}
@@ -821,60 +889,108 @@ def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> Transfer
     )
     files[ENTRY_LIST_NAME] = entry_list + "\n"
 
-    latex_dir.mkdir(parents=True, exist_ok=True)
-    written = []
-    for name, content in files.items():
-        path = latex_dir / name
-        if not path.exists() or path.read_text(encoding="utf-8") != content:
-            path.write_text(content, encoding="utf-8")
-            written.append(path)
-    removed = []
-    for path in sorted(latex_dir.glob("*.tex")):
-        if path.name in files:
-            continue
-        with path.open(encoding="utf-8") as handle:
-            generated = handle.readline().rstrip("\n") == GENERATED_MARKER
-        if generated:
-            path.unlink()
-            removed.append(path)
-
     lines = text.splitlines()
     updated = _set_in_latex(lines, written_entries)
-    notebook_changed = updated != lines
-    if notebook_changed:
-        edn_md.write_text("\n".join(updated) + ("\n" if text.endswith("\n") else ""), "utf-8")
+    if updated == lines:
+        notebook = text
+    else:
+        notebook = "\n".join(updated) + ("\n" if text.endswith("\n") else "")
+    return Plan(entries=entries, files=files, notebook=notebook)
+
+
+def _is_generated(path: Path) -> bool:
+    with path.open(encoding="utf-8") as handle:
+        return handle.readline().rstrip("\n") == GENERATED_MARKER
+
+
+def _differences(
+    edn_md: Path, latex_dir: Path, target: Plan
+) -> tuple[list[Path], list[Path], bool]:
+    """The files a transfer would write and remove, and whether it would edit the notebook."""
+    to_write = [
+        latex_dir / name
+        for name, content in target.files.items()
+        if not (latex_dir / name).exists()
+        or (latex_dir / name).read_text(encoding="utf-8") != content
+    ]
+    existing = sorted(latex_dir.glob("*.tex")) if latex_dir.is_dir() else []
+    to_remove = [
+        path for path in existing if path.name not in target.files and _is_generated(path)
+    ]
+    notebook_changes = edn_md.read_text(encoding="utf-8") != target.notebook
+    return to_write, to_remove, notebook_changes
+
+
+def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> TransferResult:
+    """Transfer every written entry of `edn_md` into `latex_dir`."""
+    target = plan(edn_md.read_text(encoding="utf-8"))
+    to_write, to_remove, notebook_changes = _differences(edn_md, latex_dir, target)
+
+    latex_dir.mkdir(parents=True, exist_ok=True)
+    for path in to_write:
+        path.write_text(target.files[path.name], encoding="utf-8")
+    for path in to_remove:
+        path.unlink()
+    if notebook_changes:
+        edn_md.write_text(target.notebook, encoding="utf-8")
 
     return TransferResult(
-        transferred=[entry.id for entry in written_entries],
-        skipped=skipped,
-        written=written,
-        removed=removed,
-        notebook_changed=notebook_changed,
+        transferred=target.transferred,
+        skipped=target.skipped,
+        written=to_write,
+        removed=to_remove,
+        notebook_changed=notebook_changes,
     )
 
 
-app = typer.Typer()
+def check(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> list[str]:
+    """What a transfer would change, as one line per file; empty when in sync."""
+    target = plan(edn_md.read_text(encoding="utf-8"))
+    to_write, to_remove, notebook_changes = _differences(edn_md, latex_dir, target)
+    stale = [f"{path.name} would be written" for path in to_write]
+    stale += [f"{path.name} would be removed" for path in to_remove]
+    if notebook_changes:
+        stale.append(f"{edn_md.name} would get In LaTeX: yes on an entry")
+    return stale
 
 
-@app.command()
-def main(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR):
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--edn-md", type=Path, default=EDN_MD)
+    parser.add_argument("--latex-dir", type=Path, default=LATEX_EDN_DIR)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="change nothing, and exit 1 when the LaTeX EDN is behind reports/edn.md",
+    )
+    args = parser.parse_args(argv)
     try:
-        result = transfer(edn_md, latex_dir)
+        if args.check:
+            stale = check(args.edn_md, args.latex_dir)
+            if stale:
+                print("The LaTeX EDN is behind reports/edn.md; run `make edn` and commit:")
+                for line in stale:
+                    print(f"  {line}")
+                return 1
+            print("The LaTeX EDN is in sync with reports/edn.md.")
+            return 0
+        result = transfer(args.edn_md, args.latex_dir)
     except EdnError as error:
-        # Logged rather than raised: the message names the entry and the line,
+        # Printed rather than raised: the message names the entry and the line,
         # which is all there is to fix, and a traceback would bury it.
-        logger.error(str(error))
-        raise typer.Exit(1) from error
+        print(f"error: {error}", file=sys.stderr)
+        return 1
     for entry_id in result.skipped:
-        logger.warning(f"{entry_id} has a heading and no fields yet, so it is not transferred.")
+        print(f"{entry_id} has a heading and no fields yet, so it is not transferred.")
     for path in result.removed:
-        logger.info(f"Removed {path.name}, which no entry produces any more.")
-    logger.success(
+        print(f"Removed {path.name}, which no entry produces any more.")
+    print(
         f"{len(result.transferred)} entries transferred, {len(result.written)} file(s) written, "
         f"{len(result.removed)} removed; reports/edn.md "
         f"{'updated' if result.notebook_changed else 'unchanged'}."
     )
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    sys.exit(main())

@@ -1,8 +1,9 @@
 # Engineering Decision Notebook (working copy)
 
 This is where we record our EDN entries as we make decisions.
-Before each delivery, `make edn` transfers the entries to the LaTeX EDN in [latex/edn/](latex/edn/), which becomes `MLOps_Recommenditos_EDN.pdf`.
+`make edn` transfers the entries to the LaTeX EDN in [latex/edn/](latex/edn/), which becomes `MLOps_Recommenditos_EDN.pdf`.
 This file stays the only place an entry is written or edited; the LaTeX files are generated from it.
+Run `make edn` in the same pull request as any change to this file and commit what it writes: CI's report job fails when the LaTeX is behind.
 
 What belongs here and what each field means: [references/Instruction_EDN_MLOps_v2026.md](../references/Instruction_EDN_MLOps_v2026.md).
 Record a decision when it meaningfully affects the ML system and could reasonably have gone differently, not every decision or every use of AI.
@@ -14,11 +15,12 @@ How to add an entry:
   IDs never change once assigned, because the report refers to them.
   Reserve the ID by adding its heading to this file on `main` before opening the branch that needs it.
   Sprint 1 handed out EDN-19 on two branches at once, and the entry that lost the race had to be renumbered to EDN-27 while merging.
+  EDN-38 was never assigned: no entry or reservation with that ID exists anywhere in the history, so the gap is a skipped number and not a removed entry.
 - Fill in every field; write "-" for optional fields that do not apply.
 - Record the alternatives with their pros and cons even when the choice looked obvious.
   They are the evidence that the decision was actually weighed.
 - Review AI conversation excerpts before quoting or linking them; never include personal or sensitive data.
-- Leave **In LaTeX** at "no": `make edn` sets it to "yes" when it transfers the entry to `latex/edn/`.
+- Leave **In LaTeX** at "no" and run `make edn`, which sets it to "yes" as it transfers the entry to `latex/edn/`.
   A heading with no fields yet is a reservation and is not transferred.
 
 ## Entries
