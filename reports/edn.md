@@ -2416,6 +2416,9 @@ How to add an entry:
 
 ### EDN-73: `learning_rate` and `num_leaves` are not tuned, and any later tuning follows a written protocol
 
+> **Extended by EDN-78** (2026-10-06, issue #88): the protocol below now covers both LightGBM variants and `min_child_samples`, its decision step is `recommenditos/modeling/tune.py`, and every fit of a search is measured and tracked.
+> This entry is kept as the record of the first sweep and of the protocol as it was written.
+
 - **Date:** 2026-10-05
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Hyperparameter Tuning, Evaluation Protocol, Experiment Tracking
@@ -2457,6 +2460,7 @@ How to add an entry:
   It also showed one trap the protocol warns about: since `evaluate` does not run, every experiment carries its parent's `metrics.json`, so the test metrics `dvc exp show` prints belong to the committed model, not to the point.
   So the queued runs are for screening, read in MLflow, and the decision is the analysis script's: it re-fits the shortlist on the validation split rather than reading the screening runs' bundles back, which MLflow (under `model/`) and the experiments' DVC outputs do keep, because a re-fit far past the ceiling gives every point its early-stopped model - the same trees where the screening run early-stopped, and the uncut model where the committed ceiling bound it.
   The script covers `learning_rate` and `num_leaves` only, and always fits the committed point, whether or not the grid names it.
+  [#88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88) moved its statistics into `recommenditos/modeling/tune.py`, which runs the decision step for any grid and records every fit, and extended the protocol to `lgbm-extended` and `min_child_samples` (EDN-78).
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI designed and ran the bounded sweep, added the paired, seller-grouped bootstrap so the question became "can the validation split tell these apart" rather than "which number is lowest", and extended the grid to `learning_rate` 0.025 after the first run showed the lower learning rate was the only direction not clearly worse.
@@ -2606,6 +2610,85 @@ How to add an entry:
 - **In LaTeX:** yes
 
 ### EDN-78: The hyperparameter search extends EDN-73's protocol to both LightGBM variants and `min_child_samples`, and measures and tracks every fit
+
+- **Date:** 2026-10-06
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Hyperparameter Tuning, Experiment Tracking, Energy Efficiency, Requirements
+- **Participants:** @kadameit, who decided, with AI assistance
+- **Decision:** The LightGBM hyperparameters are searched by `recommenditos/modeling/tune.py`, outside `dvc repro`, under the protocol EDN-73 wrote down, extended in four ways.
+  Both variants are swept, `lgbm-basic` and `lgbm-extended`, on EDN-73's grid: `learning_rate` 0.025, 0.05 and 0.1 against `num_leaves` 31, 63, 127 and 255, every point at a ceiling of 20,000 trees so early stopping decides it.
+  A second grid follows for each variant, over `min_child_samples` 5, 10, 20, 50 and 100, with `learning_rate` and `num_leaves` fixed at the first grid's winner, which is the committed point when nothing was adopted; `min_child_samples` becomes an optional LightGBM key at LightGBM's own default of 20, the value every committed model already used, so `params.yaml` names it only if a search adopts another value.
+  The adoption rule is EDN-73's, unchanged: a point replaces the reference only when the simultaneous 95 % interval of its validation L1 difference, from the paired bootstrap resampled by seller group and widened by the max-statistic bootstrap over all the grid's points, lies entirely below zero. The search never reads the test or calibration split.
+  Every fit is measured with CodeCarbon and logged as its own MLflow run in `recommenditos-price-tuning`, tagged with its sweep, `sweep_role=point` and its variant, carrying its validation metrics, fit time and energy; one `sweep_role=summary` run per sweep carries the totals and the verdict.
+  A sweep's record - its results as JSON, the same as a readable table, and CodeCarbon's row for every fit as a CSV - is kept in MLflow only, as artifacts under `results/` of the sweep's summary run, `sweep.json`, `sweep.txt` and `emissions.csv` for a sweep run from now on; nothing of a search is committed.
+  The four sweeps of #88 ran before this, so their summary runs carry the JSON and the table under the names the module then used, `results/<sweep id>.json` and `.txt`, and their CodeCarbon CSV, until then committed, was uploaded to the same run as `results/emissions.csv`.
+  The search's energy is reported as its own total there, never in `reports/emissions/<variant>.csv`, which belongs to the fit of the final configuration.
+  NFR-10 is reworded to match: the 15-minute budget applies to fitting the final chosen configuration, and a search runs separately, with its energy recorded per fit and reported apart from the final fit's.
+- **Alternatives considered:**
+  - **Option A (chosen): extend EDN-73's protocol, and build its decision step into the package.**
+    Pros: the first grid for `lgbm-basic` repeats EDN-73's twelve fits exactly, so the new tool is checked against recorded evidence before anything new is read from it; the simultaneous interval still guards against the winner's curse within each grid; the cost is bounded and small, about 34 fits in all, and EDN-73's twelve `lgbm-basic` fits took 127 s of fitting; and issue #88's acceptance criteria - a tagged run per configuration with its metric, fit time and energy, the search's emissions apart, NFR-10 reworded - are met by code that runs every time rather than by hand once.
+    Cons: on `lgbm-basic` the likely outcome is EDN-73's again, "keep", so the model card may still have to say the model is untuned; one validation split stays the only source of selection noise; the two grids are run one after the other, so an interaction between `min_child_samples` and the first grid's knobs is not searched; nothing corrects across the two grids or the two variants, because the max-statistic interval is taken per sweep, and the second grid is chosen after the first on the same validation split; and `feature_fraction` and L2 regularisation are still not parameters.
+  - **Option B: the issue as written - grid search, and the best validation point goes into `params.yaml`.**
+    Pros: the least machinery, it matches the issue text, and the model can be called tuned.
+    Cons: it adopts noise. EDN-73 measured exactly this case: the lowest validation L1 of its grid, `(0.025, 63)`, is indistinguishable from the committed point even point by point, and the two metrics disagree on which point is best. It would also overturn the adoption rule EDN-73 decided, move every number in the report for no measurable gain, and with the issue's 0.03 the grid would no longer be comparable with EDN-73's measured 0.025.
+  - **Option C: random or Optuna search over more knobs, selected by seller-grouped k-fold cross-validation on train plus validation.**
+    Pros: cross-validation is a less noisy selection than one split, and a larger space might hold a real gain.
+    Cons: a new dependency and new code; about five times the fits per point, so five times the energy, for a region EDN-73 found flat; early stopping then needs a validation fold inside every fold; and it departs from the problem specification's "the validation set is used for early stopping and tuning". EDN-73 left it for the day a criterion depends on a fraction of a point, and none does.
+  - **Option D: close #88 as covered by EDN-73.**
+    Pros: no work and no compute.
+    Cons: `lgbm-extended` would never have been swept and `min_child_samples` never examined, although many `model` values occur only once; EDN-73's screening runs carry no energy figure per point; and NFR-10 would still say "no hyperparameter search" with no rule for where a search's energy goes. None of #88's acceptance criteria would be met.
+  - **Where a sweep's record is stored (decided 2026-10-09, after the search had run).** The pipeline's own `reports/emissions/<variant>.csv` stays git-tracked whichever is chosen, because the `compare-energy` stage reads it; this is about the search's record only.
+    - **Option A: the results and CodeCarbon's CSV committed under `reports/tuning/`, as well as the runs in MLflow.**
+      Pros: the numbers can be checked from the repository without access to the DagsHub tracking server, and it follows the convention of `reports/analysis/`, whose results files are committed beside their scripts.
+      Cons: the same data in two places, which can disagree; and a commit is needed between sweeps, because a sweep's uncommitted files make every later run `git_dirty` (EDN-74).
+    - **Option B (chosen): MLflow only, with CodeCarbon's CSV uploaded as an artifact of the summary run.**
+      Pros: one source of truth; the closest to the course demo, which logs CodeCarbon's row to MLflow as metrics and parameters and commits no emissions file; no commit between sweeps; and the raw CSV keeps how each figure was produced - CodeCarbon's version, the CPU and RAM power columns, the operating system - which matters because EDN-69 calls the figure an estimate, and an estimate is checked by its method.
+      Cons: the numbers this entry and the model card quote can be checked only with access to the DagsHub tracking server.
+    - **Option C: B without the upload, exactly as the course demo does, with the CSV discarded.**
+      Pros: the least to store, and nothing beyond what the demo does.
+      Cons: rejected, because it loses the columns that say how each figure was produced, which the per-run metrics and parameters carry only in part.
+- **Rationale:** EDN-73 already answered how a value may be adopted; what #88 added was scope and record-keeping, so the protocol was extended rather than replaced.
+  Two parts of the issue were stale against EDN-73, which landed after it was written: it proposed `learning_rate` 0.03 where EDN-73 measured 0.025, and it said the winning values go into `params.yaml`, where EDN-73 adopts only a value whose simultaneous interval lies below zero.
+  0.025 was kept because a repeat of EDN-73's grid is the one check of the new code against numbers already on record, and because 0.03 lies inside the 0.025 to 0.05 range EDN-73 found flat.
+  `min_child_samples` is the knob the issue named as optional, and the data gives it a reason: a leaf of fewer rows can fit one listing of a `model` seen once.
+  Making it optional at LightGBM's default rather than writing `min_child_samples: 20` into `params.yaml` keeps every committed parameter value as it is, and a test holds that leaving it out and setting it to 20 fit the same booster.
+  The second grid holds the first grid's winner fixed because a joint grid would be 60 fits per variant instead of 5, for an interaction nothing so far suggests.
+
+  The decision step became a module of the package, run from the command line, rather than staying an analysis script, because #88 asks for every searched configuration to be a tracked run with its energy, and that is what `train` already does for one fit: the search reuses its `read_matrices`, `fit_variant`, `energy.measure` and run logging, so a search run and a pipeline run are measured and named alike.
+  It is not a DVC stage, because a search's result is a verdict a person acts on through a reviewed change to `params.yaml`, not an artefact a later stage consumes, and its cost scales with the grid rather than with the product.
+  For the same reason NFR-10's 15 minutes apply to the final fit: the budget exists to keep retraining the product cheap, and a search is run once per decision, not once per retraining.
+  The search's energy is not written beside the variants' CSVs, because each of those is the record of the fit that produced its model, and because `compare-energy` declares the whole `reports/emissions` directory as a dependency, so a search writing there would make that stage stale.
+  Where it is kept instead is the sub-decision above: MLflow alone, as artifacts of each sweep's summary run, so a sweep refuses to start when tracking is not configured, opens its runs so that a server it cannot reach fails it rather than silently dropping them, and refuses a sweep id the experiment already holds runs for.
+  Queued `dvc exp` screening stays available as EDN-73 describes, and is now optional, because the decision step measures and logs every fit itself.
+  EDN-73's bootstrap moved into the module unchanged: `tuning_sweep.py` now imports it and computes bit-identical draws and multipliers, so EDN-73's recorded evidence still reproduces.
+
+  **Results (2026-10-06).** All four sweeps kept their reference, `learning_rate` 0.05, `num_leaves` 63 and `min_child_samples` 20, so nothing is adopted: `params.yaml` and `dvc.lock` are unchanged, and the committed test metrics and gate verdict, computed once by the committed pipeline run, are those of the configuration the search kept; the search never read the test split.
+  The search ran from clean commits on a 13th Gen Intel Core i7-1360P laptop (Windows, CodeCarbon 3.3.1's estimate, `num_threads` 1), into the DagsHub MLflow experiment `recommenditos-price-tuning`; every one of the 34 fits was ended by early stopping, not by the 20,000-tree ceiling.
+  - `88-lgbm-basic-lr-leaves` reproduces EDN-73's twelve fits exactly: the same best round, validation L1 and validation MdAPE at every point, and the same per-point and simultaneous intervals, so the new module is checked against the recorded evidence, and only the fit times differ, because the machine does.
+    Its lowest validation L1 is again `(0.025, 63)`, 0.00031 below the reference with a simultaneous interval of -0.00109 to +0.00047, and only `(0.1, 127)` and `(0.1, 255)` are measurably worse; validation MdAPE spans 6.88 % to 7.04 %.
+  - `88-lgbm-extended-lr-leaves`: the lowest validation L1 is `(0.025, 127)`, 0.00040 below the reference with a simultaneous interval of -0.00150 to +0.00070.
+    `(0.025, 255)` is the case the rule exists for: it is 0.20 pp better in validation MdAPE, 6.25 % against 6.45 %, with a per-point interval of -0.385 % to -0.060 %, entirely below zero, and a search that took the best validation MdAPE would have adopted it.
+    But MdAPE is not the selection metric, its L1 difference, -0.00039, has a per-point interval of -0.00146 to +0.00069 that the split cannot resolve, and even its MdAPE difference, widened to hold for all eleven points at once, spans zero at -0.427 % to +0.028 %: the best of eleven noisy comparisons looks better than it is, which is the winner's curse.
+    Five points are measurably worse under the simultaneous L1 interval: all four at `learning_rate` 0.1, whose simultaneous intervals start at +0.00037 or higher, and `(0.05, 31)`, at +0.00003 to +0.00243; validation MdAPE spans 6.25 % to 6.69 %.
+  - `88-lgbm-basic-min-child-samples`: the lowest validation L1 is `min_child_samples` 10, 0.00043 below the reference with a simultaneous interval of -0.00124 to +0.00038, and 100 is measurably worse, at +0.00010 to +0.00210; validation MdAPE spans 6.92 % to 7.03 %.
+  - `88-lgbm-extended-min-child-samples`: the reference, 20, has the lowest validation L1 of the five, no point is resolved either way under the simultaneous interval, and validation MdAPE spans only 6.45 % to 6.49 %.
+
+  The search cost 34 fits, 391.3 s of fitting (1,069.0 CPU-s), 3.6071 Wh and 627.81 mg CO2eq: 17 fits, 112.3 s, 1.0864 Wh and 189.09 mg for `lgbm-basic`, and 17 fits, 279.1 s, 2.5207 Wh and 438.73 mg for `lgbm-extended`, each sweep's totals on the "search totals" line of its table.
+  On the search's own machine that is about 20 times the energy of one fit of `lgbm-basic`'s committed configuration (0.0549 Wh) and 16 times one of `lgbm-extended`'s (0.1584 Wh); its fit times are not comparable with the ladder's energy table in the model card, which was measured on another laptop, an i5-10210U.
+  Because nothing was adopted, the final configuration is the committed one, and its fit time against NFR-10's 15 minutes is the one already on record: 8.3 s for `lgbm-basic` and 27.9 s for `lgbm-extended` in the tracked run of 2026-10-06; the search itself sits outside that budget, as the reworded NFR-10 says.
+  As option A's cons anticipated, the verdict on `lgbm-basic` is EDN-73's again, and the model card now says the values were searched and kept rather than that they are untuned.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI compared issue #88 with EDN-73 and the code, and pointed out where the issue had become stale: it proposed 0.03 where EDN-73 measured 0.025, and it said the winning values go into `params.yaml` where EDN-73 adopts only a value its rule resolves.
+  It laid out options A to D with their pros and cons and recommended option A, a second grid over `min_child_samples` with the first grid's winner fixed, recording the method decision as a new entry extending EDN-73, and `learning_rate` 0.025.
+  Kevin weighed the options and accepted all four recommendations before the search was implemented or run.
+  The NFR-10 rewording and reporting the search's energy apart were not separate choices: they follow from the scope of issue #88.
+  AI also pointed out that the search's emissions could not go under `reports/emissions/` without making the `compare-energy` stage stale.
+  On where a sweep's record should live, AI first recommended option A of that sub-decision, committing it under `reports/tuning/` beside MLflow, so the numbers could be checked without an account; on Kevin's question it checked the course demo repository and found that the demo keeps its emissions in MLflow only.
+  Kevin chose MLflow only, with CodeCarbon's CSV uploaded as an artifact, which is the modification.
+- **AI interaction evidence:** Claude Code session of 2026-10-06 on issue #88: the comparison with EDN-73 and options A to D with a recommendation, put to Kevin before the search was implemented; Claude Code session of 2026-10-09: the options for where a sweep's record is stored, with a recommendation for option A, the check of the course demo repository Kevin asked for, and his choice of option B.
+- **Other evidence:** [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88); [`recommenditos/modeling/tune.py`](../recommenditos/modeling/tune.py) and [`tests/test_tune.py`](../tests/test_tune.py); [`reports/analysis/tuning_sweep.py`](analysis/tuning_sweep.py), now importing the module's statistics; the search's results in the [DagsHub MLflow server](https://dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow), experiment `recommenditos-price-tuning`: the sweeps `88-lgbm-basic-lr-leaves`, `88-lgbm-extended-lr-leaves`, `88-lgbm-basic-min-child-samples` and `88-lgbm-extended-min-child-samples`, each found with the filter `tags.sweep = "<id>"` and its record under `results/` of the run with `tags.sweep_role = "summary"`, compared with EDN-73's [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt); [pipeline docs](../docs/docs/pipeline.md), "Tuning a hyperparameter"; [specification](../docs/docs/specification.md) and [requirements](../docs/docs/requirements.md) NFR-10; [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol), [EDN-69](#edn-69-codecarbon-measures-the-fit-alone-offline-and-per-process-and-its-figure-is-reported-as-the-estimate-it-is), [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count).
+- **In LaTeX:** yes
 
 ## Template
 

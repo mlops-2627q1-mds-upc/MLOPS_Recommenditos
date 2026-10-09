@@ -1716,8 +1716,17 @@ def test_a_run_records_every_parameter_its_stage_declares(
         _run_param_name(key, variant, estimator): str(value) for key, value in declared.items()
     }
 
+    # An optional key the block leaves out is logged at the value the fit used
+    # (EDN-78): not declared, because it is not in params.yaml, yet a parameter
+    # of the fit all the same.
+    optional = {
+        f"{estimator}.{key}": str(value)
+        for key, value in ESTIMATORS[estimator].optional_hyperparameters.items()
+        if f"{estimator}.{key}" not in expected
+    }
     logged = dict(run.data.params)
-    assert set(logged) - set(expected) == NOT_DECLARED_TRAIN_PARAMS, (
+    assert {name: logged.get(name) for name in optional} == optional
+    assert set(logged) - set(expected) - set(optional) == NOT_DECLARED_TRAIN_PARAMS, (
         "the run carries a parameter that is neither declared nor the data's shape"
     )
     assert {name: logged.get(name) for name in expected} == expected

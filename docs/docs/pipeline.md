@@ -202,21 +202,53 @@ A parameter change reruns the stages that read it, `dvc params diff` shows what 
 Tuning a hyperparameter
 -----------------------
 
-A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-It exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
-It has two steps: queued `dvc exp` runs to **screen** the candidates, and `reports/analysis/tuning_sweep.py` to **decide**, by re-fitting the shortlist on the validation split.
+A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), extended by EDN-78 for issue #88).
+A sweep is one search run: one variant and a small grid of hyperparameter values, each combination fitted and compared with the committed values, ending in a single verdict - keep the committed values or adopt one combination.
+The protocol exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
+Its decision step is `recommenditos/modeling/tune.py`, which fits every point of a grid, measures and tracks each fit, and decides on the validation split; queued `dvc exp` runs can **screen** a wider set of candidates first, but they are optional.
 
-- **The split is validation.** Neither step runs anything after the `train` stage, so `evaluate` never reads the test split during a choice.
+- **The split is validation.** The search reads the `train` and `validation` matrices and the validation frame's seller groups, and nothing else, so neither the test nor the calibration split takes part in a choice; a test runs a sweep with both files deleted.
   The test metrics of an adopted value are read once, by the committed `dvc repro`, after the choice is made.
 - **The metric is `validation_l1_log_price`**, which `train` logs to MLflow and writes into `model.json`.
-  It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot.
-- **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** `tuning_sweep.py` bootstraps every point's validation L1 difference from the committed point, paired and resampled by seller group because the split is grouped by seller (EDN-14), and widens the intervals by the max-statistic bootstrap until all of them hold together in 95 % of the draws.
-  A point is adopted only when its simultaneous interval lies entirely below zero.
+  It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot. Validation MdAPE is reported beside it and decides nothing.
+- **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** The search bootstraps every point's validation L1 difference from the reference point, paired and resampled by seller group because the split is grouped by seller (EDN-14), and widens the intervals by the max-statistic bootstrap until all of them hold together in 95 % of the draws.
+  A point is adopted only when its simultaneous interval lies entirely below zero, and when several do, the one with the lowest validation L1.
   A per-point 95 % interval is not enough: with eleven points no better than the committed one, the luckiest clears it in up to about one sweep in four.
-- **Every point is decided by early stopping.** A screening run with `metrics.early_stopped = 0` was cut off by the `n_estimators` ceiling, not by its curve; the decision step re-fits every point far past the ceiling, so the comparison is between early-stopped models (EDN-70).
-- **Screening is tracked apart from the ladder**, in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs.
+- **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-70); a point the ceiling still ended is flagged and never adopted.
+- **The reference is always fitted.** It is the variant as `params.yaml` has it, with any `--fix` applied, whether or not the grid names it, because every difference is taken against it.
+- **Every fit is measured and tracked** (issue #88). Each one is wrapped in `energy.measure` exactly as `train` wraps its fit and logged as its own run in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs. A point's run is tagged `sweep`, `sweep_role=point`, `point`, `is_reference` and `variant` when it opens, so the run of a fit that fails still names its sweep and point, and carries its hyperparameters under the names `train` uses, its validation L1 and MdAPE, its fit time and its energy, but no model bundle; one `sweep_role=summary` run carries the sweep's totals, its verdict and its `reference_point`.
+- **MLflow is a sweep's only store** (EDN-78). Its record is uploaded to its summary run, under `results/`: `sweep.json`, every fit, comparison, total and the verdict; `sweep.txt`, the same as a table, which is also logged to the console when the sweep ends; and `emissions.csv`, CodeCarbon's row for every fit, with the columns that say how each figure was produced. Nothing of a sweep is written into the repository.
+- **The search's energy is not the product's.** It is never written to `reports/emissions/<variant>.csv`, which holds the fit that produced the model. NFR-10's 15-minute budget is for that final fit; the search runs outside `dvc repro` and is reported on its own ([specification](specification.md) NFR-10).
 
-Screening is one queued experiment per point, targeted at the variant's `train` stage:
+The grids of issue #88, one sweep per variant and grid, run from the repository root after `dvc pull`.
+The runs go to DagsHub through `.env`, as the pipeline's do. Because MLflow is the only place a sweep's results are kept, a sweep refuses to start when tracking is not configured, and fails rather than carrying on when the server cannot be reached, instead of fitting every point and keeping nothing.
+
+```bash
+uv run python -m recommenditos.modeling.tune lgbm-basic \
+  --grid learning_rate=0.025,0.05,0.1 --grid num_leaves=31,63,127,255 --sweep 88-lgbm-basic-lr-leaves
+uv run python -m recommenditos.modeling.tune lgbm-extended \
+  --grid learning_rate=0.025,0.05,0.1 --grid num_leaves=31,63,127,255 --sweep 88-lgbm-extended-lr-leaves
+```
+
+Then the second grid for each variant, with the first grid's winner fixed - leave out the `--fix` options when the first grid adopted nothing, so the committed values are the reference:
+
+```bash
+uv run python -m recommenditos.modeling.tune lgbm-basic \
+  --grid min_child_samples=5,10,20,50,100 --fix learning_rate=<winner> --fix num_leaves=<winner> \
+  --sweep 88-lgbm-basic-min-child-samples
+uv run python -m recommenditos.modeling.tune lgbm-extended \
+  --grid min_child_samples=5,10,20,50,100 --fix learning_rate=<winner> --fix num_leaves=<winner> \
+  --sweep 88-lgbm-extended-min-child-samples
+```
+
+`--grid` takes any key the estimator reads, `min_child_samples` included, which is optional in `params.yaml` at LightGBM's default of 20; `n_estimators` and `early_stopping_rounds` are refused, because the search sets them itself.
+A sweep id is used once: a second run under it is refused when the MLflow experiment already holds runs tagged with it, which is also what an interrupted sweep leaves behind; rerun it under a fresh id.
+The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
+Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files (EDN-74).
+On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, and it did when the search ran on 2026-10-06: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
+All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-78).
+
+Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:
 
 ```bash
 set -a; . ./.env; set +a   # the queued workspace is built from the commit, without the gitignored .env
@@ -230,13 +262,10 @@ uv run dvc queue start -j 1   # one fit at a time, so the logged fit times stay 
 Verified on 2026-10-05: the queued experiment runs `train@lgbm-basic` alone - the stages before it are skipped as unchanged and `evaluate` is never reached - and the worker inherits the exported tracking variables.
 Read the screening results in MLflow, not in `dvc exp show`: because `evaluate` does not run, every experiment carries its parent commit's `metrics.json`, so the test metrics `dvc exp show` prints are the committed model's and say nothing about the point.
 `uv run dvc exp remove <name>` discards an experiment once it has been read.
-
-The decision step does not read the screening runs back, although their bundles are kept - in MLflow under `model/` and in each experiment's DVC outputs.
-It re-fits the shortlist instead, because the paired comparison needs every validation row's prediction from each point and from the committed one, and a re-fit at a ceiling far past the curve gives every point its early-stopped model: the same trees as its screening run where that run early-stopped, and the model the committed ceiling cut off where it did not.
-Set the shortlist in the script's `LEARNING_RATES` and `NUM_LEAVES` and its `VARIANT`, and run it as its docstring says.
-It covers those two knobs only; tuning another one means extending its grid first.
+The decision step does not read the screening runs back, although their bundles are kept: the paired comparison needs every validation row's prediction from each point and from the reference, and a re-fit at a ceiling far past the curve gives every point its early-stopped model.
 
 A value that passes is adopted like any other parameter change: edit `params.yaml`, run `dvc repro` with `RECOMMENDITOS_REQUIRE_TRACKING=1`, commit the lock and the metrics, and record the choice in the EDN with the interval behind it.
+`reports/analysis/tuning_sweep.py`, EDN-73's original evidence, imports the same statistics from the module and still reproduces its results file.
 
 From a run to its inputs
 ------------------------
