@@ -2605,6 +2605,8 @@ How to add an entry:
 - **Other evidence:** [issue #78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78), found in the review of [#76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76); [`recommenditos/schema.py`](../recommenditos/schema.py); [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), `REQUIRED_FILLED_COLUMNS`; [`tests/test_validate_data.py`](../tests/test_validate_data.py); [pipeline docs](../docs/docs/pipeline.md), Data validation; EDN-68 is the entry for #25, whose suites this changes.
 - **In LaTeX:** yes
 
+### EDN-78: The hyperparameter search extends EDN-73's protocol to both LightGBM variants and `min_child_samples`, and measures and tracks every fit
+
 ## Template
 
 ```markdown
