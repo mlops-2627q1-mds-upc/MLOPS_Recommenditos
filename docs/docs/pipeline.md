@@ -217,13 +217,13 @@ Its decision step is `recommenditos/modeling/tune.py`, which fits every point of
 - **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-70); a point the ceiling still ended is flagged and never adopted.
 - **The reference is always fitted.** It is the variant as `params.yaml` has it, with any `--fix` applied, whether or not the grid names it, because every difference is taken against it.
 - **Every fit is measured and tracked** (issue #88). Each one is wrapped in `energy.measure` exactly as `train` wraps its fit and logged as its own run in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs. A point's run is tagged `sweep`, `sweep_role=point`, `point`, `is_reference` and `variant` when it opens, so the run of a fit that fails still names its sweep and point, and carries its hyperparameters under the names `train` uses, its validation L1 and MdAPE, its fit time and its energy, but no model bundle; one `sweep_role=summary` run carries the sweep's totals, its verdict and its `reference_point`.
-- **The search's energy is not the product's.** It goes to `reports/tuning/emissions/<sweep>.csv`, one CodeCarbon row per fit, and its total to `reports/tuning/<sweep>.json` and `.txt`, never to `reports/emissions/<variant>.csv`, which holds the fit that produced the model. NFR-10's 15-minute budget is for that final fit; the search runs outside `dvc repro` and is reported on its own ([specification](specification.md) NFR-10).
+- **MLflow is a sweep's only store** (EDN-78). Its record is uploaded to its summary run, under `results/`: `sweep.json`, every fit, comparison, total and the verdict; `sweep.txt`, the same as a table, which is also logged to the console when the sweep ends; and `emissions.csv`, CodeCarbon's row for every fit, with the columns that say how each figure was produced. Nothing of a sweep is written into the repository.
+- **The search's energy is not the product's.** It is never written to `reports/emissions/<variant>.csv`, which holds the fit that produced the model. NFR-10's 15-minute budget is for that final fit; the search runs outside `dvc repro` and is reported on its own ([specification](specification.md) NFR-10).
 
 The grids of issue #88, one sweep per variant and grid, run from the repository root after `dvc pull`.
-The runs go to DagsHub through `.env`, as the pipeline's do; `MLFLOW_TRACKING_URI= ` in front of a command runs it with tracking off.
+The runs go to DagsHub through `.env`, as the pipeline's do. Because MLflow is the only place a sweep's results are kept, a sweep refuses to start when tracking is not configured, and fails rather than carrying on when the server cannot be reached, instead of fitting every point and keeping nothing.
 
 ```bash
-export RECOMMENDITOS_REQUIRE_TRACKING=1  # the runs are cited: fail rather than skip tracking
 uv run python -m recommenditos.modeling.tune lgbm-basic \
   --grid learning_rate=0.025,0.05,0.1 --grid num_leaves=31,63,127,255 --sweep 88-lgbm-basic-lr-leaves
 uv run python -m recommenditos.modeling.tune lgbm-extended \
@@ -242,11 +242,11 @@ uv run python -m recommenditos.modeling.tune lgbm-extended \
 ```
 
 `--grid` takes any key the estimator reads, `min_child_samples` included, which is optional in `params.yaml` at LightGBM's default of 20; `n_estimators` and `early_stopping_rounds` are refused, because the search sets them itself.
-A sweep id is used once: a second run under it is refused, both when its files exist and when the MLflow experiment already holds runs tagged with it, which is what an interrupted sweep leaves behind; rerun it under a fresh id.
+A sweep id is used once: a second run under it is refused when the MLflow experiment already holds runs tagged with it, which is also what an interrupted sweep leaves behind; rerun it under a fresh id.
 The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
-Commit each sweep's `reports/tuning/` files before running the next sweep: every run is tagged `git_dirty` when the tree holds a change, an untracked file included (EDN-74), which is also why a sweep keeps its own files in a temporary directory until its last run has closed.
+Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files (EDN-74).
 On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, and it did when the search ran on 2026-10-06: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
-All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their results are in `reports/tuning/` and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-78).
+All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-78).
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:
 
@@ -264,7 +264,7 @@ Read the screening results in MLflow, not in `dvc exp show`: because `evaluate` 
 `uv run dvc exp remove <name>` discards an experiment once it has been read.
 The decision step does not read the screening runs back, although their bundles are kept: the paired comparison needs every validation row's prediction from each point and from the reference, and a re-fit at a ceiling far past the curve gives every point its early-stopped model.
 
-A value that passes is adopted like any other parameter change: edit `params.yaml`, run `dvc repro` with `RECOMMENDITOS_REQUIRE_TRACKING=1`, commit the lock, the metrics and the sweep's `reports/tuning/` files, and record the choice in the EDN with the interval behind it.
+A value that passes is adopted like any other parameter change: edit `params.yaml`, run `dvc repro` with `RECOMMENDITOS_REQUIRE_TRACKING=1`, commit the lock and the metrics, and record the choice in the EDN with the interval behind it.
 `reports/analysis/tuning_sweep.py`, EDN-73's original evidence, imports the same statistics from the module and still reproduces its results file.
 
 From a run to its inputs

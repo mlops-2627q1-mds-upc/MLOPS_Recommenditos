@@ -99,8 +99,8 @@ It is the evidence behind the committed ceiling of 5,000.
 `tuning_sweep.py` is the evidence behind EDN-73, not a tuning run: a small grid of `learning_rate` and `num_leaves` for the candidate `lgbm-basic`, each point fitted with early stopping deciding the trees, and a paired bootstrap by seller group of whether the validation split can tell any point from the committed one.
 `tuning_sweep_results.txt` is its output (2026-10-05).
 It was also the first decision step of the tuning protocol in `docs/docs/pipeline.md`, which adopts a point only when its simultaneous interval, from a max-statistic bootstrap over all the points, lies below zero.
-Since issue #88 that step is `recommenditos/modeling/tune.py`, which runs it for any grid and variant and measures and tracks every fit (EDN-78); its results go to `reports/tuning/`, not here.
-Its first sweep, `reports/tuning/88-lgbm-basic-lr-leaves.txt`, repeats this grid and reproduces `tuning_sweep_results.txt` exactly, apart from the fit times.
+Since issue #88 that step is `recommenditos/modeling/tune.py`, which runs it for any grid and variant and measures and tracks every fit (EDN-78); its results are kept in MLflow, in the experiment `recommenditos-price-tuning`, not here.
+Its first sweep, `88-lgbm-basic-lr-leaves`, repeats this grid and reproduces `tuning_sweep_results.txt` exactly, apart from the fit times.
 This script now imports the seller-group join, the paired bootstrap and the simultaneous intervals from that module, with the same draws from the same seed, so it still reproduces `tuning_sweep_results.txt`.
 
 Both import the `train` stage's own `read_matrices` and `fit_variant`, so the fits are the stage's fits, and both read the `train` and `validation` matrices only: the test split is never opened, because a choice made on test rows would leak them into the model the gate then judges.

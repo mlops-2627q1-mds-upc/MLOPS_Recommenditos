@@ -153,7 +153,7 @@ Numbers, hyperparameters and the caveats are in the [model card](model-card.md#t
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
 Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-78).
 The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so `params.yaml` and the committed metrics are unchanged.
-Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, reported in `reports/tuning/` apart from the final fit ([model card](model-card.md#environmental-impact)).
+Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
 Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) on top of quantile LightGBM models (e.g. 5 % / 95 %).

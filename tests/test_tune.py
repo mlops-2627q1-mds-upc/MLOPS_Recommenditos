@@ -7,11 +7,11 @@ points that differ from the reference only by noise are not, and the multiplier
 is a single interval's 1.96 for one comparison and grows with more. The sweep
 itself runs on the synthetic fixture, where its numbers mean nothing and its
 behaviour is what is checked: what it reads, what it measures, and what it
-records in MLflow and on disk.
+records in MLflow, its only store.
 
 Like `tests/test_model.py`, nothing here reaches DagsHub: tracking is switched
-off for every test, and the one test that reads runs back points MLflow at a
-SQLite store under `tmp_path`.
+off for every test, and a test that runs a sweep points MLflow at a SQLite store
+under `tmp_path` through the `store` fixture.
 """
 
 import json
@@ -22,10 +22,9 @@ import mlflow
 import numpy as np
 import pandas as pd
 import pytest
-from tests.conftest import TUNING_DIR as GUARDED_TUNING_DIR
 from typer.testing import CliRunner
 
-from recommenditos.config import PARAMS_FILE
+from recommenditos.config import PARAMS_FILE, REPORTS_DIR
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import read_supported_makes
 from recommenditos.modeling import tune
@@ -33,7 +32,10 @@ from recommenditos.modeling.energy import read_record
 from recommenditos.modeling.model import ESTIMATORS, LightGBMModel, ModelError, fit_variant
 from recommenditos.modeling.train import read_matrices
 from recommenditos.modeling.tune import (
-    TUNING_DIR,
+    ARTIFACT_PATH,
+    EMISSIONS_FILE,
+    REPORT_FILE,
+    RESULTS_FILE,
     TUNING_EXPERIMENT,
     Bootstrap,
     Protocol,
@@ -69,6 +71,27 @@ def _no_tracking_server(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.fixture
+def store(tmp_path: Path, monkeypatch) -> str:
+    """A local SQLite tracking store, configured the way `.env` configures DagsHub.
+
+    A local store puts its artifacts in `./mlruns`, relative to the working
+    directory, so the test runs from `tmp_path`, as `tests/test_model.py`'s do.
+    """
+    before = mlflow.get_tracking_uri()
+    uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", uri)
+    monkeypatch.setenv("MLFLOW_TRACKING_USERNAME", "someone")
+    monkeypatch.setenv("MLFLOW_TRACKING_PASSWORD", "a-token")
+    monkeypatch.chdir(tmp_path)
+    yield uri
+    mlflow.set_tracking_uri(before)
+
+
+def _listing(directory: Path) -> list[str]:
+    return sorted(str(path.relative_to(directory)) for path in directory.rglob("*"))
+
+
 @pytest.fixture(scope="session")
 def processed(tmp_path_factory, _generated_frame: pd.DataFrame) -> Path:
     """The processed splits and the `basic` matrices of the synthetic fixture."""
@@ -83,10 +106,8 @@ def processed(tmp_path_factory, _generated_frame: pd.DataFrame) -> Path:
     return processed
 
 
-def _paths(processed: Path, tmp_path: Path) -> SearchPaths:
-    return SearchPaths(
-        input_dir=processed / "features", params_path=PARAMS_FILE, output_dir=tmp_path / "tuning"
-    )
+def _paths(processed: Path) -> SearchPaths:
+    return SearchPaths(input_dir=processed / "features", params_path=PARAMS_FILE)
 
 
 def _protocol(**overrides) -> Protocol:
@@ -170,8 +191,20 @@ def test_a_point_identical_to_the_reference_gets_a_zero_width_not_a_division_by_
 # --------------------------------------------------------------------------
 
 
+def _summary_files(client: mlflow.MlflowClient, run_id: str, into: Path) -> dict[str, Path]:
+    """The summary run's `results/` artifacts, downloaded, by file name."""
+    local = Path(client.download_artifacts(run_id, ARTIFACT_PATH, str(into)))
+    return {path.name: path for path in local.iterdir()}
+
+
+def _runs(store: str, sweep: str) -> list:
+    client = mlflow.MlflowClient(tracking_uri=store)
+    experiment = client.get_experiment_by_name(TUNING_EXPERIMENT)
+    return client.search_runs([experiment.experiment_id], f"tags.sweep = '{sweep}'")
+
+
 def test_a_sweep_never_reads_the_test_or_calibration_split(
-    processed: Path, tmp_path: Path, monkeypatch
+    processed: Path, tmp_path: Path, store: str, monkeypatch
 ):
     """The choice is made on validation rows, so the gate's later reading of test stays honest.
 
@@ -192,22 +225,18 @@ def test_a_sweep_never_reads_the_test_or_calibration_split(
     monkeypatch.setattr(pd, "read_parquet", guarded)
 
     document = search(
-        Sweep("no-test", "lgbm-basic", {"learning_rate": [0.1]}),
-        _paths(copy, tmp_path),
-        _protocol(),
+        Sweep("no-test", "lgbm-basic", {"learning_rate": [0.1]}), _paths(copy), _protocol()
     )
 
     assert document["verdict"]["text"]
 
 
-def test_the_reference_is_fitted_even_when_the_grid_leaves_it_out(processed: Path, tmp_path: Path):
+def test_the_reference_is_fitted_even_when_the_grid_leaves_it_out(processed: Path, store: str):
     """Every difference is taken against it, so it is never optional."""
     committed = load_params(PARAMS_FILE)["train"]["variants"]["lgbm-basic"]["params"]
 
     document = search(
-        Sweep("reference", "lgbm-basic", {"learning_rate": [0.1]}),
-        _paths(processed, tmp_path),
-        _protocol(),
+        Sweep("reference", "lgbm-basic", {"learning_rate": [0.1]}), _paths(processed), _protocol()
     )
 
     labels = {fit["label"]: fit["reference"] for fit in document["fits"]}
@@ -220,16 +249,17 @@ def test_the_reference_is_fitted_even_when_the_grid_leaves_it_out(processed: Pat
 
 
 @pytest.mark.req("NFR-10")
-def test_the_search_records_its_energy_per_fit_apart_from_the_variants(
-    processed: Path, tmp_path: Path
+def test_the_summary_run_carries_the_record_the_table_and_one_energy_row_per_fit(
+    processed: Path, tmp_path: Path, store: str
 ):
-    """One CodeCarbon row per fit, in the sweep's own file, never in a variant's.
+    """MLflow is a sweep's only store (EDN-78), so everything it found is an artifact there.
 
     The second grid of EDN-78 is the case run here: `min_child_samples` swept with
     `learning_rate` fixed, so the reference is the fixed value at LightGBM's
-    default of 20, a key `params.yaml` does not even name.
+    default of 20, a key `params.yaml` does not even name. Nothing is written
+    into the repository's `reports/`, which the variants' energy CSVs share.
     """
-    paths = _paths(processed, tmp_path)
+    reports_before = _listing(REPORTS_DIR)
 
     document = search(
         Sweep(
@@ -238,30 +268,35 @@ def test_the_search_records_its_energy_per_fit_apart_from_the_variants(
             {"min_child_samples": [5, 20, 50]},
             fixed={"learning_rate": 0.1},
         ),
-        paths,
+        _paths(processed),
         _protocol(),
     )
 
+    assert _listing(REPORTS_DIR) == reports_before
     assert document["reference"] == "min_child_samples=20"
     assert document["fixed"] == {"learning_rate": 0.1}
-    csv = paths.emissions("second-grid")
-    assert [path.name for path in csv.parent.iterdir()] == [csv.name]
-    rows = pd.read_csv(csv, dtype={"run_id": "str"})
+    (summary,) = [
+        run for run in _runs(store, "second-grid") if run.data.tags["sweep_role"] == "summary"
+    ]
+    client = mlflow.MlflowClient(tracking_uri=store)
+    files = _summary_files(client, summary.info.run_id, tmp_path / "downloaded")
+    assert set(files) == {RESULTS_FILE, REPORT_FILE, EMISSIONS_FILE}
+    assert json.loads(files[RESULTS_FILE].read_text("utf-8")) == document
+    assert "verdict: " in files[REPORT_FILE].read_text("utf-8")
+    rows = pd.read_csv(files[EMISSIONS_FILE], dtype={"run_id": "str"})
     assert len(rows) == len(document["fits"]) == 3
     for fit in document["fits"]:
-        recorded = read_record(csv, fit["codecarbon_run_id"])
+        recorded = read_record(files[EMISSIONS_FILE], fit["codecarbon_run_id"])
         assert fit["energy_kwh"] == recorded["energy_consumed"]
     assert document["totals"]["energy_kwh"] == pytest.approx(rows["energy_consumed"].sum())
     assert document["totals"]["fit_seconds"] == pytest.approx(
         sum(fit["fit_seconds"] for fit in document["fits"])
     )
-    assert json.loads(paths.results("second-grid").read_text("utf-8")) == document
-    assert "verdict: " in paths.report("second-grid").read_text("utf-8")
 
 
 @pytest.mark.req("NFR-10", "NFR-14")
 def test_every_fit_of_a_sweep_is_a_tagged_run_with_its_metric_fit_time_and_energy(
-    processed: Path, tmp_path: Path, monkeypatch
+    processed: Path, store: str
 ):
     """Issue #88's second acceptance criterion, read back from MLflow.
 
@@ -269,31 +304,19 @@ def test_every_fit_of_a_sweep_is_a_tagged_run_with_its_metric_fit_time_and_energ
     fit time and the energy, and no model bundle; and one summary run whose
     total is the points' energy summed.
     """
-    before = mlflow.get_tracking_uri()
-    store = f"sqlite:///{tmp_path / 'mlflow.db'}"
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", store)
-    monkeypatch.setenv("MLFLOW_TRACKING_USERNAME", "someone")
-    monkeypatch.setenv("MLFLOW_TRACKING_PASSWORD", "a-token")
-    monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
-    monkeypatch.chdir(tmp_path)
-
-    try:
-        document = search(
-            Sweep("tracked", "lgbm-basic", {"learning_rate": [0.05, 0.1], "num_leaves": [15]}),
-            _paths(processed, tmp_path),
-            _protocol(),
-        )
-        client = mlflow.MlflowClient(tracking_uri=store)
-        experiment = client.get_experiment_by_name(TUNING_EXPERIMENT)
-        runs = client.search_runs([experiment.experiment_id], "tags.sweep = 'tracked'")
-        points = [run for run in runs if run.data.tags["sweep_role"] == "point"]
-        summaries = [run for run in runs if run.data.tags["sweep_role"] == "summary"]
-        artefacts = {
-            run.info.run_id: [entry.path for entry in client.list_artifacts(run.info.run_id)]
-            for run in runs
-        }
-    finally:
-        mlflow.set_tracking_uri(before)
+    document = search(
+        Sweep("tracked", "lgbm-basic", {"learning_rate": [0.05, 0.1], "num_leaves": [15]}),
+        _paths(processed),
+        _protocol(),
+    )
+    client = mlflow.MlflowClient(tracking_uri=store)
+    runs = _runs(store, "tracked")
+    points = [run for run in runs if run.data.tags["sweep_role"] == "point"]
+    summaries = [run for run in runs if run.data.tags["sweep_role"] == "summary"]
+    artefacts = {
+        run.info.run_id: [entry.path for entry in client.list_artifacts(run.info.run_id)]
+        for run in runs
+    }
 
     assert len(points) == len(document["fits"]) == 3
     assert {run.info.run_id for run in points} == {
@@ -319,34 +342,30 @@ def test_every_fit_of_a_sweep_is_a_tagged_run_with_its_metric_fit_time_and_energ
     assert summary.data.metrics["total_energy_kwh"] == pytest.approx(
         sum(run.data.metrics["energy_kwh"] for run in points)
     )
-    assert artefacts[summary.info.run_id] == ["results"]
+    assert artefacts[summary.info.run_id] == [ARTIFACT_PATH]
 
 
-@pytest.mark.req("NFR-14")
-def test_a_sweep_writes_into_the_tree_only_after_its_last_run(
-    processed: Path, tmp_path: Path, monkeypatch
-):
-    """Otherwise its own energy CSV would tag every run after the first `git_dirty`.
+def test_a_sweep_without_tracking_is_refused_before_any_fit(processed: Path, monkeypatch):
+    """With MLflow the only store, a sweep without it would fit every point and keep nothing."""
+    calls = []
+    monkeypatch.setattr(tune, "fit_variant", lambda *args, **kwargs: calls.append(1))
 
-    Each run's provenance is computed when it opens, and an untracked file in the
-    tree counts as a change (EDN-74), so the record stays out of the tree until
-    every run of the sweep, the summary included, is closed.
-    """
-    paths = _paths(processed, tmp_path)
-    seen = []
-    opened = tune.optional_run
+    with pytest.raises(TuningError, match="not configured"):
+        search(
+            Sweep("untracked", "lgbm-basic", {"learning_rate": [0.1]}),
+            _paths(processed),
+            _protocol(),
+        )
 
-    def watching(*args, **kwargs):
-        seen.append(paths.output_dir.exists())
-        return opened(*args, **kwargs)
+    assert calls == []
 
-    monkeypatch.setattr(tune, "optional_run", watching)
 
-    search(Sweep("staged", "lgbm-basic", {"learning_rate": [0.1]}), paths, _protocol())
+def test_the_command_line_reports_a_sweep_without_tracking_and_exits_1():
+    result = CliRunner().invoke(
+        tune.app, ["lgbm-basic", "--grid", "learning_rate=0.1", "--sweep", "untracked"]
+    )
 
-    assert seen == [False, False, False], "a run opened with the sweep's files in the tree"
-    assert paths.results("staged").exists()
-    assert paths.emissions("staged").exists()
+    assert result.exit_code == 1
 
 
 @pytest.mark.parametrize(
@@ -363,7 +382,7 @@ def test_a_sweep_that_cannot_be_judged_is_refused_before_any_fit(
     grid: dict, fixed: dict, message: str, tmp_path: Path
 ):
     """Refused while reading the request, so the matrices are never even opened."""
-    paths = SearchPaths(input_dir=tmp_path / "nowhere", output_dir=tmp_path / "tuning")
+    paths = SearchPaths(input_dir=tmp_path / "nowhere")
 
     with pytest.raises(TuningError, match=message):
         search(Sweep("refused", "lgbm-basic", grid, fixed), paths, _protocol())
@@ -371,22 +390,14 @@ def test_a_sweep_that_cannot_be_judged_is_refused_before_any_fit(
 
 @pytest.mark.req("NFR-14")
 def test_an_interrupted_sweep_leaves_attributable_runs_and_its_id_is_not_reused(
-    processed: Path, tmp_path: Path, monkeypatch
+    processed: Path, store: str, monkeypatch
 ):
-    """A crash leaves no file, but its runs are in MLflow: they are tagged, and they count.
+    """An interrupted sweep uploads no record, but its runs are in MLflow: tagged, and counted.
 
     The second point's fit is interrupted. Its run must still name its sweep and
     point, and a rerun under the same id must be refused rather than put a second
     run for the first point beside the first one's.
     """
-    before = mlflow.get_tracking_uri()
-    store = f"sqlite:///{tmp_path / 'mlflow.db'}"
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", store)
-    monkeypatch.setenv("MLFLOW_TRACKING_USERNAME", "someone")
-    monkeypatch.setenv("MLFLOW_TRACKING_PASSWORD", "a-token")
-    monkeypatch.setenv(REQUIRE_TRACKING_ENV_VAR, "1")
-    monkeypatch.chdir(tmp_path)
-    paths = _paths(processed, tmp_path)
     calls = []
     fit = tune.fit_variant
 
@@ -399,45 +410,36 @@ def test_an_interrupted_sweep_leaves_attributable_runs_and_its_id_is_not_reused(
     monkeypatch.setattr(tune, "fit_variant", interrupted_second)
     sweep = Sweep("crashed", "lgbm-basic", {"learning_rate": [0.05, 0.1]})
 
-    try:
-        with pytest.raises(KeyboardInterrupt):
-            search(sweep, paths, _protocol())
-        client = mlflow.MlflowClient(tracking_uri=store)
-        experiment = client.get_experiment_by_name(TUNING_EXPERIMENT)
-        runs = client.search_runs([experiment.experiment_id], "tags.sweep = 'crashed'")
-        with pytest.raises(TuningError, match="fresh id"):
-            search(sweep, paths, _protocol())
-        after = client.search_runs([experiment.experiment_id], "tags.sweep = 'crashed'")
-    finally:
-        mlflow.set_tracking_uri(before)
+    with pytest.raises(KeyboardInterrupt):
+        search(sweep, _paths(processed), _protocol())
+    runs = _runs(store, "crashed")
+    with pytest.raises(TuningError, match="fresh id"):
+        search(sweep, _paths(processed), _protocol())
 
-    assert len(runs) == len(after) == 2
+    assert len(runs) == len(_runs(store, "crashed")) == 2
     assert {run.data.tags["point"] for run in runs} == {"learning_rate=0.05", "learning_rate=0.1"}
     assert {run.data.tags["sweep_role"] for run in runs} == {"point"}
-    assert not paths.output_dir.exists()
+    assert {run.info.status for run in runs} == {"FINISHED", "FAILED"}
+
+
+def test_a_finished_sweeps_id_is_not_reused(processed: Path, store: str):
+    """A second run under the same id would put two records under one tag."""
+    sweep = Sweep("again", "lgbm-basic", {"learning_rate": [0.1]})
+    search(sweep, _paths(processed), _protocol())
+
+    with pytest.raises(TuningError, match="fresh id"):
+        search(sweep, _paths(processed), _protocol())
 
 
 @pytest.mark.parametrize("ceiling", [0, -5, 50, 2.5])
 def test_a_ceiling_early_stopping_cannot_stop_under_is_refused(ceiling, tmp_path: Path):
     """Refused before any run opens: at or below the patience the ceiling decides every fit."""
-    paths = SearchPaths(input_dir=tmp_path / "nowhere", output_dir=tmp_path / "tuning")
-
     with pytest.raises(TuningError, match="ceiling"):
         search(
             Sweep("refused", "lgbm-basic", {"learning_rate": [0.1]}),
-            paths,
+            SearchPaths(input_dir=tmp_path / "nowhere"),
             _protocol(ceiling=ceiling),
         )
-
-
-def test_a_sweep_id_is_used_once(processed: Path, tmp_path: Path):
-    """A second run under the same id would mix two sweeps' energy rows in one record."""
-    paths = _paths(processed, tmp_path)
-    paths.emissions("again").parent.mkdir(parents=True)
-    paths.emissions("again").write_text("", encoding="utf-8")
-
-    with pytest.raises(TuningError, match="already written"):
-        search(Sweep("again", "lgbm-basic", {"learning_rate": [0.1]}), paths, _protocol())
 
 
 def test_the_command_line_parses_a_grid_as_params_yaml_types():
@@ -454,10 +456,12 @@ def test_the_command_line_parses_a_grid_as_params_yaml_types():
 
 
 def test_an_unknown_variant_is_refused_by_name(tmp_path: Path):
-    paths = SearchPaths(input_dir=tmp_path / "nowhere", output_dir=tmp_path / "tuning")
-
     with pytest.raises(TuningError, match="lgbm-nothing"):
-        search(Sweep("refused", "lgbm-nothing", {"learning_rate": [0.1]}), paths, _protocol())
+        search(
+            Sweep("refused", "lgbm-nothing", {"learning_rate": [0.1]}),
+            SearchPaths(input_dir=tmp_path / "nowhere"),
+            _protocol(),
+        )
 
 
 def test_the_command_line_reports_a_refused_sweep_and_exits_1():
@@ -466,10 +470,6 @@ def test_the_command_line_reports_a_refused_sweep_and_exits_1():
     )
 
     assert result.exit_code == 1
-
-
-def test_the_tuning_directory_the_suite_guards_is_the_one_the_search_writes():
-    assert GUARDED_TUNING_DIR == TUNING_DIR
 
 
 # --------------------------------------------------------------------------

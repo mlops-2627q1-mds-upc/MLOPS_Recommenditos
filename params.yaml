@@ -312,8 +312,8 @@ train:
         # point of it is distinguishable from them (EDN-73,
         # reports/analysis/tuning_sweep_results.txt). Issue #88's search repeated
         # that grid exactly and then swept `min_child_samples`, with the same
-        # verdict (EDN-78, reports/tuning/88-lgbm-basic-lr-leaves.txt and
-        # 88-lgbm-basic-min-child-samples.txt). A new value goes through the
+        # verdict (EDN-78; MLflow sweeps 88-lgbm-basic-lr-leaves and
+        # 88-lgbm-basic-min-child-samples). A new value goes through the
         # protocol in docs/docs/pipeline.md, "Tuning a hyperparameter", whose
         # decision step is `python -m recommenditos.modeling.tune` (EDN-78).
         learning_rate: 0.05
@@ -352,9 +352,8 @@ train:
       params:
         # As `lgbm-basic`, including the optional `min_child_samples`. EDN-73
         # swept only `lgbm-basic`; issue #88's search swept this variant on its
-        # own feature set too and kept all three values (EDN-78,
-        # reports/tuning/88-lgbm-extended-lr-leaves.txt and
-        # 88-lgbm-extended-min-child-samples.txt).
+        # own feature set too and kept all three values (EDN-78; MLflow sweeps
+        # 88-lgbm-extended-lr-leaves and 88-lgbm-extended-min-child-samples).
         learning_rate: 0.05
         num_leaves: 63
         # The same ceiling as `lgbm-basic`, for the reasons given there.

@@ -38,20 +38,36 @@ L1. Validation MdAPE is reported beside it, through `evaluate`'s own
 **What it records (issue #88).** Every fit is measured by CodeCarbon exactly as
 `train` measures one, and logged as its own MLflow run in the experiment
 `recommenditos-price-tuning`, tagged `sweep`, `sweep_role=point`, `point`,
-`is_reference` and `variant` as it opens,
-with its hyperparameters under the names `train` logs them by, its validation
-metrics, its fit time and its energy. No bundle is uploaded: a point that is not
-adopted is never served, and one that is gets refitted by `dvc repro`. One more
-run, `sweep_role=summary`, carries the totals of the sweep and its verdict, and
-the same goes to `reports/tuning/<sweep>.json` and `.txt`.
+`is_reference` and `variant` as it opens, so the run of a fit that fails still
+names its sweep and point. It carries its hyperparameters under the names
+`train` logs them by, its validation metrics, its fit time and its energy. No
+bundle is uploaded: a point that is not adopted is never served, and one that is
+gets refitted by `dvc repro`. One more run, `sweep_role=summary`, carries the
+totals of the sweep and its verdict, and three artifacts under `results/`:
 
-The search's energy is kept apart from the product's, in
-`reports/tuning/emissions/<sweep>.csv`. Not in `reports/emissions/`: each
-variant's CSV there is the record of the fit that produced its model, which
-`train@<variant>` owns, and the directory as a whole is a dependency of the
-`compare-energy` stage, so a search writing into it would make that stage stale.
-NFR-10's 15-minute budget is about retraining the product, and the search's cost
-scales with its grid instead (EDN-78).
+- `results/sweep.json`, the whole record: every fit, every comparison, the
+  totals and the verdict;
+- `results/sweep.txt`, the same as a table a person reads, which is also logged
+  to the console when the sweep ends;
+- `results/emissions.csv`, CodeCarbon's own row for every fit of the sweep, with
+  the columns that say how each figure was produced - CodeCarbon's version, the
+  CPU and RAM power, the operating system - because EDN-69 calls the figure an
+  estimate, and an estimate is checked by its method.
+
+**MLflow is the only store (EDN-78).** Nothing of a sweep is written into the
+repository: the three files are written to a temporary directory and exist
+afterwards only as artifacts of the summary run. So a sweep refuses to start
+when tracking is not configured, because its results would have nowhere to go,
+and it opens its runs through `tracked_run` rather than `optional_run`, so a
+server that cannot be reached fails the sweep instead of silently dropping it.
+A sweep id is used once: an id the experiment already holds runs for is refused,
+which is also what an interrupted sweep leaves behind.
+
+The search's energy is kept apart from the product's. Not in
+`reports/emissions/`: each variant's CSV there is the record of the fit that
+produced its model, which `train@<variant>` owns and the `compare-energy` stage
+reads. NFR-10's 15-minute budget is about retraining the product, and the
+search's cost scales with its grid instead (EDN-78).
 
 **Provenance.** The runs carry the commit and `git_dirty` like every run the
 tracking seam opens. A sweep that reads the matrices at their default path also
@@ -60,23 +76,23 @@ the matrices and the supported-make list it was fitted on. They do not cover
 `data/processed/validation.parquet`, which the sweep reads for the seller groups;
 the commit's `dvc.lock` and `dvc pull` restore that file. One pointed elsewhere,
 as every test is, carries none, as a stage called outside DVC does
-(`recommenditos/provenance.py`).
-The sweep writes its files into a temporary directory and moves them into
-`reports/tuning/` only after its last run has closed, because an untracked file
-counts as a change and would tag every later run of the sweep `git_dirty`. For
-the same reason a sweep's files are committed before the next sweep is run.
+(`recommenditos/provenance.py`). Since a sweep writes nothing into the working
+tree, its own runs cannot make each other `git_dirty`, and sweeps can follow one
+another without a commit in between. A sweep that fails at its summary run - a
+server outage at the very end - keeps its point runs, prints its table, uploads
+no record, and its id is spent.
 
 It runs outside `dvc repro`, from the repository root after `dvc pull`, one
 sweep per variant and grid; `docs/docs/pipeline.md` gives the commands.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from itertools import product
 import os
 from pathlib import Path
 import re
-import shutil
 import tempfile
 from typing import Annotated
 
@@ -86,7 +102,7 @@ import numpy as np
 import typer
 import yaml
 
-from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR, REPORTS_DIR
+from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR
 from recommenditos.data.build_features import read_supported_makes
 from recommenditos.modeling.energy import EnergySettings, FitMeasurement, measure
 from recommenditos.modeling.evaluate import point_metrics, relative_error
@@ -101,19 +117,23 @@ from recommenditos.pipeline import load_params, read_frame, write_json
 from recommenditos.provenance import input_tags
 from recommenditos.schema import PROCESSED_SCHEMA
 from recommenditos.tracking import (
-    REQUIRE_TRACKING_ENV_VAR,
     REQUIRED_ENV_VARS,
     UNCONFIGURED_TRACKING_URI,
-    optional_run,
+    Run,
+    tracked_run,
 )
 
 #: The MLflow experiment every sweep logs to, so `recommenditos-price` holds only
 #: the pipeline's runs (EDN-73).
 TUNING_EXPERIMENT = "recommenditos-price-tuning"
 
-#: Where a sweep writes its results, and its energy record beneath that.
-TUNING_DIR = REPORTS_DIR / "tuning"
-EMISSIONS_SUBDIR = "emissions"
+#: Where the summary run keeps a sweep's record, and the three files there. The
+#: names are fixed rather than the sweep's id, because the run already is the
+#: sweep: its `sweep` tag says which.
+ARTIFACT_PATH = "results"
+RESULTS_FILE = "sweep.json"
+REPORT_FILE = "sweep.txt"
+EMISSIONS_FILE = "emissions.csv"
 
 #: The `n_estimators` every point is fitted with: far past where early stopping
 #: lands on the real snapshot (round 4,066 at the slowest point EDN-73 fitted),
@@ -129,8 +149,8 @@ CONFIDENCE = 0.95
 #: ceiling above, and the patience that makes it a ceiling.
 SEARCH_OWNED_KEYS = frozenset({"n_estimators", "early_stopping_rounds"})
 
-#: A sweep id names files and a tag, so it is kept to characters every file
-#: system and MLflow's search syntax take as they are.
+#: A sweep id names runs and a tag, so it is kept to characters MLflow's search
+#: syntax takes as they are.
 _SWEEP_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 _PERCENT = 100
@@ -338,20 +358,13 @@ class Sweep:
 
 @dataclass(frozen=True)
 class SearchPaths:
-    """Where a sweep reads and writes, every one redirectable as `train.main`'s are."""
+    """Where a sweep reads, every path redirectable as `train.main`'s are.
+
+    Nothing here says where it writes: a sweep's record goes to MLflow alone.
+    """
 
     input_dir: Path = PROCESSED_DATA_DIR / "features"
     params_path: Path = PARAMS_FILE
-    output_dir: Path = TUNING_DIR
-
-    def results(self, sweep: str) -> Path:
-        return self.output_dir / f"{sweep}.json"
-
-    def report(self, sweep: str) -> Path:
-        return self.output_dir / f"{sweep}.txt"
-
-    def emissions(self, sweep: str) -> Path:
-        return self.output_dir / EMISSIONS_SUBDIR / f"{sweep}.csv"
 
 
 @dataclass(frozen=True)
@@ -476,39 +489,28 @@ class _Context:
     data: TrainingData
     bootstrap: Bootstrap
     tags: dict
-    #: Where the sweep writes while it runs: a temporary directory, so the files
-    #: it produces are not in the working tree while its runs are open. Every run
-    #: is tagged with `git_dirty`, and a CSV the sweep itself had just written
-    #: would mark every run after the first one dirty (EDN-74).
-    staged: SearchPaths | None = None
+    #: The temporary directory the sweep's three files are written to before the
+    #: summary run uploads them.
+    workdir: Path | None = None
 
 
 def search(
     sweep: Sweep, paths: SearchPaths | None = None, protocol: Protocol | None = None
 ) -> dict:
-    """Run one sweep and return its results document, as written to `<sweep>.json`."""
-    paths = paths or SearchPaths()
-    context = _prepare(sweep, paths, protocol or Protocol())
-    with tempfile.TemporaryDirectory() as staging:
-        staged = replace(paths, output_dir=Path(staging))
-        document = _run(replace(context, staged=staged))
-        # Moved into the tree only now, once no run of the sweep is open any more.
-        for written, final in (
-            (staged.emissions(sweep.name), paths.emissions(sweep.name)),
-            (staged.results(sweep.name), paths.results(sweep.name)),
-            (staged.report(sweep.name), paths.report(sweep.name)),
-        ):
-            final.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(written, final)
+    """Run one sweep and return its results document, as uploaded to `results/sweep.json`."""
+    context = _prepare(sweep, paths or SearchPaths(), protocol or Protocol())
+    with tempfile.TemporaryDirectory() as workdir:
+        document = _run(replace(context, workdir=Path(workdir)))
     logger.success(
-        f"sweep {sweep.name}: {document['verdict']['text']} Wrote {paths.results(sweep.name)}."
+        f"sweep {sweep.name}: {document['verdict']['text']} The record is in MLflow, "
+        f"experiment {context.protocol.experiment!r}, run tagged sweep_role=summary."
     )
     return document
 
 
 def _run(context: _Context) -> dict:
-    """Fit every point, decide, and write the sweep's record into the staging directory."""
-    sweep, staged = context.sweep, context.staged
+    """Fit every point, decide, and log the record with the summary run."""
+    workdir = context.workdir
     errors: dict[Point, np.ndarray] = {}
     relative: dict[Point, np.ndarray] = {}
     fits: list[Fit] = []
@@ -526,8 +528,12 @@ def _run(context: _Context) -> dict:
     adopted = min(candidates, key=lambda row: row.difference).point if candidates else None
 
     document = _document(context, fits, l1, mdape, adopted)
-    write_json(document, staged.results(sweep.name))
-    staged.report(sweep.name).write_text(_report(document), encoding="utf-8", newline="\n")
+    report = _report(document)
+    write_json(document, workdir / RESULTS_FILE)
+    (workdir / REPORT_FILE).write_text(report, encoding="utf-8", newline="\n")
+    # The table, for whoever ran the sweep, before the upload: if the server fails
+    # at the summary run, the verdict still reaches the console.
+    logger.info(f"sweep {context.sweep.name}:\n{report}")
     _log_summary(context, document)
     return document
 
@@ -538,13 +544,6 @@ def _prepare(sweep: Sweep, paths: SearchPaths, protocol: Protocol) -> _Context:
         raise TuningError(f"the sweep id {sweep.name!r} must match {_SWEEP_ID.pattern}.")
     if not sweep.grid:
         raise TuningError("the grid is empty; name at least one hyperparameter to sweep.")
-    written = (paths.results(sweep.name), paths.report(sweep.name), paths.emissions(sweep.name))
-    existing = [str(path) for path in written if path.exists()]
-    if existing:
-        raise TuningError(
-            f"sweep {sweep.name!r} has already written {', '.join(existing)}. A sweep's "
-            f"record is evidence: give a new sweep its own id rather than mixing two in a file."
-        )
     params = load_params(paths.params_path)
     if sweep.variant not in params["train"]["variants"]:
         raise TuningError(f"{sweep.variant!r} is not a key of train.variants in params.yaml.")
@@ -556,6 +555,8 @@ def _prepare(sweep: Sweep, paths: SearchPaths, protocol: Protocol) -> _Context:
     both = sorted(set(sweep.grid) & set(sweep.fixed))
     if both:
         raise TuningError(f"{', '.join(both)} is both swept and fixed.")
+    # After the request is checked, so a misnamed key is reported as such first.
+    _require_tracking_configured()
     _refuse_a_tracked_sweep_id(sweep.name, protocol.experiment)
     # Before the matrices are read, as in `train`, so a misconfigured measurement
     # fails before any work is done.
@@ -603,42 +604,58 @@ def _check_ceiling(ceiling: int, committed: dict) -> None:
         )
 
 
+def _require_tracking_configured() -> None:
+    """Refuse to start a sweep whose results would have nowhere to go.
+
+    MLflow is a sweep's only store (EDN-78), so a sweep without tracking would fit
+    every point and keep nothing. `train` degrades instead, because a model is
+    written to disk either way; a sweep's record is not.
+    """
+    missing = [
+        variable
+        for variable in REQUIRED_ENV_VARS
+        if os.environ.get(variable, "") in {"", UNCONFIGURED_TRACKING_URI}
+    ]
+    if missing:
+        raise TuningError(
+            f"MLflow tracking is not configured ({', '.join(missing)} not set), and a sweep "
+            f"keeps its record in MLflow only, so its results would be lost. Copy "
+            f".env.template to .env and fill in your DagsHub credentials "
+            f"(docs/docs/getting-started.md)."
+        )
+
+
+@contextmanager
+def _tracked(experiment: str, run_name: str) -> Iterator[Run]:
+    """A run that must open: `tracked_run`, as the handle `train` logs through.
+
+    Not `optional_run`, which degrades to logging nothing when the server cannot
+    be reached: for a sweep that would mean fitting every point for no record.
+    """
+    with tracked_run(experiment, run_name) as active:
+        yield Run(active.info.run_id)
+
+
 def _refuse_a_tracked_sweep_id(name: str, experiment: str) -> None:
     """Refuse an id the experiment already holds runs for.
 
-    A sweep's files reach `reports/tuning/` only once it has finished, so one that
-    was interrupted - Ctrl-C, or a failed request under
-    `RECOMMENDITOS_REQUIRE_TRACKING=1` - leaves no file behind but does leave runs
-    in MLflow. Rerun under the same id, it would put a second run for a point
-    beside the first, and nothing would say which belongs to the record. Checked
-    only where tracking is configured, since otherwise no run is logged either; a
-    server that cannot be asked is a failure only when tracking is required, as
-    it is for `optional_run`.
+    An interrupted sweep - Ctrl-C, or a request the server refused - uploads no
+    record, but does leave its finished runs in MLflow. Rerun under the same id,
+    it would put a second run for a point beside the first, and nothing would say
+    which belongs to the record.
     """
-    configured = all(
-        os.environ.get(variable, "") not in {"", UNCONFIGURED_TRACKING_URI}
-        for variable in REQUIRED_ENV_VARS
+    client = mlflow.MlflowClient(tracking_uri=os.environ["MLFLOW_TRACKING_URI"])
+    found = client.get_experiment_by_name(experiment)
+    runs = (
+        []
+        if found is None
+        else client.search_runs([found.experiment_id], f"tags.sweep = '{name}'", max_results=1)
     )
-    if not configured:
-        return
-    try:
-        client = mlflow.MlflowClient(tracking_uri=os.environ["MLFLOW_TRACKING_URI"])
-        found = client.get_experiment_by_name(experiment)
-        runs = (
-            []
-            if found is None
-            else client.search_runs([found.experiment_id], f"tags.sweep = '{name}'", max_results=1)
-        )
-    except Exception as error:  # any failure to reach the server
-        if os.environ.get(REQUIRE_TRACKING_ENV_VAR, "") not in {"", "0"}:
-            raise
-        logger.warning(f"could not check MLflow for earlier runs of sweep {name!r}: {error}")
-        return
     if runs:
         raise TuningError(
             f"the MLflow experiment {experiment!r} already holds runs of sweep {name!r}, from "
-            f"an earlier attempt that did not finish or whose files were removed. Run this "
-            f"sweep under a fresh id; the earlier runs stay as the record of that attempt."
+            f"an earlier attempt. Run this sweep under a fresh id; the earlier runs stay as "
+            f"the record of that attempt."
         )
 
 
@@ -667,7 +684,7 @@ def _fit_point(context: _Context, point: Point) -> tuple[Fit, np.ndarray, np.nda
         "is_reference": str(is_reference).lower(),
         "variant": sweep.variant,
     }
-    with optional_run(context.protocol.experiment, f"{sweep.name}-{sweep.variant}-{label}") as run:
+    with _tracked(context.protocol.experiment, f"{sweep.name}-{sweep.variant}-{label}") as run:
         # Before the fit, so the run of a fit that fails or is interrupted still
         # names its sweep and point.
         run.set_tags(tags)
@@ -682,7 +699,7 @@ def _fit_point(context: _Context, point: Point) -> tuple[Fit, np.ndarray, np.nda
             ),
             name=f"{sweep.name} {sweep.variant} {label}",
             settings=context.energy,
-            output_file=context.staged.emissions(sweep.name),
+            output_file=context.workdir / EMISSIONS_FILE,
         )
         predicted = model.predict_eur(data.validation)
         # Through `evaluate`'s own implementation, so this is the gate's metric on
@@ -850,10 +867,10 @@ def _report(document: dict) -> str:
 
 
 def _log_summary(context: _Context, document: dict) -> None:
-    """The sweep's own run: its totals, its verdict, and its two results files."""
+    """The sweep's own run: its totals, its verdict, and its three files."""
     sweep, totals, verdict = context.sweep, document["totals"], document["verdict"]
     run_name = f"{sweep.name}-{sweep.variant}-summary"
-    with optional_run(context.protocol.experiment, run_name) as run:
+    with _tracked(context.protocol.experiment, run_name) as run:
         run.set_tags(
             {
                 **context.tags,
@@ -890,10 +907,9 @@ def _log_summary(context: _Context, document: dict) -> None:
                 "adopted": float(verdict["adopted"] is not None),
             }
         )
-        with tempfile.TemporaryDirectory() as staging:
-            for path in (context.staged.results(sweep.name), context.staged.report(sweep.name)):
-                shutil.copy(path, Path(staging) / path.name)
-            run.log_artifacts(Path(staging), artifact_path="results")
+        # The working directory holds exactly the three files: the record, the
+        # table, and CodeCarbon's rows.
+        run.log_artifacts(context.workdir, artifact_path=ARTIFACT_PATH)
 
 
 @app.command()
@@ -903,7 +919,7 @@ def main(
         list[str],
         typer.Option("--grid", help="key=v1,v2,... to sweep; repeat it for each hyperparameter"),
     ],
-    sweep: Annotated[str, typer.Option("--sweep", help="this sweep's id: its tag and file name")],
+    sweep: Annotated[str, typer.Option("--sweep", help="this sweep's id, its runs' tag")],
     fix: Annotated[
         list[str] | None,
         typer.Option("--fix", help="key=value set on every point, the reference included"),

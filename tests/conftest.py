@@ -24,6 +24,16 @@ from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.energy import EMISSIONS_DIR
 from recommenditos.pipeline import load_params
 
+# MLflow's usage telemetry off for the whole suite. MLflow decides at import time
+# whether it runs under a test, from PYTEST_CURRENT_TEST, and imports during
+# collection, before pytest sets that variable, so telemetry stays on locally.
+# Its thread then resolves api.mlflow-telemetry.io after a test logs a real run
+# to a local store, which is a network call from the suite, and which
+# `tests/test_energy.py`'s no-network check catches when it runs afterwards.
+# The variable is read on every call, so setting it here, before any test opens a
+# run, is enough. `setdefault`, so a contributor who wants it can still turn it on.
+os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
+
 #: Small enough to keep the suite fast, large enough that a seller-grouped
 #: split and a per-make count still mean something.
 FIXTURE_ROWS = 2000
@@ -47,10 +57,6 @@ PII_COLUMNS = (
 #: ones that never touch data validation. `tests/test_validate_data.py` holds the
 #: two copies equal.
 GX_DIR = PROJ_ROOT / "gx"
-#: Where `recommenditos.modeling.tune` writes a sweep's record, repeated rather
-#: than imported for the same reason: importing that module imports `train`,
-#: `evaluate` and MLflow with them. `tests/test_tune.py` holds the two copies equal.
-TUNING_DIR = REPORTS_DIR / "tuning"
 VALIDATION_DIR = REPORTS_DIR / "data-validation"
 VALIDATION_SUMMARY_FILE = VALIDATION_DIR / "summary.json"
 
@@ -84,9 +90,6 @@ def _repo_artefacts_stay_untouched():
     # that trained without redirecting `energy_dir` leaves the file list as it
     # was and adds a row to a git-tracked record of the real ladder's energy.
     emissions_before = _tree_digest(EMISSIONS_DIR)
-    # The same for a hyperparameter search's record (EDN-78), which a sweep
-    # writes beside its results and appends its energy rows to.
-    tuning_before = _tree_digest(TUNING_DIR)
     already_there = [path for path in FORBIDDEN_PATHS if path.exists()]
 
     yield
@@ -105,9 +108,6 @@ def _repo_artefacts_stay_untouched():
     assert _tree_digest(GX_DIR) == context_before, f"the test suite rebuilt {GX_DIR}"
     assert _tree_digest(EMISSIONS_DIR) == emissions_before, (
         f"the test suite wrote an energy measurement into {EMISSIONS_DIR}"
-    )
-    assert _tree_digest(TUNING_DIR) == tuning_before, (
-        f"the test suite wrote a hyperparameter search's record into {TUNING_DIR}"
     )
 
     appeared = sorted(
