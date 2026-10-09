@@ -203,7 +203,8 @@ Tuning a hyperparameter
 -----------------------
 
 A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), extended by EDN-78 for issue #88).
-It exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
+A sweep is one search run: one variant and a small grid of hyperparameter values, each combination fitted and compared with the committed values, ending in a single verdict - keep the committed values or adopt one combination.
+The protocol exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
 Its decision step is `recommenditos/modeling/tune.py`, which fits every point of a grid, measures and tracks each fit, and decides on the validation split; queued `dvc exp` runs can **screen** a wider set of candidates first, but they are optional.
 
 - **The split is validation.** The search reads the `train` and `validation` matrices and the validation frame's seller groups, and nothing else, so neither the test nor the calibration split takes part in a choice; a test runs a sweep with both files deleted.
