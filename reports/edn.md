@@ -2749,7 +2749,7 @@ How to add an entry:
   - **Option E: no written rule, or no agents** (not discussed at the time, weighed here).
     Pros: nothing to maintain. Cons: the team had agreed to work with agents ([issue #43](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/43)).
 - **Rationale:** A rule and its trace must agree.
-  Of the 56 pull requests merged by 2026-10-12, 2 carry a review by another person, both by @kadameit, and branch protection requires 9 checks and 0 approvals.
+  Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, both by @kadameit, and branch protection requires 9 checks and 0 approvals.
 
   People decide: of the 75 entries EDN-01 to EDN-77, 46 record the AI's proposal as accepted, 26 as modified, 2 as rejected and 1 as input for further analysis.
   Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member is responsible for them, as the rule's third bullet says.

@@ -17,7 +17,7 @@ Team conventions for how we work together on this project.
 - Every change goes through a pull request into `main`; there are no direct pushes.
 - Passing checks gate the merge; a formal approval does not.
   GitHub blocks self-approval and a pull request written with an agent runs under its author's account, so requiring one would leave those pull requests unmergeable.
-  A teammate's review is welcome and does not gate the merge: 2 of the 56 pull requests merged by 2026-10-12 carry one ([EDN-81](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  A teammate's review is welcome and does not gate the merge: 2 of the 56 pull requests merged by 2026-10-11 carry one ([EDN-81](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
   The workflow this follows from is in [CONTRIBUTING.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md).
 - Reserve the next EDN ID in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md) on `main` before opening a branch that needs one.
   IDs handed out on parallel branches collide, and an ID never changes once it is published.
