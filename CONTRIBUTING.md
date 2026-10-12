@@ -179,6 +179,7 @@ The gate accepts *verified by a test*, *verified by hand*, and *named by a test*
 It refuses *named by a test* on its own, that is a **[manual]** cell left empty with a marker put on some test, because letting the marker alone pass would reopen the cheapest way to fake coverage there is.
 None of the four statuses says a person agreed the evidence is enough; a tool cannot read a test body and judge that.
 That judgement is the review NFR-07 asks for before each delivery, and the matrix is what it reads.
+What the reviewer looks at, and the comment on the delivery's issue that records the review, are described under [The delivery review](reports/latex/README.md#the-delivery-review).
 
 Build the matrix locally with
 
