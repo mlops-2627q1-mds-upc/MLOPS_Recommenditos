@@ -117,3 +117,42 @@ b0: OK
 b1: OK
 lgbm-basic: OK
 lgbm-extended: OK
+
+
+# Issue #93 (PR #109): the four runs of the dvc repro that pull request committed, made from the clean commit 96875d0
+# with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-12 on 7e7cc4c, whose dvc.lock is that run's (committed in cad5ac1); exit status 0.
+
+HEAD 7e7cc4ce3412b0f4cae4a8f2194560a9c77593a3, tree clean, MD5 of its dvc.lock c732d376dfbc03d832fc46fadca94721
+
+b0: run b937b54e5c9b4543b1245ed599705f6d (b0, FINISHED)
+    dvc_stage train@b0
+    git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, git_dirty false
+    evaluate.git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, evaluate.git_dirty false
+    train.deps: 11/11 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b1: run c03f80a3116f46648c7f779c1bbfc721 (b1, FINISHED)
+    dvc_stage train@b1
+    git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, git_dirty false
+    evaluate.git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, evaluate.git_dirty false
+    train.deps: 11/11 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-basic: run f46d1c27699b4b34817d2e9a5d597909 (lgbm-basic, FINISHED)
+    dvc_stage train@lgbm-basic
+    git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, git_dirty false
+    evaluate.git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, evaluate.git_dirty false
+    train.deps: 11/11 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+lgbm-extended: run e27517d36db947ce99b93f0e8529671c (lgbm-extended, FINISHED)
+    dvc_stage train@lgbm-extended
+    git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, git_dirty false
+    evaluate.git_commit 96875d02123e9d4e5e81ac2ded9f305943ca357d, evaluate.git_dirty false
+    train.deps: 11/11 equal the lock
+    evaluate.deps: 10/10 equal the lock
+
+b0: OK
+b1: OK
+lgbm-basic: OK
+lgbm-extended: OK
