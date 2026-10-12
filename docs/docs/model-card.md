@@ -478,6 +478,63 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 Every criterion is measured once per candidate model on the test set, logged to MLflow, and asserted by the model tests from Milestone 3.
 A model is released only if it meets all six ([requirements](requirements.md#2-non-functional-requirements) NFR-01), which the gate in front of a promotion enforces (FR-15).
 
+### How comparable the sets are, and how much a figure moves with the split
+
+The split assigns whole sellers by a hash of the seed and the seller key and stratifies on nothing, so the four sets are comparable only as far as the draw makes them.
+This is what the committed draw looks like, over every row the `split` stage wrote (the served makes are 98.6 % of them):
+
+| | train | validation | calibration | test | pool |
+|---|---|---|---|---|---|
+| rows | 61,180 | 8,992 | 9,169 | 19,985 | 99,326 |
+| seller groups | 16,907 | 2,810 | 2,848 | 5,870 | 28,435 |
+| BMW | 33.73 % | 33.91 % | 37.66 % | 36.12 % | 34.59 % |
+| Porsche | 22.47 % | 22.29 % | 23.71 % | 22.57 % | 22.59 % |
+| Mercedes-Benz | 14.95 % | 14.28 % | 8.67 % | 11.11 % | 13.54 % |
+| Audi | 12.27 % | 12.20 % | 11.80 % | 12.16 % | 12.20 % |
+| median price (EUR) | 39,750 | 37,000 | 35,945 | 36,949 | 38,699 |
+| older than 20 years | 3.98 % | 4.26 % | 4.36 % | 4.07 % | 4.06 % |
+
+The other seven supported makes are within 0.9 pp of their pool share in every set, and the price quantiles from the 10th to the 90th are in [`split_strategy_results.txt`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/split_strategy_results.txt), which holds every number of this section.
+
+- **Mercedes-Benz is the one make that is visibly unbalanced, and one dealer is why.**
+  The largest seller group holds 3,383 listings, 3.41 % of the pool, and 3,382 of them are Mercedes-Benz: a quarter (25.2 %) of all Mercedes-Benz rows belong to one dealer.
+  It landed in train, and without it train's Mercedes-Benz share is 9.97 % and the pool's is 10.49 %, so the gap between train and the other sets is that dealer raising train rather than calibration being short.
+  The remaining 1.8 pp in calibration is the next tier: of the 20 dealers with the most Mercedes-Benz listings, one landed in calibration, against ten in train, three in validation and six in test.
+  No grouped split can balance this make, because that dealer has to go somewhere whole, and in a 10 % set it would make the set one third Mercedes-Benz.
+- **The committed draw is an ordinary one, on the favourable side.**
+  Over 1,000 seeds of the same assignment, the largest distance of any make's share in any set from its pool share is 9.07 pp on average and 6.30 pp at the median; the committed split is at 4.86 pp, and 72 % of the seeds are less balanced.
+  What decides it is where the largest dealer lands: train in 61 % of the seeds (mean gap 5.09 pp), test in 19 % (10.30 pp), and validation or calibration in the remaining 20 % (20 pp).
+  The calibration set's 8.67 % Mercedes-Benz is around the 21st percentile of its own distribution, and its median price at the 17th.
+- **A classifier cannot tell train from test once sellers are held out.**
+  One LightGBM classifier on the model's features and the price, asked to separate train rows from test rows, reaches an AUC of 0.495 on sellers it did not see.
+  The same classifier reaches 0.599 when rows are held out at random, which is the dealer signature a row-wise split would have leaked (EDN-14) and not a difference between the sets.
+
+How much a reported figure depends on which sellers landed where was measured by repeating the split with seeds 1 to 20 and refitting the candidate `lgbm-basic` on each, through the `split` and `features` stages and the `train` stage's own fit, with the committed hyperparameters and model seed.
+The seeds were fixed before any of them was run, and none of them is a candidate split: this measures noise, it does not select a seed.
+
+| `lgbm-basic`, test set | committed split | mean of 20 other splits | standard deviation | range |
+|---|---|---|---|---|
+| MdAPE (SC-01) | 6.81 % | 6.73 % | 0.27 pp | 6.23 % to 7.10 % |
+| within 20 % (SC-02) | 89.81 % | 90.11 % | 0.77 pp | 89.13 % to 91.79 % |
+| MdAPE, older than 20 years (SC-04) | 16.77 % | 18.28 % | 0.76 pp | 16.98 % to 19.68 % |
+| test rows older than 20 years | 784 | 773 | 31 | 731 to 833 |
+
+- **The pooled figures are stable.**
+  SC-01 and SC-02 hold on all 20 splits, with the worst MdAPE 1.9 pp under the bound, and the committed 6.81 % is within a third of a standard deviation of the mean.
+  Most of that spread is again the largest dealer: on the five splits that put it in test the MdAPE is 6.31 % on average, and on the other fifteen it is 6.87 %: that dealer's listings are then about 15 % of the test set, and the lower figure implies they are priced more accurately than the rest.
+  The committed split has that dealer in train, so its figure is of the less flattering kind.
+- **SC-04's miss on old cars is not an artefact of the draw.**
+  The segment is over the 15 % bound on 20 of 20 splits, and it is the worst qualifying level on every one.
+  The committed 16.77 % is lower than all 20, so the figure this card reports understates the miss by about 1.5 pp against the typical split rather than overstating it.
+- **A tuning difference has to be read against this.**
+  The validation MdAPE of the committed hyperparameters has a standard deviation of 0.42 pp over the splits, and a range of 1.15 pp, against the 0.16 pp the whole grid of EDN-73 spans on the committed one.
+  Compared on the same split the noise is much smaller: the grid's lowest-MdAPE point, 255 leaves, is lower than the committed 63 on 17 of 20 splits, by 0.06 pp on average, and higher in validation L1, the metric the tuning protocol decides by, on 13 of 20.
+  A gain of that size is consistent in sign and a fifth of the noise of the test figure it would be reported in.
+
+Two things this does not cover.
+A temporal split would be the stronger test for a price model and is impossible, because the snapshot carries no listing dates (see [Bias, Risks, and Limitations](#bias-risks-and-limitations)).
+And whether the UC2 intervals cover each make equally, Mercedes-Benz above all since the calibration set holds the least of it, cannot be checked before the intervals exist: SC-05 is not measured, and the calibration set is written by `split` and read by no model yet.
+
 ### Results
 
 The criteria are defined in the [problem specification](problem-spec.md#8-success-criteria) (EDN-06, with SC-06 added by EDN-15).
