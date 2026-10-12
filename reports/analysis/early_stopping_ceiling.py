@@ -1,4 +1,4 @@
-"""Where early stopping lands when `n_estimators` does not bind it (EDN-70, issue #64).
+"""Where early stopping lands when `n_estimators` does not bind it (EDN-73, issue #64).
 
 At `n_estimators: 1000` both LightGBM variants ran out of budget before early stopping fired, so
 the budget, not the validation curve, decided how many trees they kept. This script fits each

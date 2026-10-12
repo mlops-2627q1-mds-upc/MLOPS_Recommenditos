@@ -617,12 +617,12 @@ def test_the_realised_test_share_keeps_sc04_measurable(
 # The supported-make list (EDN-05)
 #
 # Deliberately unmarked with `@pytest.mark.req("FR-04")`. FR-04 is the API's
-# 422 and its specification cell reads "**[automated]** API test", so by EDN-45
+# 422 and its specification cell reads "**[automated]** API test", so by EDN-44
 # a marker here would earn the status *verified by a test* for a route these
 # tests do not take: they cover the pipeline half, that the list is computed
 # from the data and written where the API reads it. FR-04 therefore stays open
 # until the API test exists, and the link is kept in prose instead - which is
-# the failure mode EDN-45 exists to prevent, not a gap in traceability.
+# the failure mode EDN-44 exists to prevent, not a gap in traceability.
 # --------------------------------------------------------------------------
 
 

@@ -40,10 +40,10 @@ milestones:
       - NFR-06
       - NFR-07
       - NFR-08
-      # The two halves EDN-66 split out of NFR-06 and NFR-09 so that neither
+      # The two halves that were split out of NFR-06 and NFR-09 so that neither
       # waits for the other. Run provenance is recorded by the tracking seam and
       # the `train` stage, both merged. The secret scan guards credentials that
-      # every contributor has held since the DagsHub remote arrived (EDN-46), so
+      # every contributor has held since the DagsHub remote arrived, so
       # it is due from the moment the risk is, not from when the API exists.
       - NFR-14
       - NFR-15
@@ -67,11 +67,11 @@ milestones:
       - FR-13
       - FR-16
       # Latency, throughput and the request-size limit are measured against a
-      # running API, on the machine of EDN-17.
+      # running API, on the course's VM.
       - NFR-02
       - NFR-03
       # The running system's security, without the repository's secret hygiene,
-      # which EDN-66 moved to NFR-15 and M3. Its first evidence is the body-limit
+      # which moved to NFR-15 and M3. Its first evidence is the body-limit
       # test against the API. Its image scan, Dockerfile review and the check from
       # outside the VM need the image and the deployment of M5; booked M4 as
       # decided with that split, so the delivery review is what notices if they

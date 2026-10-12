@@ -788,7 +788,7 @@ def test_the_supported_make_list_is_read_as_names_and_not_as_its_entries(run_sta
     # that case cannot arise from the only producer; what can still go wrong is
     # the shape. Each entry is `{"make": ..., "listings": ...}`, and reading the
     # entries instead of the names would satisfy `len()` and then match nothing
-    # in `served_rows`, which restricts every frame on it (EDN-67).
+    # in `served_rows`, which restricts every frame on it (EDN-48).
     run_stage(
         {"train": processed_frame([{"make": "BMW"}] * 4 + [{"make": "Audi"}] * 4)},
         supported_makes=["Audi", "BMW"],
@@ -816,11 +816,11 @@ def test_an_empty_supported_make_list_is_refused_rather_than_read_as_no_make(run
 
 
 # --------------------------------------------------------------------------
-# The served population (EDN-48, EDN-67)
+# The served population (EDN-48)
 #
 # Deliberately unmarked with `@pytest.mark.req("FR-04")`, for the reason
 # tests/test_split.py gives for the make list itself: FR-04 is the API's 422,
-# its specification cell names an API test as the evidence, and by EDN-45 a
+# its specification cell names an API test as the evidence, and by EDN-44 a
 # marker here would report it verified by a route these tests do not take. What
 # they verify is the pipeline half of the same scope - that no frame reaching a
 # model holds a make that answer refuses, and that no such make decides the
@@ -833,9 +833,10 @@ _UNSERVED_MAKE = "Trabant"
 
 
 def test_every_frame_the_stage_writes_holds_only_supported_makes(run_stage):
-    # EDN-48's first obligation, in the one stage that now owns it: train,
-    # validation, calibration, test and the `ES` holdout. The holdout is the one
-    # people forget, and it is the set NFR-11 and FR-15 rest on.
+    # The first obligation of the supported-make rule (EDN-48), in the one stage
+    # that now owns it: train, validation, calibration, test and the `ES` holdout.
+    # The holdout is the one people forget, and it is the set NFR-11 and FR-15
+    # rest on.
     #
     # Every input frame holds an unsupported make, so a frame passed through
     # unfiltered fails here rather than the test passing because the filter had
@@ -864,10 +865,10 @@ def test_every_frame_the_stage_writes_holds_only_supported_makes(run_stage):
 
 
 def test_the_vocabulary_is_decided_by_the_served_training_rows_alone(run_stage):
-    # EDN-48's second obligation: the filter comes before anything is fitted on
-    # the training rows. Ten served rows and ten unserved ones, built so that
-    # every data-dependent part of the vocabulary comes out differently if the
-    # unserved rows are counted at all:
+    # The second obligation of the supported-make rule (EDN-48): the filter comes
+    # before anything is fitted on the training rows. Ten served rows and ten
+    # unserved ones, built so that every data-dependent part of the vocabulary
+    # comes out differently if the unserved rows are counted at all:
     #
     # - their make and their model would be levels;
     # - 'Two-stroke engine' and the trim '601 S de luxe' are on every unserved row

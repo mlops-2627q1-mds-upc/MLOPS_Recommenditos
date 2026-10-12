@@ -109,8 +109,8 @@ write_frame(frame, out, INTERIM_SCHEMA)  # conforms before writing
 Because it selects, a column the contract does not name cannot reach an artefact: the PII columns [NFR-08](specification.md) forbids are kept out structurally, not by every stage remembering to drop them.
 
 That guarantee starts at the interim frame, not before it.
-The raw layer deliberately keeps the published file's PII columns, because preprocessing hashes `seller_company_name` and the location into the split's group key before dropping them, and it is pushed to the remote like any other stage output (EDN-34).
-The pushed Parquet therefore holds the published file's personal data, which is the exposure EDN-34 weighed.
+The raw layer deliberately keeps the published file's PII columns, because preprocessing hashes `seller_company_name` and the location into the split's group key before dropping them, and it is pushed to the remote like any other stage output (EDN-20).
+The pushed Parquet therefore holds the published file's personal data, which is the exposure EDN-20 weighed.
 
 Both halves exist because Parquet preserves whatever dtype it is handed rather than normalising it.
 Without an explicit cast at each boundary the frames drift apart stage by stage, and the stage that notices is never the stage that caused it.
@@ -138,7 +138,7 @@ Three stages share that rule, and each has one job in it:
 
 - `split` **records** the list and writes it as `data/processed/supported_makes.json`, but removes no row.
   It stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no row disappears without an artefact saying where it went.
-- `features` **applies** it, in `build_features.served_rows`, and is the only stage that does ([EDN-67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+- `features` **applies** it, in `build_features.served_rows`, and is the only stage that does ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
   It restricts all five frames - train, validation, calibration, test and the `ES` holdout - and it does so before the vocabulary is built, so the `make` levels, the equipment columns and the `model_version` levels are decided by served training rows alone.
   It declares the artefact as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
   It also refuses a supported make that no training row holds, naming it: `split` counts support over all four sets, so after a change to `seed` or to the threshold every seller of a make can land outside train, and the API would then accept a make the model has never seen.
@@ -161,10 +161,10 @@ EDN-48 named four guarantees this arrangement owes, and each has an owner and a 
 
 Measured on the real snapshot (2026-10-05), the filter removes 1,437 of the 99,326 split rows and moves every realised split share by at most 0.08 pp, so it does not disturb the split proportions.
 Per frame: train keeps 60,378 of 61,180 rows, validation 8,859 of 8,992, calibration 8,987 of 9,169 and test 19,665 of 19,985.
-Of the 6,079 `ES` holdout rows the holdout matrix keeps 5,979, which is EDN-14's count of the `ES` rows the API accepts under FR-04; the 100 it drops are requests the API refuses before the model sees them.
+Of the 6,079 `ES` holdout rows the holdout matrix keeps 5,979, which is the count of the `ES` rows the API accepts under FR-04; the 100 it drops are requests the API refuses before the model sees them.
 The matrix is the holdout as the model receives it, and it is not what M6 replays: a request cannot be rebuilt from it, because its `country_code` is empty throughout (see below) and `registration_date` has become `age_years`, both fields FR-01 requires.
 The replay reads `data/processed/holdout_es.parquet`, which keeps all 6,079 rows, and has to filter to the supported makes itself or count the 100 refused requests as FR-04's 422s.
-The holdout's `country_code` stays empty in every one of those rows, because `ES` is still not a training level ([EDN-42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); the filter removes rows and leaves that encoding as it was.
+The holdout's `country_code` stays empty in every one of those rows, because `ES` is still not a training level ([EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); the filter removes rows and leaves that encoding as it was.
 The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
 The problem they pose is a different one: the reported population would not be the served population.
 
@@ -267,7 +267,7 @@ And these rules:
   It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot. Validation MdAPE is reported beside it and decides nothing.
 - **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** A point is adopted only when its simultaneous interval of the validation L1 difference lies entirely below zero, and when several do, the one with the lowest validation L1.
   On this validation split that resolves a difference of about 1 % and nothing smaller: in the four sweeps of issue #88 the simultaneous half-widths ran from 0.0008 to 0.0015, which is 0.8 % to 1.6 % of the reference's validation L1 (0.100 for `lgbm-basic`, 0.097 for `lgbm-extended`), and the best point of any sweep was 0.4 % better.
-- **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-70); a point the ceiling still ended is flagged and never adopted.
+- **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-73); a point the ceiling still ended is flagged and never adopted.
   The search's validation figures are optimistic, because early stopping picks each point's tree count on the same validation rows that score it.
 - **The reference is always fitted.** It is the variant as `params.yaml` has it, with any `--fix` applied, whether or not the grid names it, because every difference is taken against it.
 - **Every fit is measured and tracked** (issue #88). Each one is wrapped in `energy.measure` exactly as `train` wraps its fit and logged as its own run in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs. A point's run is tagged `sweep`, `sweep_role=point`, `point`, `is_reference` and `variant` when it opens, so the run of a fit that fails still names its sweep and point, and carries its hyperparameters under the names `train` uses, its validation L1 and MdAPE, its fit time and its energy, but no model bundle; one `sweep_role=summary` run carries the sweep's totals, its verdict and its `reference_point`.
@@ -300,7 +300,7 @@ uv run python -m recommenditos.modeling.tune lgbm-extended \
 `--grid` takes any key the estimator reads, `min_child_samples` included, which is optional in `params.yaml` at LightGBM's default of 20; `n_estimators` and `early_stopping_rounds` are refused, because the search sets them itself.
 A sweep id is used once: a second run under it is refused when the MLflow experiment already holds runs tagged with it, which is also what an interrupted sweep leaves behind; rerun it under a fresh id.
 The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
-Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files (EDN-74).
+Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files.
 On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, and it did when the search ran on 2026-10-06: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
 All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-78).
 
@@ -326,7 +326,7 @@ A value that passes is adopted like any other parameter change: edit `params.yam
 From a run to its inputs
 ------------------------
 
-Every MLflow run the pipeline makes names the committed state that produced it ([NFR-14](specification.md), EDN-74).
+Every MLflow run the pipeline makes names the committed state that produced it ([NFR-14](specification.md)).
 `train@<variant>` opens the variant's run and `evaluate` appends its metrics to it (EDN-55), and the tracking seam, `recommenditos/provenance.py`, tags it with what each stage was produced from:
 
 | Tag | Set when | What it identifies |
@@ -357,7 +357,7 @@ To get from a run back to what produced it:
    `git log --reverse --format=%H -S <hash> -- dvc.lock` lists the commits that added or removed the hash in the lock, oldest first; the first one added it, and its lock records the input.
    `git checkout` that commit and `dvc pull <path>` restores the file or directory.
 
-Runs made before 2026-10-05 carry a `dvc_lock_md5` tag instead of the input hashes: the MD5 of `dvc.lock` as it stood when that stage started, which for the first stage of a `dvc repro` is the previous run's lock and for every later one a lock that only existed mid-run, so it is never the lock that records the run (EDN-74).
+Runs made before 2026-10-05 carry a `dvc_lock_md5` tag instead of the input hashes: the MD5 of `dvc.lock` as it stood when that stage started, which for the first stage of a `dvc repro` is the previous run's lock and for every later one a lock that only existed mid-run, so it is never the lock that records the run.
 
 The test fixture
 ----------------

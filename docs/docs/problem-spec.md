@@ -23,11 +23,11 @@ It does not forecast future prices.
 ### In scope
 
 - **Used passenger cars only:** `offer_type = U`, not pre-registered, `vehicle_type = Car` ([EDN-04](#decision-records)).
-  The pre-registered filter can only read `is_preregistered`, whose `False` also covers "not stated", so a residual number of unmarked pre-registered listings stays in the training data ([EDN-24](#decision-records)).
+  The pre-registered filter can only read `is_preregistered`, whose `False` also covers "not stated", so a residual number of unmarked pre-registered listings stays in the training data ([EDN-04](#decision-records)).
 - **Supported makes:** makes with at least **300 listings** in the cleaned used-car data, counted after removing the `ES` holdout and before the split ([EDN-05](#decision-records)).
   The pipeline computes this list; it is not hard-coded.
   With the current data these are 11 makes covering 98.6 % of the used listings: BMW, Porsche, Mercedes-Benz, Audi, Alfa Romeo, Suzuki, Volvo, Honda, Hyundai, Aston Martin and Volkswagen.
-  The model is fitted and evaluated on these makes only, and every feature matrix - the `ES` holdout's included - holds no other, because the `features` stage restricts each frame before it decides any level or column ([EDN-48, EDN-67](#decision-records)).
+  The model is fitted and evaluated on these makes only, and every feature matrix - the `ES` holdout's included - holds no other, because the `features` stage restricts each frame before it decides any level or column ([EDN-48](#decision-records)).
   The split itself stays lossless, so the listings of the other makes are still in its frames.
 - **Markets:** the model is trained on 7 countries (DE, IT, NL, BE, AT, FR, LU), with the country as a feature.
   All `ES` listings are held out as the new-market drift scenario ([EDN-03](#decision-records), project brief section 3.2); they join the training data only after the drift is confirmed and the model is retrained.
@@ -199,19 +199,15 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 
 The choices behind this page are recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md):
 
-- EDN-03: hold out AutoScout24 `ES` as the new-market drift scenario.
-- EDN-04: used cars only.
-- EDN-05: minimum listing support per make.
-- EDN-06: success criteria.
-- EDN-15: UC1 required fields and SC-06, the criterion for absent optional fields.
-- EDN-22: drop listings registered after the reference date.
-- EDN-23: read the condition flags as one-sided assertions.
-- EDN-24: keep the pre-registered exclusion despite the unreliable flag.
-- EDN-48: `split` records the supported-make list and stays a lossless partition; the stages that build model input apply it.
-- EDN-58: an unmeasured criterion blocks the gate rather than passing it.
-- EDN-59: SC-06 masks input fields rather than feature columns.
-- EDN-60: which segments SC-04 may gate on is enforced in code.
-- EDN-62: `lgbm-basic` is the candidate, and SC-04's miss on cars over 20 years is accepted.
-- EDN-67: the `features` stage applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built.
-- EDN-78: the hyperparameter search keeps the committed LightGBM values.
-- EDN-79: the seller-grouped hash split stays, and its figures are reported with their spread over other splits.
+- EDN-03: the Spanish listings are held out as the new-market scenario.
+- EDN-04: the model covers used passenger cars only.
+- EDN-05: a make is supported from 300 listings.
+- EDN-06: success criteria for the price model.
+- EDN-15: UC1 required fields and the missing-input criterion SC-06.
+- EDN-22: listings registered after the reference date are dropped.
+- EDN-23: condition flags are read as one-sided assertions.
+- EDN-48: the supported-make list is applied in the `features` stage.
+- EDN-58: an unmeasured success criterion blocks the release gate.
+- EDN-62: `lgbm-basic` is the candidate model.
+- EDN-78: the hyperparameter search covers both LightGBM variants.
+- EDN-79: the seller-grouped hash split stays.

@@ -2,6 +2,7 @@ One-off analyses
 ================
 
 Scripts behind EDN entries, kept so a decision can be re-checked later.
+An entry called archived here is in [reports/edn-archive.md](../edn-archive.md), and the last section of [reports/edn.md](../edn.md) says what became of it.
 They are not part of the DVC pipeline, and `[tool.ruff]` in `pyproject.toml` excludes this directory, so they stay as they were run.
 
 ## NFR-11 drift feasibility (EDN-14)
@@ -22,7 +23,7 @@ computed once and evaluated at each level. It exists because the Bonferroni thre
 the "at most 1 of 20 windows" NFR-11 promises, leaving the requirement no margin.
 `nfr11_alpha_sweep_results.json` and `nfr11_alpha_sweep_results.txt` are its output (2026-09-29).
 
-The level the drift job actually runs at is **0.005**, decided in EDN-29. `nfr11_check.py` keeps
+The level the drift job actually runs at is **0.005**, decided in EDN-14. `nfr11_check.py` keeps
 `P_VAL = 0.05`, because its committed output is the evidence EDN-14 cites and re-running it at a
 different level would silently change what that entry points at. Use `nfr11_alpha_sweep.py` to
 re-check the decided level.
@@ -41,7 +42,7 @@ training scope, to find the fields that FR-01 may not leave optional because the
 see them missing.
 `fillrates_results.txt` is the output of the run recorded in EDN-15 (2026-09-29).
 
-## The `split` stage's size gate (EDN-39, EDN-40)
+## The `split` stage's size gate (EDN-03, archived EDN-39)
 
 `split_gate.py` chooses the four constants the gate of `recommenditos/data/split_data.py` is
 calibrated with, and reports the realised split sizes, the group count, the largest dealer and
@@ -52,7 +53,7 @@ seeds on three pools: the real snapshot and the two synthetic fixtures the tests
 It exists because the first version of the constant was justified by a sweep that stopped at 200
 seeds and was wrong by 2,000, in both directions at once: sound splits would have been failed and
 a calibration set at 0.58 of its intended size would have passed.
-`split_gate_results.txt` is the output of the run recorded in EDN-39 and EDN-40 (2026-09-30).
+`split_gate_results.txt` is the output of the run recorded in EDN-03 and in the archived EDN-39 (2026-09-30).
 
 Unlike the other scripts here it imports the stage's own functions rather than re-deriving them,
 so the justification cannot drift from the code it justifies; it therefore has to run from the
@@ -83,17 +84,17 @@ listings, against SC-04's segment size, which only checks a segment once it hold
 It reports which supported makes therefore never reach the quality gate.
 `make_support_results.txt` is the output of the run cited in the model card (2026-09-29).
 
-## Extended feature set: `model_version` and `weight_kg` (EDN-41, model card)
+## Extended feature set: `model_version` and `weight_kg` (model card, archived EDN-41)
 
 `extended_features.py` answers the two questions the `features` stage had to decide and the
 specification did not cover.
 It measures how much the `model_version` normalisation merges - per make and model, and against
 the two finer alternatives of prefixing the token with make and model or keeping two tokens after
 an engine letter - and what range `weight_kg` covers once parsed out of its text form.
-`extended_features_results.txt` is the output of the run cited in EDN-41, the model card and the
+`extended_features_results.txt` is the output of the run cited in the archived EDN-41, the model card and the
 dataset card (2026-09-30).
 
-## The feature space over the served makes (EDN-67, model card)
+## The feature space over the served makes (EDN-48, model card)
 
 `served_vocabulary.py` builds the `features` stage's vocabulary twice from the same `split` output,
 once over every training row and once over the training rows of the supported makes, and reports
@@ -103,14 +104,14 @@ It is the before-and-after of moving the supported-make filter in front of the v
 Like `split_gate.py` it imports the stage's own functions, so it runs from the repository root, and
 it reads the `split` artefacts under `data/processed/` rather than the raw CSV, so `dvc pull` is all
 it needs.
-`served_vocabulary_results.txt` is the output of the run cited in EDN-67, the model card and
+`served_vocabulary_results.txt` is the output of the run cited in EDN-48, the model card and
 `params.yaml` (2026-10-05).
 
-## Where early stopping lands, and what tuning could still buy (EDN-70, issue #64)
+## Where early stopping lands, and what tuning could still buy (EDN-73, issue #64)
 
 `early_stopping_ceiling.py` fits each LightGBM variant once with `n_estimators` at 20,000, every other setting as `params.yaml` has it, and reports the round early stopping chose, the validation curve at fixed tree counts, and what the trees cost: fit seconds, `booster.txt` size, and the single-row latency of a prediction and of the native SHAP export FR-08 serves.
 It is the evidence behind the committed ceiling of 5,000.
-`early_stopping_ceiling_results.txt` is the output of the run cited in EDN-70, the model card and `params.yaml` (2026-10-05).
+`early_stopping_ceiling_results.txt` is the output of the run cited in EDN-73, the model card and `params.yaml` (2026-10-05).
 
 `tuning_sweep.py` is the evidence behind EDN-73, not a tuning run: a small grid of `learning_rate` and `num_leaves` for the candidate `lgbm-basic`, each point fitted with early stopping deciding the trees, and a paired bootstrap by seller group of whether the validation split can tell any point from the committed one.
 `tuning_sweep_results.txt` is its output (2026-10-05).
@@ -162,7 +163,7 @@ MLFLOW_TRACKING_URI= uv run python reports/analysis/rapl_validation.py > reports
 sudo chmod 0400 /sys/class/powercap/intel-rapl:*/energy_uj /sys/class/powercap/intel-rapl-mmio:*/energy_uj
 ```
 
-Run them against the raw dataset, which is not in the repo (NFR-08; EDN-35 for where it does live).
+Run them against the raw dataset, which is not in the repo (NFR-08; EDN-25 for where it does live).
 Use the `download` stage's own cache rather than a second 548 MB copy: `uv run dvc repro download`
 with `download.source: zenodo` puts the pinned file there, verified against `download.md5`, and
 reuses it on every later run.
@@ -221,11 +222,11 @@ It needs no data: `uv run python reports/analysis/gx_probe.py`.
 `gx_fingerprint_cost.py` runs the real `validate-data` stage on the real snapshot with Great Expectations' batch fingerprint switched off, as the stage does, or on, against a context in a temporary directory, so the pipeline's outputs are not touched.
 Run each mode under `/usr/bin/time -v`; `gx_fingerprint_cost_results.txt` holds the wall time and peak RSS of both runs cited in EDN-68 (2026-10-05).
 
-`mileage_scope.py` measures the alternative EDN-72 rejected for the mileage rule: dropping the three cleaned listings above FR-03's 1,000,000 km in preprocessing.
+`mileage_scope.py` measures the alternative EDN-22 rejected for the mileage rule: dropping the three cleaned listings above FR-03's 1,000,000 km in preprocessing.
 It runs the real `split`, `features`, `train` and `evaluate` stages on the interim frame without them, in a temporary directory with tracking off, and compares the result with the committed `metrics.json`.
-`mileage_scope_results.txt` is the output of the run cited in EDN-72 (2026-10-05), taken against the `metrics.json` of commit `abea241`.
+`mileage_scope_results.txt` is the output of the run cited in EDN-22 (2026-10-05), taken against the `metrics.json` of commit `abea241`.
 
-## What a run's provenance tags identify (EDN-74, issue #79)
+## What a run's provenance tags identify (archived EDN-74, issue #79)
 
 `run_provenance_check.py` takes the runs the committed pipeline points at - the run id in each `models/<variant>/model.json`, after checking that the bundle is the one the committed `dvc.lock` records - reads them back from the tracking server, and compares them with that lock.
 For every run it checks that each `train.deps.<path>` tag equals the `md5` the lock records for that dependency of `train@<variant>`, that each `evaluate.deps.<path>` equals the one under `evaluate`, with no dependency missing and no tag extra, and that `git_dirty` and `evaluate.git_dirty` are `false`; for a run made before the fix it also says whether its `dvc_lock_md5` equals the committed lock's digest.

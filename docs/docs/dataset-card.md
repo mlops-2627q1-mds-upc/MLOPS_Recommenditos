@@ -168,7 +168,7 @@ The full framing lives in the [problem specification](problem-spec.md); this sec
 - **Scope.** Used passenger cars that are not pre-registered, which is `offer_type = 'U'`, `vehicle_type = 'Car'` and `is_preregistered = False`, leaving 110,013 of the 118,382 rows (113,708 before the pre-registered filter). Preprocessing additionally drops the listings registered after the snapshot date and keeps only prices between 500 EUR and 2,000,000 EUR.
 - **Excluded as leakage.** `price_net` and `price_vat_rate` are derived from the target. `price_tax_deductible` and `price_negotiable` are seller-side listing options tied to the price rather than properties of the car.
 - **Excluded as identifiers or PII.** `id`, `vin`, `german_hsn_tsn`, `street`, `zip`, `city`, `latitude`, `longitude` and `seller_company_name`. The last is used only in hashed form, as the grouping key for the split.
-  That hash is a grouping key and not an anonymisation: it is unsalted, so a dictionary built from this published file maps every group id back to the company name, or to the `country_code`, `zip` and `city` of a private seller, that it came from. No artefact carries those columns, but nor are the ids opaque, and this file is where that is stated ([EDN-37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  That hash is a grouping key and not an anonymisation: it is unsalted, so a dictionary built from this published file maps every group id back to the company name, or to the `country_code`, `zip` and `city` of a private seller, that it came from. No artefact carries those columns, but nor are the ids opaque, and this file is where that is stated ([EDN-20](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 - **Row funnel.** Each rule is applied to what the rule above it left, so these are the counts the `preprocess` stage reports (measured 2026-09-30, `reports/analysis/preprocess_funnel.py`): 118,382 as read, 110,013 after the used-passenger-car scope, 109,986 after dropping the listings registered after the snapshot, 109,911 after the price range and **105,405** after deduplication.
   Deduplication removes 4,506 rows, not the 6,347 duplicates the raw file holds, and the date rule removes 27 of the 164 post-snapshot listings, because in both cases the rules above them delete the rest first.
 - **Splits.** Listings are deduplicated first, and every remaining `ES` listing (6,079 of the 8,015 in the raw file, 7,545 of them still present before deduplication) is then held out as a simulated new market for drift monitoring, never reaching training, validation or calibration. The remainder is split into train, validation, calibration and test grouped by seller, so that no seller appears in two splits. A purely random split would leak near-identical listings from the same dealer across splits, and no listing date exists, so a temporal split is not possible.
@@ -184,7 +184,7 @@ The full framing lives in the [problem specification](problem-spec.md); this sec
 - **Supported makes.** 11 of the 25 makes reach the 300-listing threshold on the 99,326 split listings, covering 97,889 of them (98.6 %): BMW (34,360), Porsche (22,434), Mercedes-Benz (13,444), Audi (12,115), Alfa Romeo (6,285), Suzuki (3,849), Volvo (3,348), Honda (798), Hyundai (548), Aston Martin (360) and Volkswagen (348).
   The list is computed by the `split` stage and written as `data/processed/supported_makes.json`, never hard-coded, because the API reads it from the model metadata.
   The listings of the other makes stay in the split sets: the stage records the scope rather than enforcing it, so the threshold can be revisited without re-running the split.
-  The `features` stage then removes them from every feature matrix, the `ES` holdout's included, so the model never sees them: 1,437 of the split listings and 100 of the 6,079 holdout listings ([EDN-67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  The `features` stage then removes them from every feature matrix, the `ES` holdout's included, so the model never sees them: 1,437 of the split listings and 100 of the 6,079 holdout listings ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 - **How these numbers were produced.** By the `preprocess` and `split` stages on the real snapshot, which apply the preprocessing rules of the problem specification, so `dvc repro` reproduces them; the [profiling notebook](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/notebooks/1.0-lh-dataset-card-profiling.ipynb) recomputes them through the same stage functions.
   The same split run on the unfiltered raw rows would give an 8,015-row holdout and 13 supported makes, because the new, pre-registered and duplicate listings that the rules remove still carry BYD and Ford over the threshold.
 
@@ -218,8 +218,8 @@ The raw file carries a real re-identification risk and is handled accordingly.
 - `seller_company_name`, `city`, `street` and exact `latitude` and `longitude` identify a dealership, or for the 19,802 private listings, a specific location.
 - The free-text `description` may contain seller-inserted contact details.
 
-In this project the `download` stage fetches the raw file from the pinned Zenodo DOI, verifies it against the published checksum and converts it to `data/raw/listings.parquet` (EDN-35).
-The CSV itself is a local cache and is not pushed anywhere, but that Parquet is, and it keeps the same PII columns, because preprocessing needs them to build the split's group key (EDN-34).
+In this project the `download` stage fetches the raw file from the pinned Zenodo DOI, verifies it against the published checksum and converts it to `data/raw/listings.parquet` (EDN-25).
+The CSV itself is a local cache and is not pushed anywhere, but that Parquet is, and it keeps the same PII columns, because preprocessing needs them to build the split's group key (EDN-20).
 So we do re-host the personal data ourselves, on a remote that is public (EDN-20), in the derived format rather than the published one.
 `download.source` is `zenodo` and the pushed Parquet is the real snapshot, so that is the state today and not a prospect.
 We record this as an accepted risk rather than a solved problem: the marginal exposure is small, because the identical data is already publicly downloadable from the pinned Zenodo DOI under the same licence, but we are publishers of that personal data in our own right.
@@ -227,7 +227,7 @@ The PII columns are dropped in preprocessing, so no processed dataset, predictio
 See [Data versioning](data-versioning.md).
 
 Anyone else redistributing or deploying from this data should drop or hash `vin`, `street` and the exact coordinates, and treat `seller_company_name` as sensitive.
-A plain hash of any of these is a pseudonym and not a removal, because the values can be enumerated from this file: our own group key is measurably invertible that way (EDN-37), and a hash that has to resist that needs a secret key.
+A plain hash of any of these is a pseudonym and not a removal, because the values can be enumerated from this file: our own group key is measurably invertible that way (EDN-20), and a hash that has to resist that needs a secret key.
 
 ## Bias, Risks, and Limitations
 

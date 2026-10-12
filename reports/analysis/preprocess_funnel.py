@@ -8,7 +8,7 @@ committed artefact rather than to a log line somebody has to have kept.
 It calls the stage's own functions instead of re-implementing any of its steps, so these numbers
 cannot drift from what the pipeline does. The rule order is the one issue #34 fixes and is load-bearing:
 each rule sees only what the rule above it left. The raw dataset is not in the repo (NFR-08,
-EDN-07), see the README.
+EDN-25), see the README.
 
 Usage: uv run python reports/analysis/preprocess_funnel.py <the raw CSV>
 """

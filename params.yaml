@@ -43,7 +43,7 @@ download:
 
 preprocess:
   # Scope: used passenger cars only (EDN-04). `is_preregistered` rows are
-  # excluded even though the flag is unreliable (EDN-24).
+  # excluded even though the flag is unreliable (EDN-04).
   offer_type: U
   vehicle_type: Car
   # Training price range in EUR. Below 500 the listings are placeholders and
@@ -165,7 +165,7 @@ features:
     - equipment_extra
     - equipment_safety
   # An equipment item becomes its own column only above this share of the
-  # training rows of the supported makes (EDN-67), so the matrix does not grow a
+  # training rows of the supported makes (EDN-48), so the matrix does not grow a
   # tail of near-constant columns. It keeps 133 of the 146 items those rows hold,
   # the same 133 as over every training row (2026-10-05).
   equipment_min_frequency: 0.01
@@ -183,7 +183,7 @@ features:
   #
   # Both values are coarse on purpose and the ladder is meant to sweep them: the
   # leading token names the body style for some makes and the engine letter for
-  # others, which merges heavily (EDN-41). The counts above are measured by
+  # others, which merges heavily. The counts above are measured by
   # reports/analysis/served_vocabulary.py; the merging and the rejected finer
   # alternatives are in the model card and in
   # reports/analysis/extended_features.py (2026-09-30).
@@ -286,7 +286,7 @@ train:
         alpha: 1.0
         # Levels below this many training rows share one "rare level" column
         # instead of getting a coefficient each, and an unseen level at serving
-        # time is encoded as that column where there is one (EDN-18, EDN-50). An
+        # time is encoded as that column where there is one (EDN-18). An
         # absolute row count rather than a share, so that what it means does not
         # change as the training set grows. Only the `ridge` variant has this: the
         # tree models handle a rare level natively (EDN-02).
@@ -300,7 +300,7 @@ train:
         # values seen exactly once. It is not a boundary: an infrequent group
         # already exists at 2, and at 5 only `model` and `fuel_category` have one
         # at all, so the other six categoricals encode an unseen value as all
-        # zeros (EDN-50 has the per-column measurement).
+        # zeros (the archived EDN-50 has the per-column measurement).
         min_category_rows: 5
     # Ladder step 3: the main model.
     lgbm-basic:
@@ -323,7 +323,7 @@ train:
         # written here only if a search adopts another value (EDN-78); issue #88's
         # search over 5, 10, 20, 50 and 100 kept 20.
         # A ceiling for early stopping, not a tree count: early stopping on the
-        # validation split decides how many trees the model keeps (EDN-70). At
+        # validation split decides how many trees the model keeps (EDN-73). At
         # 1,000 the ceiling decided instead, for both LightGBM variants. With no
         # ceiling in reach, early stopping chooses round 1,243 here and 1,647 for
         # `lgbm-extended` (reports/analysis/early_stopping_ceiling_results.txt,

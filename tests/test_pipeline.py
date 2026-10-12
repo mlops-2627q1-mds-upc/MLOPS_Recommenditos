@@ -253,7 +253,7 @@ def test_the_reported_population_is_the_served_population(pipeline, params):
     # a property of the stages agreeing, not of one model.
     #
     # Counted on the test frame `split` wrote, which still holds every make,
-    # rather than on the matrix: `features` restricts the matrix (EDN-67), so the
+    # rather than on the matrix: `features` restricts the matrix (EDN-48), so the
     # matrix alone cannot show that anything was removed.
     supported = {
         entry["make"]

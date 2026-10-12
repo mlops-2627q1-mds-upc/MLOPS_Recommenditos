@@ -46,7 +46,7 @@ How the Markdown fields map onto the course's, since the two are not the same:
   entry amended this one or that its evidence was corrected. It becomes the
   entry's `note`, which edn.tex prints first, so a reader of the PDF sees that an
   entry was revised before reading what it decided.
-* A field the template does not define (EDN-59 has one) is appended to the field
+* A field the template does not define (an entry may have one) is appended to the field
   above it under its own label, so nothing in the source is dropped.
 * A field that holds only "-" is the template's "does not apply" and is left out.
 * `In LaTeX` is bookkeeping and is not rendered.

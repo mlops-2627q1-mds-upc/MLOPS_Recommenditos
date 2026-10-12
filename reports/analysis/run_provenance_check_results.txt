@@ -1,4 +1,4 @@
-# Before: the runs main's committed models point at, made by the code before EDN-74.
+# Before: the runs main's committed models point at, made by the code before the archived EDN-74.
 # Run 2026-10-05 on a commit of this branch whose dvc.lock and models/ are still main's (e1e91e1); exit status 1.
 
 HEAD 4a1fc03741101e5684bca6b73451f7a60c4e64fd, tree clean, MD5 of its dvc.lock 7a0a78e53b74de48a87d7f7a0e3a98c1
@@ -41,7 +41,7 @@ lgbm-basic: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 tra
 lgbm-extended: 4 problem(s): git_dirty true; evaluate.git_dirty missing; 9 of 9 train.deps tags missing; 9 of 9 evaluate.deps tags missing
 
 
-# After: the four runs of the dvc repro this pull request committed, made by the code of EDN-74 from the clean commit fdd6f51,
+# After: the four runs of the dvc repro this pull request committed, made by the code of the archived EDN-74 from the clean commit fdd6f51,
 # with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-05 on the commit that holds that run's dvc.lock (fd499ef); exit status 0.
 
 HEAD fd499efe5ef1488f77268abbb834173b587de8fe, tree clean, MD5 of its dvc.lock 8f36ab0b44cddafe5377cf3cdbc17c8e

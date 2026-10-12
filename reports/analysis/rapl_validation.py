@@ -21,7 +21,7 @@ It measures, around the same fit and in the same run:
   `params.yaml` gives the `train` stage;
 - what CodeCarbon itself reports once RAPL is readable (`cc_default`), which is
   what the pipeline would switch to on a machine that grants the access
-  permanently (EDN-69's rejected option B).
+  permanently (an alternative EDN-69 rejected).
 
 The four ladder variants are fitted three times each, round robin, on the feature
 matrices in `data/processed/features`, with `train.num_threads` from params.yaml.

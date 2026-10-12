@@ -320,7 +320,7 @@ def validation_seller_groups(
 
     The matrix does not carry `seller_group_id`, so it is joined back from the
     split frame `features` read: the matrix keeps that frame's served rows in
-    their order (EDN-67), which the row count and the prices check, so a matrix
+    their order (EDN-48), which the row count and the prices check, so a matrix
     from another run fails here rather than resampling the wrong groups.
     """
     frame = read_frame(processed_dir / f"{VALIDATION_SPLIT}.parquet", PROCESSED_SCHEMA)

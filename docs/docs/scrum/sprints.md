@@ -105,7 +105,7 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
   threshold hidden in a test; a `features` stage, which the demo's text model does not need; and a
   synthetic fixture instead of a data sample, because the raw file carries PII we may not re-host.
 - **NFR-11 restated** at a window of 1,000 requests with `model` excluded from the drift comparison,
-  after measuring that neither change works on its own (EDN-26).
+  after measuring that neither change works on its own (EDN-14).
 - **A working rule for coding agents**, written into the [working agreements](working-agreements.md).
   The decision and how the rule has been practised are recorded in [EDN-81](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 
@@ -133,9 +133,9 @@ Recorded on day 2 of the sprint from the merged pull requests and the closed iss
 - The model card ([#5](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/5), [PR #30](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/30)) merged on 2026-09-29, minutes after the sprint 1 review was written.
   That emptied the pull request backlog and closed [#31](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/31), so sprint 1 carried nothing into sprint 2.
 - The project structure deviation is recorded as EDN-28 ([PR #46](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/46)), which the planning notes above still list as outstanding.
-- The committed analysis outputs in `reports/analysis/` reproduce again and NFR-11's false-alarm bound is corrected as EDN-29 ([PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47)).
+- The committed analysis outputs in `reports/analysis/` reproduce again and NFR-11's false-alarm bound is corrected as EDN-14 ([PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47)).
   That closes the second risk the sprint carried in.
-- The pipeline skeleton and the processed-data contract ([#32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32), [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48)) merged on 2026-09-30: all eight DVC stages defined and running as stubs, `params.yaml`, `recommenditos/schema.py`, the synthetic fixture, and EDN-30 to EDN-34 for the decisions behind them.
+- The pipeline skeleton and the processed-data contract ([#32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32), [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48)) merged on 2026-09-30: all eight DVC stages defined and running as stubs, `params.yaml`, `recommenditos/schema.py`, the synthetic fixture, and EDN-30 to EDN-20 for the decisions behind them.
 
 **What that unblocks.** [#33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33) to [#39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39) and [#25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25) each waited on #32 and on nothing else, so every pipeline ticket can now be built in parallel against the schema and the fixture instead of against another branch.
 The board and its labels are in place as of this sprint, so the work can be filtered per milestone and per area.
@@ -171,7 +171,7 @@ Written from the merged pull requests and the closed issues, to be confirmed by 
 - Open pull requests that carry over: [#86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/86) (SC-04's accepted limitation) and [#98](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/98) (the interim suite's filled columns).
 
 **Risks from planning.**
-The committed analysis outputs reproduce again (EDN-29).
+The committed analysis outputs reproduce again (EDN-14).
 Nobody having access to the FIB Virtech VM was not resolved, and the M4a session date is still to be confirmed.
 
 ## Sprint 3 planning notes (2026-10-06)
