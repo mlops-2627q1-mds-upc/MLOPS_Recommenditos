@@ -61,7 +61,7 @@ Re-measure them on the delivery commit:
 The commit itself, after `dvc pull`:
 
 - [ ] The checks CI runs, locally: `make lint`, `make test`, `make test-serving`, `make notebook-lint`, and `uv run mkdocs build --strict` in `docs/`.
-- [ ] CI ran what it shows as green. The `Tests`, `Tests (Windows)`, `Serving runtime` and `Build docs` jobs pass with every step skipped when the commit changes no file of their paths filter, and a run is cancelled when the next merge follows within minutes: `gh run view <run> --json jobs` lists the steps, and where they were skipped the counts come from the pull request run of the last change to the code.
+- [ ] CI ran what it shows as green. The `Tests`, `Tests (Windows)`, `Serving runtime` and `Build docs` jobs pass with every step skipped when the commit changes no file of their paths filter: `gh run view <run> --json jobs` lists the steps, and where they were skipped the counts come from the pull request run of the last change to the code.
 - [ ] The pipeline is up to date: plain `uv run dvc status` reports nothing changed. `dvc status -c` is not this check: it only compares the cache with the remote, and it passed while six stages were stale.
 - [ ] Every artefact the lock names is on the remote: `uv run dvc status -c` reports cache and remote in sync.
 - [ ] The MLflow runs behind the committed models name the committed state (NFR-14): `uv run python reports/analysis/run_provenance_check.py` ends with `OK` for every variant. It only reads from the tracking server.
