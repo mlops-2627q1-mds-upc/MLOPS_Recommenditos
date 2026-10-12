@@ -6,7 +6,7 @@ here reaches `data/`, the DagsHub server or the network: a variant that could no
 be trained on a clean clone with no credentials would be a variant CI cannot
 check, so the whole module trains with the MLflow variables removed and the few
 tests that need a server point it at a SQLite database under `tmp_path`. The one
-exception reads and never writes: `test_the_real_model_lowers_its_typical_prediction_too`
+exception reads and never writes: `test_the_real_model_lowers_more_predictions_than_it_raises_too`
 checks the bundle in `models/` where `dvc pull` has restored it, and is skipped
 everywhere else.
 
@@ -772,7 +772,7 @@ _DEPRECIATING_STEPS = {
 }
 
 
-def _assert_the_step_lowers_the_typical_prediction(
+def _assert_the_step_lowers_more_predictions_than_it_raises(
     model: Model, frame: pd.DataFrame, step: str
 ) -> None:
     """Applied to every row of `frame`, `step` lowers more predictions than it raises.
@@ -797,18 +797,20 @@ def _assert_the_step_lowers_the_typical_prediction(
 
 @pytest.mark.parametrize("step", list(_DEPRECIATING_STEPS))
 @pytest.mark.parametrize("variant", _LEARNED_VARIANTS)
-def test_more_mileage_or_age_lowers_the_typical_prediction(
+def test_more_mileage_or_age_lowers_more_predictions_than_it_raises(
     variant: str, step: str, trained: dict, test_frames: dict
 ):
     """The direction the generator's price formula has is the one the fit learned."""
     model = trained["models"][variant]
 
-    _assert_the_step_lowers_the_typical_prediction(model, test_frames[model.feature_set], step)
+    _assert_the_step_lowers_more_predictions_than_it_raises(
+        model, test_frames[model.feature_set], step
+    )
 
 
 @pytest.mark.parametrize("step", list(_DEPRECIATING_STEPS))
 @pytest.mark.parametrize("variant", _LEARNED_VARIANTS)
-def test_the_real_model_lowers_its_typical_prediction_too(variant: str, step: str):
+def test_the_real_model_lowers_more_predictions_than_it_raises_too(variant: str, step: str):
     """The same direction on the bundle `dvc pull` restores, over the real validation rows.
 
     The fixture's price is a formula, so the test above shows that an estimator can
@@ -820,7 +822,7 @@ def test_the_real_model_lowers_its_typical_prediction_too(variant: str, step: st
     if not (MODELS_DIR / variant / MODEL_FILE).exists() or not matrix.exists():
         pytest.skip("needs the real bundle and matrices, which `dvc pull` restores")
 
-    _assert_the_step_lowers_the_typical_prediction(
+    _assert_the_step_lowers_more_predictions_than_it_raises(
         load_model(MODELS_DIR / variant), pd.read_parquet(matrix / "validation.parquet"), step
     )
 
