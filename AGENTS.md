@@ -51,9 +51,10 @@ The course grades how we make engineering decisions and how we use AI in them, s
    Do not pick one silently, even when one option is clearly better.
 3. **Ask.** Ask the user which option they want, and whether the decision should be recorded in the EDN.
    Only continue with the chosen option.
-4. **Record it.** Once decided, and if the user wants it recorded, add an entry to [reports/edn.md](reports/edn.md) following the template there.
-   Capture everything needed to justify the decision later: the alternatives with their pros and cons, why the chosen one won, who decided, and exactly how AI was involved and how the team responded to it.
-   Link the evidence (issue, PR, commit, experiment).
+4. **Record it.** Once decided, and if the user wants it recorded, add an entry to [reports/edn.md](reports/edn.md) following the template and the word budget there.
+   An entry is short, about 220 words: the decision, the alternatives that were really weighed with the reason each lost, the deciding argument, who decided, and what AI contributed and what the team checked, changed or rejected.
+   Link the evidence (issue, PR, commit, experiment) and do not retell it.
+   When a decision is revised, update its entry so that it states the current decision, and do not add a second entry for it.
 
 [reports/edn.md](reports/edn.md) is the working source of the EDN.
 The LaTeX EDN ([reports/latex/edn/](reports/latex/edn/)) is generated from `reports/edn.md` by `make edn`, so never write or edit an entry directly in LaTeX.

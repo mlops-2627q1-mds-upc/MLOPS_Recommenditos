@@ -312,7 +312,7 @@ def test_an_amendment_note_is_printed_before_the_fields():
 
 
 def test_a_field_the_template_does_not_define_is_kept_under_the_field_above():
-    """EDN-59 has one; dropping it would drop part of the decision."""
+    """An entry may carry one; dropping it would drop part of the decision."""
     text = notebook(entry_md()).replace(
         "- **Alternatives considered:**",
         "- **Scope, after review:** the empty list.\n- **Alternatives considered:**",

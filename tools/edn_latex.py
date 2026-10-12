@@ -40,7 +40,7 @@ What a run does, in order:
 How the Markdown fields map onto the course's, since the two are not the same:
 
 * The course has no slot for alternatives, so, as reports/latex/README.md says,
-  they go into the rationale: first the alternatives with their pros and cons,
+  they go into the rationale: first the alternatives with the reason each lost,
   because the rationale argues in terms of them, then the rationale itself.
 * A block quote above an entry's fields is how the notebook records that a later
   entry amended this one or that its evidence was corrected. It becomes the

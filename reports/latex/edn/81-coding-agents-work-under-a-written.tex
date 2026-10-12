@@ -2,44 +2,30 @@
 % Do not edit: change reports/edn.md and run `make edn`.
 \ednentry{
   id = {EDN-81},
-  title = {Coding agents work under a written rule: an independent agent reviews, people decide and are accountable},
+  title = {Coding agents work under a written team rule},
   date = {2026-09-29 (rule written down); review rule reworded on 2026-10-12, as a proposal},
   milestone = {Other (team process)},
   topic = {Use of AI Coding Agents, Code Review},
-  participants = {@lukas2510 as Scrum master wrote the rule down and proposed the rewording, to be confirmed by the team at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record.},
-  decision = {Coding agents work under the four rules of the \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/working-agreements.md}{working agreements}, and the review rule was reworded on 2026-10-12 to: ``Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change.''
-It used to read ``The reviewer is a person, and reviewing means having understood the tests, not having watched them pass'', which the trace does not show.
+  participants = {@lukas2510 wrote the rule down and proposed the rewording, to be confirmed by the team at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record},
+  decision = {Coding agents work under the four rules of the \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/working-agreements.md}{working agreements}.
+The review rule was reworded on 2026-10-12 to: ``Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change.''
 No person signs off each pull request.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item \textbf{Option A (chosen): reword the review rule to the process as practised.}
-\newline Pros: rule and practice agree. Cons: for most pull requests the reviewer is an agent and not a person.
-\item \textbf{Option B: keep the old wording and record the gap as a weakness.}
-\newline Pros: no rule changes before the team has met. Cons: a rule the team does not follow.
-\item \textbf{Option C: a second person approves every pull request} (considered on 2026-09-21 and 2026-10-12).
-\newline Pros: human review is visible on every pull request. Cons: GitHub blocks approving one's own pull request, and an agent's runs under its author's account (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/8}{PR \#8}), so most merges would wait.
+\item Keep the old wording, ``The reviewer is a person'': a rule the team does not follow.
+\item A second person approves every pull request: GitHub blocks approving one's own, and an agent's runs under its author's account, so most merges would wait.
 \end{itemize}
 \par
-\emph{Why:} Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, both by @kadameit, and branch protection requires 9 checks and 0 approvals.
-The bodies of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50}{\#50}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53}{\#53}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55}{\#55}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62}{\#62}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71}{\#71} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80}{\#80} describe an independent or adversarial review, which was an agent's; otherwise, before 2026-10-12, the review left its trace in the agent session and not on GitHub.
-Since 2026-10-12 its result is posted on the pull request before the merge, first on \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101\#issuecomment-6124299563}{\#101}.
-\par
-People decide: of the 76 entries EDN-01 to EDN-78, 46 record the AI's proposal as accepted, 27 as modified, 2 as rejected and 1 as input for further analysis.
-Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them (the third rule).
-The strongest cases:
-@lukas2510 asked who owned the DagsHub repository the AI had recommended, which invalidated it (EDN-19);
-he asked what availability the single unattended VM could actually meet, which replaced the draft requirements' 99\,\% uptime target (EDN-10, commit \texttt{3afcb50c} of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{\#19});
-he overruled the second of two AI passes on an omitted equipment list, on a ground neither pass had weighed (EDN-61);
-@kadameit required two changes on \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26}{\#26}, and ran the suite on Windows 11 for \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85}{\#85}, where his approval came three minutes after the merge and did not inform it;
-@lukas2510 moved \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/86}{\#86} back to draft, because accepting SC-04's miss before tuning was premature.
-\par
-Two examples of where checking failed: the DagsHub recommendation was posted on \#26 unchecked, and two pull requests moved the laboratory to the wrong weekday (corrected in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97}{PR \#97}).
+\emph{Why:} Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
+The reviews that the pull requests describe were an agent's.
+People decide.
+Counted on 2026-10-12 over the 42 entries this notebook keeps from EDN-01 to EDN-78, the AI's proposal was accepted in 28, modified in 12, used as input for further analysis in 1, and rejected and then largely adopted in 1 (EDN-25).
+Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them.
 The weak spot: 48 of the 56 were opened and merged under one account with no second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
-  assessment = {The oracle criterion and the rule's text are AI's, adopted by @lukas2510 on 2026-09-29.
-On 2026-10-12 AI measured the numbers above, found that the review rule and the trace disagreed, and recommended option A over B, which @lukas2510 chose.
-He decided against option C the same day; option C is AI's as well.},
-  aievidence = {Claude Code sessions of 2026-09-21, 2026-09-29 (sprint 2 planning) and 2026-10-12.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45}{PR \#45}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95}{issue \#95}; \texttt{gh pr list -\allowbreak{}-\allowbreak{}state merged -\allowbreak{}-\allowbreak{}json number,author,mergedBy,reviews} and the branch protection of \texttt{main}, both read on 2026-10-12.},
+  assessment = {The rule's text is AI's, adopted by @lukas2510 on 2026-09-29.
+On 2026-10-12 AI measured the numbers above, found that the review rule and the trace disagreed, and recommended the rewording, which @lukas2510 chose.},
+  aievidence = {Claude Code sessions of 2026-09-21, 2026-09-29 and 2026-10-12.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45}{PR \#45}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95}{issue \#95}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101\#issuecomment-6124299563}{PR \#101}, \texttt{gh pr list} and the branch protection of \texttt{main}, read on 2026-10-12.},
 }

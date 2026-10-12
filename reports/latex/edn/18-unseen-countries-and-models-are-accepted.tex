@@ -2,26 +2,31 @@
 % Do not edit: change reports/edn.md and run `make edn`.
 \ednentry{
   id = {EDN-18},
-  title = {Unseen countries and models are accepted with a warning, not rejected},
+  title = {Unseen countries and models are accepted with a warning},
+  note = {\textbf{Absorbs EDN-42} (2026-09-30): the pipeline encodes an unseen categorical value as missing.},
   date = {2026-09-29},
-  milestone = {M4: Model Deployment (serving contract; enables M6: Monitoring)},
-  topic = {API Design},
+  milestone = {M4: Model Deployment},
+  topic = {API Design, Feature Encoding},
   participants = {@lukas2510},
-  decision = {FR-05 loses its \texttt{[proposed]} marker. A \texttt{country\_\allowbreak{}code} among the 8 countries of the data or a \texttt{model} that is missing from the training data is accepted, passed to the model as unknown, and reported in the response's \texttt{warnings} field.},
+  decision = {A \texttt{country\_\allowbreak{}code} or a \texttt{model} that the training data does not contain is accepted, passed to the model as unknown and reported in the response's \texttt{warnings} field (FR-05).
+The \texttt{features} stage follows the same rule: a categorical has the training levels only, and any other value becomes missing.
+The \texttt{ES} holdout's \texttt{country\_\allowbreak{}code} is therefore missing in every row, on purpose.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item \textbf{Option A (chosen): accept and warn.}
-\newline Pros: the \texttt{ES} replay reaches the model at all, which is what EDN-03's new-market drift scenario and all of M6 depend on; LightGBM handles an unseen category natively, so nothing has to be built; the caller still learns that the answer is extrapolated, and the warning is in the prediction log (FR-13).
-\newline Cons: the API answers for inputs the model has never seen, and the estimate can be worse than the metrics suggest without the caller noticing the warning.
-\item \textbf{Option B: reject with HTTP 422.}
-\newline Pros: stricter, and never answers outside what was trained.
-\newline Cons: would reject every \texttt{ES} listing, so the drift scenario could not be replayed and the retraining loop (FR-15) could not be demonstrated. The scope check we do want is about the make (FR-04), which stays a 422.
+\item Reject with HTTP 422: every \texttt{ES} listing would be refused, so the drift scenario of EDN-03 could not be replayed.
+\item Give the holdout country a level of its own: the model would receive a code it was never fitted on.
+\item Drop \texttt{country\_\allowbreak{}code} from the features: discards a real price driver to tidy one holdout frame.
 \end{itemize}
 \par
-\emph{Why:} The decision was effectively made by EDN-03, which chose Spain as the held-out new market precisely so that unseen traffic can be replayed against the running API in M6. Rejecting it would have removed the scenario the monitoring milestone is built on. Out-of-scope makes are a different case and keep their 422 (FR-04), so ``accept'' is not a blanket rule.},
+\emph{Why:} EDN-03 holds Spain out so that unseen traffic can be replayed against the running API.
+LightGBM handles a missing category natively, so nothing has to be built.
+The scope check we do want is the make, which keeps its 422 (FR-04).
+The \texttt{features} stage warns about a column that a split never fills, and a test pins the holdout case.},
   ai = {Alternative assessment, Recommendation},
   response = {Accepted},
-  assessment = {AI pointed out that this item was already prejudiced by EDN-03 and cost nothing to confirm, which is why it stayed unmarked longer than necessary. No further analysis was needed.},
-  aievidence = {Claude Code session on 2026-09-29: AI noted that FR-05 was (translated from German) ``in fact already prejudged by EDN-03'' and recommended lifting it to \texttt{[decided]}; Lukas replied ``do that''.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{requirements} FR-05 and FR-04; \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{specification} FR-05; \hyperref[EDN-03]{EDN-03}; \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}.},
+  assessment = {AI pointed out that EDN-03 had already settled the API rule.
+An adversarial AI review later found the empty holdout column on the real snapshot and recommended documenting it instead of changing the encoding.
+We accepted both.},
+  aievidence = {Claude Code sessions of 2026-09-29 (PR \#19) and 2026-09-30 (review of PR \#55).},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{Specification} FR-05, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/problem-spec.md}{problem specification} section 2, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/tests/test_features.py}{\texttt{tests/\allowbreak{}test\_\allowbreak{}features.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55}{PR \#55}.},
 }
