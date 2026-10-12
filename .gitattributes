@@ -6,7 +6,13 @@
 
 # Pipeline outputs committed to Git (`cache: false` in dvc.yaml) are recorded in
 # dvc.lock by their exact bytes, so Git must not touch their line endings.
-# The CSVs are written by the csv module, which ends rows with CRLF everywhere.
+# The CSVs of `evaluate` and `compare-energy` are written by the csv module, which
+# ends rows with CRLF everywhere; CodeCarbon writes `reports/emissions/` through
+# pandas, which ends them with the platform's separator, so CRLF on Windows.
+# Every output with `cache: false` in dvc.yaml belongs here, and
+# tests/test_committed_outputs.py fails for one that is missing.
 metrics.json -text
 reports/metrics/** -text
 reports/data-validation/** -text
+reports/emissions/** -text
+reports/figures/** -text
