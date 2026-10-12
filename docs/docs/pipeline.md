@@ -148,6 +148,25 @@ The holdout's `country_code` stays empty in every one of those rows, because `ES
 The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
 The problem they pose is a different one: the reported population would not be the served population.
 
+The split
+---------
+
+`split` assigns whole sellers to train, validation, calibration and test by a hash of `seed` and the seller key, at 60/10/10/20, after the `ES` holdout has left, and it stratifies on nothing ([EDN-79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+That keeps two properties a stratified assignment gives up.
+A clean clone reproduces the split from the seed and the key alone (NFR-06), and adding sellers leaves every seller already there in its set, which is what makes FR-15's retrain with `ES` comparable to the model before it.
+Measured on the real snapshot, a stratified-group split on `make` moves 52.6 % of the existing rows when the `ES` listings join the pool, and the hash split moves none.
+
+The price is that the sets are only as comparable as the draw makes them, so that is measured rather than assumed.
+`reports/analysis/split_strategy.py` reports the committed split set by set, puts it beside 1,000 other seeds of the same assignment, and refits the candidate on 20 other splits; the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split) holds the tables and what they say.
+Three rules follow from it:
+
+- **`seed` is not a tuning knob.**
+  Changing it reshuffles the sellers, so it is a new split, and every figure and any FR-15 comparison starts over.
+  No seed is chosen for a better mix or a better number.
+- **A figure of the committed split is reported with its spread.**
+  The candidate's test MdAPE of 6.81 % comes with a standard deviation of 0.27 pp over the 20 other splits, and the 16.77 % of cars older than 20 years with their mean of 18.3 %.
+- **The script is re-run when what it measured changes**: the snapshot, the scope, the split ratios, or the candidate and its hyperparameters, because the spread is that model's on that pool.
+
 Data validation
 ---------------
 
