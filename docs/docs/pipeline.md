@@ -203,21 +203,38 @@ Tuning a hyperparameter
 -----------------------
 
 A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), extended by EDN-78 for issue #88).
-A sweep is one search run: one variant and a small grid of hyperparameter values, each combination fitted and compared with the committed values, ending in a single verdict - keep the committed values or adopt one combination.
 The protocol exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
 Its decision step is `recommenditos/modeling/tune.py`, which fits every point of a grid, measures and tracks each fit, and decides on the validation split; queued `dvc exp` runs can **screen** a wider set of candidates first, but they are optional.
+
+Four terms carry it:
+
+- **Sweep:** one search run for one variant over one small grid of hyperparameter values, for example `lgbm-extended` over `learning_rate` x `num_leaves`.
+  It fits every point of the grid plus the *reference* (the values committed in `params.yaml`), compares each point with the reference on the validation split, and ends in one verdict: keep the reference, or adopt one point.
+  Its id, for example `88-lgbm-extended-lr-leaves`, is the `sweep` tag of its MLflow runs.
+- **Point:** one combination of values in a sweep, for example `learning_rate=0.025;num_leaves=255`.
+  One point is one fit and one MLflow run.
+- **Bootstrap:** how a sweep decides whether a point is really better than the reference or only lucky on these particular validation rows.
+  Every point predicts every validation row, and the rows are then resampled 2,000 times: each draw picks the validation sellers at random with replacement (2,784 of them) and takes all their listings, because listings of one dealer are alike and the split is grouped by seller (EDN-14).
+  In every draw, each point and the reference are scored on the same resampled rows (*paired*), so shared luck cancels, and the difference in validation L1 is recorded.
+  The 2,000 differences give a 95 % interval per point.
+- **Simultaneous interval:** with eleven points compared against one reference, one of them clears a single 95 % interval by chance in up to about one sweep in four (the winner's curse).
+  The max-statistic bootstrap therefore widens all intervals, by a multiplier of about 2.8 instead of 1.96, until they hold together in 95 % of the draws.
+
+And these rules:
 
 - **The split is validation.** The search reads the `train` and `validation` matrices and the validation frame's seller groups, and nothing else, so neither the test nor the calibration split takes part in a choice; a test runs a sweep with both files deleted.
   The test metrics of an adopted value are read once, by the committed `dvc repro`, after the choice is made.
 - **The metric is `validation_l1_log_price`**, which `train` logs to MLflow and writes into `model.json`.
   It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot. Validation MdAPE is reported beside it and decides nothing.
-- **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** The search bootstraps every point's validation L1 difference from the reference point, paired and resampled by seller group because the split is grouped by seller (EDN-14), and widens the intervals by the max-statistic bootstrap until all of them hold together in 95 % of the draws.
-  A point is adopted only when its simultaneous interval lies entirely below zero, and when several do, the one with the lowest validation L1.
-  A per-point 95 % interval is not enough: with eleven points no better than the committed one, the luckiest clears it in up to about one sweep in four.
+- **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** A point is adopted only when its simultaneous interval of the validation L1 difference lies entirely below zero, and when several do, the one with the lowest validation L1.
+  On this validation split that resolves a difference of about 1 % and nothing smaller: in the four sweeps of issue #88 the simultaneous half-widths ran from 0.0008 to 0.0015, which is 0.8 % to 1.6 % of the reference's validation L1 (0.100 for `lgbm-basic`, 0.097 for `lgbm-extended`), and the best point of any sweep was 0.4 % better.
 - **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-70); a point the ceiling still ended is flagged and never adopted.
+  The search's validation figures are optimistic, because early stopping picks each point's tree count on the same validation rows that score it.
 - **The reference is always fitted.** It is the variant as `params.yaml` has it, with any `--fix` applied, whether or not the grid names it, because every difference is taken against it.
 - **Every fit is measured and tracked** (issue #88). Each one is wrapped in `energy.measure` exactly as `train` wraps its fit and logged as its own run in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs. A point's run is tagged `sweep`, `sweep_role=point`, `point`, `is_reference` and `variant` when it opens, so the run of a fit that fails still names its sweep and point, and carries its hyperparameters under the names `train` uses, its validation L1 and MdAPE, its fit time and its energy, but no model bundle; one `sweep_role=summary` run carries the sweep's totals, its verdict and its `reference_point`.
 - **MLflow is a sweep's only store** (EDN-78). Its record is uploaded to its summary run, under `results/`: `sweep.json`, every fit, comparison, total and the verdict; `sweep.txt`, the same as a table, which is also logged to the console when the sweep ends; and `emissions.csv`, CodeCarbon's row for every fit, with the columns that say how each figure was produced. Nothing of a sweep is written into the repository.
+  The four sweeps of issue #88 ran before the two files got these fixed names, so their summary runs hold `<sweep id>.json` and `<sweep id>.txt` instead.
+  Their runs' `git_commit` tags name commits of pull request #101's branch, which a squash merge keeps out of `main` and GitHub keeps under `refs/pull/101/head`.
 - **The search's energy is not the product's.** It is never written to `reports/emissions/<variant>.csv`, which holds the fit that produced the model. NFR-10's 15-minute budget is for that final fit; the search runs outside `dvc repro` and is reported on its own ([specification](specification.md) NFR-10).
 
 The grids of issue #88, one sweep per variant and grid, run from the repository root after `dvc pull`.
