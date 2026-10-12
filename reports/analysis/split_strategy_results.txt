@@ -1,0 +1,193 @@
+# reports/analysis/split_strategy.py on the real snapshot
+pool 99,326 rows in 28,435 seller groups after the ES holdout of 6,079; committed seed 20251108; ratios {'train': 0.6, 'validation': 0.1, 'calibration': 0.1, 'test': 0.2}
+No seed is chosen from this file. The seeds below measure the noise of the split; the committed seed stays as it is.
+
+====================================================================================================
+1. The committed split, set by set (data/processed, every row the split wrote)
+====================================================================================================
+                                train   validation  calibration         test         pool
+rows                           61,180        8,992        9,169       19,985       99,326
+share of the pool              61.60%        9.05%        9.23%       20.12%
+seller groups                  16,907        2,810        2,848        5,870       28,435
+rows of served makes           60,378        8,859        8,987       19,665       97,889
+
+share of the set's rows, per make
+BMW                            33.73%       33.91%       37.66%       36.12%       34.59%
+Porsche                        22.47%       22.29%       23.71%       22.57%       22.59%
+Mercedes-Benz                  14.95%       14.28%        8.67%       11.11%       13.54%
+Audi                           12.27%       12.20%       11.80%       12.16%       12.20%
+Alfa Romeo                      6.36%        5.45%        6.58%        6.50%        6.33%
+Suzuki                          3.72%        4.31%        3.94%        4.12%        3.88%
+Volvo                           3.22%        3.76%        3.59%        3.57%        3.37%
+Honda                           0.74%        1.07%        0.79%        0.89%        0.80%
+Hyundai                         0.54%        0.62%        0.60%        0.53%        0.55%
+Aston Martin                    0.35%        0.27%        0.41%        0.42%        0.36%
+Volkswagen                      0.34%        0.37%        0.27%        0.41%        0.35%
+(unsupported)                   1.31%        1.48%        1.98%        1.60%        1.45%
+largest gap to the pool        1.41%        0.88%        4.86%        2.43%
+
+price in EUR
+quantile 0.10                  13,500       11,900       11,990       12,490       12,980
+quantile 0.25                  23,900       22,750       21,900       22,600       23,000
+quantile 0.50                  39,750       37,000       35,945       36,949       38,699
+quantile 0.75                  69,650       67,888       69,200       68,500       68,999
+quantile 0.90                 113,750      112,972      119,458      111,655      113,890
+
+over 20 years, rows             2,437          383          400          813        4,033
+over 20 years, share            3.98%        4.26%        4.36%        4.07%        4.06%
+over 20 years among the 19,665 served test rows `evaluate` reads: 784 (SC-04's segment)
+
+====================================================================================================
+2. Why Mercedes-Benz is under-represented in calibration: dealer by dealer
+====================================================================================================
+the largest dealer: 3,383 rows (3.41% of the pool), assigned to train, 3382 of them Mercedes-Benz; its makes: Mercedes-Benz 3,382, Porsche 1
+
+Mercedes-Benz share                 train   validation  calibration         test
+as committed                       14.95%       14.28%        8.67%       11.11%
+without the largest dealer          9.97%       14.28%        8.67%       11.11%
+Mercedes-Benz share of the pool: 13.54% with that dealer, 10.49% without it; the dealer holds 25.2% of all Mercedes-Benz rows
+
+the 20 dealers with the most Mercedes-Benz listings hold 6,400 of the 13,444 Mercedes-Benz rows (47.6%); where they landed:
+  rank  rows  of them Mercedes-Benz  set
+     1  3,383                  3,382  train
+     2   774                    258  train
+     3   257                    256  train
+     4   241                    239  test
+     5   232                    230  test
+     6   231                    216  train
+     7   173                    173  test
+     8   159                    158  validation
+     9   156                    156  validation
+    10   153                    153  test
+    11   143                    143  train
+    12   140                    139  train
+    13   135                    134  train
+    14   126                    126  train
+    15   125                    119  test
+    16   110                    107  train
+    17   116                    105  calibration
+    18   105                    104  train
+    19   102                    101  validation
+    20   103                    101  test
+
+                                            train   validation  calibration         test
+top-20 dealers in the set                      10            3            1            6
+their Mercedes-Benz rows                    4,865          415          105        1,015
+expected at the set ratio                   3,840          640          640        1,280
+Mercedes-Benz rows of all other dealers        4,280          869          690        1,205
+share without the top-20 dealers            7.67%       10.13%        7.62%        6.36%
+
+====================================================================================================
+3. The hash split over 1,000 seeds, assignment only (no fit)
+====================================================================================================
+                      set            committed      mean       sd     2.5 %    97.5 %       min       max  committed is at percentile
+Mercedes-Benz share   train             14.95%    13.55%    2.50%     9.48%    16.43%     8.45%    17.09%  49.4%
+Mercedes-Benz share   validation        14.28%    12.67%    7.19%     6.51%    34.58%     4.78%    37.87%  85.7%
+Mercedes-Benz share   calibration        8.67%    12.74%    7.40%     6.38%    34.71%     5.13%    38.13%  21.5%
+Mercedes-Benz share   test              11.11%    12.99%    5.54%     7.64%    25.47%     6.14%    27.92%  54.6%
+BMW share             train             33.73%    34.58%    1.07%    33.05%    36.56%    32.36%    37.80%  26.4%
+BMW share             validation        33.91%    34.91%    3.30%    25.73%    39.41%    23.23%    42.63%  23.2%
+BMW share             calibration       37.66%    34.94%    3.39%    25.40%    39.54%    23.58%    41.42%  85.1%
+BMW share             test              36.12%    34.87%    2.39%    29.54%    38.16%    28.04%    39.35%  65.2%
+median price EUR      train             39,750    38,575    1,035    36,750    39,900    35,950    39,990  84.5%
+median price EUR      validation        37,000    38,115    2,746    34,850    45,490    32,995    48,080  45.7%
+median price EUR      calibration       35,945    38,131    2,802    34,883    45,632    32,990    47,990  17.0%
+median price EUR      test              36,949    38,190    2,103    35,000    42,950    34,899    43,990  31.0%
+over 20 years share   train              3.98%     4.06%    0.14%     3.84%     4.32%     3.75%     4.41%  36.1%
+over 20 years share   validation         4.26%     4.10%    0.44%     2.97%     4.75%     2.59%     5.16%  60.8%
+over 20 years share   calibration        4.36%     4.10%    0.45%     2.93%     4.80%     2.61%     5.30%  70.9%
+over 20 years share   test               4.07%     4.10%    0.32%     3.40%     4.60%     3.11%     4.78%  36.8%
+
+largest gap of any make's share in any set to its pool share: committed 4.86%; over the seeds mean 9.07%, median 6.30%, 2.5 % to 97.5 % 3.02% to 21.91%, max 24.59%; 27.9% of the seeds are better balanced than the committed one
+the same gap by where the largest dealer landed:
+  in train         61.0% of the seeds, gap mean 5.09%, Mercedes-Benz share of that set mean 15.48%
+  in validation     9.6% of the seeds, gap mean 20.13%, Mercedes-Benz share of that set mean 33.67%
+  in calibration   10.0% of the seeds, gap mean 20.28%, Mercedes-Benz share of that set mean 33.81%
+  in test          19.4% of the seeds, gap mean 10.30%, Mercedes-Benz share of that set mean 23.84%
+
+====================================================================================================
+4. Split noise of the reported metrics: lgbm-basic refitted on 20 other splits
+====================================================================================================
+committed hyperparameters {'learning_rate': 0.05, 'num_leaves': 63, 'n_estimators': 5000, 'early_stopping_rounds': 50}, model seed 20251108 for every fit
+alternative, validation only: num_leaves 255, everything else as committed
+
+     seed  test n  test MdAPE  within 20  o20 n  o20 MdAPE  SC-04  worst SC-04 level                        trees  val MdAPE  alt-com   alt-com L1  prep s  fit s  largest dealer in
+ 20251108  19,665    6.8076%     89.81%     784     16.77%   miss  age_bucket=over 20 16.77% (n 784)   1,243   6.9563%   -0.076%   +0.00102     4    15  train   <- the committed seed, as a check of the method
+metrics.json records MdAPE 6.8076% and within 20 % 89.81% for lgbm-basic; this script reproduces them to 0.0e+00 and 0.0e+00
+        1  18,931    6.9902%     89.40%     772     17.86%   miss  age_bucket=over 20 17.86% (n 772)     822   7.1015%   -0.120%   -0.00032     3    12  train
+        2  19,361    6.9779%     89.74%     744     18.98%   miss  age_bucket=over 20 18.98% (n 744)     920   6.7174%   -0.061%   -0.00024     3    10  calibration
+        3  18,284    7.1035%     89.13%     741     19.01%   miss  age_bucket=over 20 19.01% (n 741)     745   5.9471%   +0.017%   +0.00003     3    10  validation
+        4  22,615    6.2306%     91.51%     768     18.07%   miss  age_bucket=over 20 18.07% (n 768)   1,158   7.0958%   -0.109%   -0.00065     3    15  test
+        5  21,736    6.3212%     91.14%     743     19.68%   miss  age_bucket=over 20 19.68% (n 743)   1,174   6.7096%   -0.077%   -0.00046     2    12  test
+        6  18,958    6.9183%     89.46%     738     18.76%   miss  age_bucket=over 20 18.76% (n 738)   1,029   5.9754%   -0.049%   -0.00016     2    11  validation
+        7  19,558    6.7275%     90.14%     816     17.93%   miss  age_bucket=over 20 17.93% (n 816)   1,454   6.8739%   -0.127%   +0.00024     2    12  train
+        8  18,803    6.9592%     89.49%     791     18.93%   miss  age_bucket=over 20 18.93% (n 791)     932   6.6966%   -0.034%   +0.00041     2     8  train
+        9  19,031    6.8968%     89.36%     771     17.15%   miss  age_bucket=over 20 17.15% (n 771)     836   6.1251%   -0.066%   +0.00057     2     8  validation
+       10  21,277    6.3752%     91.02%     833     17.45%   miss  age_bucket=over 20 17.45% (n 833)   1,256   6.9429%   -0.024%   +0.00075    10    29  test
+       11  18,796    6.8794%     89.88%     753     18.38%   miss  age_bucket=over 20 18.38% (n 753)   1,246   7.0713%   -0.159%   +0.00017     2    14  train
+       12  22,459    6.3281%     90.84%     814     17.72%   miss  age_bucket=over 20 17.72% (n 814)   1,040   6.7279%   -0.018%   -0.00016     2     9  test
+       13  19,045    6.7820%     89.79%     807     18.38%   miss  age_bucket=over 20 18.38% (n 807)   1,503   6.0538%   -0.051%   +0.00079     3    18  validation
+       14  17,980    6.8162%     89.20%     800     17.91%   miss  age_bucket=over 20 17.91% (n 800)   1,337   6.9950%   +0.011%   +0.00090     2    13  train
+       15  20,246    6.7962%     90.19%     803     18.66%   miss  age_bucket=over 20 18.66% (n 803)   1,365   7.0650%   -0.055%   +0.00119     3    12  train
+       16  23,360    6.2724%     91.79%     741     18.14%   miss  age_bucket=over 20 18.14% (n 741)   1,329   6.7989%   -0.013%   +0.00032     2    12  test
+       17  18,431    6.9134%     90.03%     777     17.29%   miss  age_bucket=over 20 17.29% (n 777)   1,425   6.8188%   +0.028%   +0.00029     2    14  train
+       18  19,841    6.6465%     90.28%     776     16.98%   miss  age_bucket=over 20 16.98% (n 776)   1,459   7.0602%   -0.122%   +0.00037     2    13  train
+       19  18,318    6.7815%     90.02%     736     19.10%   miss  age_bucket=over 20 19.10% (n 736)   1,079   5.9916%   -0.106%   -0.00026     2    10  validation
+       20  18,781    6.9262%     89.84%     731     19.29%   miss  age_bucket=over 20 19.29% (n 731)     828   6.8977%   -0.070%   +0.00041     2     8  train
+
+over the 20 other seeds                     committed     mean      sd      min      max
+test MdAPE                                 6.808%   6.732%  0.273%   6.231%   7.103%
+within 20 % (SC-02)                       89.809%  90.112%  0.771%  89.133%  91.789%
+over-20 MdAPE (SC-04)                     16.767%  18.283%  0.760%  16.977%  19.679%
+validation MdAPE                           6.956%   6.683%  0.416%   5.947%   7.101%
+over-20 test rows                             784      773      31      731      833
+SC-04 (bound 15%) passes on 0 of 20 seeds; the over-20 segment is at or under the bound on 0; the worst level is another one on 0
+  largest dealer in train         9 seeds: test MdAPE mean 6.851%, over-20 MdAPE mean 18.14%
+  largest dealer in validation    5 seeds: test MdAPE mean 6.896%, over-20 MdAPE mean 18.48%
+  largest dealer in calibration   1 seeds: test MdAPE mean 6.978%, over-20 MdAPE mean 18.98%
+  largest dealer in test          5 seeds: test MdAPE mean 6.306%, over-20 MdAPE mean 18.21%
+SC-01 (MdAPE at most 9%) and SC-02 (at least 85% within 20 %) hold on 20 of 20 seeds
+
+the tuning grid of EDN-73 against this noise
+  the grid's validation MdAPE spans 6.88 % to 7.04 %, 0.16 pp; the validation MdAPE of the committed point has a standard deviation of 0.42 pp over the splits and a range of 1.15 pp
+  num_leaves 255 minus committed, same split, validation MdAPE: committed split -0.076 pp; over the seeds mean -0.060 pp, sd 0.052 pp, lower on 17 of 20
+  the same in validation L1 (log price), which the tuning protocol decides by: committed split +0.00102; mean +0.00021, sd 0.00049, lower on 7 of 20
+
+====================================================================================================
+5. Adversarial validation: can a classifier tell train rows from test rows?
+====================================================================================================
+80,043 rows of the `basic` matrices, 24.6% of them test; the model's features and the price; one LightGBM classifier (200 trees, 31 leaves) per row below, scored on the 30 % it did not see
+  whole sellers held out     AUC 0.495 on 22,611 rows
+  rows held out at random    AUC 0.599 on 24,119 rows
+
+====================================================================================================
+6. The stratified-group alternative (StratifiedGroupKFold on make), assignment only
+====================================================================================================
+3 seeds, 77 s; no seller is in two sets under any of them
+the largest dealer lands in: train (seed 1), train (seed 2), train (seed 3)
+
+                                    hash, committed  hash, 1,000 seeds   stratified, 3 seeds
+largest make-share gap to pool                4.86%         9.07% mean 2.04% mean, 2.05% max
+Mercedes-Benz share, calibration              8.67%        12.74% mean           11.50% mean
+Mercedes-Benz share, sd over sets             2.92%         5.56% mean            1.67% mean
+median price, max-min over sets               3,805         5,061 mean            1,588 mean
+over-20 share, max-min over sets              0.38%         0.78% mean            0.38% mean
+row share, worst gap to ratio                 1.60%         2.06% mean            0.92% mean
+
+FR-15's retrain adds the 6,079 `ES` rows to the pool. Sellers already in the pool that change set when it does:
+  hash split: 0.00% of the pool's rows (1,933 sellers are new)
+  stratified-group split, same seed before and after: 52.6% of the pool's rows on average (52.4% to 52.7%), 57.9% of its sellers
+  for scale, a different seed on the same pool moves 50.3% of the rows, and four sets at 60/10/10/20 drawn independently twice disagree on 58.0%
+
+====================================================================================================
+7. Can the UC2 interval coverage be checked per make on the test set today?
+====================================================================================================
+Model has `predict_interval_eur`: False
+metrics.json: criteria_not_measured = 'sc05', deployable_variant = None
+  b0             sc05_status 'not_measured', sc05_coverage None
+  b1             sc05_status 'not_measured', sc05_coverage None
+  lgbm-basic     sc05_status 'not_measured', sc05_coverage None
+  lgbm-extended  sc05_status 'not_measured', sc05_coverage None
+No interval exists, so no coverage can be computed, per make or pooled. The calibration set is written by `split` and read by no model yet.
+
+total run time 14.6 min

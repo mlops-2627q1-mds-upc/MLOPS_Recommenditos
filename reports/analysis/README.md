@@ -60,6 +60,22 @@ repository root.
 The `split` block of `params.yaml` is copied into it rather than loaded, the way `nfr11_check.py`
 keeps its own `P_VAL`, so the committed output stays attached to the values it was measured at.
 
+## How comparable the sets are, and the split noise (EDN-79, issue #89)
+
+`split_strategy.py` is the evidence behind the decision on the split strategy.
+It reports the committed split set by set (rows, make shares, price quantiles, the share of cars over 20 years), traces the low Mercedes-Benz share of the calibration set to individual dealers, and puts the committed draw beside 1,000 other seeds of the same hash assignment.
+It then measures the split noise of the reported metrics: the real `split` and `features` stages and the `train` stage's own `fit_variant`, once per seed for seeds 1 to 20, in a temporary directory with tracking off, with the test MdAPE, the over-20 segment and SC-04's verdict of each.
+The seeds are fixed in the script before any of them was run, and none of them is a candidate: the script measures noise, it does not select a split.
+Only the split seed varies; every fit uses the committed `seed` and hyperparameters, and the run of the committed seed must reproduce `metrics.json` exactly, which the output states.
+The last blocks hold an adversarial-validation check, the stratified-group alternative as an assignment (its make balance, and how many sellers move when the `ES` listings join the pool), and the state of SC-05.
+`split_strategy_results.txt` is the output of the run recorded in EDN-79 and cited in the model card (2026-10-12).
+
+Like `split_gate.py` it imports the stages' own functions and runs from the repository root after `dvc pull`, and it writes nothing under `data/`, `models/` or `metrics.json`:
+
+```bash
+MLFLOW_TRACKING_URI= uv run python reports/analysis/split_strategy.py > reports/analysis/split_strategy_results.txt
+```
+
 ## SC-04 coverage per make (model card)
 
 `make_support.py` compares EDN-05's support threshold, which admits a make into scope at 300

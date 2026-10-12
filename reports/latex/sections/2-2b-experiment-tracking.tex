@@ -2,10 +2,10 @@
 % so it appears as subsection 2.2's last sub-subsection.
 % Owner: @ulasawczuk. Split out of 2-2-reproducibility.tex so that the two
 % people writing about Milestone 2 each own one file and never conflict.
-% Everything below is a draft assembled from the repository's own evidence so
-% that its owner has a starting point, not finished text. The \tbd right after
-% the heading says so in the PDF as well, and `make report-submit` counts it,
-% so the draft cannot reach a submission unnoticed.
+% The text below is a complete draft written from the repository's evidence.
+% The \tbd right after the heading marks it as awaiting its owner's sign-off,
+% and `make report-submit` counts it, so the draft cannot reach a submission
+% unnoticed.
 
 \subsubsection{Experiment tracking}
 \label{sec:m2-experiment-tracking}
@@ -19,46 +19,54 @@
 
 \tbd{DRAFT, owner \texttt{@ulasawczuk}, to check and rewrite in own words}
 
-Experiments are tracked in MLflow with the team's DagsHub repository as the shared tracking server (EDN-19), which is also the DVC remote, so a run and the data version it was trained on live in the same place.
-Credentials are read from a gitignored \texttt{.env} and never committed, and the tracking server is reached from a developer machine only: nothing in the serving path depends on MLflow being up (EDN-08).
+We track experiments with MLflow on the team's DagsHub repository, which is also the DVC remote (EDN-19).
+The credentials are in a \texttt{.env} file that Git ignores.
 
-There is exactly one experiment for the pipeline's runs, \texttt{recommenditos-price}, and one run per rung of the experiment ladder.
-Both are configuration rather than code: \texttt{params.yaml} holds the experiment name as \texttt{train.\allowbreak mlflow\_experiment}, and the four variants as a \texttt{train.\allowbreak variants} mapping that \texttt{dvc.yaml} iterates with \texttt{foreach}.
-The ladder is B0, the median price per make, model and two-year age bucket, which is the baseline SC-03 measures against; B1, a Ridge regression on $\log(\mathrm{price})$ as an interpretable depreciation baseline; \texttt{lgbm-basic}, the main model on the basic feature set; and \texttt{lgbm-extended}, the same model on the extended set, whose only purpose is to measure what equipment, history flags and appearance columns are worth.
-Adding a rung is therefore a change to \texttt{params.yaml}, and \texttt{dvc params diff} says what changed between two commits.
+\paragraph{What we track.}
+The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder.
+The ladder is defined in \texttt{params.yaml} and has four steps, each of which changes one thing: \texttt{b0}, the median price per make, model and age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features; and \texttt{lgbm-extended}, the same model on 162 features, which add the equipment lists, the history flags and further technical columns.
+Each run logs:
 
-Three properties are meant to make the runs comparable and extensible rather than merely recorded, and they follow from decisions taken elsewhere in the project.
+\begin{itemize}
+  \item the parameters of its stage and the name of its feature set;
+  \item the metrics: MdAPE, the shares within $\pm$10\,\% and $\pm$20\,\%, the mean absolute error in EUR and the success criteria;
+  \item the fit time and CodeCarbon's energy and emissions figures (\cref{sec:m3-energy});
+  \item the model artefact;
+  \item the Git commit and the hashes of the stage's inputs, so that a run can be matched to a committed state of the pipeline (NFR-14, EDN-74).
+\end{itemize}
 
-\emph{A run is reproducible from the repository, not only from what it logged.}
-Each variant is its own DVC stage, \texttt{train@b0} to \texttt{train@lgbm-extended}, so \texttt{dvc.lock} pins the code, the input data and the exact parameter subset behind every run.
-Reproducing a run is \texttt{dvc repro train@<variant>} on the commit it belongs to, and the MLflow entry is the human-readable record of it rather than the only record.
-The demo declares neither \texttt{params} nor \texttt{metrics} on any stage and keeps its hyperparameters as Python constants, so a changed hyperparameter there reruns nothing (EDN-30).
-
-\emph{The comparison is a committed artefact, not only a server view.}
-The \texttt{evaluate} stage writes one JSON record per variant under \texttt{reports/metrics/} and a \texttt{metrics.json} summary, both uncached and therefore tracked by Git, so the comparison between variants is reviewable in a pull request and readable without an account on the tracking server.
-That is what lets the same numbers back the report, the model card and the promotion decision, which EDN-12 keeps in human hands.
-
-\emph{Energy sits next to accuracy in the same run.}
-NFR-10 asks every training run to log its CodeCarbon measurement alongside its metrics, which issue \#38 implements, so that the ladder answers whether a rung earned its energy and not only whether it was more accurate; that comparison is the subject of \cref{sec:m3-energy}.
-
-What is logged per run is the parameter subset the stage declares, the metrics of the problem specification (MdAPE as the primary metric, the shares within $\pm$10\,\% and $\pm$20\,\%, MAE in EUR, MAPE for comparability, and for the interval models the empirical coverage and the mean relative width), the emissions record once issue \#38 adds it, and the model artefact together with the feature-set name it was trained on.
-
-\Cref{tab:runs} compares the four runs of the committed pipeline state, which the \href{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}{experiment on DagsHub} lists when filtered on the commit they ran from, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/commit/bc5a87ba75ff947359b0f76627e483710e5fa37c}{\texttt{bc5a87b}}, which is on the branch of pull request \#77 rather than on \texttt{main}, where it was squash-merged as \texttt{df4879d}.
+\paragraph{How others can compare and extend the results.}
+Each variant is its own DVC stage, so \texttt{dvc.lock} pins the code, data and parameters behind a run, and \texttt{dvc repro train@lgbm-basic} on the same commit reproduces it.
+The comparison is also committed: the \texttt{evaluate} stage writes one record per variant to \texttt{reports/metrics/} and a summary to \texttt{metrics.json}.
+A pull request that changes a result shows the change in its diff, and a reader needs no account on the tracking server.
+A new variant is one more entry in \texttt{params.yaml}.
 
 \begin{table}[ht]
   \centering\small
-  \begin{tabular}{@{}lrrrrr@{}}
+  \begin{tabular}{@{}lrrrrrr@{}}
     \toprule
-    Run & MdAPE & Within $\pm$20\,\% & MAE (EUR) & Fit time & Emissions (mg CO$_2$eq) \\
+    & & \multicolumn{3}{c}{Every field given} & Required fields only & \\
+    \cmidrule(lr){3-5}\cmidrule(lr){6-6}
+    Run & Features & MdAPE & Within $\pm$20\,\% & MAE (EUR) & MdAPE & Fit time \\
     \midrule
-    \texttt{b0} & 12.16\,\% & 70.5\,\% & 9,388 & 0.1\,s & 0.06 \\
-    \texttt{b1} & 9.52\,\% & 80.3\,\% & 7,499 & 1.3\,s & 1.15 \\
-    \texttt{lgbm-basic} & 6.81\,\% & 89.8\,\% & 4,760 & 8.4\,s & 5.96 \\
-    \texttt{lgbm-extended} & 6.26\,\% & 90.4\,\% & 4,651 & 30.0\,s & 18.82 \\
+    \texttt{b0} & 16 & 12.16\,\% & 70.5\,\% & 9,388 & 12.16\,\% & 0.1\,s \\
+    \texttt{b1} & 16 & 9.52\,\% & 80.3\,\% & 7,499 & 10.72\,\% & 1.4\,s \\
+    \texttt{lgbm-basic} & 16 & 6.81\,\% & 89.8\,\% & 4,760 & 8.26\,\% & 9.2\,s \\
+    \texttt{lgbm-extended} & 162 & 6.26\,\% & 90.4\,\% & 4,651 & 10.30\,\% & 30.9\,s \\
     \bottomrule
   \end{tabular}
-  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and the four MLflow runs; fit times and emissions from the tracked run of 2026-10-06, before hyperparameter tuning, with \texttt{train.num\_threads} at 1 (the fits still use more than one thread), emissions as CodeCarbon's estimate and not a meter reading.}
+  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and \texttt{reports/figures/energy-vs-error.csv}. The MLflow run ID of each row is in \texttt{reports/metrics/<run>.json}. Runs of 2026-10-06 on a laptop CPU.}
   \label{tab:runs}
 \end{table}
 
-The ladder answered its question conditionally: the extended set is worth 0.55 points of MdAPE on a fully described car and costs 146 more columns and 3.3 times the fit, but with only the ten fields FR-01 requires its MdAPE is 1.65 times its full-input figure, above SC-06's 1.5, so \texttt{lgbm-basic} is put forward (EDN-62).
+\paragraph{What the comparison showed.}
+\Cref{tab:runs} compares the four runs, which the \href{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}{experiment on DagsHub} lists as well.
+The extended feature set improves the MdAPE by 0.55 percentage points when the user gives every field.
+With only the fields FR-01 requires, \texttt{lgbm-extended} is at 10.30\,\%, which is 1.65 times its own full-input value and above SC-06's bound of 1.5, and it is worse than \texttt{lgbm-basic} at 8.26\,\%.
+It also takes 3.3 times as long to fit.
+We therefore put \texttt{lgbm-basic} forward as the candidate (EDN-62).
+
+The hyperparameter search is tracked separately.
+Its 34 fits are runs in a second experiment, \texttt{recommenditos-price-tuning}, so they do not mix with the ladder (EDN-78).
+The search compared \texttt{learning\_rate}, \texttt{num\_leaves} and \texttt{min\_child\_samples} on the validation split for both LightGBM variants and found no value that is measurably better than the committed ones.
+The results in \cref{tab:runs} are therefore those of the searched configuration.

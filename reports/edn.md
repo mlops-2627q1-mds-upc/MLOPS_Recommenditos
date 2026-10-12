@@ -2691,7 +2691,52 @@ How to add an entry:
 - **Other evidence:** [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88); [`recommenditos/modeling/tune.py`](../recommenditos/modeling/tune.py) and [`tests/test_tune.py`](../tests/test_tune.py); [`reports/analysis/tuning_sweep.py`](analysis/tuning_sweep.py), now importing the module's statistics; the search's results in the [DagsHub MLflow server](https://dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow), experiment `recommenditos-price-tuning`: the sweeps `88-lgbm-basic-lr-leaves`, `88-lgbm-extended-lr-leaves`, `88-lgbm-basic-min-child-samples` and `88-lgbm-extended-min-child-samples`, each found with the filter `tags.sweep = "<id>"` and its record under `results/` of the run with `tags.sweep_role = "summary"`, compared with EDN-73's [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt); [pipeline docs](../docs/docs/pipeline.md), "Tuning a hyperparameter"; [specification](../docs/docs/specification.md) and [requirements](../docs/docs/requirements.md) NFR-10; [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol), [EDN-69](#edn-69-codecarbon-measures-the-fit-alone-offline-and-per-process-and-its-figure-is-reported-as-the-estimate-it-is), [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count).
 - **In LaTeX:** yes
 
-### EDN-79: The split strategy is weighed against the measured set distributions and the split's seed noise
+### EDN-79: The seller-grouped hash split stays, and its figures are reported with their spread over other splits
+
+- **Date:** 2026-10-12
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Evaluation Protocol, Data Splitting
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** The split stays as it is: whole sellers assigned by a hash of the seed and the seller key, 60/10/10/20, unstratified, with the committed seed.
+  What changes is the reporting: the model card states the distribution of every set, and a figure of the committed split is given with its spread over 20 other splits.
+  An adversarial-validation check is recorded once and not made a standing check, and the missing temporal split is a stated limitation.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the grouped hash split and report the set distributions.**
+    Pros: no rerun and no number moves a week before the delivery; adding sellers moves no seller already there, measured at 0.00 % of the rows when the `ES` listings join the pool, which is what FR-15's retrain comparison rests on; the committed draw is better balanced than 72 % of 1,000 seeds.
+    Cons: the balance is the luck of this draw, not a property of the design, and Mercedes-Benz stays at 8.67 % of the calibration set against 13.54 % of the pool.
+  - **Option B: a stratified-group split on `make`.**
+    Pros: the largest gap of any make's share in any set to its pool share falls from 4.86 pp to 2.04 pp, and calibration reaches 11.5 % Mercedes-Benz.
+    Cons: the assignment depends on all sellers at once, so 52.6 % of the existing rows change set when the `ES` listings join, about as many as a new seed moves, which confounds FR-15's before-and-after comparison; a full pipeline rerun and new split code, with every reported number changing; and it cannot balance the make either, because one dealer holds 25.2 % of the Mercedes-Benz listings and has to go somewhere whole.
+  - **Option C (chosen, with A): repeated grouped splits, reporting the spread beside the single figure.**
+    Pros: it answers what was never measured, how much a figure depends on which sellers landed where, in about 15 minutes and without touching the pipeline.
+    Cons: an analysis script rather than a stage, so it has to be re-run by hand when the candidate or the data changes.
+  - **Option D (recorded once): adversarial validation.**
+    Pros: one classifier, AUC 0.495 on held-out sellers, so train and test are indistinguishable.
+    Cons: nearly a tautology for a random assignment of sellers; run row-wise it reports 0.599, which is the dealer signature EDN-14 found and not a difference between the sets, so as a standing check it would mostly raise false alarms.
+  - **Option E: choose a seed for a better mix.**
+    Pros: none that survives a question.
+    Cons: a new split selected by its outcome; and the committed seed already gives the most favourable SC-04 figure of 21 draws, so a reseed would either worsen that number or look chosen for it.
+  - **Option F: a temporal split.**
+    Pros: the strongest test for a price model.
+    Cons: impossible, the snapshot has no listing dates; it is stated as a limitation.
+- **Rationale:** The question was whether the default split deserved to stay, and three measurements could have said no; none did.
+  The imbalance that prompted the issue has one cause, and it is not what the issue assumed: the largest seller group is a single dealer with 3,383 listings, 3,382 of them Mercedes-Benz, that landed in train, so train is raised (14.95 %, 9.97 % without it) rather than calibration being short, and the calibration share is at the 21st percentile of its own distribution over 1,000 seeds.
+  The verdict on the pooled criteria does not depend on the draw: over 20 other splits the candidate's test MdAPE is 6.73 % on average with a standard deviation of 0.27 pp, against 6.81 % committed, and SC-01 and SC-02 hold on all 20.
+  And SC-04's miss is not an artefact of it: cars older than 20 years are over the bound on 20 of 20 splits, at 18.3 % on average, so the committed 16.77 % understates the miss.
+  Against that, option B buys 2.8 pp of make balance for the one property the split was built for.
+  The same run puts EDN-73 in context: the validation MdAPE moves by 0.42 pp (standard deviation) between splits, more than the 0.16 pp the whole tuning grid spans on one.
+  The 20 splits share one pool of listings, so the spread describes how a figure moves with the assignment and is not a confidence interval for new data.
+  The issue's criterion that the UC2 interval coverage be checked per make is deferred to the work that builds the intervals: no model has an interval method and SC-05 is not measured, so there is nothing to compute a coverage from.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI wrote and ran the evidence script against the stages' own split, feature and fit code, checked first that it reproduces the committed `metrics.json` exactly, and ran 20 seeds instead of the ten asked for after timing one.
+  It corrected the issue's premise, which Lukas had written: the largest dealer is the cause of the Mercedes-Benz gap, but by raising train, not by leaving calibration short.
+  It laid out the six options with their measured costs, recommended A with C, and stopped for the decision; Lukas chose A with C as recommended, with D recorded once and F as a limitation.
+  It also reported that the interval-coverage criterion could not be met and proposed deferring it rather than producing a number.
+  The recommendation was accepted without change because every claim in it is a line of the results file that can be re-run.
+- **AI interaction evidence:** Claude Code session on 2026-10-12 implementing issue #89: the agent measured, reported the options with the numbers of `reports/analysis/split_strategy_results.txt` and its recommendation, and Lukas decided on that report.
+- **Other evidence:** [issue #89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89); [PR #107](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107); [`reports/analysis/split_strategy.py`](analysis/split_strategy.py) and [its results file](analysis/split_strategy_results.txt) (2026-10-12); [model card](../docs/docs/model-card.md), "How comparable the sets are, and how much a figure moves with the split"; [pipeline docs](../docs/docs/pipeline.md), "The split"; [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one), [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
+- **In LaTeX:** yes
 
 ### EDN-80: The project is the used-car price component, the most feasible-sounding of four ideas, chosen without a detailed comparison
 
