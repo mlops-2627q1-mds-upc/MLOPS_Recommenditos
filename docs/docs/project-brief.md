@@ -304,7 +304,7 @@ The first decision of M1, the project choice, is EDN-80: the used-car price comp
 
 **[open]**, to decide with the team:
 
-- Deduplication key and split strategy.
+- Deduplication key; the split strategy it was listed with is decided, the seller-grouped hash split stays ([EDN-79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 - Whether the point model needs random masking for the optional fields that are rarely missing in training, or whether native missing-value handling is enough (section 4); the field list itself is settled in EDN-15.
 
 ## 9. Reference links
