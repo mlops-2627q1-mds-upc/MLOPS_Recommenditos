@@ -28,9 +28,9 @@ The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from 
 
 The figures are estimates.
 On our laptops a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
-We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for the three fitted models, and both gave the same ratio of 2.97 between the two LightGBM variants.
+We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants; the 0.09-second fit of \texttt{b0} is too short to compare.
 We therefore use the figures to compare variants and not as absolute values.
-The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that the same fit has the same emissions on every machine.
+The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
 \begin{table}[ht]
   \centering\small
@@ -58,16 +58,13 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
   \label{fig:energy}
 \end{figure}
 
-Measuring energy told us four things about our choices.
-
 \paragraph{Feature sets.}
-\texttt{lgbm-extended} needs 3.0 times the energy of \texttt{lgbm-basic} and gains 0.55 percentage points of MdAPE when every field is given.
-When only the required fields are given it is worse, 10.3\,\% against 8.3\,\% (\cref{fig:energy}).
-The extended features do not earn their energy, and together with SC-06 this is why \texttt{lgbm-basic} is the candidate (EDN-62).
+\texttt{lgbm-extended} needs 3.0 times the energy of \texttt{lgbm-basic}.
+The accuracy comparison in \cref{sec:m2-experiment-tracking} already favours \texttt{lgbm-basic}, and \cref{fig:energy} adds that the extended features are also the most expensive ones, so they do not earn their energy (EDN-62).
 
-\paragraph{Absolute cost.}
+\paragraph{Training budget.}
 The whole ladder takes 42 seconds of fitting and 0.157\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
-The energy of training therefore does not limit our choices: the variants differ by less than 0.1\,Wh.
+By CodeCarbon's estimate the most expensive fit uses about 0.11\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-70).
@@ -76,11 +73,10 @@ We accepted this so that the validation split, and not a fixed ceiling, decides 
 
 \paragraph{Hyperparameter search.}
 The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-78).
-That is about twenty times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
+That is about 23 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
 
-\paragraph{Serving.}
 The energy of serving is not measured yet.
 We will report it in Milestone~4 as an average per answer over the load test, because CodeCarbon cannot resolve a single request of a few milliseconds.
 
@@ -100,21 +96,18 @@ The configuration is in \texttt{pyproject.toml}.
 The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint} and a required CI job.
 On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 73 files as formatted.
 
-Linting changed the code base twice.
 The Pylint rules found five magic values in the command-line stubs of the template, which we removed.
 We also found that \texttt{make lint} covered only \texttt{recommenditos/}, while CI linted \texttt{tests/} and \texttt{notebooks/} as well; all three now lint the same files.
-Three exceptions are configured, each with its reason next to it, for example the magic-value rule in \texttt{tests/}, where an assertion compares against a literal.
+Each configured exception has its reason next to it, for example the magic-value rule in \texttt{tests/}, where an assertion compares against a literal.
 
 \paragraph{Notebooks (EDN-64, EDN-65).}
 Our notebook is the exploratory analysis behind the dataset card.
 It recomputes the figures of the card from the source file and fails when one does not reproduce.
-Three tools check it:
 
-\begin{itemize}
-  \item \textbf{ruff} checks the code in its cells.
-  \item \textbf{Pynblint} \cite{quaranta2022pynblint} checks its structure, for example the length of a cell and the share of Markdown cells. We enforce 13 of its 22 rules. The other 9 are excluded with a written reason: three read execution counts, which \texttt{nbstripout} removes, and five check the repository for things CI already enforces.
-  \item \textbf{nbstripout} removes outputs before every commit, which also keeps rows of the dataset with personal data out of Git.
-\end{itemize}
+Ruff checks the code in its cells, and \texttt{nbstripout} removes the outputs before every commit, which also keeps rows of the dataset with personal data out of Git.
+Pynblint \cite{quaranta2022pynblint} checks the structure, for example the length of a cell and the share of Markdown cells.
+We enforce 13 of its 22 rules.
+The other 9 are excluded with a written reason: three read execution counts, which \texttt{nbstripout} removes, five check the repository for things CI already enforces, and one is switched off in Pynblint itself.
 
 Pynblint exits with 0 whatever it finds, so we wrote a wrapper, \texttt{tools/notebook\_lint.py}, that reads its report and fails on any finding.
 CI runs it as a required check.
@@ -155,31 +148,15 @@ On \texttt{main} it has 749 tests, of which 745 pass and 4 are skipped, and it c
 \end{table}
 
 The gate tests check the logic of the gate, not the accuracy of the model.
-The accuracy is measured by the \texttt{evaluate} stage on the real test split (\cref{tab:success-criteria}).
+The accuracy is measured by the \texttt{evaluate} stage on the real test split, and on every run under different conditions: in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
 We have no behavioural tests of the trained model yet, such as invariance of the estimate under small changes of the input.
 
 \paragraph{Traceability.}
-A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds the requirement-to-test matrix from the markers (NFR-07).
+A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).
 The job fails when a requirement that is due by the current milestone has no evidence (EDN-44).
-A marker counts as evidence only for a requirement whose specification promises a test; for one that promises a manual drill, the matrix reports the test as naming the requirement (EDN-45).
-Today 67 tests carry a marker for one of six requirements.
-\Cref{tab:matrix} shows the matrix: all six requirements due by Milestone~3 have their evidence.
-
-\begin{table}[ht]
-  \centering\small
-  \begin{tabular}{@{}lrl@{}}
-    \toprule
-    Status in the matrix & Requirements & \\
-    \midrule
-    Verified by a test & 3 & NFR-01, NFR-08, NFR-14 \\
-    Named by a test, the evidence is a manual drill & 3 & NFR-06, NFR-07, NFR-10 \\
-    Manual check with named evidence & 9 & NFR-15 is due by Milestone~3 \\
-    No evidence yet & 16 & all due in Milestone~4 or later \\
-    \bottomrule
-  \end{tabular}
-  \caption{The requirement-to-test matrix for the 31 requirements, as CI builds it on \texttt{main}.}
-  \label{tab:matrix}
-\end{table}
+Today 67 tests carry a marker.
+Of the 31 requirements, 3 are verified by a test (NFR-01, NFR-08, NFR-14), 3 are named by a test while the evidence they promise is a manual drill (NFR-06, NFR-07, NFR-10), 9 have a manual check with named evidence, and 16 have no evidence yet.
+Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~3 are NFR-01, 06, 07, 08, 14 and 15, and each has its evidence.
 
 \subsubsection{Data testing}
 \label{sec:m3-data-testing}
@@ -193,9 +170,9 @@ We validate the data in two layers, because they catch different problems (EDN-3
 
 \paragraph{Structure.}
 \texttt{recommenditos/schema.py} fixes the column names, types and nullability of the raw, cleaned and processed data.
-Every stage validates its input after reading and its output before writing.
+Every stage validates its input after reading and its output before writing, and it writes only the columns the contract names, which keeps the seven personal-data columns out of the processed data (NFR-08).
 A violation is a bug in our code, so it fails the stage that caused it.
-We wrote the contract by hand after we found that Pandera does not check the unit of a datetime column, which the contract fixes.
+We wrote the contract by hand and did not use Pandera, because the contract fixes the unit of every datetime column and Pandera does not check it.
 
 \paragraph{Values.}
 Great Expectations checks the values in two DVC stages (EDN-68).
@@ -218,7 +195,7 @@ Great Expectations checks the values in two DVC stages (EDN-68).
   \label{tab:validation}
 \end{table}
 
-Four properties let the validation prevent problems:
+The validation is built to stop a problem before training:
 
 \begin{itemize}
   \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so nothing is trained on data that did not pass.

@@ -13,12 +13,8 @@
 
 Someone who owns a used car, or wants to buy one, has to compare listings by hand to find out what it is worth.
 We build and deploy an ML component that does this for them: from a description of a used car it estimates the asking price the car would have on a European online car portal.
-It serves two use cases:
-
-\begin{itemize}
-  \item \textbf{UC1, car valuation.} An owner describes their car and receives a price estimate in euros, together with the properties that influenced it most (FR-06, FR-08).
-  \item \textbf{UC2, purchase guidance.} A buyer describes the car they are looking for and receives a typical price with a 90\,\% interval and comparable real listings (FR-02, FR-07, FR-09).
-\end{itemize}
+In the first use case, car valuation (UC1), an owner describes their car and receives a price estimate in euros, together with the properties that influenced it most (FR-06, FR-08).
+In the second, purchase guidance (UC2), a buyer describes the car they are looking for and receives a typical price with a 90\,\% interval and comparable real listings (FR-02, FR-07, FR-09).
 
 The learning task is a regression on $\log(\mathrm{price})$.
 We train on the AutoScout24 Car Listings Dataset, one snapshot of 118,382 listings with 75 columns from eight European countries, published on Zenodo under DOI \href{https://doi.org/10.5281/zenodo.17643343}{10.5281/zenodo.17643343} (EDN-01).
@@ -36,7 +32,8 @@ The primary metric is the median absolute percentage error (MdAPE).
 The criteria are the release gate (NFR-01): the \texttt{evaluate} stage of the pipeline reads the bounds from \texttt{params.yaml}, measures each criterion and writes the verdict to \texttt{metrics.json} (EDN-58).
 SC-04 is also our fairness check, because it compares the error across countries, seller types and the other segments.
 
-We set the bounds after one exploratory run on the final scope, in which baseline B0 reached 11.9\,\% MdAPE and a first LightGBM model 6.7\,\% (EDN-06).
+We set the bounds after one exploratory run on the final scope.
+In it the baseline B0, the median price per make, model and two-year age band, reached 11.9\,\% MdAPE and a first LightGBM model 6.7\,\% (EDN-06).
 The same run showed cars older than 20 years at 15.3\,\%, just above SC-04's bound.
 We kept the bound at 15\,\% and recorded this segment as a known risk.
 
@@ -48,7 +45,7 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
     \midrule
     SC-01 & MdAPE & $\le$ 9\,\% & 6.81\,\% & met \\
     SC-02 & Predictions within $\pm$20\,\% of the asking price & $\ge$ 85\,\% & 89.8\,\% & met \\
-    SC-03 & MdAPE reduction against baseline B0 (median price per make, model and two-year age band) & $\ge$ 30\,\% & 44.0\,\% & met \\
+    SC-03 & MdAPE reduction against baseline B0 & $\ge$ 30\,\% & 44.0\,\% & met \\
     SC-04 & MdAPE in every level of make, country, seller type, fuel category and age band with at least 500 test rows & $\le$ 15\,\% & 16.77\,\% & missed \\
     SC-05 & Coverage of the 90\,\% price intervals of UC2 & 88--92\,\% & -- & not measured \\
     SC-06 & MdAPE with optional input fields missing, relative to the MdAPE with every field given & $\le$ 1.5 & 1.21 & met \\
@@ -65,12 +62,11 @@ It misses SC-04 in one of the 26 segments the criterion checks: its MdAPE is 16.
 SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented.
 We did not move the bound to make the model pass (EDN-62).
 
-The result does not depend on how the data happened to be split.
+The verdicts on SC-01, SC-02 and SC-04 do not depend on the seed of the seller-grouped split.
 We refitted the candidate on 20 other split seeds: the test MdAPE was 6.73\,\% on average with a standard deviation of 0.27 percentage points, against 6.81\,\% on the committed split.
 SC-01 and SC-02 held on all 20 splits and SC-04 was missed on all 20, with 18.3\,\% on average for cars older than 20 years; the committed 16.77\,\% is the lowest of the 21 values (EDN-79).
 
-\paragraph{Engineering decisions.}
-The course grades how the engineering practices are applied more than the accuracy of the model, so we kept the model simple and put the effort into the practices described in \cref{sec:methodology}.
+We kept the model simple and put the effort into the engineering practices described in \cref{sec:methodology}.
 The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (MLOps\_\TeamName\_EDN.pdf), which this report cites by entry ID.
 
 \subsection{Teammates' evaluation}

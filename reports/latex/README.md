@@ -46,6 +46,7 @@ Re-measure them on the delivery commit, after the last merge that goes into it:
 - [ ] Gate result, metrics and fit times: `metrics.json`, `reports/metrics/` and `reports/figures/energy-vs-error.csv`, in the success-criteria table of 1.1, in 2.1.3, in the ladder table and its text in 2.2.4, and in 2.3.1.
 - [ ] The split-noise figures of 1.1 (EDN-79), if the split or the candidate changed: `reports/analysis/split_strategy_results.txt`.
 - [ ] Split and validation figures, if a data stage ran: the dataset card and `reports/data-validation/summary.json`, in 2.1.2 and 2.3.4.
+- [ ] The pipeline is up to date: plain `uv run dvc status` reports nothing changed. `dvc status -c` is not this check: it only compares the cache with the remote, and it passed while six stages were stale.
 - [ ] The pipeline figure, if `dvc.yaml` changed: `reports/latex/figures/pipeline.sh`.
 - [ ] The energy figure and the energy table of 2.3.1, if the ladder was re-run: `cp reports/figures/energy-vs-error.png reports/latex/figures/`, and the rows, the total and the ratios in the text from `reports/figures/energy-vs-error.csv`.
 - [ ] The page count against the limit, and no placeholder left: `make report-submit`, which prints both and the space left on the last page.

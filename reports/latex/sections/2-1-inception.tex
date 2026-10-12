@@ -26,7 +26,7 @@ That check also gave us the dataset (EDN-01) and the scope rules of \cref{sec:go
 
 \paragraph{The requirements.}
 The system has 16 functional and 15 non-functional requirements, summarised in \cref{tab:requirements}.
-Each one has a MoSCoW priority and an acceptance criterion that a test or a named manual check can verify.
+Each one has a MoSCoW priority and an acceptance criterion that a test or a named manual check can verify; \cref{sec:m3-model-testing} shows which of them have this evidence today.
 Each non-functional requirement names its quality characteristic in ISO/IEC 25010 or 25059.
 
 \begin{table}[ht]
@@ -67,10 +67,6 @@ FR-01 makes body type and seller type required fields, because they are filled i
 NFR-05 first promised an uptime percentage, which a single unattended machine cannot guarantee; it now requires recovery within 30 seconds and no downtime during the graded presentation (EDN-10).
 A target that we cannot measure yet is marked \textbf{[proposed]} in the document.
 
-\paragraph{Traceability.}
-A test names the requirement it verifies with a Pytest marker, and CI builds a requirement-to-test matrix from these markers (NFR-07).
-\Cref{sec:m3-model-testing} shows the current state of this matrix.
-
 \subsubsection{Dataset card}
 \label{sec:m1-dataset-card}
 \guidance{
@@ -82,8 +78,7 @@ A test names the requirement it verifies with a Pytest marker, and CI builds a r
 The dataset card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/dataset-card.md}{\texttt{docs/docs/dataset-card.md}} and follows the Hugging Face template \cite{hf-dataset-card}.
 It documents the AutoScout24 snapshot of \cref{sec:goal}: one scrape dated 2025-11-08, prices in EUR, no predefined splits.
 
-We profiled the file ourselves and did not copy the publisher's figures.
-Three findings shaped the project:
+We profiled the file ourselves, and what we found shaped the project:
 
 \begin{itemize}
   \item Germany has 38.5\,\% of the rows, and BMW, Porsche, Mercedes-Benz and Audi together have 82.9\,\%. This led to the scope rules, and the card states that the data does not represent the European used-car market as a whole.
@@ -94,7 +89,7 @@ Three findings shaped the project:
 The card states each limitation together with what it rules out.
 The target is an asking price, not a sale price.
 The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-79).
-The raw file contains seven columns with personal data of sellers: they never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote (EDN-20, EDN-34).
+The raw file contains seven columns with personal data of sellers: they never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20, EDN-34).
 
 After the scope, price, date and deduplication rules, 105,405 of the 118,382 listings remain.
 The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
@@ -176,9 +171,10 @@ The board is linked on the cover.
 
 \paragraph{Coding agents.}
 Coding agents write most of the code, under a rule in our working agreements (EDN-81).
-Every substantive change is reviewed by an independent agent with a fresh context and must pass nine required CI checks before it can be merged (\cref{tab:ci-checks}).
+The rule is that an independent agent with a fresh context reviews every substantive change.
+Branch protection adds the nine required CI checks of \cref{tab:ci-checks} before a merge.
 People decide the questions that go into the EDN and are accountable for the merge.
-A second person reviewed 2 of the 56 pull requests merged by 12 October 2026.
+A second person reviewed 2 of the 56 pull requests merged by 11 October 2026.
 
 \subsubsection{Selection of the cloud provider}
 \label{sec:m1-cloud}
@@ -189,33 +185,16 @@ A second person reviewed 2 of the 56 pull requests merged by 12 October 2026.
 }
 
 We deploy on the FIB Virtech virtual machine that the course provides (EDN-17).
-\Cref{tab:cloud} compares it with the free tiers the course lists.
-
-\begin{table}[ht]
-  \centering\small
-  \begin{tabular}{@{}lllll@{}}
-    \toprule
-    Provider & Compute & Storage & Memory & Free for \\
-    \midrule
-    AWS & 750 h per month & 5\,GB + 30\,GB & 1\,GB & 12 months \\
-    Azure & 750 h per month & 5\,GB + 128\,GB & 1 to 4\,GB & 12 months \\
-    GCP & 750 h per month & 30\,GB & 0.6\,GB & 12 months \\
-    Okteto & unlimited & 5\,GB & 3\,GB & unlimited \\
-    \textbf{FIB Virtech} & unlimited & 20\,GB & 4\,GB & one semester \\
-    \bottomrule
-  \end{tabular}
-  \caption{The free options the course compares (\texttt{references/course-demos.md}).}
-  \label{tab:cloud}
-\end{table}
+The course lists four free alternatives: AWS, Azure, GCP and Okteto.
 
 Memory decided the choice.
-Our stack is an API container, Prometheus, Grafana and a scheduled drift job, which does not fit into the 0.6 to 1\,GB of the AWS and GCP free tiers.
-The FIB machine has the most memory of the five options, the course provides it, and one semester is as long as the project runs.
+Our stack is an API container, Prometheus, Grafana and a scheduled drift job, which does not fit into the 1\,GB and 0.6\,GB of the AWS and GCP free tiers.
+Okteto offers 3\,GB and Azure between 1 and 4\,GB, depending on the instance.
+The FIB machine has 4\,GB of memory and 20\,GB of disk, and it is free for the semester the project runs.
+The course provides it, so nobody needs a personal cloud account with payment details (EDN-17).
 
-Two requirements are tied to this machine.
-NFR-04 gives it a budget: the API container stays below 1\,GB of memory, the drift job runs in its own container, and the metrics and logs are capped so that the disk cannot fill up.
+NFR-04 gives the machine a budget: the API container stays below 1\,GB of memory, the drift job runs in its own container, and the metrics and logs are capped so that the disk cannot fill up.
 NFR-12 keeps the choice reversible: the system starts on a fresh machine with one command and needs no paid service, so nothing in the serving path depends on this provider.
 
-The machine has two weaknesses.
-It is a single host without redundancy, which is why NFR-05 asks for fast recovery and not for an uptime percentage.
-And nobody on the team has access to it yet; if this is still the case at the first Milestone~4 laboratory session, we raise it with the lecturers.
+The machine is a single host without redundancy, which is why NFR-05 asks for fast recovery and not for an uptime percentage.
+Nobody on the team has access to it yet; if this is still the case at the first Milestone~4 laboratory session, we raise it with the lecturers.
