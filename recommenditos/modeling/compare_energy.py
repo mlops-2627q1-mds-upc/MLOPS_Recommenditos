@@ -83,6 +83,13 @@ _INK = "#0b0b0b"
 _INK_SECONDARY = "#52514e"
 _GRID = "#e4e3df"
 
+#: The figure's size in inches, which is the size the report prints it at, and its
+#: font sizes in points: at that size they are the sizes on paper, where the
+#: report's own text is 11 pt.
+_FIGURE_SIZE_IN = (4.2, 3.0)
+_AXIS_PT = 9
+_LABEL_PT = 8
+
 app = typer.Typer()
 
 
@@ -164,13 +171,19 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
     spent on optional columns is spent whether or not a caller sends them. Two
     series, so a legend; each pair is labelled with its variant once.
 
-    The subtitle states the method, because a reader of the picture alone would
-    otherwise take the x axis for a meter reading.
+    The x axis names the method, because a reader of the picture alone would
+    otherwise take it for a meter reading. The figure carries no title: the
+    caption of whatever prints it does, and a title inside the picture would be
+    scaled with it.
+
+    It is drawn at the size the report prints it, two thirds of an A4 text width
+    of 16 cm, so the font sizes below are the sizes on paper, and at 300 dpi so
+    the documentation can show it larger.
 
     A bare `Figure` rather than `pyplot`, so drawing it touches no global state
     and needs no backend chosen for a process that has no display.
     """
-    figure = Figure(figsize=(6.4, 3.8), dpi=200)
+    figure = Figure(figsize=_FIGURE_SIZE_IN, dpi=300)
     axis = figure.subplots()
     energy = [row["energy_wh"] for row in rows]
     full = [row["mdape"] * _PERCENT for row in rows]
@@ -183,7 +196,7 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
     for x, low, high in zip(energy, full, required, strict=True):
         if high is not None:
             axis.plot([x, x], [low, high], color=_GRID, linewidth=2, zorder=2)
-    marks = {"s": 48, "edgecolors": "white", "linewidths": 2, "zorder": 3}
+    marks = {"s": 40, "edgecolors": "white", "linewidths": 1.5, "zorder": 3}
     axis.scatter(energy, full, color=_MARK, label="every field given", **marks)
     shown = [(x, y) for x, y in zip(energy, required, strict=True) if y is not None]
     axis.scatter(
@@ -201,28 +214,26 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
         axis.annotate(
             f"{row['variant']} (both)" if same else row["variant"],
             (x, max(low, high or low)),
-            xytext=(0, 9),
+            xytext=(0, 7),
             textcoords="offset points",
             ha="center",
-            fontsize=8,
+            fontsize=_LABEL_PT,
             color=_INK,
         )
     axis.set_xscale("log")
     axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
-    axis.set_xlabel("Training energy of the fit, Wh (log scale)", fontsize=8, color=_INK_SECONDARY)
-    axis.set_ylabel("Test MdAPE, %", fontsize=8, color=_INK_SECONDARY)
     methods = sorted({str(row["cpu_power_method"]) for row in rows})
-    axis.set_title(
-        "Training energy against test error across the experiment ladder\n"
-        f"CodeCarbon estimate ({', '.join(methods)} CPU, 10 W RAM floor), not a meter reading",
-        fontsize=8,
-        color=_INK,
-        loc="left",
+    axis.set_xlabel(
+        "Training energy of the fit, Wh (log scale)\n"
+        f"CodeCarbon's {', '.join(methods)} estimate, not a meter reading",
+        fontsize=_AXIS_PT,
+        color=_INK_SECONDARY,
     )
-    axis.legend(fontsize=7, frameon=False, loc="upper right", labelcolor=_INK_SECONDARY)
+    axis.set_ylabel("Test MdAPE, %", fontsize=_AXIS_PT, color=_INK_SECONDARY)
+    axis.legend(fontsize=_LABEL_PT, frameon=False, loc="upper right", labelcolor=_INK_SECONDARY)
     axis.grid(True, which="major", color=_GRID, linewidth=0.8)
     axis.set_axisbelow(True)
-    axis.tick_params(labelsize=7, colors=_INK_SECONDARY)
+    axis.tick_params(which="both", labelsize=_LABEL_PT, colors=_INK_SECONDARY)
     for side in ("top", "right"):
         axis.spines[side].set_visible(False)
     for side in ("left", "bottom"):
