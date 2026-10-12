@@ -26,7 +26,7 @@ The split seed and the model seed are separate here on purpose: only the split s
 every fit uses the committed `seed` and hyperparameters, so the spread is the split's and not the
 fit's. Nothing under `data/`, `models/`, `metrics.json` or `dvc.lock` is written.
 
-Run from the repository root after `dvc pull`, with tracking off (about 20 minutes on a laptop):
+Run from the repository root after `dvc pull`, with tracking off (about 15 minutes on a laptop):
 
     MLFLOW_TRACKING_URI= uv run python reports/analysis/split_strategy.py \
         > reports/analysis/split_strategy_results.txt

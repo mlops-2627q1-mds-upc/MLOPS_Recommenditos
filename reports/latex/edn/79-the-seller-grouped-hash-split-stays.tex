@@ -19,7 +19,7 @@ An adversarial-validation check is recorded once and not made a standing check, 
 \newline Pros: the largest gap of any make's share in any set to its pool share falls from 4.86 pp to 2.04 pp, and calibration reaches 11.5\,\% Mercedes-Benz.
 \newline Cons: the assignment depends on all sellers at once, so 52.6\,\% of the existing rows change set when the \texttt{ES} listings join, about as many as a new seed moves, which confounds FR-15's before-and-after comparison; a full pipeline rerun and new split code, with every reported number changing; and it cannot balance the make either, because one dealer holds 25.2\,\% of the Mercedes-Benz listings and has to go somewhere whole.
 \item \textbf{Option C (chosen, with A): repeated grouped splits, reporting the spread beside the single figure.}
-\newline Pros: it answers what was never measured, how much a figure depends on which sellers landed where, in 15 minutes and without touching the pipeline.
+\newline Pros: it answers what was never measured, how much a figure depends on which sellers landed where, in about 15 minutes and without touching the pipeline.
 \newline Cons: an analysis script rather than a stage, so it has to be re-run by hand when the candidate or the data changes.
 \item \textbf{Option D (recorded once): adversarial validation.}
 \newline Pros: one classifier, AUC 0.495 on held-out sellers, so train and test are indistinguishable.
@@ -33,8 +33,8 @@ An adversarial-validation check is recorded once and not made a standing check, 
 \end{itemize}
 \par
 \emph{Why:} The question was whether the default split deserved to stay, and three measurements could have said no; none did.
-The imbalance that prompted the issue has one cause, and it is not what the issue assumed: the largest seller group is a single Mercedes-Benz dealer with 3,382 listings that landed in train, so train is raised (14.95\,\%, 9.97\,\% without it) rather than calibration being short, and the calibration share is at the 21st percentile of its own distribution over 1,000 seeds.
-The pooled criteria do not depend on the draw: over 20 other splits the candidate's test MdAPE is 6.73\,\% on average with a standard deviation of 0.27 pp, against 6.81\,\% committed, and SC-01 and SC-02 hold on all 20.
+The imbalance that prompted the issue has one cause, and it is not what the issue assumed: the largest seller group is a single dealer with 3,383 listings, 3,382 of them Mercedes-Benz, that landed in train, so train is raised (14.95\,\%, 9.97\,\% without it) rather than calibration being short, and the calibration share is at the 21st percentile of its own distribution over 1,000 seeds.
+The verdict on the pooled criteria does not depend on the draw: over 20 other splits the candidate's test MdAPE is 6.73\,\% on average with a standard deviation of 0.27 pp, against 6.81\,\% committed, and SC-01 and SC-02 hold on all 20.
 And SC-04's miss is not an artefact of it: cars older than 20 years are over the bound on 20 of 20 splits, at 18.3\,\% on average, so the committed 16.77\,\% understates the miss.
 Against that, option B buys 2.8 pp of make balance for the one property the split was built for.
 The same run puts EDN-73 in context: the validation MdAPE moves by 0.42 pp (standard deviation) between splits, more than the 0.16 pp the whole tuning grid spans on one.
