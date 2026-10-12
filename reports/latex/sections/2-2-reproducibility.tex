@@ -30,7 +30,7 @@ We use the Cookiecutter Data Science template \cite{ccds} with \texttt{uv} as th
 We changed it in five places, each for a need of this project:
 
 \begin{itemize}
-  \item \textbf{One module per pipeline stage (EDN-28).} The template's \texttt{dataset.py}, \texttt{features.py} and \texttt{train.py} became one module per stage in \texttt{recommenditos/data/} and \texttt{recommenditos/modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each ticket also has its own file, so several people can work on the pipeline at once.
+  \item \textbf{One module per pipeline stage (EDN-28).} The template's three flat modules became one module per stage, in \texttt{recommenditos/\allowbreak data/} and \texttt{recommenditos/\allowbreak modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each ticket also has its own file, so several people can work on the pipeline at once.
   \item \textbf{Configuration in \texttt{params.yaml} (EDN-30).} Everything configurable is there, and \texttt{config.py} holds only paths. A changed parameter reruns the stages that read it, and \texttt{dvc params diff} shows what changed between two commits.
   \item \textbf{Two more stages than the course demo.} A tabular model needs a \texttt{features} stage. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12).
   \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned and processed data, and every stage checks its input and output against it (\cref{sec:m3-data-testing}).

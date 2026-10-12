@@ -36,12 +36,19 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
     Area & IDs & What is required \\
     \midrule
     Input & FR-01 to FR-05 & A valuation needs a small set of required facts and accepts optional ones; implausible input and unsupported makes are refused, with every problem named. \\
+    \addlinespace[2pt]
     Answers & FR-06 to FR-09 & A price estimate with the model version; a price range with bounds; an explanation of the estimate; comparable real listings. \\
+    \addlinespace[2pt]
     Operation & FR-10 to FR-16 & Health and traffic figures; a record of every answer; monitoring of drift and of the real error; retraining and release started and approved by a person, with a rollback. \\
+    \addlinespace[2pt]
     Model quality & NFR-01 & Only a model that meets SC-01 to SC-06 is released. \\
+    \addlinespace[2pt]
     Performance & NFR-02 to NFR-05 & 95\,\% of valuations within 200\,ms; 20 requests per second for five minutes; everything fits the 4\,GB machine; recovery within 30 seconds of a crash. \\
+    \addlinespace[2pt]
     Engineering & NFR-06, 07, 12 to 14 & Same splits and metrics from a clean clone; 80\,\% test coverage and clean linting; start with one command; automatic deployment with rollback; every run records its code, data and parameters. \\
+    \addlinespace[2pt]
     Privacy, security & NFR-08, 09, 15 & No personal data beyond the raw data; public endpoints are read-only; no secret in the Git history. \\
+    \addlinespace[2pt]
     Energy, drift & NFR-10, NFR-11 & Emissions recorded for every training run, and training within 15 minutes on a laptop; a new market is detected within the first 1,000 answers. \\
     \bottomrule
   \end{tabularx}
@@ -91,6 +98,7 @@ The raw file contains seven columns with personal data of sellers: they never re
 
 After the scope, price, date and deduplication rules, 105,405 of the 118,382 listings remain.
 The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
+We reviewed this split strategy after training and kept it (EDN-79).
 \Cref{tab:split} shows the result.
 The validation set is used for early stopping and tuning, the calibration set is reserved for the price intervals of UC2, and the test set is what the release gate reads.
 
@@ -146,17 +154,19 @@ The board is linked on the cover.
   \item \textbf{Ceremonies.} A sprint runs from Tuesday to Tuesday. Planning, review and retrospective take place in the Tuesday laboratory session, the only time the whole team is in one room. We have no daily standup.
   \item \textbf{Tickets.} Every issue has an owner, a milestone label (\texttt{M1} to \texttt{M6}) and an area label such as \texttt{area:data}. Sprint~1 had no labels until its last day, so we now add them when the issue is written.
   \item \textbf{Written process.} \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}} hold the roles, the Definition of Done and the working agreements.
-  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 75 engineering decisions taken so far are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
+  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 76 engineering decisions taken so far are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
 \end{itemize}
 
 \begin{table}[ht]
   \centering\small
-  \begin{tabularx}{\textwidth}{@{}llXl@{}}
+  \begin{tabularx}{\textwidth}{@{}llX>{\raggedright\arraybackslash}p{0.24\textwidth}@{}}
     \toprule
     Sprint & Dates (2026) & Goal & Result \\
     \midrule
-    1 & 22 to 29 Sep & Set up coordination, fix the dataset and the modelling direction, start DVC, the requirements and the two cards & 16 pull requests merged, 7 issues closed \\
+    1 & 22 to 29 Sep & Coordination set up, dataset and modelling direction fixed, DVC, requirements and the two cards started & 16 pull requests merged, 7 issues closed \\
+    \addlinespace[2pt]
     2 & 29 Sep to 6 Oct & A pipeline that runs end to end on the real data, tracked in MLflow and gated by the success criteria & 29 pull requests merged, 26 issues closed \\
+    \addlinespace[2pt]
     3 & 6 to 13 Oct & Tune the model and measure its carbon emissions & in progress \\
     \bottomrule
   \end{tabularx}

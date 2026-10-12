@@ -53,7 +53,7 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 
 \begin{figure}[ht]
   \centering
-  \includegraphics[width=0.72\textwidth]{energy-vs-error}
+  \includegraphics[width=0.66\textwidth]{energy-vs-error}
   \caption{Training energy against test error for the four variants. The blue points are requests with every field, the orange points requests with only the fields FR-01 requires.}
   \label{fig:energy}
 \end{figure}
@@ -98,7 +98,7 @@ The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, 
 The configuration is in \texttt{pyproject.toml}.
 
 The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint} and a required CI job.
-On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 71 files as formatted.
+On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 73 files as formatted.
 
 Linting changed the code base twice.
 The Pylint rules found five magic values in the command-line stubs of the template, which we removed.
@@ -130,7 +130,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-On \texttt{main} it has 717 tests, of which 713 pass and 4 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+On \texttt{main} it has 749 tests, of which 745 pass and 4 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
@@ -140,9 +140,13 @@ On \texttt{main} it has 717 tests, of which 713 pass and 4 are skipped, and it c
     Area & What the tests check \\
     \midrule
     Pipeline stages & Every stage runs on a generated dataset in a temporary directory, without network or credentials (EDN-33). Each output satisfies its contract, the split loses no row, no seller is in two sets, and the holdout contains all Spanish listings and no others. \\
+    \addlinespace[2pt]
     Edge cases & The generated dataset always contains the cases the pipeline rules exist for, such as a duplicate, a registration after the snapshot date, an unsupported make and prices outside the training range. A test of a rule therefore always finds its case in the data. \\
+    \addlinespace[2pt]
     Release gate & 21 tests drive the gate with constructed models and records (NFR-01): a criterion passes and fails at its bound, and a criterion that cannot be measured blocks the gate. \\
+    \addlinespace[2pt]
     Prediction & A single row gets the same prediction as the same row in a batch, and every prediction lies inside the training price range. \\
+    \addlinespace[2pt]
     Tooling & The requirement matrix, the notebook lint wrapper and the EDN generator have tests of their own. \\
     \bottomrule
   \end{tabularx}
@@ -158,7 +162,7 @@ We have no behavioural tests of the trained model yet, such as invariance of the
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds the requirement-to-test matrix from the markers (NFR-07).
 The job fails when a requirement that is due by the current milestone has no evidence (EDN-44).
 A marker counts as evidence only for a requirement whose specification promises a test; for one that promises a manual drill, the matrix reports the test as naming the requirement (EDN-45).
-Today 64 tests carry a marker for one of six requirements.
+Today 67 tests carry a marker for one of six requirements.
 \Cref{tab:matrix} shows the matrix: all six requirements due by Milestone~3 have their evidence.
 
 \begin{table}[ht]
@@ -206,6 +210,7 @@ Great Expectations checks the values in two DVC stages (EDN-68).
     Suite & Rows & Expectations & Result & What it found \\
     \midrule
     Raw & 118,382 & 103 & passed & 164 registration dates after the snapshot date (0.14\,\%, tolerated up to 1\,\%) and 3 mileage values above 1,000,000\,km (tolerated up to 0.1\,\%) \\
+    \addlinespace[2pt]
     Cleaned & 105,405 & 57 & passed & No registration date after the snapshot date and no personal-data column \\
     \bottomrule
   \end{tabularx}
