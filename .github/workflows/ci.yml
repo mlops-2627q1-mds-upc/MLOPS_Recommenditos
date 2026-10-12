@@ -6,9 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# A new push to a pull request cancels the run of the push before it.
+# A run on main is never cancelled: when two pull requests merge within minutes,
+# the first merge's run still has to finish, or main carries a commit whose tests
+# never ran. That happened to #106, whose run #111 cancelled two minutes later.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
