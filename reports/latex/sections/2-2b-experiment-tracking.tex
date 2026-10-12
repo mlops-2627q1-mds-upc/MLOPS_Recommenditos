@@ -49,13 +49,13 @@ A new variant is one more entry in \texttt{params.yaml}.
     \cmidrule(lr){3-5}\cmidrule(lr){6-6}
     Run & Features & MdAPE & Within $\pm$20\,\% & MAE (EUR) & MdAPE & Fit time \\
     \midrule
-    \texttt{b0} & 16 & 12.16\,\% & 70.5\,\% & 9,388 & 12.16\,\% & 0.1\,s \\
-    \texttt{b1} & 16 & 9.52\,\% & 80.3\,\% & 7,499 & 10.72\,\% & 1.4\,s \\
-    \texttt{lgbm-basic} & 16 & 6.81\,\% & 89.8\,\% & 4,760 & 8.26\,\% & 9.2\,s \\
-    \texttt{lgbm-extended} & 162 & 6.26\,\% & 90.4\,\% & 4,651 & 10.30\,\% & 30.9\,s \\
+    \texttt{b0} & 16 & 12.16\,\% & 70.5\,\% & 9,388 & 12.16\,\% & 0.3\,s \\
+    \texttt{b1} & 16 & 9.52\,\% & 80.3\,\% & 7,499 & 10.72\,\% & 2.9\,s \\
+    \texttt{lgbm-basic} & 16 & 6.81\,\% & 89.8\,\% & 4,760 & 8.26\,\% & 12.4\,s \\
+    \texttt{lgbm-extended} & 162 & 6.26\,\% & 90.4\,\% & 4,651 & 10.30\,\% & 42.4\,s \\
     \bottomrule
   \end{tabular}
-  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and \texttt{reports/figures/energy-vs-error.csv}. The MLflow run ID of each row is in \texttt{reports/metrics/<run>.json}. Runs of 2026-10-06 on a laptop CPU.}
+  \caption{The experiment ladder on the 19,665 test rows, from \texttt{reports/metrics/} and \texttt{reports/figures/energy-vs-error.csv}. The MLflow run ID of each row is in \texttt{reports/metrics/<run>.json}. Runs of 2026-10-12 on a laptop CPU.}
   \label{tab:runs}
 \end{table}
 
@@ -63,7 +63,7 @@ A new variant is one more entry in \texttt{params.yaml}.
 \Cref{tab:runs} compares the four runs, which the \href{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}{experiment on DagsHub} lists as well.
 The extended feature set improves the MdAPE by 0.55 percentage points when the user gives every field.
 With only the fields FR-01 requires, \texttt{lgbm-extended} is at 10.30\,\%, which is 1.65 times its own full-input value and above SC-06's bound of 1.5, and it is worse than \texttt{lgbm-basic} at 8.26\,\%.
-It also takes 3.3 times as long to fit.
+It also takes 3.4 times as long to fit.
 We therefore put \texttt{lgbm-basic} forward as the candidate (EDN-62).
 
 The hyperparameter search is tracked separately.

@@ -60,7 +60,7 @@ No model passes the gate, so no model is released.
 The candidate \texttt{lgbm-basic} meets SC-01, SC-02, SC-03 and SC-06.
 It misses SC-04 in one of the 26 segments the criterion checks: its MdAPE is 16.77\,\% on the 784 test cars older than 20 years, while the next segment is at 10.2\,\%.
 SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented.
-We did not move the bound to make the model pass (EDN-62).
+We accept the miss as a limitation of this model and did not move the bound to make it pass (EDN-62).
 
 The verdicts on SC-01, SC-02 and SC-04 do not depend on the seed of the seller-grouped split.
 We refitted the candidate on 20 other split seeds: the test MdAPE was 6.73\,\% on average with a standard deviation of 0.27 percentage points, against 6.81\,\% on the committed split.
