@@ -2722,50 +2722,50 @@ How to add an entry:
 - **AI involvement:** Information seeking
 - **Response to AI:** Used as input for further analysis
 - **Assessment of the AI contribution:** As far as @lukas2510 recalls, AI did not take part in choosing among the four ideas.
-  It was used for the feasibility check, and its output was not taken at its word: the plan an AI assistant had drafted rested on assumptions about the data that a profile of the real files contradicted, and the project brief records the corrected picture ([PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13)).
-  The three reasons added afterwards are AI's, checked against the repository on 2026-10-12; a fourth, a simple API to serve, was dropped because the API does not exist yet.
+  It was used for the feasibility check, and its output was not taken at its word: the team's pre-analysis plan, drafted with an AI assistant as @lukas2510 recalls, rested on assumptions about the data that a profile of the real files contradicted, and the project brief records the corrected picture ([PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13)).
+  The three reasons added afterwards are AI's, checked against the repository on 2026-10-12.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-22 (the drafted plan checked against the data) and 2026-10-12 (@lukas2510's account).
 - **Other evidence:** [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95); [problem specification](../docs/docs/problem-spec.md), success criteria; [`reports/figures/energy-vs-error.csv`](figures/energy-vs-error.csv), `fit_seconds`.
 - **In LaTeX:** yes
 
 ### EDN-81: Coding agents work under a written rule: an independent agent reviews, people decide and are accountable
 
-- **Date:** 2026-09-29 (rule written down); review rule reworded on 2026-10-12, proposed until the team confirms it on 2026-10-13
+- **Date:** 2026-09-29 (rule written down); review rule reworded on 2026-10-12, as a proposal
 - **Milestone:** Other (team process)
 - **Activity / Topic:** Use of AI Coding Agents, Code Review
-- **Participants:** @lukas2510 as Scrum master wrote the rule down and proposed the rewording, which the team confirms at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record.
-- **Decision:** Coding agents work under the four rules of the [working agreements](../docs/docs/scrum/working-agreements.md), and the review rule was reworded on 2026-10-12: an independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, the required checks gate the merge, and a person decides the questions that belong in this notebook and is accountable for the change.
+- **Participants:** @lukas2510 as Scrum master wrote the rule down and proposed the rewording, to be confirmed by the team at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record.
+- **Decision:** Coding agents work under the four rules of the [working agreements](../docs/docs/scrum/working-agreements.md), and the review rule was reworded on 2026-10-12 to: "Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change."
   It used to read "The reviewer is a person, and reviewing means having understood the tests, not having watched them pass", which the trace does not show.
   No person signs off each pull request.
 - **Alternatives considered:**
   - **Option A (chosen): reword the review rule to the process as practised.**
-    Pros: rule and trace agree. Cons: for most pull requests the reviewer is an agent and not a person.
+    Pros: rule and practice agree. Cons: for most pull requests the reviewer is an agent and not a person.
   - **Option B: keep the old wording and record the gap as a weakness.**
     Pros: no rule changes before the team has met. Cons: a rule the team does not follow.
   - **Option C: a second person approves every pull request** (considered on 2026-09-21 and 2026-10-12).
     Pros: human review is visible on every pull request. Cons: GitHub blocks approving one's own pull request, and an agent's runs under its author's account ([PR #8](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/8)), so most merges would wait.
-  - **Option D: a GitHub account of its own for the agent** (considered on 2026-09-21).
+  - **Option D: a GitHub account of its own for the agent** (considered on 2026-09-21, by @lukas2510's recollection only).
     Pros: the trace shows who typed. Cons: an account to maintain, and still no second pair of eyes.
-  - **Option E: no written rule, or no agents** (not discussed at the time, weighed here).
-    Pros: nothing to maintain. Cons: the team had agreed to work with agents ([issue #43](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/43)).
-- **Rationale:** A rule and its trace must agree.
-  Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, both by @kadameit, and branch protection requires 9 checks and 0 approvals.
+- **Rationale:** Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, both by @kadameit, and branch protection requires 9 checks and 0 approvals.
+  The bodies of [#50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50), [#53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53), [#55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55), [#62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62), [#71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71) and [#80](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80) describe an independent or adversarial review, which was an agent's; otherwise, before 2026-10-12, the review left its trace in the agent session and not on GitHub.
+  Since 2026-10-12 its result is posted on the pull request before the merge, first on [#101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101#issuecomment-6124299563).
 
-  People decide: of the 75 entries EDN-01 to EDN-77, 46 record the AI's proposal as accepted, 26 as modified, 2 as rejected and 1 as input for further analysis.
-  Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member is responsible for them, as the rule's third bullet says.
+  People decide: of the 76 entries EDN-01 to EDN-78, 46 record the AI's proposal as accepted, 27 as modified, 2 as rejected and 1 as input for further analysis.
+  Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them (the third rule).
   The strongest cases:
-  @lukas2510 asked who owned the DagsHub repository the AI had recommended, which invalidated it (EDN-19), and overruled two AI passes on an omitted equipment list (EDN-61);
-  @W11W11W11 chose `dvc add` against the AI's recommendation (EDN-25);
-  @kadameit required two changes on [#26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26) and approved [#85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85) after running the suite on Windows 11;
+  @lukas2510 asked who owned the DagsHub repository the AI had recommended, which invalidated it (EDN-19);
+  he rejected the draft requirements' 99 % uptime target for one the deployment can meet (EDN-10, commit `3afcb50c` of [#19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19));
+  he overruled the second of two AI passes on an omitted equipment list, on a ground neither pass had weighed (EDN-61);
+  @kadameit required two changes on [#26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), and ran the suite on Windows 11 for [#85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85), where his approval came three minutes after the merge and did not inform it;
   @lukas2510 moved [#86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/86) back to draft, because accepting SC-04's miss before tuning was premature.
 
-  Checking claims failed twice: the DagsHub recommendation was posted on #26 unchecked, and two pull requests moved the laboratory to the wrong weekday (corrected in [PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)).
+  Two examples of where checking failed: the DagsHub recommendation was posted on #26 unchecked, and two pull requests moved the laboratory to the wrong weekday (corrected in [PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97)).
   The weak spot: 48 of the 56 were opened and merged under one account with no second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** The oracle criterion and the rule's text are AI's, adopted by @lukas2510 on 2026-09-29.
-  On 2026-10-12 AI reconstructed the practice and measured the numbers above, found that the review rule and the trace disagreed, laid out options A and B and recommended A, which @lukas2510 chose.
-  He decided against option C the same day; options C to E are AI's as well.
+  On 2026-10-12 AI measured the numbers above, found that the review rule and the trace disagreed, and recommended option A over B, which @lukas2510 chose.
+  He decided against option C the same day; options C and D are AI's as well.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-21, 2026-09-29 (sprint 2 planning) and 2026-10-12.
 - **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95); `gh pr list --state merged --json number,author,mergedBy,reviews` and the branch protection of `main`, both read on 2026-10-12.
 - **In LaTeX:** yes
