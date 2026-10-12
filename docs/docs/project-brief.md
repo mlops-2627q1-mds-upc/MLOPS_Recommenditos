@@ -86,6 +86,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
   The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
   That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
+  Measured on 2026-10-12 ([EDN-79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.3 % on average for cars older than 20 years against 16.77 % on the committed one.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
 It was the original drift set, and the supervisor (S. del Rey) asked us to check whether it is feasible given the feature mismatch.

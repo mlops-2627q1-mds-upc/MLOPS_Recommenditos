@@ -143,7 +143,7 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
   Mass-market brands are not simply out of scope: Volkswagen, Honda, Hyundai and Suzuki clear the 300-listing threshold and are served.
   But several supported makes sit so close to that threshold that SC-04 never checks them.
   A make needs about 2,500 in-scope listings to reach SC-04's 500 test rows at a 20 % test share, and **Honda (798), Hyundai (548), Aston Martin (360) and Volkswagen (348) fall short**, together 2.1 % of the training scope (listing counts measured 2026-09-29, `reports/analysis/make_support.py`).
-  Four is a floor rather than a count: the split proportions are not pinned yet, and a four-way train, validation, calibration and test split leaves the test set below 20 %, at which point Volvo joins below a 15 % share and Suzuki below 13 %.
+  Four is the count at the committed split: the test share is pinned at 20 % in `params.yaml` so that Suzuki (824 test rows) and Volvo (714) stay above the 500, and below a test share of about 15 % Volvo would join the four, and Suzuki below 13 %.
   Their rows still count towards the pooled criteria SC-01 to SC-03 and SC-05 to SC-06, but no criterion isolates them, so a failure specific to one of these makes cannot surface as a missed criterion.
   For these makes the per-segment half of the quality gate is blind by construction.
   Closing that gap, by raising the support threshold, lowering SC-04's segment size, or naming these makes as low-confidence in the response, is an open task for Milestone 3.
@@ -164,7 +164,7 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
   At any real scale this is a feedback loop, and the model would gradually be evaluated against a market it helped set.
   The project never reaches that scale, but the limitation belongs to the model, not to the deployment, so anyone reusing it inherits it.
 - **Dealer concentration.**
-  83.3 % of listings come from dealers, and a few large ones can dominate a segment.
+  83.3 % of listings come from dealers, and a few large ones can dominate a segment: one dealer alone holds 25.2 % of the Mercedes-Benz listings ([measured](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)).
   The seller-grouped split keeps this from inflating the measured quality, but it does not remove it from what the model learned.
 
 ### Fairness
@@ -481,6 +481,12 @@ A model is released only if it meets all six ([requirements](requirements.md#2-n
 ### How comparable the sets are, and how much a figure moves with the split
 
 The split assigns whole sellers by a hash of the seed and the seller key and stratifies on nothing, so the four sets are comparable only as far as the draw makes them.
+**That was measured, and the split is kept as it is (EDN-79).**
+What changed is the reporting: this section states the distribution of every set, and a figure of the committed split is given with its spread over 20 other splits.
+It was enough to keep the split because the three things that could have argued against it did not show: the committed draw is better balanced than most, the pooled criteria hold on every split tried, and the one criterion that fails, SC-04, fails on every one of them.
+A stratified-group split would have narrowed the largest make gap from 4.86 pp to 2.04 pp, and would have moved 52.6 % of the rows between sets as soon as the `ES` listings join the pool, which is the retrain FR-15 compares against the current model; the hash split moves none.
+Choosing another seed for a better mix was rejected as well, since it is a new split picked by its outcome.
+
 This is what the committed draw looks like, over every row the `split` stage wrote (the served makes are 98.6 % of them):
 
 | | train | validation | calibration | test | pool |
@@ -525,7 +531,7 @@ The seeds were fixed before any of them was run, and none of them is a candidate
   The committed split has that dealer in train, so its figure is of the less flattering kind.
 - **SC-04's miss on old cars is not an artefact of the draw.**
   The segment is over the 15 % bound on 20 of 20 splits, and it is the worst qualifying level on every one.
-  The committed 16.77 % is lower than all 20, so the figure this card reports understates the miss by about 1.5 pp against the typical split rather than overstating it.
+  The committed 16.77 % comes with a mean of 18.3 % over the 20 other splits and is lower than every one of them, the most favourable of 21 draws, so the figure this card reports understates the miss by about 1.5 pp against the typical split rather than overstating it.
 - **A tuning difference has to be read against this.**
   The validation MdAPE of the committed hyperparameters has a standard deviation of 0.42 pp over the splits, and a range of 1.15 pp, against the 0.16 pp the whole grid of EDN-73 spans on the committed one.
   Compared on the same split the noise is much smaller: the grid's lowest-MdAPE point, 255 leaves, is lower than the committed 63 on 17 of 20 splits, by 0.06 pp on average, and higher in validation L1, the metric the tuning protocol decides by, on 13 of 20.
@@ -534,6 +540,7 @@ The seeds were fixed before any of them was run, and none of them is a candidate
 Two things this does not cover.
 A temporal split would be the stronger test for a price model and is impossible, because the snapshot carries no listing dates (see [Bias, Risks, and Limitations](#bias-risks-and-limitations)).
 And whether the UC2 intervals cover each make equally, Mercedes-Benz above all since the calibration set holds the least of it, cannot be checked before the intervals exist: SC-05 is not measured, and the calibration set is written by `split` and read by no model yet.
+That check is deferred to the work that builds the intervals, where the coverage is to be reported per make on the test set beside the pooled figure SC-05 asks for.
 
 ### Results
 
@@ -798,6 +805,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-70: `n_estimators` is a ceiling of 5,000 that early stopping stays under, not a tree count.
 - EDN-73: `learning_rate` and `num_leaves` are not tuned, and any later tuning follows a written protocol.
 - EDN-78: the hyperparameter search extends EDN-73's protocol to both LightGBM variants and `min_child_samples`, measures and tracks every fit, and kept every value.
+- EDN-79: the seller-grouped hash split stays, and its figures are reported with their spread over other splits.
 
 ## Model Card Authors
 
