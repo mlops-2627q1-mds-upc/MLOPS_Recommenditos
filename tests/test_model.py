@@ -5,7 +5,10 @@ fixture and then train all four variants once, into `tmp_path_factory`. Nothing
 here reaches `data/`, the DagsHub server or the network: a variant that could not
 be trained on a clean clone with no credentials would be a variant CI cannot
 check, so the whole module trains with the MLflow variables removed and the few
-tests that need a server point it at a SQLite database under `tmp_path`.
+tests that need a server point it at a SQLite database under `tmp_path`. The one
+exception reads and never writes: `test_the_real_model_lowers_more_predictions_than_it_raises_too`
+checks the bundle in `models/` where `dvc pull` has restored it, and is skipped
+everywhere else.
 
 The fixtures are session-scoped and the models are fitted once. Measured on this
 fixture at `num_threads: 1`: the four fits together cost well under a second, so
@@ -38,7 +41,7 @@ import pytest
 from tests.conftest import PII_COLUMNS, params_override
 import yaml
 
-from recommenditos.config import PARAMS_FILE, PROJ_ROOT
+from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, Vocabulary, read_supported_makes
 from recommenditos.modeling import train
@@ -473,8 +476,8 @@ def test_predict_eur_ignores_extra_and_reordered_columns(
 ):
     """The model selects what it needs; the caller does not have to prepare a frame.
 
-    The matrix carries `price` and `log_price`, so a model that took the frame as
-    given would be scored on its own target.
+    Only the order varies here; that a column outside the features changes no
+    answer is `test_a_column_that_is_not_a_feature_cannot_move_the_prediction`.
     """
     model = trained["models"][variant]
     frame = test_frames[model.feature_set]
@@ -749,6 +752,105 @@ def test_a_prediction_that_would_overflow_is_bounded_to_the_training_range(
         assert np.isfinite(predicted).all()
         assert (predicted > 0).all()
         np.testing.assert_allclose(predicted.to_numpy(), expected)
+
+
+# --------------------------------------------------------------------------
+# Behaviour: what moves a prediction, and what must not
+# --------------------------------------------------------------------------
+
+#: The variants that take mileage and age as numbers. `b0` is left out: its lookup
+#: has no mileage, and its two-year age bands leave most cars where they were.
+_LEARNED_VARIANTS = tuple(
+    name for name, settings in _variants().items() if settings["estimator"] != "median_baseline"
+)
+
+#: A realistic change whose effect on a price has a known sign, as (column, amount):
+#: about a year and a half of driving, and a first registration one year earlier.
+_DEPRECIATING_STEPS = {
+    "20000-km-more": ("mileage_km_raw", 20_000.0),
+    "a-year-older": ("age_years", 1.0),
+}
+
+
+def _assert_the_step_lowers_more_predictions_than_it_raises(
+    model: Model, frame: pd.DataFrame, step: str
+) -> None:
+    """Applied to every row of `frame`, `step` lowers more predictions than it raises.
+
+    On aggregate, because boosted trees are not monotone and a per-row assertion
+    would fail on a model that is right. A row that does not move counts for
+    neither side: a step that crosses no split of a tree changes nothing, and how
+    many rows that is depends on the fixture's draw, so a statistic that counted
+    them as not falling, as a median of the ratios does, could fail on a model
+    with no defect. A model that ignores the column still fails, on 0 > 0.
+    """
+    column, amount = _DEPRECIATING_STEPS[step]
+    before = model.predict_eur(frame).to_numpy()
+    after = model.predict_eur(frame.assign(**{column: frame[column] + amount})).to_numpy()
+    fell, rose = np.mean(after < before), np.mean(after > before)
+
+    assert fell > rose, (
+        f"{model.variant}: {step} lowers {fell:.1%} of the {len(frame)} predictions "
+        f"and raises {rose:.1%}"
+    )
+
+
+@pytest.mark.parametrize("step", list(_DEPRECIATING_STEPS))
+@pytest.mark.parametrize("variant", _LEARNED_VARIANTS)
+def test_more_mileage_or_age_lowers_more_predictions_than_it_raises(
+    variant: str, step: str, trained: dict, test_frames: dict
+):
+    """The direction the generator's price formula has is the one the fit learned."""
+    model = trained["models"][variant]
+
+    _assert_the_step_lowers_more_predictions_than_it_raises(
+        model, test_frames[model.feature_set], step
+    )
+
+
+@pytest.mark.parametrize("step", list(_DEPRECIATING_STEPS))
+@pytest.mark.parametrize("variant", _LEARNED_VARIANTS)
+def test_the_real_model_lowers_more_predictions_than_it_raises_too(variant: str, step: str):
+    """The same direction on the bundle `dvc pull` restores, over the real validation rows.
+
+    The fixture's price is a formula, so the test above shows that an estimator can
+    learn the direction and this one that the model we release did. It is the one
+    test of this module that reads `models/` and `data/`, and it is skipped where
+    they are absent, which includes CI.
+    """
+    matrix = PROCESSED_DATA_DIR / "features" / _variants()[variant]["feature_set"]
+    if not (MODELS_DIR / variant / MODEL_FILE).exists() or not matrix.exists():
+        pytest.skip("needs the real bundle and matrices, which `dvc pull` restores")
+
+    _assert_the_step_lowers_more_predictions_than_it_raises(
+        load_model(MODELS_DIR / variant), pd.read_parquet(matrix / "validation.parquet"), step
+    )
+
+
+@pytest.mark.parametrize("field", ["vin", "seller_group_id", "price", "log_price"])
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_a_column_that_is_not_a_feature_cannot_move_the_prediction(
+    variant: str, field: str, trained: dict, test_frames: dict
+):
+    """An identifier or the label in the caller's frame changes no answer.
+
+    `price` and `log_price` are in every matrix, so a model that read one would be
+    scored on its own target. `vin` and `seller_group_id` are in none: the test
+    adds them, as a caller's frame taken from the raw file or a split might.
+    """
+    model = trained["models"][variant]
+    frame = test_frames[model.feature_set]
+    assert field not in model.features
+    # Another value in every row: a label that is in the frame is doubled, an
+    # identifier that is not is added, unique per row.
+    values = (
+        frame[field] * 2 if field in frame else [f"{field}-{row}" for row in range(len(frame))]
+    )
+
+    np.testing.assert_array_equal(
+        model.predict_eur(frame.assign(**{field: values})).to_numpy(),
+        model.predict_eur(frame).to_numpy(),
+    )
 
 
 # --------------------------------------------------------------------------

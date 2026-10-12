@@ -37,6 +37,12 @@ They call the same stage functions in the same order against a synthetic fixture
 make test
 ```
 
+The model tests check behaviour as well as the contract and the gate.
+Adding 20,000 km or a year of age has to lower more predictions than it raises for `b1` and the two LightGBM variants, counted over all rows because boosted trees are not monotone row by row, with a row that does not move counting for neither side.
+A column that is not a feature (`vin`, `seller_group_id`, the label itself) has to leave every prediction bit-identical.
+CI has no data, so it asserts the direction on the fixture-trained models only and never runs the test on the real bundle.
+That test runs in a developer's `make test` once `dvc pull` has restored `models/` and the feature matrices, over the real validation rows.
+
 Stages
 ------
 
