@@ -954,16 +954,17 @@ def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> Transfer
 def entry_words(entry: Entry) -> int:
     """The words of an entry, counted as reports/edn.md says it counts them.
 
-    The title, the note and the text fields count. A link counts by its text
-    and not by its target, and text in double quotes does not count, so that a
-    rule or a prompt quoted word for word does not push an entry over the cap.
+    The title, the note and the text fields count. A word is what white space
+    separates, so a link counts by the words of its text: its target has no
+    space and adds none. Text in double quotes does not count, so that a rule
+    or a prompt quoted word for word does not push an entry over the cap.
     """
     lines = [entry.title, *entry.note]
     for key in COUNTED_FIELDS:
         lines += entry.fields.get(key, [])
     for _label, markdown, _above in entry.extra_fields:
         lines += markdown
-    text = re.sub(r"\]\([^)\s]*\)", "]", re.sub(r'"[^"\n]*"', " ", "\n".join(lines)))
+    text = re.sub(r'"[^"\n]*"', " ", "\n".join(lines))
     return sum(1 for token in text.split() if re.search(r"[^\W_]", token))
 
 

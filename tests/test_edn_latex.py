@@ -505,13 +505,47 @@ def test_an_entry_over_the_word_limit_is_named_with_its_count(tmp_path):
     assert problem.endswith("the limit is 300")
 
 
-def test_quoted_text_and_link_targets_do_not_count_as_words():
+def test_quoted_text_does_not_count_and_a_link_counts_by_the_words_of_its_text():
     quote = " ".join(["quoted"] * 400)
     plain = entry_md(Decision="Use the dataset.")
-    quoting = entry_md(Decision=f'Use the dataset. "{quote}" [docs](https://example.org/a/b c).')
+    quoting = entry_md(Decision=f'Use the dataset. "{quote}" [the docs](https://example.org/a/b).')
     (short,), (long,) = parse_notebook(notebook(plain)), parse_notebook(notebook(quoting))
 
     assert entry_words(long) == entry_words(short) + 2
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Decision",
+        "Alternatives considered",
+        "Rationale",
+        "Assessment of the AI contribution",
+        "AI interaction evidence",
+        "Other evidence",
+    ],
+)
+def test_the_words_of_every_text_field_count(label):
+    """A field left out of the count would let an entry grow there unnoticed."""
+
+    def words_with(n: int) -> int:
+        value = " ".join(["word"] * n)
+        if label == "Alternatives considered":
+            value = f"\n  - {value}"
+        (entry,) = parse_notebook(notebook(entry_md(**{label: value})))
+        return entry_words(entry)
+
+    assert words_with(60) == words_with(10) + 50
+
+
+def test_the_title_and_the_note_count_and_the_other_fields_do_not():
+    (base,) = parse_notebook(notebook(entry_md()))
+    noted = entry_md().replace("\n\n", "\n\n> **Revised on 2026-10-12**: one two three.\n\n", 1)
+    (with_note,) = parse_notebook(notebook(noted))
+    (with_names,) = parse_notebook(notebook(entry_md(Participants="one two three four five")))
+
+    assert entry_words(with_note) == entry_words(base) + 6
+    assert entry_words(with_names) == entry_words(base)
 
 
 def test_the_check_fails_on_an_entry_over_the_limit(tmp_path, capsys):

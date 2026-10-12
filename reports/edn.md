@@ -24,7 +24,7 @@ How to add an entry:
 - Keep to the shape.
   An entry is read in about a minute, so it has about 220 words and never more than 300.
   The 300 are the one hard limit: `python -m tools.edn_latex --check` and the tests fail on an entry above it.
-  Counted are the title, the note line and the fields from **Decision** to **Other evidence**, without link targets and without text in double quotes.
+  Counted are the title, the note line and the fields from **Decision** to **Other evidence**; a link counts by the words of its text, and text in double quotes does not count.
   The figures per field are guide values:
   - title: one clause of about ten words that states the decision;
   - **Decision**: what we do, in about 45 words;
@@ -381,6 +381,8 @@ How to add an entry:
 - **In LaTeX:** yes
 
 ### EDN-17: The component is deployed on the FIB Virtech VM
+
+> **Revised on 2026-10-12**: the comparison of the free tiers was added from section 2.1.5 of the report; the entry of 2026-09-29 weighed "another cloud" on cost and account grounds only.
 
 - **Date:** 2026-09-29
 - **Milestone:** M4: Model Deployment
@@ -882,7 +884,7 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** The design is AI's: two agents working on issues #37 and #39 agreed it, and one of them saw that a stage covering four variants leaks a run across variants unless each run is closed.
   AI verified against the real DagsHub server that resuming creates no additional run.
-  Lukas accepted the design as proposed; the original entry records no check of his own.
+  Lukas accepted the design as proposed; no check by a person is recorded.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issues #37 and #39.
 - **Other evidence:** `resume_run` in [`tracking.py`](../recommenditos/tracking.py), [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
 - **In LaTeX:** yes
