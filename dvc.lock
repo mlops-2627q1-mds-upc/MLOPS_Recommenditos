@@ -446,12 +446,12 @@ stages:
       size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: 8d5b73a96e2aaab78d698d15509ebf3a
-      size: 56292
+      md5: 2ffdd0ffe723258e33060be6d1e1e4da
+      size: 57795
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
-      size: 13923
+      md5: 38fa5c7931bc4596ede93b972b39e43f
+      size: 15108
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -485,13 +485,13 @@ stages:
     outs:
     - path: models/b0
       hash: md5
-      md5: 480c860cc5bf75e60c1ae81e783e6251.dir
-      size: 40680
+      md5: 721076eb6e63049b539cdfd363c2678d.dir
+      size: 40681
       nfiles: 3
     - path: reports/emissions/b0.csv
       hash: md5
-      md5: d53015631f541df4f94b514f2a073d77
-      size: 895
+      md5: 8945e115d39d74b337c98fa1eee2ac15
+      size: 891
   train@b1:
     cmd: python3 -m recommenditos.modeling.train b1
     deps:
@@ -518,12 +518,12 @@ stages:
       size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: 8d5b73a96e2aaab78d698d15509ebf3a
-      size: 56292
+      md5: 2ffdd0ffe723258e33060be6d1e1e4da
+      size: 57795
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
-      size: 13923
+      md5: 38fa5c7931bc4596ede93b972b39e43f
+      size: 15108
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -558,12 +558,12 @@ stages:
     outs:
     - path: models/b1
       hash: md5
-      md5: 75d592d7362a4b5caff0080fca123fc1.dir
-      size: 40791
+      md5: 053c47e10cd8a7af8b98a32d5754a110.dir
+      size: 40785
       nfiles: 3
     - path: reports/emissions/b1.csv
       hash: md5
-      md5: 1b51f52f3129567dc5bd0713760b4a5a
+      md5: 7b8b7f2760da58f8c3009711d187529c
       size: 913
   train@lgbm-basic:
     cmd: python3 -m recommenditos.modeling.train lgbm-basic
@@ -591,12 +591,12 @@ stages:
       size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: 8d5b73a96e2aaab78d698d15509ebf3a
-      size: 56292
+      md5: 2ffdd0ffe723258e33060be6d1e1e4da
+      size: 57795
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
-      size: 13923
+      md5: 38fa5c7931bc4596ede93b972b39e43f
+      size: 15108
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -633,13 +633,13 @@ stages:
     outs:
     - path: models/lgbm-basic
       hash: md5
-      md5: 36edcbd3b6f0ef122dba45be8609e853.dir
-      size: 7660164
+      md5: a4e23cae87791cd58218d5cb740a3703.dir
+      size: 7660165
       nfiles: 3
     - path: reports/emissions/lgbm-basic.csv
       hash: md5
-      md5: bf20061db1035a47ce29468a89d558c2
-      size: 948
+      md5: f6c9969cf3bd9e89cf5cd3972b7613b6
+      size: 937
   train@lgbm-extended:
     cmd: python3 -m recommenditos.modeling.train lgbm-extended
     deps:
@@ -666,12 +666,12 @@ stages:
       size: 20285
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: 8d5b73a96e2aaab78d698d15509ebf3a
-      size: 56292
+      md5: 2ffdd0ffe723258e33060be6d1e1e4da
+      size: 57795
     - path: recommenditos/modeling/train.py
       hash: md5
-      md5: 94d2ae99ca7a73d05c6a4da8f58d07b3
-      size: 13923
+      md5: 38fa5c7931bc4596ede93b972b39e43f
+      size: 15108
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -708,13 +708,13 @@ stages:
     outs:
     - path: models/lgbm-extended
       hash: md5
-      md5: 4ee7e92cdff2bda270ecda0dd5407d42.dir
-      size: 10972939
+      md5: a2438ff5eaebd98a5d21c71a0f29a0df.dir
+      size: 10972933
       nfiles: 3
     - path: reports/emissions/lgbm-extended.csv
       hash: md5
-      md5: 00ee467a762b2b310b19435ba11192f5
-      size: 942
+      md5: f04d6b36f2345a7a44f5a123b9a0b36e
+      size: 950
   evaluate:
     cmd: python3 -m recommenditos.modeling.evaluate
     deps:
@@ -725,8 +725,8 @@ stages:
       nfiles: 13
     - path: models
       hash: md5
-      md5: 9a61a87e1ac30d472891e943968ec73b.dir
-      size: 18714609
+      md5: 95461051770e5807e2f804e6614c418b.dir
+      size: 18714599
       nfiles: 13
     - path: recommenditos/config.py
       hash: md5
@@ -742,8 +742,8 @@ stages:
       size: 52524
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: 8d5b73a96e2aaab78d698d15509ebf3a
-      size: 56292
+      md5: 2ffdd0ffe723258e33060be6d1e1e4da
+      size: 57795
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -847,7 +847,7 @@ stages:
       size: 1198
     - path: reports/metrics
       hash: md5
-      md5: 8abf4e8764832aebdf59f7742f26a6c5.dir
+      md5: 2c2a8c6f68d067d1b164b70df3753ef2.dir
       size: 110765
       nfiles: 6
   compare-energy:
@@ -855,8 +855,8 @@ stages:
     deps:
     - path: models
       hash: md5
-      md5: 9a61a87e1ac30d472891e943968ec73b.dir
-      size: 18714609
+      md5: 95461051770e5807e2f804e6614c418b.dir
+      size: 18714599
       nfiles: 13
     - path: recommenditos/config.py
       hash: md5
@@ -868,8 +868,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/compare_energy.py
       hash: md5
-      md5: 82bcb18ddb1aeb7fda9c139491d31e25
-      size: 11217
+      md5: 3074d3ae38184e1bdb22d70f28d4af59
+      size: 12066
     - path: recommenditos/modeling/energy.py
       hash: md5
       md5: 4181349a90c714fa292280207dcb90ee
@@ -880,8 +880,8 @@ stages:
       size: 52524
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: 8d5b73a96e2aaab78d698d15509ebf3a
-      size: 56292
+      md5: 2ffdd0ffe723258e33060be6d1e1e4da
+      size: 57795
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -900,12 +900,12 @@ stages:
       size: 18951
     - path: reports/emissions
       hash: md5
-      md5: 76ea2aadd33b7fe03eb668fa54adf66f.dir
-      size: 3698
+      md5: 3884030fb08816ea54d54980900a94c4.dir
+      size: 3691
       nfiles: 4
     - path: reports/metrics
       hash: md5
-      md5: 8abf4e8764832aebdf59f7742f26a6c5.dir
+      md5: 2c2a8c6f68d067d1b164b70df3753ef2.dir
       size: 110765
       nfiles: 6
     params:
@@ -941,9 +941,9 @@ stages:
     outs:
     - path: reports/figures/energy-vs-error.csv
       hash: md5
-      md5: 9eab16b2d59c6a5caa3595793255de1d
-      size: 1204
+      md5: d389789152f2f19e30dce5ba714c766b
+      size: 1203
     - path: reports/figures/energy-vs-error.png
       hash: md5
-      md5: a3064e9c13d2a0aacc3fe77b75ac6c97
-      size: 66586
+      md5: c6636dfb207eacdf556656c54de05745
+      size: 77906

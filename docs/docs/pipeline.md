@@ -316,7 +316,8 @@ Every MLflow run the pipeline makes names the committed state that produced it (
 | `evaluate.git_commit`, `evaluate.git_dirty` | `evaluate` resumes the run | The same for the evaluation, which can run at a later commit than the fit: a change to `evaluate.py` alone reruns only `evaluate`. |
 | `evaluate.deps.<path>` | `evaluate` resumes the run | Each dependency of `evaluate`, by the hash `dvc.lock` records for it under that stage. |
 
-`git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/` and `reports/data-validation/summary.json`.
+`git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/`, `reports/emissions/`, `reports/figures/energy-vs-error.{csv,png}` and `reports/data-validation/summary.json`.
+Git must hand those back byte for byte, because `dvc.lock` records them by their MD5, so `.gitattributes` marks each of them `-text` and `tests/test_committed_outputs.py` fails for one that is not.
 So the runs of a clean commit reproduced with `dvc repro` are tagged clean, and `true` means a change somebody made, an untracked file included; `unknown` means git named the commit but could not read the tree's status.
 The one write of DVC's that still counts is the line it adds to a `.gitignore` the first time a new cached output is produced, because that file is also the hand-written `.gitignore` of the repository root; commit the line, and the next run is clean.
 
@@ -330,6 +331,8 @@ To get from a run back to what produced it:
 1. **Code and parameters:** `git checkout` the run's `git_commit`, or `evaluate.git_commit` for the evaluation.
    With `git_dirty: false` the code there is what ran, and every code file has the hash its `deps` tag records, which is the plain `md5sum` of its bytes; `params.yaml` at that commit is what the stage read.
    The commit is the one the pipeline ran from, on the branch of its pull request, so after the squash merge it is reachable through the pull request (`git fetch origin pull/<n>/head`) rather than from `main`.
+   That holds only while the commit stays on the branch: a run's `git_commit` tag names a commit of the branch the run was made on, and a rebase replaces that commit with a copy the tag does not name.
+   So a branch is not rebased after a tracked run, it is brought up to date by merging `main` into it, or the tracked run is made last.
 2. **Data:** a data dependency's hash is its address in the DVC cache and on the remote, so it identifies the input whatever happened to the commits.
    `git log --reverse --format=%H -S <hash> -- dvc.lock` lists the commits that added or removed the hash in the lock, oldest first; the first one added it, and its lock records the input.
    `git checkout` that commit and `dvc pull <path>` restores the file or directory.

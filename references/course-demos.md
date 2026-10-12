@@ -57,7 +57,7 @@ A broader list of MLOps tools the teachers point to: <https://agate-tangerine-72
 - Data tests: Great Expectations file context in `gx/` with an expectation suite, validation definitions for raw and clean data, and a checkpoint that updates Data Docs; the validation runs as a DVC stage.
 - API tests: FastAPI `TestClient` fixtures, happy path plus invalid input (e.g. input too long).
 - Pytest config in `pyproject.toml`: `pythonpath = "."`, `testpaths = "tests"`, `--junitxml` report for CI and `--cov` HTML report under `reports/coverage`.
-- The demo's ruff config enables `E, F, UP, B, SIM, I, PL`; ours only extends `I`, so it does not cover the Pylint-style checks the rubric asks for yet.
+- The demo's ruff config enables `E, F, UP, B, SIM, I, PL`, and ours extends the same seven rule sets (`extend-select` in `pyproject.toml`), so it covers the Pylint-style checks the rubric asks for.
 
 ### API and deployment (M4)
 
