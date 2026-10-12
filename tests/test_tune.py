@@ -14,6 +14,7 @@ off for every test, and a test that runs a sweep points MLflow at a SQLite store
 under `tmp_path` through the `store` fixture.
 """
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import shutil
@@ -44,6 +45,7 @@ from recommenditos.modeling.tune import (
     TuningError,
     compare,
     mean_error,
+    paired_bootstrap,
     parse_assignments,
     search,
     simultaneous,
@@ -186,6 +188,35 @@ def test_a_point_identical_to_the_reference_gets_a_zero_width_not_a_division_by_
     assert half[0] == 0
 
 
+def test_a_point_is_scored_on_the_draw_the_reference_is_scored_on():
+    """Paired: a point with the reference's own errors differs from it by nothing in any draw."""
+    reference, groups = _reference_errors()
+    per_row = {"reference": reference, "twin": reference.copy()}
+
+    _, differences = paired_bootstrap(
+        per_row, "reference", mean_error, Bootstrap(groups, 3, DRAWS)
+    )
+
+    assert not differences.any()
+
+
+def test_a_draw_takes_every_row_of_a_seller_or_none():
+    """By seller group: a difference that cancels within every seller cancels in every draw.
+
+    Each seller has two rows, the point 0.5 worse than the reference on one and
+    0.5 better on the other. Drawing rows one by one would split the pairs.
+    """
+    reference, _ = _reference_errors()
+    groups = np.repeat(np.arange(len(reference) // 2), 2)
+    per_row = {"reference": reference, "point": reference + np.tile([0.5, -0.5], len(groups) // 2)}
+
+    _, differences = paired_bootstrap(
+        per_row, "reference", mean_error, Bootstrap(groups, 3, DRAWS)
+    )
+
+    assert np.abs(differences).max() < 1e-12
+
+
 # --------------------------------------------------------------------------
 # A sweep on the fixture
 # --------------------------------------------------------------------------
@@ -275,6 +306,12 @@ def test_the_summary_run_carries_the_record_the_table_and_one_energy_row_per_fit
     assert _listing(REPORTS_DIR) == reports_before
     assert document["reference"] == "min_child_samples=20"
     assert document["fixed"] == {"learning_rate": 0.1}
+    fitted = {
+        run.data.params["lightgbm.learning_rate"]
+        for run in _runs(store, "second-grid")
+        if run.data.tags["sweep_role"] == "point"
+    }
+    assert fitted == {"0.1"}, "the fixed value did not reach every fit, the reference included"
     (summary,) = [
         run for run in _runs(store, "second-grid") if run.data.tags["sweep_role"] == "summary"
     ]
@@ -343,6 +380,50 @@ def test_every_fit_of_a_sweep_is_a_tagged_run_with_its_metric_fit_time_and_energ
         sum(run.data.metrics["energy_kwh"] for run in points)
     )
     assert artefacts[summary.info.run_id] == [ARTIFACT_PATH]
+
+
+@pytest.mark.parametrize(
+    ("factors", "adopted"),
+    [
+        # All three are resolved better: 0.4 by the most, but the ceiling ended it,
+        # and of the other two the one with the lower validation L1 wins.
+        ({0.1: 0.9, 0.2: 0.8, 0.4: 0.7}, "learning_rate=0.2"),
+        # One identical to the reference, one worse, and the only better one bound.
+        ({0.1: 1.0, 0.2: 1.1, 0.4: 0.7}, None),
+    ],
+)
+def test_the_verdict_adopts_the_best_resolved_point_the_ceiling_did_not_end(
+    factors: dict, adopted: str | None, processed: Path, store: str, monkeypatch
+):
+    """The line that decides keep or adopt, on errors whose verdict is known.
+
+    The fits are real, but each point's per-row errors are replaced by the first
+    fit's times the point's factor (1 for the reference), and 0.4 is marked as
+    ended by the ceiling.
+    """
+    fit_point, first = tune._fit_point, []
+
+    def rigged(context, point):
+        fit, errors, relative = fit_point(context, point)
+        first.append(errors)
+        rate = dict(point)["learning_rate"]
+        if rate == 0.4:
+            fit = replace(fit, training={**fit.training, "early_stopped": False})
+        return fit, first[0] * factors.get(rate, 1.0), relative
+
+    monkeypatch.setattr(tune, "_fit_point", rigged)
+    sweep = Sweep("verdict", "lgbm-basic", {"learning_rate": list(factors)})
+
+    document = search(sweep, _paths(processed), _protocol())
+
+    (summary,) = [
+        run for run in _runs(store, "verdict") if run.data.tags["sweep_role"] == "summary"
+    ]
+    assert document["budget_bound"] == ["learning_rate=0.4"]
+    assert document["verdict"]["adopted"] == adopted
+    assert document["verdict"]["adopted_point"] == (adopted and {"learning_rate": 0.2})
+    assert summary.data.tags["verdict"] == ("adopt" if adopted else "keep")
+    assert summary.data.tags["adopted"] == (adopted or "none")
 
 
 def test_a_sweep_without_tracking_is_refused_before_any_fit(processed: Path, monkeypatch):
