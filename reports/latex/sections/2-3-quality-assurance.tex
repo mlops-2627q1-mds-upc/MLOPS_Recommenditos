@@ -28,7 +28,7 @@ The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from 
 
 The figures are estimates.
 On our laptops a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
-We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants; the 0.09-second fit of \texttt{b0} is too short to compare.
+We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants; the fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
 We therefore use the figures to compare variants and not as absolute values.
 The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
@@ -38,16 +38,16 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
     \toprule
     & Fit time & Energy & Emissions (CO$_2$eq) \\
     \midrule
-    \texttt{b0} & 0.09\,s & 0.0003\,Wh & 0.06\,mg \\
-    \texttt{b1} & 1.40\,s & 0.0069\,Wh & 1.19\,mg \\
-    \texttt{lgbm-basic} & 9.25\,s & 0.0375\,Wh & 6.53\,mg \\
-    \texttt{lgbm-extended} & 30.90\,s & 0.1119\,Wh & 19.47\,mg \\
+    \texttt{b0} & 0.26\,s & 0.0010\,Wh & 0.18\,mg \\
+    \texttt{b1} & 2.93\,s & 0.0133\,Wh & 2.32\,mg \\
+    \texttt{lgbm-basic} & 12.42\,s & 0.0494\,Wh & 8.60\,mg \\
+    \texttt{lgbm-extended} & 42.37\,s & 0.1526\,Wh & 26.56\,mg \\
     \midrule
-    Whole ladder & 41.6\,s & 0.157\,Wh & 27.3\,mg \\
+    Whole ladder & 58.0\,s & 0.216\,Wh & 37.7\,mg \\
     Hyperparameter search, 34 fits, on another laptop & 391\,s & 3.61\,Wh & 628\,mg \\
     \bottomrule
   \end{tabular}
-  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-78).}
+  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-78). The ladder is the run of 2026-10-12, made while other work loaded the laptop; fit time and energy vary between runs, and the identical trees took 0.157\,Wh on 2026-10-06.}
   \label{tab:energy}
 \end{table}
 
@@ -59,12 +59,12 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 \end{figure}
 
 \paragraph{Feature sets.}
-\texttt{lgbm-extended} needs 3.0 times the energy of \texttt{lgbm-basic} for 0.55 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given (\cref{fig:energy}).
+\texttt{lgbm-extended} needs 3.1 times the energy of \texttt{lgbm-basic} for 0.55 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given (\cref{fig:energy}).
 The extended features therefore do not earn their energy, which together with SC-06 is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
-The whole ladder takes 42 seconds of fitting and 0.157\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
-By CodeCarbon's estimate the most expensive fit uses about 0.11\,Wh, so the energy of training does not limit our choices.
+The whole ladder takes 58 seconds of fitting and 0.216\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
+By CodeCarbon's estimate the most expensive fit uses about 0.15\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-70).
@@ -73,7 +73,7 @@ We accepted this so that the validation split, and not a fixed ceiling, decides 
 
 \paragraph{Hyperparameter search.}
 The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-78).
-That is about 23 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
+That is about 17 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
 
@@ -95,7 +95,7 @@ The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, 
 The configuration is in \texttt{pyproject.toml}.
 
 The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint} and a required CI job.
-On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 73 files as formatted.
+On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 74 files as formatted.
 
 The Pylint rules found five magic values in the command-line stubs of the template, which we removed.
 We also found that \texttt{make lint} covered only \texttt{recommenditos/}, while CI linted \texttt{tests/} and \texttt{notebooks/} as well; all three now lint the same files.
@@ -124,7 +124,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-On \texttt{main} it has 749 tests, of which 745 pass and 4 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+In CI it has 779 tests, of which 769 pass and 10 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
@@ -150,7 +150,11 @@ On \texttt{main} it has 749 tests, of which 745 pass and 4 are skipped, and it c
 
 The gate tests check the logic of the gate, not the accuracy of the model.
 The accuracy is measured by the \texttt{evaluate} stage on the real test split, and on every run under different conditions: in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
-We have no behavioural tests of the trained model yet, such as invariance of the estimate under small changes of the input.
+
+Three parametrised behavioural tests with 28 cases check the trained models.
+For the Ridge baseline and both LightGBM variants, 20,000\,km more or a first registration one year earlier must lower more predictions than it raises.
+A column that is not a feature, such as an identifier or the price itself, must leave every prediction unchanged.
+CI runs the direction test on models trained from the synthetic data, and with the real data pulled the same test runs on the real models: 20,000\,km more lowers 92.5\,\% of the 8,859 validation predictions of \texttt{lgbm-basic} and raises 7.0\,\%.
 
 \paragraph{Traceability.}
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).
