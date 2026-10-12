@@ -2744,8 +2744,6 @@ How to add an entry:
     Pros: no rule changes before the team has met. Cons: a rule the team does not follow.
   - **Option C: a second person approves every pull request** (considered on 2026-09-21 and 2026-10-12).
     Pros: human review is visible on every pull request. Cons: GitHub blocks approving one's own pull request, and an agent's runs under its author's account ([PR #8](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/8)), so most merges would wait.
-  - **Option D: a GitHub account of its own for the agent** (considered on 2026-09-21, by @lukas2510's recollection only).
-    Pros: the trace shows who typed. Cons: an account to maintain, and still no second pair of eyes.
 - **Rationale:** Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, both by @kadameit, and branch protection requires 9 checks and 0 approvals.
   The bodies of [#50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50), [#53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53), [#55](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/55), [#62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62), [#71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71) and [#80](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/80) describe an independent or adversarial review, which was an agent's; otherwise, before 2026-10-12, the review left its trace in the agent session and not on GitHub.
   Since 2026-10-12 its result is posted on the pull request before the merge, first on [#101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101#issuecomment-6124299563).
@@ -2754,7 +2752,7 @@ How to add an entry:
   Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them (the third rule).
   The strongest cases:
   @lukas2510 asked who owned the DagsHub repository the AI had recommended, which invalidated it (EDN-19);
-  he rejected the draft requirements' 99 % uptime target for one the deployment can meet (EDN-10, commit `3afcb50c` of [#19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19));
+  he asked what availability the single unattended VM could actually meet, which replaced the draft requirements' 99 % uptime target (EDN-10, commit `3afcb50c` of [#19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19));
   he overruled the second of two AI passes on an omitted equipment list, on a ground neither pass had weighed (EDN-61);
   @kadameit required two changes on [#26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), and ran the suite on Windows 11 for [#85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85), where his approval came three minutes after the merge and did not inform it;
   @lukas2510 moved [#86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/86) back to draft, because accepting SC-04's miss before tuning was premature.
@@ -2765,7 +2763,7 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** The oracle criterion and the rule's text are AI's, adopted by @lukas2510 on 2026-09-29.
   On 2026-10-12 AI measured the numbers above, found that the review rule and the trace disagreed, and recommended option A over B, which @lukas2510 chose.
-  He decided against option C the same day; options C and D are AI's as well.
+  He decided against option C the same day; option C is AI's as well.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-21, 2026-09-29 (sprint 2 planning) and 2026-10-12.
 - **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95); `gh pr list --state merged --json number,author,mergedBy,reviews` and the branch protection of `main`, both read on 2026-10-12.
 - **In LaTeX:** yes
