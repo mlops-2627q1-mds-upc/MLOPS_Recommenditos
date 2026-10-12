@@ -35,10 +35,19 @@ LaTeX sources for our two course deliverables:
 
 ## Before a submission
 
-Several figures in the report describe the commit it is built from, and go stale as `main` moves.
-Re-measure them on the delivery commit, after the last merge that goes into it:
+A delivery is cut from one commit, the delivery commit, and everything below is run on it; the delivery's issue (#93 for the first one) tracks the cut.
+The whole list was run once as a dry run on `804ea06` (2026-10-12), so every command in it is known to work.
 
-- [ ] Test count, skips and coverage: `make test`, in 2.3.3.
+The cut:
+
+- [ ] The delivery commit is chosen: after the last merge that changes the report, and before the freeze window of [CONTRIBUTING.md](../../CONTRIBUTING.md#freeze-window-before-a-presentation), which starts 48 hours before the presentation.
+- [ ] Every DRAFT marker is gone because the section's owner signed the section off, not because the marker was deleted.
+- [ ] The commit is tagged once every line below holds, and the tag is pushed.
+
+Several figures in the report describe the commit it is built from, and go stale as `main` moves.
+Re-measure them on the delivery commit:
+
+- [ ] Test count, skips and coverage: `make test`, in 2.3.3. The report quotes CI's counts, and CI has no data, so a machine that ran `dvc pull` skips fewer tests: 4 against CI's 10 on `804ea06`.
 - [ ] Files `ruff format --check` reports, and that `ruff check` finds nothing: `make lint`, in 2.3.2.
 - [ ] Notebook lint findings: `make notebook-lint`, in 2.3.2.
 - [ ] Tests carrying a `req` marker, and the matrix's counts: `uv run python -m tools.requirement_matrix` and `reports/requirement-matrix.json`, in 2.3.3.
@@ -46,11 +55,41 @@ Re-measure them on the delivery commit, after the last merge that goes into it:
 - [ ] Gate result, metrics and fit times: `metrics.json`, `reports/metrics/` and `reports/figures/energy-vs-error.csv`, in the success-criteria table of 1.1, in 2.1.3, in the ladder table and its text in 2.2.4, and in 2.3.1.
 - [ ] The split-noise figures of 1.1 (EDN-79), if the split or the candidate changed: `reports/analysis/split_strategy_results.txt`.
 - [ ] Split and validation figures, if a data stage ran: the dataset card and `reports/data-validation/summary.json`, in 2.1.2 and 2.3.4.
-- [ ] The pipeline is up to date: plain `uv run dvc status` reports nothing changed. `dvc status -c` is not this check: it only compares the cache with the remote, and it passed while six stages were stale.
 - [ ] The pipeline figure, if `dvc.yaml` changed: `reports/latex/figures/pipeline.sh`.
 - [ ] The energy figure and the energy table of 2.3.1, if the ladder was re-run: `cp reports/figures/energy-vs-error.png reports/latex/figures/`, and the rows, the total and the ratios in the text from `reports/figures/energy-vs-error.csv`.
-- [ ] The page count against the limit, and no placeholder left: `make report-submit`, which prints both and the space left on the last page.
+
+The commit itself, after `dvc pull`:
+
+- [ ] The checks CI runs, locally: `make lint`, `make test`, `make test-serving`, `make notebook-lint`, and `uv run mkdocs build --strict` in `docs/`.
+- [ ] CI ran what it shows as green. The `Tests`, `Tests (Windows)`, `Serving runtime` and `Build docs` jobs pass with every step skipped when the commit changes no file of their paths filter: `gh run view <run> --json jobs` lists the steps, and where they were skipped the counts come from the pull request run of the last change to the code.
+- [ ] The pipeline is up to date: plain `uv run dvc status` reports nothing changed. `dvc status -c` is not this check: it only compares the cache with the remote, and it passed while six stages were stale.
+- [ ] Every artefact the lock names is on the remote: `uv run dvc status -c` reports cache and remote in sync.
+- [ ] The MLflow runs behind the committed models name the committed state (NFR-14): `uv run python reports/analysis/run_provenance_check.py` ends with `OK` for every variant. It only reads from the tracking server.
+- [ ] NFR-06: the clean-clone drill of [The DVC pipeline](../../docs/docs/pipeline.md#running-it), repeated in a fresh `git clone` of the delivery commit without a `.env`, and its record there replaced by this run. The commit that records it changes that page alone, comes right after the commit the drill ran on, and is the one that gets the tag.
+- [ ] NFR-07 and NFR-15: one person reviews the requirement matrix and the secret scan of the delivery commit's CI run and records it, as described under [The delivery review](#the-delivery-review).
+
+The PDF and the hand-in:
+
+- [ ] The page count against the limit, and no placeholder left: `make report-submit DELIVERABLE=initial` (or `final`), which prints both and the space left on the last page.
+- [ ] The size against Atenea's 20 MB: `ls -l reports/latex/build/MLOps_Recommenditos_*_report.pdf`. The same build writes `MLOps_Recommenditos_EDN.pdf`.
 - [ ] Once the DRAFT boxes are gone, every page break: no heading orphaned at the bottom of a page (such as 2.3 with no text under it) and no figure or table pushed away from its text.
+- [ ] Every link of the cover and the text opens in a browser that is not logged in, the repository above all, which the lecturer has to be able to open: `pdfinfo -url <pdf>` lists them.
+- [ ] Who submits is named in the delivery's issue, and the PDF uploaded to Atenea is the one built from the tagged commit.
+
+### The delivery review
+
+NFR-07 and NFR-15 each ask for a person's review before a delivery, and no tool can stand in for it.
+Both read the CI run of the delivery commit, and neither job has a paths filter, so both run on every commit:
+
+- **The requirement matrix (NFR-07):** the summary of the `Requirement matrix` job, or its `requirement-matrix` artefact (`gh run download <run> -n requirement-matrix`).
+  Check that the four counts are the ones 2.3.3 of the report states and that none of the requirements with nothing is already due.
+  Then judge what the job cannot: for every requirement due by the current milestone, whether the tests the matrix names really verify it, and whether the drill a **[manual]** cell names was really run on this commit and is recorded where the cell says.
+- **The secret scan (NFR-15):** the summary of the `Secret scan (gitleaks)` job.
+  Check that the commit it names is the delivery commit, that the number of commits scanned is plausible for the whole history and not for a shallow checkout (404 on `804ea06`), and that it says no leaks were found.
+  In the job's log, the canary step has to say that it found the planted DagsHub token in every place it was planted, which is what shows that a clean scan is not a blind one.
+
+The review is recorded as one comment on the delivery's issue: the delivery commit, the links to the CI run and to both jobs, the reviewer's name, the date, and what was found, even when that is nothing.
+The reviewer writes that comment; a prepared summary of the two artefacts is not a review.
 
 ## Building with Docker (recommended)
 

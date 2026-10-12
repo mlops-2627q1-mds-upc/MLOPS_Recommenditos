@@ -27,8 +27,22 @@ A clean clone pays none of that, because `dvc pull` brings the Parquet down and 
 CI never runs the stage; the test suite covers it against fixtures instead.
 
 That is measured, not assumed, and it is the drill NFR-06 names.
-On a scratch clone of commit `3e05487` (#66, 2026-10-01), before the data-validation stages had outputs of their own, `dvc pull` fetched 34 files and added 32, and `dvc repro` then reported all twelve stages as `didn't change, skipping` and finished with `Data and pipelines are up to date.`
-Nothing came from Zenodo: the clone has no `data/external/` directory at all, and its `metrics.json` and `data/raw/listings.parquet` are byte-identical to the ones this repository produced.
+The record below is the dry run before the first delivery's cut, on 2026-10-12; the drill is repeated on the delivery commit, and this record is then replaced by that run.
+It ran in a fresh `git clone` of commit `804ea06` (#111) on Linux, with a cache of its own, the DVC credentials in `.dvc/config.local` and no `.env`, so with tracking off and no run written to the MLflow server.
+`dvc pull` fetched 76 files and added 72 in 258 s, plain `dvc status` reported the pipeline up to date, and `dvc repro` then reported all thirteen stages as `didn't change, skipping` and finished with `Data and pipelines are up to date.` in 3 s.
+Nothing came from Zenodo: the clone had no `data/external/` directory at all, its `metrics.json` and `data/raw/listings.parquet` were byte-identical to the ones this repository produced, and `git status` was clean afterwards.
+The run before it, on `3e05487` (#66, 2026-10-01), fetched 34 files, added 32 and skipped twelve stages; the validation stages' outputs and the `compare-energy` stage have been added since.
+
+That part executes no stage, so on its own it shows that the committed lock, the code and the remote agree, not that the stages reproduce their outputs.
+So the dry run went on to `dvc repro --force` in the same clone, which ran all thirteen stages, from the Zenodo download on, in 277 s on a four-core laptop under load from other work.
+
+- **Reproduced byte for byte**, by the MD5 the committed lock records: the raw and the interim Parquet, the five split files and `supported_makes.json`, both feature matrices, the validation summary, the fitted estimator of every variant (`lookup.parquet`, `pipeline.joblib` and both `booster.txt`) and `metrics.json`.
+  The splits and every metric are therefore the same, without needing the ±0.1 percentage points NFR-06 allows.
+- **Different, because it records the run and not its result:** `model.json` (`trained_at`, the fit times, and the tracking fields, which are empty with tracking off), the `mlflow_run_id` line of each `reports/metrics/<variant>.json`, which is the only line of those files that changed, and the emissions files and the energy comparison, which are measurements.
+- **Different, and not looked into:** the Great Expectations context, the validation results and the Data Docs have other hashes than the lock records, while `summary.json`, the file the report quotes, has the same.
+- **Not covered:** MLflow tracking, which a tracked `dvc repro` of record exercises and `reports/analysis/run_provenance_check.py` checks against the server, and any operating system other than Linux.
+
+Nothing of the forced run was pushed or committed, and the clone was removed afterwards.
 
 The tests never run the pipeline through DVC.
 They call the same stage functions in the same order against a synthetic fixture in a temporary directory, so `pytest` stays fast and hermetic:
