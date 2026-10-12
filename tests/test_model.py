@@ -175,7 +175,7 @@ def test_frames(matrices: dict) -> dict:
     """The test matrix per feature set, as `features` wrote it.
 
     Already the population `evaluate` reports on, because the stage restricts
-    every frame to the makes the API serves (EDN-48, EDN-67), so a test that
+    every frame to the makes the API serves (EDN-48), so a test that
     scores a model here scores it on the same rows the stage would.
     """
     return {
@@ -299,7 +299,7 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
     row would pass a check that only read the metadata.
 
     Counted on the frames `split` wrote rather than on the matrices, because
-    `features` is where the restriction happens now (EDN-67): a matrix holds only
+    `features` is where the restriction happens now (EDN-48): a matrix holds only
     supported makes, so it cannot show that anything was removed, while the split
     frames still hold every make and say what the model should have been fitted
     on.
@@ -576,7 +576,7 @@ def test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is(
     non-nullable, so a float64 NaN fails the contract's null check and the caller
     finds out. An equipment column is nullable, so the same assignment upcasts to
     float64, survives `conform` and comes back as `pd.NA` - the field arrives as
-    absent where EDN-61 says it is empty, and nothing says a word about it. No
+    absent where EDN-15 says it is empty, and nothing says a word about it. No
     metric would either: on the real snapshot the two rules give **bit-identical**
     predictions on all 19,665 test rows, for each of the four equipment fields and
     for all 23 optional fields at once. That equivalence is a property of the tree
@@ -1308,7 +1308,7 @@ def test_a_bundle_whose_two_halves_disagree_is_refused(damage: str, tmp_path: Pa
 
 
 def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: dict):
-    """EDN-51's guard, which no prediction on this fixture can show.
+    """The Ridge baseline's indicator guard, which no prediction on this fixture can show.
 
     scikit-learn's default is an indicator only for the features that were
     missing *at fit time*. A column that happens to be complete in the training
@@ -1524,7 +1524,7 @@ def test_training_refuses_matrices_built_against_another_make_list(
 
     The way it happens: `split.min_listings_per_make` is swept, the list is
     rewritten and the matrices are not rebuilt. `features` owns the restriction
-    (EDN-67), so `train` does not filter again - that would quietly repair the
+    (EDN-48), so `train` does not filter again - that would quietly repair the
     rows while keeping a vocabulary decided over a different population - but it
     checks that every row it is about to fit is a make the list names, and says
     which list it checked against.
@@ -2064,7 +2064,7 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
         if name not in required:
             # An unticked checkbox is `False` and the absence of evidence
             # (EDN-23); an equipment list nobody sent is an empty one, so every
-            # item of it is `False` too (EDN-61). Everything else is `None`.
+            # item of it is `False` too (EDN-15). Everything else is `None`.
             row[name] = False if column.dtype in {"bool", "boolean"} else None
         elif column.levels is not None:
             row[name] = str(frame[name].dropna().iloc[0])
@@ -2594,7 +2594,7 @@ def test_a_test_matrix_holding_a_make_the_model_was_not_fitted_on_is_refused(
     trained, matrices, tmp_path
 ):
     # Reachable only when the test matrix and the model's make list come from
-    # different `split` runs. `features` owns the restriction (EDN-67), so the
+    # different `split` runs. `features` owns the restriction (EDN-48), so the
     # stage checks the test rows against the model's own list instead of
     # filtering them again: a filter here would report on a population chosen by
     # whichever run the model came from, with no error anywhere.

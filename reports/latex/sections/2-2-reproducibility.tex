@@ -112,7 +112,7 @@ A Git commit therefore identifies the code, the data and the parameters together
 Three properties of the pipeline go beyond the course demo:
 
 \begin{itemize}
-  \item \textbf{Raw data.} The \texttt{download} stage fetches the file from the Zenodo DOI and refuses it unless its MD5 equals the checksum Zenodo publishes (EDN-36). We keep no copy of the published CSV.
+  \item \textbf{Raw data.} The \texttt{download} stage fetches the file from the Zenodo DOI and refuses it unless its MD5 equals the checksum Zenodo publishes (EDN-25). We keep no copy of the published CSV.
   \item \textbf{Parameters.} Each stage lists only the \texttt{params.yaml} keys it reads, and \texttt{foreach} generates the \texttt{features} stage once per feature set and the \texttt{train} stage once per variant. Changing the hyperparameters of one variant retrains only that variant (EDN-30).
   \item \textbf{Synthetic data.} With \texttt{download.source} set to \texttt{synthetic}, the \texttt{download} stage generates a dataset with the same schema, and \texttt{dvc repro} runs on a clean clone without the 548.6\,MB file and without DagsHub access (EDN-33). The tests use the same generator, so no real listing is committed to Git. \texttt{metrics.json} records which source produced it.
 \end{itemize}
