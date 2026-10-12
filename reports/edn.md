@@ -16,6 +16,7 @@ How to add an entry:
   Reserve the ID by adding its heading to this file on `main` before opening the branch that needs it.
   Sprint 1 handed out EDN-19 on two branches at once, and the entry that lost the race had to be renumbered to EDN-27 while merging.
   EDN-38 was never assigned: no entry or reservation with that ID exists anywhere in the history, so the gap is a skipped number and not a removed entry.
+  EDN-76 was never assigned either, for the same reason: it is a skipped number.
 - Fill in every field; write "-" for optional fields that do not apply.
 - Record the alternatives with their pros and cons even when the choice looked obvious.
   They are the evidence that the decision was actually weighed.
@@ -2689,6 +2690,12 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session of 2026-10-06 on issue #88: the comparison with EDN-73 and options A to D with a recommendation, put to Kevin before the search was implemented; Claude Code session of 2026-10-09: the options for where a sweep's record is stored, with a recommendation for option A, the check of the course demo repository Kevin asked for, and his choice of option B.
 - **Other evidence:** [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88); [`recommenditos/modeling/tune.py`](../recommenditos/modeling/tune.py) and [`tests/test_tune.py`](../tests/test_tune.py); [`reports/analysis/tuning_sweep.py`](analysis/tuning_sweep.py), now importing the module's statistics; the search's results in the [DagsHub MLflow server](https://dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow), experiment `recommenditos-price-tuning`: the sweeps `88-lgbm-basic-lr-leaves`, `88-lgbm-extended-lr-leaves`, `88-lgbm-basic-min-child-samples` and `88-lgbm-extended-min-child-samples`, each found with the filter `tags.sweep = "<id>"` and its record under `results/` of the run with `tags.sweep_role = "summary"`, compared with EDN-73's [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt); [pipeline docs](../docs/docs/pipeline.md), "Tuning a hyperparameter"; [specification](../docs/docs/specification.md) and [requirements](../docs/docs/requirements.md) NFR-10; [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol), [EDN-69](#edn-69-codecarbon-measures-the-fit-alone-offline-and-per-process-and-its-figure-is-reported-as-the-estimate-it-is), [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count).
 - **In LaTeX:** yes
+
+### EDN-79: The split strategy is weighed against the measured set distributions and the split's seed noise
+
+### EDN-80: The project is the used-car price component, chosen over the route-safety, recommender and grocery ideas
+
+### EDN-81: Coding agents work under a written team rule
 
 ## Template
 
