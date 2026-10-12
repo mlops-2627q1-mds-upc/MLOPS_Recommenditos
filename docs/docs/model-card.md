@@ -675,6 +675,9 @@ Explanations are part of the product, not an afterthought: every valuation ships
   `shap` pulls in `numba` and `llvmlite`, measured at 189 MB, merely to import, which a CPU-only serving image should not carry (EDN-11).
   A training-time test asserts the booster's export matches `shap.TreeExplainer` bit for bit.
 - **Globally:** `shap` is used offline, in training and notebooks, for summary plots and global feature importance.
+- **Behaviour under a changed input:** `tests/test_model.py` asserts the direction of the two inputs whose effect on a price has a known sign, on aggregate, because boosted trees are not monotone row by row.
+  Measured on 2026-10-12 over the 8,859 validation rows, 20,000 km more multiplies the median prediction of `lgbm-basic` by 0.950 and of `lgbm-extended` by 0.952, with 7.0 % and 3.3 % of the rows getting dearer, and a first registration one year earlier multiplies it by 0.945 and 0.953, with 9.3 % and 7.2 %.
+  The same tests hold every prediction bit-identical when a column that is not a feature changes (`vin`, `seller_group_id`, `price`, `log_price`) and when the fields of a request arrive in another order.
 
 ## Environmental Impact
 
