@@ -420,6 +420,7 @@ The energy metrics are `energy_kwh` (with its `cpu_energy_kwh` and `ram_energy_k
 Every run is tagged with `variant`, `estimator`, `feature_set` and `dvc_stage`, and - by the tracking seam, for NFR-14 - with what produced it: `git_commit` and `git_dirty` for the fit, one `train.deps.<path>` per dependency of its `train` stage holding the hash `dvc.lock` records for it, and the same for the evaluation that appended to it, `evaluate.git_commit`, `evaluate.git_dirty` and `evaluate.deps.<path>` (EDN-74).
 [The DVC pipeline](pipeline.md#from-a-run-to-its-inputs) says what each tag identifies and how to get from a run back to its code, data and parameters.
 The ladder this card reports is four runs of the `recommenditos-price` experiment, one per variant, produced by the `dvc repro` whose lock is committed.
+They were fitted on 2026-10-12 at commit `96875d0` (pull request #109), and the run id in each `models/<variant>/model.json` names them.
 The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
 
 ```
@@ -439,6 +440,7 @@ Two things about it are worth knowing before the filter is believed, both checke
 
 The experiment also holds runs that are **not** pipeline runs: the test suite trains the same four variants on the synthetic fixture, and it logs to this experiment whenever a `.env` is present, under the same four run names.
 Their metrics are an order of magnitude worse and they carry a different commit; they also carry no `train.deps.<path>` tags, because DVC did not run them, so since 2026-10-05 a run without those tags is not a pipeline run and its numbers are not the model's.
+A pipeline run is not always a committed one either: the ladder was fitted a second time on 2026-10-12, at commit `8301e07` and on a busier laptop, and the first pass was kept, so the commit above and the run ids in `models/<variant>/model.json` are what name the committed chain.
 
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
@@ -457,7 +459,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 
 | Property | Target | Measured |
 |---|---|---|
-| Training time, chosen configuration, hyperparameter search not included | at most 15 minutes on a laptop CPU (NFR-10) | **8.3 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 27.9 s for `lgbm-extended` (1,697 rounds), 37.6 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-06). Read as an order of magnitude and not a benchmark: fits of the identical two models on 2026-10-05 and 2026-10-06 took 8.0 s to 10.0 s and 26.4 s to 32.9 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` (EDN-70) |
+| Training time, chosen configuration, hyperparameter search not included | at most 15 minutes on a laptop CPU (NFR-10) | **12.4 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 42.4 s for `lgbm-extended` (1,697 rounds), 58.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-12, on a laptop that other work kept busy). Read as an order of magnitude and not a benchmark: fits of the identical two models between 2026-10-05 and 2026-10-12 took 8.0 s to 19.1 s and 26.4 s to 58.5 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` at the rate EDN-70 measured, and about 125 s at this run's |
 | Hyperparameter search | no budget: run once per tuning decision, outside `dvc repro`, and reported apart from the final fit (NFR-10, EDN-78) | **391.3 s** of fitting and 3.6071 Wh for the 34 fits of issue #88's search: 112.3 s and 1.0864 Wh over 17 fits for `lgbm-basic`, 279.1 s and 2.5207 Wh over 17 fits for `lgbm-extended`, at `num_threads: 1` on an i7-1360P laptop, so its fit times are not comparable with the i5-10210U figures above (the `results/` record of each sweep's summary run in MLflow) |
 | Model artefact on disk | no target | 7.6 MB (`booster.txt`, 1,243 trees) for the candidate, 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
@@ -540,10 +542,10 @@ The bold figures are the lowest of the ladder; they are not the candidate, which
 
 | Variant | Ladder step | Features | MdAPE | Within 20 % | Validation L1 (log price) | Trees | Fit time | Payload |
 |---|---|---|---|---|---|---|---|---|
-| `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.1 s | 19 KB |
-| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 1.3 s | 19 KB |
-| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.81 % | 89.8 % | 0.1003 | 1,243 | 8.3 s | 7.6 MB |
-| `lgbm-extended` | 4 | 162 | **6.26 %** | **90.4 %** | 0.0966 | 1,647 | 27.9 s | 10.9 MB |
+| `b0` | 1 | 16 | 12.16 % | 70.5 % | 0.1769 | - | 0.3 s | 19 KB |
+| `b1` | 2 | 16 | 9.52 % | 80.3 % | 0.1406 | - | 2.9 s | 19 KB |
+| `lgbm-basic` **(the candidate)** | 3 | 16 | 6.81 % | 89.8 % | 0.1003 | 1,243 | 12.4 s | 7.6 MB |
+| `lgbm-extended` | 4 | 162 | **6.26 %** | **90.4 %** | 0.0966 | 1,647 | 42.4 s | 10.9 MB |
 
 What the ladder says, and what it does not:
 
@@ -556,7 +558,7 @@ What the ladder says, and what it does not:
   What they cost is linear in the trees: 1.3x and 1.7x the boosting rounds and so the fit, 6.2 to 7.6 MB and 6.8 to 10.9 MB of booster, and one row's native SHAP export from 18.9 to 26.1 ms and from 22.3 to 35.4 ms.
   So the 1,000-tree models were a hair short of where their validation curve flattens, not far from it, and the pooled numbers this card used to quote were not a materially pessimistic bound.
   `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was distinguishable from them (EDN-73), and issue #88's search, over both variants and `min_child_samples` as well, kept every value for the same reason (EDN-78, under [Hyperparameters as trained](#hyperparameters-as-trained)).
-- The whole four-variant ladder trains in **37.6 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models on 2026-10-05 and 2026-10-06, with identical trees, took 8.0 s to 10.0 s and 26.4 s to 32.9 s against 8.3 s and 27.9 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
+- The whole four-variant ladder trains in **58.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models between 2026-10-05 and 2026-10-12, with identical trees, took 8.0 s to 19.1 s and 26.4 s to 58.5 s against 12.4 s and 42.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
 
 #### Reference values
 
@@ -600,28 +602,29 @@ CodeCarbon records the energy and emissions of every fit, and only of the fit, i
 **The figure is an estimate, not a reading.**
 RAPL, the CPU's energy counter, is root-only on Linux since kernel 5.10, so on every machine we train on CodeCarbon falls back to its `cpu_load` model: 10 W for the RAM plus the CPU's TDP times the share of its logical CPUs the fit kept busy.
 On the i5-10210U the ladder is trained on, that is 15 W / 8 x the fit's CPU time plus 10 W x its wall time, so a single-threaded fit is charged 11.75 to 11.80 W for every second it runs, and the RAM constant is most of it.
-The real fits are charged 13 to 18 W for every second in the ladder run of 2026-10-06, because they use more than one thread although `train.num_threads` is 1: their CPU time is 1.6 to 2.2 times their wall time.
-The energies of two variants therefore follow their fit times closely (3.2 against 3.6 for `lgbm-extended` over `lgbm-basic`), which is a fair comparison of their cost when both come from one run on one machine, and nothing more: the same fit is charged more on a busy laptop, because it takes longer, and about 80 W per second on a GitHub runner, whose four vCPUs CodeCarbon gives a quarter of a 280 W server TDP each.
+The real fits are charged 13 to 16 W for every second in the ladder run of 2026-10-12, because they use more than one thread although `train.num_threads` is 1: the CPU time of the two LightGBM fits is 1.6 and 2.2 times their wall time, and that of `b1` 3.4 times.
+The energies of two variants therefore follow their fit times closely (3.1 against 3.4 for `lgbm-extended` over `lgbm-basic`), which is a fair comparison of their cost when both come from one run on one machine, and nothing more: the same fit is charged more on a busy laptop, because it takes longer, and about 80 W per second on a GitHub runner, whose four vCPUs CodeCarbon gives a quarter of a 280 W server TDP each.
 Emissions are energy times the Spanish grid's 174.05 g CO2eq/kWh, pinned rather than geolocated so that an identical fit has identical emissions wherever it runs.
 Checked once against the RAPL counter on an idle laptop (`reports/analysis/rapl_validation.py`, 2026-10-06, at the committed hyperparameters, which the search of issue #88 later kept), with an idle package draw of 6.6 W and three fits of each variant.
 The estimate's total is about 70 % of the counter's package energy for the three fitted variants and 112 % for `b0`, whose whole fit is about 1 J, and its CPU half is 27 % to 41 % of the energy above idle.
 The ranking and the ratios survive: `lgbm-extended` costs 2.97 times `lgbm-basic` by the counter and 2.97 times by the estimate.
 One variant's package energy varies by a factor of 1.3 to 2.1 between repeats, so only medians are quoted.
 
-The table is the tracked ladder run of 2026-10-06 on the i5-10210U laptop (8 logical CPUs, 15 GB RAM).
+The table is the tracked ladder run of 2026-10-12 on the i5-10210U laptop (8 logical CPUs, 15 GB RAM), whose trees are byte-identical to those of the run of 2026-10-06 it replaces.
+The laptop was under other load during the fits, a 1-minute load average of 10 to 12 on its 8 logical CPUs, and fit time and energy vary with that from run to run: `lgbm-basic` took 12.42 s here, 19.08 s in a second pass a few minutes later that was not kept, and 9.25 s on 2026-10-06.
 The hyperparameter search of issue #88 kept every value, so it is also the cost of the final configuration.
 
 | Variant | Fit time | Energy | Emissions | MdAPE, every field given | MdAPE, only the fields FR-01 requires |
 |---|---|---|---|---|---|
-| `b0` | 0.09 s | 0.0003 Wh | 0.06 mg CO2eq | 12.2 % | 12.2 % |
-| `b1` | 1.34 s | 0.0066 Wh | 1.15 mg CO2eq | 9.5 % | 10.7 % |
-| `lgbm-basic` | 8.42 s | 0.0342 Wh | 5.96 mg CO2eq | 6.8 % | 8.3 % |
-| `lgbm-extended` | 30.02 s | 0.1082 Wh | 18.82 mg CO2eq | 6.3 % | 10.3 % |
+| `b0` | 0.26 s | 0.0010 Wh | 0.18 mg CO2eq | 12.2 % | 12.2 % |
+| `b1` | 2.93 s | 0.0133 Wh | 2.32 mg CO2eq | 9.5 % | 10.7 % |
+| `lgbm-basic` | 12.42 s | 0.0494 Wh | 8.60 mg CO2eq | 6.8 % | 8.3 % |
+| `lgbm-extended` | 42.37 s | 0.1526 Wh | 26.56 mg CO2eq | 6.3 % | 10.3 % |
 
 `reports/figures/energy-vs-error.png` draws the same rows, built by the `compare-energy` stage from the artefacts rather than by hand.
-On this run `lgbm-extended` costs 3.2 times the energy of `lgbm-basic` for 0.55 percentage points of MdAPE, which is 0.07 Wh more in absolute terms and negligible on its own.
+On this run `lgbm-extended` costs 3.1 times the energy of `lgbm-basic` for 0.55 percentage points of MdAPE, which is 0.10 Wh more in absolute terms and negligible on its own.
 It earns that only when the user supplies the extra fields: given only the fields FR-01 requires it is worse than `lgbm-basic` (10.3 % against 8.3 %).
-The whole ladder is 0.149 Wh, 26 mg CO2eq and 40 s of fitting, against NFR-10's 15 minutes.
+The whole ladder is 0.216 Wh, 37.7 mg CO2eq and 58.0 s of fitting, against NFR-10's 15 minutes.
 The search of issue #88 changed no value, so these numbers and the conclusion stand for the final configuration.
 
 The hyperparameter search of issue #88 is measured the same way, fit by fit, and kept apart from these figures: its CodeCarbon rows (`results/emissions.csv`) and its totals (the JSON record beside them under `results/`) are artifacts of each sweep's summary run in the MLflow experiment `recommenditos-price-tuning`, not files in the repository, because the table above is the cost of the models that were chosen, and a search is the cost of choosing them (NFR-10, EDN-78).
@@ -638,16 +641,16 @@ It ran on 2026-10-06 on another laptop, a 13th Gen Intel Core i7-1360P (16 logic
 | **Search, total** | **34** | **391.3 s** | **3.6071 Wh** | **627.81 mg CO2eq** |
 
 On its own machine the search for `lgbm-basic` cost about 20 times one fit of the committed configuration (0.0549 Wh), and the search for `lgbm-extended` about 16 times one of its own (0.1584 Wh).
-Set against the ladder's 0.149 Wh above, the whole search is about 24 times the final ladder, but that ratio crosses two machines, so it is an order of magnitude and nothing finer: the same fit is charged differently on each, and the reference fits here took 5.6 s and 16.0 s against the ladder's 8.42 s and 30.02 s.
+Set against the ladder's 0.216 Wh above, the whole search is about 17 times the final ladder, but that ratio crosses two machines, one of them busy with other work, so it is an order of magnitude and nothing finer: the same fit is charged differently on each, and the reference fits here took 5.6 s and 16.0 s against the ladder's 12.42 s and 42.37 s.
 Either way it is a one-off cost of choosing the values, paid once per tuning decision, while each retraining of the product pays only the final fit.
 
 | | |
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
-| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration; a hyperparameter search is reported apart (NFR-10, EDN-78). Measured on the tracked run of 2026-10-06: 8.3 s of fitting for the candidate `lgbm-basic`, 37.6 s for the whole ladder; issue #88's search, outside the budget, took 391.3 s of fitting on another laptop. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
+| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration; a hyperparameter search is reported apart (NFR-10, EDN-78). Measured on the tracked run of 2026-10-12: 12.4 s of fitting for the candidate `lgbm-basic`, 58.0 s for the whole ladder; issue #88's search, outside the budget, took 391.3 s of fitting on another laptop. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
-| **Carbon emitted** | 0.149 Wh and 26 mg CO2eq for the whole ladder on 2026-10-06, the configuration the hyperparameter search kept, per variant in the table above, plus 3.6071 Wh and 627.81 mg CO2eq once for the search itself: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
+| **Carbon emitted** | 0.216 Wh and 37.7 mg CO2eq for the whole ladder on 2026-10-12, the configuration the hyperparameter search kept, per variant in the table above, plus 3.6071 Wh and 627.81 mg CO2eq once for the search itself: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
 
 Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02.
 Whether the VM exposes an energy counter is not known yet, so on the VM the figure is expected to be an estimate of the same kind.
