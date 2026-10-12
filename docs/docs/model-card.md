@@ -57,7 +57,7 @@ The same trained booster serves the point estimate, its explanation and, through
 - **Version:** none yet.
   From the first release on, the served version is the one `dvc.lock` on `main` points to, reported by `GET /health` and verified in CI ([specification](specification.md) FR-12, EDN-08).
 - **Status:** `lgbm-basic` is the candidate, not released.
-  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is accepted (EDN-62), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 has no measurement until the UC2 conformal intervals exist. NFR-01's gate therefore blocks. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
+  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 has no measurement until the UC2 conformal intervals exist. NFR-01's gate therefore blocks. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
 
 ### Model Sources
 
@@ -147,9 +147,12 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
   Their rows still count towards the pooled criteria SC-01 to SC-03 and SC-05 to SC-06, but no criterion isolates them, so a failure specific to one of these makes cannot surface as a missed criterion.
   For these makes the per-segment half of the quality gate is blind by construction.
   Closing that gap, by raising the support threshold, lowering SC-04's segment size, or naming these makes as low-confidence in the response, is an open task for Milestone 3.
-- **Classic and old cars.**
-  In the reference run, cars older than 20 years are the only segment that breaches the per-segment target, at 15.3 % MdAPE against SC-04's 15 % limit.
-  Closing this with the extended features or a scope change is an open task.
+- **Classic and old cars: an accepted limitation.**
+  The candidate misses SC-04 for cars older than 20 years: its MdAPE there is 16.77 % over 784 test rows against the 15 % bound, and 18.3 % on average over 20 other splits (standard deviation 0.76 pp, range 16.98 % to 19.68 %), so the committed figure is the most favourable of 21 draws.
+  The team accepted the miss and reports the criterion as missed (EDN-62), because an upper age bound would pass SC-04 by removing the rows it fails on and a higher threshold would fit the criterion to its result: the 15 % bound, the scope and the age breakdown stay as they are, and NFR-01's gate stays closed on SC-04.
+  The extended features make the segment worse (18.45 %), the hyperparameter search kept the committed values after 34 fits, which leaves the model and this figure unchanged (EDN-78), and the segment is over the bound on 20 of 20 other splits (EDN-79).
+  What a user must know: an estimate for a car older than 20 years is less reliable than for a younger one, with half of these estimates off by more than 16.77 % of the listing price against 6.81 % over all cars, and 55.5 % of them within 20 % of it against 89.8 %.
+  The limitation is accepted for this model and this delivery, and a scope change of the kind EDN-04 made for price or a segment-specific model would be a new decision.
 - **Reference-date drift.**
   Age is computed from the snapshot date in training and from the request date at serving, so served cars grow older than anything seen at the same registration date.
   This is expected, not accidental, and it is what the monitoring of Milestone 6 watches (FR-14).
@@ -560,7 +563,7 @@ It is a **measured candidate, not a release**: the gate blocks, so nothing is pr
 | SC-05 | Empirical coverage of the nominal 90 % intervals, full inputs and partial scenario P1 | 88 % to 92 % | not measured, **no** | not measured, **no** |
 | SC-06 | MdAPE with each optional field masked, and with all masked at once | at most 1.5x the full-input MdAPE | 1.21x, yes | **1.65x, no** |
 
-These are the figures of the committed split: over 20 other splits the candidate's test MdAPE is 6.73 % on average (standard deviation 0.27 pp) and its MdAPE for cars older than 20 years is 18.3 %, so the SC-04 figure above is the most favourable of 21 draws ([How comparable the sets are, and how much a figure moves with the split](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)).
+These are the figures of the committed split: over 20 other splits the candidate's test MdAPE is 6.73 % on average (standard deviation 0.27 pp) and its MdAPE for cars older than 20 years is 18.3 %, and the SC-04 figure above is the most favourable of 21 draws ([How comparable the sets are, and how much a figure moves with the split](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)).
 
 `b0` and `b1` miss SC-01, SC-02 and SC-03 as well, and are baselines rather than candidates; their per-criterion numbers are in `reports/metrics/<variant>.json`.
 
@@ -568,7 +571,14 @@ These are the figures of the committed split: over 20 other splits the candidate
 The candidate above is a documented judgement about which model *would* be released, not a computed one: `metrics.json`'s `best_variant` stays the lowest MdAPE overall, because that field means what it says, and `deployable_variant` stays null while anything blocks.
 The two failures are the interesting half of this card, and neither is a surprise:
 
-- **SC-04 fails on old cars, for every variant, and the extended features do not close it. The miss is accepted and recorded rather than worked around (EDN-62).** The [problem specification](problem-spec.md#8-success-criteria) already recorded cars over 20 years at 15.3 % as the known risk, and the pipeline measures them worse than that: **16.77 % for the candidate** (18.3 % on average over 20 other splits) and 18.45 % for `lgbm-extended`, over 784 test rows. Letting early stopping decide the tree count (EDN-70) moved the candidate 0.35 pp closer to the bar and not under it. The specification named two possible remedies, "the extended features or a scope change for classic cars", and measurement has now **ruled the first one out**: the extended set makes this segment 1.7 pp worse while improving the pooled figure by 0.55 pp, so the extra features do not carry information about old cars. That is a finding about the features, not a reason to move the bar: the threshold stays at 15 %, no upper age bound is added, and the criterion is reported as missed. Nothing is unblocked by softening it in any case, because SC-05 blocks the gate regardless. What is left, for a later ticket, is a scope change of the kind EDN-04 made for price, or a segment-specific model.
+- **SC-04 fails on old cars, for every variant, and the extended features do not close it.**
+  The miss is an accepted limitation of this model (EDN-62), stated in full under [Bias, Risks, and Limitations](#bias-risks-and-limitations).
+  The [problem specification](problem-spec.md#8-success-criteria) already recorded cars over 20 years at 15.3 % as the known risk, and the pipeline measures them worse than that: **16.77 % for the candidate** (18.3 % on average over 20 other splits) and 18.45 % for `lgbm-extended`, over 784 test rows.
+  Letting early stopping decide the tree count (EDN-70) moved the candidate 0.35 pp closer to the bar and not under it.
+  The specification named two possible remedies, "the extended features or a scope change for classic cars", and measurement has **ruled the first one out**: the extended set makes this segment 1.7 pp worse while improving the pooled figure by 0.55 pp, so the extra features do not carry information about old cars.
+  The hyperparameter search kept the committed values (EDN-78), so it leaves the figure where it is.
+  That is a finding about the features and the model, not a reason to move the bar: the threshold stays at 15 %, no upper age bound is added, and the criterion is reported as missed.
+  Nothing is unblocked by softening it in any case, because SC-05 blocks the gate regardless.
 - **SC-06 passes for the candidate and fails on `lgbm-extended`, and there only when every optional field is absent at once.** Each of the 23 optional fields masked on its own costs at most 9.7 % of the MdAPE (`equipment_extra`, 1.10x), which is comfortably inside the bound; all 23 together cost 64.6 % (6.26 % to 10.30 %). `lgbm-basic` passes at 1.21x (6.81 % to 8.26 %), because it has six optional fields to lose rather than 23, and `b0` and `b1` pass at 1.00x and 1.16x.
 
     **This is what decided the candidate (EDN-62).** The two rows above describe the same request: only the ten fields FR-01 requires. On that request `lgbm-basic` answers at **8.26 %** and `lgbm-extended` at **10.30 %**, so the variant with the 0.55 pp pooled advantage is beaten by 2.04 pp as soon as the caller stops filling in the optional fields, which FR-01 says a caller need not do. The extended model's advantage is conditional on a well-filled request, which is precisely the fragility EDN-15 added SC-06 to expose, and a criterion a candidate misses is not something to serve. The worst single field is also worth naming per variant, because it is not the same one: `equipment_extra` for `lgbm-extended`, `cylinders_volume_cc` for `lgbm-basic` and `b0`, `nr_doors` for `b1` at 1.16x, which is above that variant's all-at-once ratio of 1.13x. SC-06 bounds the worst of both kinds of request, so a criterion measured only on the all-at-once scenario would have missed it.
@@ -644,9 +654,10 @@ The chosen model is therefore `lgbm-basic` **as a candidate**, chosen over the l
 Early stopping decides its tree count (EDN-70), which turned out to be worth 0.02 pp, and its `learning_rate`, `num_leaves` and `min_child_samples` are the values it was first fitted with because the search around them found nothing the validation split can tell apart, for either LightGBM variant (EDN-73, EDN-78).
 So the honest statement about it is not that it is tuned to an optimum but that the obvious knobs have been searched and kept, because none of them buys a resolvable gain.
 
-Three open risks going into the rest of Milestone 3, all three now measured rather than anticipated:
+Three risks going into the rest of Milestone 3, all three now measured rather than anticipated:
 
-- **SC-04 is missed and the miss is accepted (EDN-62).** The over-20-years segment sat at 15.3 % in the reference run and the pipeline measures it at 16.77 % for the candidate (18.3 % on average over 20 other splits), and the extended features are now ruled out as the remedy. A scope change or a segment-specific model is the open work.
+- **SC-04 is missed on cars older than 20 years, and the miss is an accepted limitation, not open work (EDN-62).**
+  The candidate is at 16.77 % against the 15 % bound (18.3 % on average over 20 other splits), NFR-01's gate stays closed on it, and [Bias, Risks, and Limitations](#bias-risks-and-limitations) states it in full.
 - The low-support makes SC-04 cannot see at all, because they do not reach its 500-row minimum: `Honda` at 177 test rows down to `Ethanol` at 3, ten levels in all, reported in `reports/metrics/segments.csv` with the rule that excluded each one.
 - **SC-06 did genuinely fail, on `lgbm-extended`**, which is what settled the candidate. It cannot be demonstrated on the synthetic fixture, whose generator derives price from a formula that ignores the optional columns, so the test suite drives it with a constructed degrading model instead.
 
