@@ -169,7 +169,7 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
     the fields FR-01 requires. The second is what decided the candidate (EDN-62),
     and it is the one an efficiency question has to see, because training energy
     spent on optional columns is spent whether or not a caller sends them. Two
-    series, so a legend; each pair is labelled with its variant once.
+    series, so a legend, above the axes; each pair is labelled with its variant once.
 
     The x axis names the method, because a reader of the picture alone would
     otherwise take it for a meter reading. The figure carries no title: the
@@ -230,7 +230,20 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
         color=_INK_SECONDARY,
     )
     axis.set_ylabel("Test MdAPE, %", fontsize=_AXIS_PT, color=_INK_SECONDARY)
-    axis.legend(fontsize=_LABEL_PT, frameon=False, loc="upper right", labelcolor=_INK_SECONDARY)
+    # Above the axes, not inside them: a frameless legend in the data area puts
+    # its two handles among the points, where they read as a fifth variant.
+    axis.legend(
+        fontsize=_LABEL_PT,
+        frameon=False,
+        labelcolor=_INK_SECONDARY,
+        loc="lower left",
+        bbox_to_anchor=(0.0, 1.0),
+        ncols=2,
+        borderaxespad=0.3,
+        borderpad=0.0,
+        handletextpad=0.2,
+        columnspacing=1.2,
+    )
     axis.grid(True, which="major", color=_GRID, linewidth=0.8)
     axis.set_axisbelow(True)
     axis.tick_params(which="both", labelsize=_LABEL_PT, colors=_INK_SECONDARY)
