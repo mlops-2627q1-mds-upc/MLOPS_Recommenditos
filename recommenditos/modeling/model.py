@@ -34,13 +34,14 @@ that raised would then make the criterion read as measurable. The absence is
 pinned by a test now, before the check that will depend on it exists.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version as distribution_version
 import json
 from pathlib import Path
 import platform
+from types import MappingProxyType
 
 import joblib
 import lightgbm
@@ -177,6 +178,13 @@ class Model:
     #: does not know is refused rather than ignored: a parameter nothing reads
     #: makes `dvc repro` report a retrain for a change that cannot move a number.
     hyperparameters: tuple[str, ...] = ()
+
+    #: Keys the `params` block may leave out, each with the value it then takes.
+    #: Only for a knob whose default is the library's own, so that naming it in
+    #: params.yaml at that value changes nothing about the fit, and leaving it out
+    #: keeps `params.yaml` and `dvc.lock` as they were before the knob became one.
+    #: Read-only, because the class attribute is shared by every subclass.
+    optional_hyperparameters: Mapping[str, object] = MappingProxyType({})
 
     def __init__(self, metadata: dict, space: FeatureSpace) -> None:
         self.metadata = metadata
@@ -492,11 +500,12 @@ class Model:
 
         Both directions, because both are silent otherwise: a missing key would
         surface as a `KeyError` from inside a fit, and an extra one as a
-        parameter somebody set and nothing used.
+        parameter somebody set and nothing used. An optional key the block leaves
+        out takes its default here, so the fit always receives every key it reads.
         """
         given = dict(metadata["params"])
         expected = set(cls.hyperparameters)
-        unknown = sorted(set(given) - expected)
+        unknown = sorted(set(given) - expected - set(cls.optional_hyperparameters))
         missing = sorted(expected - set(given))
         if unknown or missing:
             problems = []
@@ -504,12 +513,17 @@ class Model:
                 problems.append(f"does not set {', '.join(missing)}")
             if unknown:
                 problems.append(f"sets {', '.join(unknown)}, which this estimator does not read")
+            optional = (
+                f", and optionally {', '.join(cls.optional_hyperparameters)}"
+                if cls.optional_hyperparameters
+                else ""
+            )
             raise ModelError(
                 f"the params block of variant {metadata['variant']!r} "
                 f"{' and '.join(problems)}. {cls.estimator_name!r} reads exactly: "
-                f"{', '.join(cls.hyperparameters)}."
+                f"{', '.join(cls.hyperparameters)}{optional}."
             )
-        return given
+        return {**cls.optional_hyperparameters, **given}
 
 
 # --------------------------------------------------------------------------
@@ -884,6 +898,14 @@ class LightGBMModel(Model):
     estimator_name = "lightgbm"
     libraries = ("numpy", "pandas", "lightgbm")
     hyperparameters = ("learning_rate", "num_leaves", "n_estimators", "early_stopping_rounds")
+    #: `min_child_samples`, the fewest training rows a leaf may hold, is a knob of
+    #: the search of issue #88 (EDN-78), because many `model` values occur only
+    #: once and a leaf that small can fit a single listing. Optional, at
+    #: LightGBM's own default of 20, so a params block that leaves it out fits
+    #: exactly the trees it fitted before the key existed - `booster.txt` records
+    #: `min_data_in_leaf: 20` either way - and `params.yaml` names it only once a
+    #: search has adopted another value.
+    optional_hyperparameters = MappingProxyType({"min_child_samples": 20})
 
     def __init__(self, metadata: dict, space: FeatureSpace, booster: lightgbm.Booster | None):
         super().__init__(metadata, space)

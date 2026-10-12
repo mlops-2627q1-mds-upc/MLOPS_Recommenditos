@@ -24,6 +24,16 @@ from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.energy import EMISSIONS_DIR
 from recommenditos.pipeline import load_params
 
+# MLflow's usage telemetry off for the whole suite. MLflow decides at import time
+# whether it runs under a test, from PYTEST_CURRENT_TEST, and imports during
+# collection, before pytest sets that variable, so telemetry stays on locally.
+# Its thread then resolves api.mlflow-telemetry.io after a test logs a real run
+# to a local store, which is a network call from the suite, and which
+# `tests/test_energy.py`'s no-network check catches when it runs afterwards.
+# The variable is read on every call, so setting it here, before any test opens a
+# run, is enough. `setdefault`, so a contributor who wants it can still turn it on.
+os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
+
 #: Small enough to keep the suite fast, large enough that a seller-grouped
 #: split and a per-make count still mean something.
 FIXTURE_ROWS = 2000
