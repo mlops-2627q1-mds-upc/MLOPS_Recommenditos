@@ -435,7 +435,7 @@ Two things about it are worth knowing before the filter is believed, both checke
   The commit is on the branch of the pull request that re-ran the pipeline, so after the squash merge it is reached through that pull request.
 - **The input tags are what ties a run to the committed lock.**
   For each of the four runs, every `train.deps.<path>` equals the hash the committed `dvc.lock` records for that dependency of `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks that against the server, and its output is committed beside it.
-  Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the ladder before this one were tagged dirty only because DVC had rewritten `dvc.lock` under them.
+  Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the last ladder made before that date were tagged dirty only because DVC had rewritten `dvc.lock` under them.
 
 The experiment also holds runs that are **not** pipeline runs: the test suite trains the same four variants on the synthetic fixture, and it logs to this experiment whenever a `.env` is present, under the same four run names.
 Their metrics are an order of magnitude worse and they carry a different commit; they also carry no `train.deps.<path>` tags, because DVC did not run them, so since 2026-10-05 a run without those tags is not a pipeline run and its numbers are not the model's.

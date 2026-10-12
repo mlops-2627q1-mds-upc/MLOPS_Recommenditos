@@ -297,7 +297,8 @@ Every MLflow run the pipeline makes names the committed state that produced it (
 | `evaluate.git_commit`, `evaluate.git_dirty` | `evaluate` resumes the run | The same for the evaluation, which can run at a later commit than the fit: a change to `evaluate.py` alone reruns only `evaluate`. |
 | `evaluate.deps.<path>` | `evaluate` resumes the run | Each dependency of `evaluate`, by the hash `dvc.lock` records for it under that stage. |
 
-`git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/` and `reports/data-validation/summary.json`.
+`git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/`, `reports/emissions/`, `reports/figures/energy-vs-error.{csv,png}` and `reports/data-validation/summary.json`.
+Git must hand those back byte for byte, because `dvc.lock` records them by their MD5, so `.gitattributes` marks each of them `-text` and `tests/test_committed_outputs.py` fails for one that is not.
 So the runs of a clean commit reproduced with `dvc repro` are tagged clean, and `true` means a change somebody made, an untracked file included; `unknown` means git named the commit but could not read the tree's status.
 The one write of DVC's that still counts is the line it adds to a `.gitignore` the first time a new cached output is produced, because that file is also the hand-written `.gitignore` of the repository root; commit the line, and the next run is clean.
 
