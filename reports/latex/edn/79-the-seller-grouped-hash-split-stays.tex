@@ -2,51 +2,29 @@
 % Do not edit: change reports/edn.md and run `make edn`.
 \ednentry{
   id = {EDN-79},
-  title = {The seller-grouped hash split stays, and its figures are reported with their spread over other splits},
+  title = {The seller-grouped hash split stays},
   date = {2026-10-12},
   milestone = {M3: Quality Assurance},
   topic = {Evaluation Protocol, Data Splitting},
-  participants = {@lukas2510, decided by the repository owner},
+  participants = {@lukas2510},
   decision = {The split stays as it is: whole sellers assigned by a hash of the seed and the seller key, 60/10/10/20, unstratified, with the committed seed.
-What changes is the reporting: the model card states the distribution of every set, and a figure of the committed split is given with its spread over 20 other splits.
-An adversarial-validation check is recorded once and not made a standing check, and the missing temporal split is a stated limitation.},
+The model card states the distribution of every set and gives a figure of the committed split with its spread over 20 other splits.
+An adversarial-validation check is recorded once, and the missing temporal split is a stated limitation.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item \textbf{Option A (chosen): keep the grouped hash split and report the set distributions.}
-\newline Pros: no rerun and no number moves a week before the delivery; adding sellers moves no seller already there, measured at 0.00\,\% of the rows when the \texttt{ES} listings join the pool, which is what FR-15's retrain comparison rests on; the committed draw is better balanced than 72\,\% of 1,000 seeds.
-\newline Cons: the balance is the luck of this draw, not a property of the design, and Mercedes-Benz stays at 8.67\,\% of the calibration set against 13.54\,\% of the pool.
-\item \textbf{Option B: a stratified-group split on \texttt{make}.}
-\newline Pros: the largest gap of any make's share in any set to its pool share falls from 4.86 pp to 2.04 pp, and calibration reaches 11.5\,\% Mercedes-Benz.
-\newline Cons: the assignment depends on all sellers at once, so 52.6\,\% of the existing rows change set when the \texttt{ES} listings join, about as many as a new seed moves, which confounds FR-15's before-and-after comparison; a full pipeline rerun and new split code, with every reported number changing; and it cannot balance the make either, because one dealer holds 25.2\,\% of the Mercedes-Benz listings and has to go somewhere whole.
-\item \textbf{Option C (chosen, with A): repeated grouped splits, reporting the spread beside the single figure.}
-\newline Pros: it answers what was never measured, how much a figure depends on which sellers landed where, in about 15 minutes and without touching the pipeline.
-\newline Cons: an analysis script rather than a stage, so it has to be re-run by hand when the candidate or the data changes.
-\item \textbf{Option D (recorded once): adversarial validation.}
-\newline Pros: one classifier, AUC 0.495 on held-out sellers, so train and test are indistinguishable.
-\newline Cons: nearly a tautology for a random assignment of sellers; run row-wise it reports 0.599, which is the dealer signature EDN-14 found and not a difference between the sets, so as a standing check it would mostly raise false alarms.
-\item \textbf{Option E: choose a seed for a better mix.}
-\newline Pros: none that survives a question.
-\newline Cons: a new split selected by its outcome; and the committed seed already gives the most favourable SC-04 figure of 21 draws, so a reseed would either worsen that number or look chosen for it.
-\item \textbf{Option F: a temporal split.}
-\newline Pros: the strongest test for a price model.
-\newline Cons: impossible, the snapshot has no listing dates; it is stated as a limitation.
+\item A stratified-group split on \texttt{make}: better make balance, but about half of the existing rows change set when the \texttt{ES} listings join, which confounds FR-15's retrain comparison.
+\item Choose a seed for a better mix: a split selected by its outcome.
+\item A temporal split: impossible, because the snapshot has no listing dates.
 \end{itemize}
 \par
-\emph{Why:} The question was whether the default split deserved to stay, and three measurements could have said no; none did.
-The imbalance that prompted the issue has one cause, and it is not what the issue assumed: the largest seller group is a single dealer with 3,383 listings, 3,382 of them Mercedes-Benz, that landed in train, so train is raised (14.95\,\%, 9.97\,\% without it) rather than calibration being short, and the calibration share is at the 21st percentile of its own distribution over 1,000 seeds.
-The verdict on the pooled criteria does not depend on the draw: over 20 other splits the candidate's test MdAPE is 6.73\,\% on average with a standard deviation of 0.27 pp, against 6.81\,\% committed, and SC-01 and SC-02 hold on all 20.
-And SC-04's miss is not an artefact of it: cars older than 20 years are over the bound on 20 of 20 splits, at 18.3\,\% on average, so the committed 16.77\,\% understates the miss.
-Against that, option B buys 2.8 pp of make balance for the one property the split was built for.
-The same run puts EDN-73 in context: the validation MdAPE moves by 0.42 pp (standard deviation) between splits, more than the 0.16 pp the whole tuning grid spans on one.
-The 20 splits share one pool of listings, so the spread describes how a figure moves with the assignment and is not a confidence interval for new data.
-The issue's criterion that the UC2 interval coverage be checked per make is deferred to the work that builds the intervals: no model has an interval method and SC-05 is not measured, so there is nothing to compute a coverage from.},
+\emph{Why:} Over 20 other splits the candidate's test MdAPE is 6.73\,\% on average, with a standard deviation of 0.27 pp, and SC-01 and SC-02 hold on all 20.
+Cars older than 20 years exceed the SC-04 bound on all 20 as well, at 18.3\,\% on average, so that miss is no artefact of the draw.
+The 20 splits share one pool of listings, so the spread describes how a figure moves with the assignment and is not a confidence interval for new data.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
-  assessment = {AI wrote and ran the evidence script against the stages' own split, feature and fit code, checked first that it reproduces the committed \texttt{metrics.\allowbreak{}json} exactly, and ran 20 seeds instead of the ten asked for after timing one.
-It corrected the issue's premise, which Lukas had written: the largest dealer is the cause of the Mercedes-Benz gap, but by raising train, not by leaving calibration short.
-It laid out the six options with their measured costs, recommended A with C, and stopped for the decision; Lukas chose A with C as recommended, with D recorded once and F as a limitation.
-It also reported that the interval-coverage criterion could not be met and proposed deferring it rather than producing a number.
-The recommendation was accepted without change because every claim in it is a line of the results file that can be re-run.},
-  aievidence = {Claude Code session on 2026-10-12 implementing issue \#89: the agent measured, reported the options with the numbers of \texttt{reports/\allowbreak{}analysis/\allowbreak{}split\_\allowbreak{}strategy\_\allowbreak{}results.\allowbreak{}txt} and its recommendation, and Lukas decided on that report.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89}{issue \#89}; \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107}{PR \#107}; \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/split_strategy.py}{\texttt{reports/\allowbreak{}analysis/\allowbreak{}split\_\allowbreak{}strategy.\allowbreak{}py}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/split_strategy_results.txt}{its results file} (2026-10-12); \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{model card}, ``How comparable the sets are, and how much a figure moves with the split''; \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{pipeline docs}, ``The split''; \hyperref[EDN-14]{EDN-14}, \hyperref[EDN-73]{EDN-73}.},
+  assessment = {AI wrote and ran the evidence script against the stages' own code and first checked that it reproduces the committed metrics.
+It corrected the premise of the issue, which Lukas had written: the largest dealer raises the make's share in train, and calibration is not short.
+It laid out the options, recommended this one and stopped for the decision.},
+  aievidence = {Claude Code session of 2026-10-12 on issue \#89.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89}{Issue \#89}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107}{PR \#107}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/split_strategy_results.txt}{\texttt{split\_\allowbreak{}strategy\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{model card}.},
 }
