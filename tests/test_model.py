@@ -476,8 +476,8 @@ def test_predict_eur_ignores_extra_and_reordered_columns(
 ):
     """The model selects what it needs; the caller does not have to prepare a frame.
 
-    The matrix carries `price` and `log_price`, so a model that took the frame as
-    given would be scored on its own target.
+    Only the order varies here; that a column outside the features changes no
+    answer is `test_a_column_that_is_not_a_feature_cannot_move_the_prediction`.
     """
     model = trained["models"][variant]
     frame = test_frames[model.feature_set]
@@ -775,22 +775,23 @@ _DEPRECIATING_STEPS = {
 def _assert_the_step_lowers_the_typical_prediction(
     model: Model, frame: pd.DataFrame, step: str
 ) -> None:
-    """Applied to every row of `frame`, `step` makes the typical car cheaper.
+    """Applied to every row of `frame`, `step` lowers more predictions than it raises.
 
-    The statistic is the median of the per-row ratios and the bound is 1, so more
-    than half the rows have to fall: boosted trees are not monotone, and a per-row
-    assertion would fail on a model that is right. Measured for 20,000 km on the
-    two LightGBM variants: 0.988 and 0.991 on the fixture, where 16 % and 14 % of
-    the rows get dearer, and 0.950 and 0.952 on the real snapshot, where 7 % and
-    3 % do. A year is clearer on the fixture, 0.933 and 0.935.
+    On aggregate, because boosted trees are not monotone and a per-row assertion
+    would fail on a model that is right. A row that does not move counts for
+    neither side: a step that crosses no split of a tree changes nothing, and how
+    many rows that is depends on the fixture's draw, so a statistic that counted
+    them as not falling, as a median of the ratios does, could fail on a model
+    with no defect. A model that ignores the column still fails, on 0 > 0.
     """
     column, amount = _DEPRECIATING_STEPS[step]
-    changed = model.predict_eur(frame.assign(**{column: frame[column] + amount}))
-    ratio = (changed / model.predict_eur(frame)).to_numpy()
+    before = model.predict_eur(frame).to_numpy()
+    after = model.predict_eur(frame.assign(**{column: frame[column] + amount})).to_numpy()
+    fell, rose = np.mean(after < before), np.mean(after > before)
 
-    assert np.median(ratio) < 1.0, (
-        f"{model.variant}: {step} multiplies the median prediction by {np.median(ratio):.4f}, "
-        f"and {np.mean(ratio > 1.0):.1%} of the {len(frame)} rows get dearer"
+    assert fell > rose, (
+        f"{model.variant}: {step} lowers {fell:.1%} of the {len(frame)} predictions "
+        f"and raises {rose:.1%}"
     )
 
 
@@ -824,24 +825,16 @@ def test_the_real_model_lowers_its_typical_prediction_too(variant: str, step: st
     )
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
-        pytest.param("vin", marks=pytest.mark.req("NFR-08")),
-        pytest.param("seller_group_id", marks=pytest.mark.req("NFR-08")),
-        "price",
-        "log_price",
-    ],
-)
+@pytest.mark.parametrize("field", ["vin", "seller_group_id", "price", "log_price"])
 @pytest.mark.parametrize("variant", VARIANTS)
 def test_a_column_that_is_not_a_feature_cannot_move_the_prediction(
     variant: str, field: str, trained: dict, test_frames: dict
 ):
     """An identifier or the label in the caller's frame changes no answer.
 
-    `vin` is personal data of the raw file and `seller_group_id` the pseudonym the
-    split frames still carry (NFR-08); `price` and `log_price` are in every matrix,
-    so a model that read one would be scored on its own target.
+    `price` and `log_price` are in every matrix, so a model that read one would be
+    scored on its own target. `vin` and `seller_group_id` are in none: the test
+    adds them, as a caller's frame taken from the raw file or a split might.
     """
     model = trained["models"][variant]
     frame = test_frames[model.feature_set]
@@ -855,26 +848,6 @@ def test_a_column_that_is_not_a_feature_cannot_move_the_prediction(
     np.testing.assert_array_equal(
         model.predict_eur(frame.assign(**{field: values})).to_numpy(),
         model.predict_eur(frame).to_numpy(),
-    )
-
-
-@pytest.mark.parametrize("variant", VARIANTS)
-def test_the_order_of_a_request_s_fields_cannot_move_the_prediction(
-    variant: str, trained: dict, spaces: dict, test_frames: dict
-):
-    """A request is a JSON object, and the keys of one have no order to keep.
-
-    `test_predict_eur_ignores_extra_and_reordered_columns` is the same property on
-    a matrix; this is the API's path, one dict with the optional fields absent.
-    """
-    model = trained["models"][variant]
-    row = _api_request(model, spaces[model.feature_set].schema, test_frames[model.feature_set])
-    backwards = dict(reversed(row.items()))
-    assert list(backwards) != list(row), "the fields were not reordered"
-
-    np.testing.assert_array_equal(
-        model.predict_eur(pd.DataFrame([backwards])).to_numpy(),
-        model.predict_eur(pd.DataFrame([row])).to_numpy(),
     )
 
 

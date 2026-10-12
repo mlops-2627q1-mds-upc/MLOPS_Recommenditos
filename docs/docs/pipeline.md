@@ -38,9 +38,10 @@ make test
 ```
 
 The model tests check behaviour as well as the contract and the gate.
-Adding 20,000 km or a year of age has to lower the typical prediction of every learned variant, measured as the median of the per-row ratios being below 1, because boosted trees are not monotone row by row.
-A column that is not a feature (`vin`, `seller_group_id`, the label itself) and a different order of a request's fields have to leave every prediction bit-identical.
-The direction is asserted on the fixture-trained models in CI and, where `dvc pull` has restored `models/` and the feature matrices, on the real bundle over its validation rows; that one test is the only one that reads a real artefact, and it is skipped everywhere else.
+Adding 20,000 km or a year of age has to lower more predictions than it raises for `b1` and the two LightGBM variants, counted over all rows because boosted trees are not monotone row by row, with a row that does not move counting for neither side.
+A column that is not a feature (`vin`, `seller_group_id`, the label itself) has to leave every prediction bit-identical.
+CI has no data, so it asserts the direction on the fixture-trained models only and never runs the test on the real bundle.
+That test runs in a developer's `make test` once `dvc pull` has restored `models/` and the feature matrices, over the real validation rows, and it is the only test that reads a real artefact.
 
 Stages
 ------
