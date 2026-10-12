@@ -8,10 +8,7 @@
   milestone = {M3: Quality Assurance},
   topic = {Static Analysis, CI/CD},
   participants = {@lukas2510},
-  decision = {Pynblint 0.1.6 runs from its own locked environment in \texttt{tools/\allowbreak{}pynblint-\allowbreak{}env/\allowbreak{}}.
-The wrapper \texttt{tools/\allowbreak{}notebook\_\allowbreak{}lint.\allowbreak{}py} reads Pynblint's JSON report and fails the build, in \texttt{make notebook-\allowbreak{}lint} and in CI.
-The table on the Notebooks page lists every rule as enforced or excluded with its reason, and the wrapper reads that table as its configuration.
-The rules that read execution counts are excluded, because nbstripout removes the counts.},
+  decision = {Pynblint runs from its own locked environment behind a wrapper that fails the build on a finding, enforcing the rules that the table on the Notebooks page marks as enforced; the rules that read execution counts are excluded, because nbstripout removes the counts.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item \texttt{uvx pynblint}, as the issue proposed: its transitive dependencies float, and a new click release crashed the tool.
@@ -24,10 +21,9 @@ A rule is enforced where it can fire on a committed notebook and excluded where 
 That a notebook runs from top to bottom is shown with \texttt{make notebook-\allowbreak{}run}.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
-  assessment = {AI reproduced the crash, measured the exit code and tested every rule on stripped and unstripped notebooks.
-It laid out the options and Lukas chose.
-Later AI reviews found defects in the wrapper's tests and exit codes, which were fixed before merging.
-The notebook that AI drafted failed the cell-length rule and was restructured; the threshold stayed.},
+  assessment = {AI contributed the three measurements, the options and the wrapper with its tests.
+Lukas chose among the options.
+The work was checked by two further AI reviews, which found defects in the wrapper's tests and exit codes that were fixed before merging, and by the gate itself: the notebook AI had drafted failed the cell-length rule and was restructured, with the threshold unchanged.},
   aievidence = {Claude Code sessions of 2026-10-01 and of 2026-10-05 (review of PR \#67).},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/notebooks.md\#pynblint-rules}{Notebooks}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/tools/notebook_lint.py}{\texttt{notebook\_\allowbreak{}lint.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/tools/pynblint-env/pyproject.toml}{\texttt{tools/\allowbreak{}pynblint-\allowbreak{}env/\allowbreak{}}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67}{PR \#67}.},
 }

@@ -10,7 +10,7 @@ The course asks for a selected set of short entries.
 Record a decision when it meaningfully affects the design, quality, development, deployment or operation of the ML system and could reasonably have gone differently.
 A bug fix, an implementation detail, the use of a tool the course prescribes and a choice without a realistic alternative get no entry; they belong in the code, the docs or the pull request.
 
-On 2026-10-12 the entries EDN-01 to EDN-78 were trimmed from 76 to the 42 that meet this criterion, and every kept entry was rewritten to the shape below.
+On 2026-10-12 the entries EDN-01 to EDN-78 were trimmed from 76 to the 44 that meet this criterion, and every kept entry was rewritten to the shape below.
 An entry that amended, reversed or continued another one was merged into the surviving entry, which states the decision as it stands now.
 The originals are kept word for word in [edn-archive.md](edn-archive.md), which the PDF does not include, and [Retired and merged IDs](#retired-and-merged-ids) at the end of this file says what became of each ID.
 
@@ -22,14 +22,17 @@ How to add an entry:
   Reserve the ID by adding its heading to this file on `main` before opening the branch that needs it.
   EDN-38 and EDN-76 were never assigned: they are skipped numbers, not removed entries.
 - Keep to the shape.
-  An entry is read in about a minute, so its title and text fields together have about 220 words, and not more than 300, quoted text excluded:
-  - title: one clause of at most ten words that names the decision;
-  - **Decision**: what we do, in at most 45 words;
-  - **Alternatives considered**: only alternatives we really weighed, at most three, one line each with the reason it lost;
-  - **Rationale**: the deciding argument, in at most 60 words and with at most two numbers, each checked against its source; link the analysis and do not retell it;
-  - **Assessment of the AI contribution**: what AI contributed and what we checked, changed or rejected, in at most 45 words;
-  - **AI interaction evidence**: the session and its topic, or one quoted prompt, in at most 20 words;
-  - **Other evidence**: at most four links.
+  An entry is read in about a minute, so it has about 220 words and never more than 300.
+  The 300 are the one hard limit: `python -m tools.edn_latex --check` and the tests fail on an entry above it.
+  Counted are the title, the note line and the fields from **Decision** to **Other evidence**, without link targets and without text in double quotes.
+  The figures per field are guide values:
+  - title: one clause of about ten words that states the decision;
+  - **Decision**: what we do, in about 45 words;
+  - **Alternatives considered**: only alternatives we really weighed, about three, one line each with the reason it lost;
+  - **Rationale**: the deciding argument, in about 60 words and with one or two numbers, each checked against its source; link the analysis and do not retell it;
+  - **Assessment of the AI contribution**: what AI contributed and what we checked, changed or rejected, in about 45 words;
+  - **AI interaction evidence**: the session and its topic, or one quoted prompt, in about 20 words;
+  - **Other evidence**: about four links.
 - When a decision is revised, edit its entry so that it states the current decision, and say in one note line above the fields what changed and when.
   Do not add a second entry for the same decision.
 - Fill in every field; write "-" for an optional field that does not apply.
@@ -155,13 +158,14 @@ How to add an entry:
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md) section 2, [dataset card](../docs/docs/dataset-card.md), [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
 - **In LaTeX:** yes
 
-### EDN-06: Success criteria for the price model
+### EDN-06: A model is deployable only when it meets the success criteria
 
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Performance Criteria
 - **Participants:** @lukas2510
 - **Decision:** A model is deployable when it meets SC-01 to SC-05 on the seller-grouped test set: MdAPE at most 9 %, at least 85 % of predictions within ±20 %, MdAPE at least 30 % below the median baseline, MdAPE at most 15 % in every segment level with 500 or more test rows, and 88 % to 92 % coverage of the nominal 90 % intervals.
+  EDN-15 added SC-06, which the gate requires as well.
 - **Alternatives considered:**
   - Baseline comparison only: says nothing about usefulness, and a weak baseline makes it easy to pass.
   - MAPE-based targets: dominated by cheap cars and outliers.
@@ -300,7 +304,7 @@ How to add an entry:
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-10, FR-14 and NFR-09, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
-### EDN-14: Drift detection settings for NFR-11
+### EDN-14: Drift is tested on windows of 1,000 requests at level 0.005
 
 > **Absorbs EDN-26 and EDN-29** (2026-09-29): the window, the exclusion of `model` and the significance level, each set after a new measurement.
 
@@ -328,9 +332,9 @@ How to add an entry:
 - **Other evidence:** [Specification](../docs/docs/specification.md) NFR-11, [`nfr11_alpha_sweep_results.txt`](analysis/nfr11_alpha_sweep_results.txt), [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19), [PR #47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/47).
 - **In LaTeX:** yes
 
-### EDN-15: UC1 required fields and the missing-input criterion SC-06
+### EDN-15: `/predict` requires ten fields, with missing inputs bounded by SC-06
 
-> **Absorbs EDN-59 and EDN-61** (2026-09-30, 2026-10-01): how SC-06 is measured and what an omitted field means.
+> **Absorbs EDN-59** (2026-09-30): how SC-06 is measured.
 
 - **Date:** 2026-09-29
 - **Milestone:** M1: Project Inception
@@ -339,20 +343,20 @@ How to add an entry:
 - **Decision:** `/predict` requires `body_type` and `seller_type` on top of the eight core fields; the other basic fields stay optional.
   SC-06 bounds the result: with each optional input field masked on its own, and with all of them masked at once, MdAPE stays at or below 1.5 times the full-input MdAPE.
   SC-06 masks API input fields, mapped to the columns they produce.
-  An omitted equipment list is read as the empty list.
 - **Alternatives considered:**
   - All basic fields optional, relying on LightGBM's handling of missing values: the model never sees the two fields absent, so the contract would promise untested behaviour.
-  - An omitted equipment list as missing values: no listing has a null list, so the model would score a state it was never fitted on.
+  - Require every basic field: `nr_prev_owners` is filled in only 61.0 % of the listings.
+  - SC-06 over feature columns: it would treat the car's age as optional and mask single equipment items, which no request can omit.
 - **Rationale:** In the 97,889 listings of the training scope, `body_type` is filled in 100.000 % and `seller_type` in 99.986 %.
   The model cannot learn their absence, and whoever owns the car knows both.
   With SC-06 in the NFR-01 gate, the gate also covers the partial requests FR-01 allows.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI measured the fill rates and separated the API contract from the training mechanism, which we accepted.
-  For an omitted equipment list, a second AI pass recommended and implemented missing values.
-  Lukas overruled it, because the training data has no null list; a figure AI gave for that option came from an error in its own probe.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-29 (PR #19) and of 2026-09-30 and 2026-10-01 (PR #62).
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), `Model.mask_absent` in [`model.py`](../recommenditos/modeling/model.py).
+  It also found, before any code existed, that a criterion over feature columns would count the car's age as optional.
+  Its proposal to mask the condition flags as missing values was rejected, because it contradicts EDN-23 and the contract.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-29 (PR #19) and 2026-09-30 (issues #37 and #39).
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), [`evaluate.py`](../recommenditos/modeling/evaluate.py).
 - **In LaTeX:** yes
 
 ### EDN-16: UC1 and UC2 have separate endpoints
@@ -374,6 +378,30 @@ How to add an entry:
   Lukas dropped its further suggestions, a shared base schema and a combined convenience endpoint, as unnecessary for a course project.
 - **AI interaction evidence:** Claude Code session of 2026-09-29; Lukas replied (translated from German): "I do not want overkill, it should stay simple, it is only a university course".
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-06 and FR-07, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** yes
+
+### EDN-17: The component is deployed on the FIB Virtech VM
+
+- **Date:** 2026-09-29
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Deployment
+- **Participants:** @lukas2510
+- **Decision:** The component is deployed on the FIB Virtech VM that the course offers: 4 GB of memory, 20 GB of disk, CPU only, free for one semester.
+  Every target in the requirements is written for this machine.
+- **Alternatives considered:**
+  - The free tiers of AWS and GCP: 1 GB and 0.6 GB of memory do not hold an API container, Prometheus, Grafana and a scheduled drift job.
+  - Okteto or Azure: 3 GB, and 1 to 4 GB depending on the instance, so neither has more memory than the FIB machine.
+  - A paid cloud or a free ARM tier: tied to a private account with payment details, and an ARM tier would need multi-architecture images.
+- **Rationale:** Memory decided the choice, together with the fact that the course provides the machine.
+  4 GB is enough with the budgets of NFR-04: the API container stays below 1 GB, the drift job runs in its own container, and metrics and logs are capped.
+  The machine is a single unattended host without redundancy, which EDN-10 accounts for.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI first reported the brief and the requirements as contradicting each other on the target.
+  Asked to look again, it corrected its own framing: the requirements treated the VM as settled, so the issue was a decision nobody had written down.
+  Lukas fixed the target and left the performance figures as proposed until the first load test.
+- **AI interaction evidence:** Claude Code session of 2026-09-29, review of PR #19; Lukas replied "yes do that".
+- **Other evidence:** [Specification](../docs/docs/specification.md) section 2 and NFR-04, [course demo notes](../references/course-demos.md), [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
 ### EDN-18: Unseen countries and models are accepted with a warning
@@ -449,7 +477,7 @@ How to add an entry:
   We accept this risk and revisit it once we host data that is not public elsewhere.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Used as input for further analysis
-- **Assessment of the AI contribution:** AI showed that the premise "the repository is private" was false and laid out both options without recommending one; Lukas decided.
+- **Assessment of the AI contribution:** AI showed that its own earlier check, "the repository is private", was wrong, and laid out both options without recommending one; Lukas decided.
   For the Parquet, AI preferred removing the columns in `download`; Lukas took the simpler option.
   An adversarial AI review inverted every seller id with a dictionary, so we corrected the claim instead of adding a pepper.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-29 and 2026-09-30 (reviews of PR #48 and PR #56); Lukas answered (translated from German): "we keep it public".
@@ -516,7 +544,7 @@ How to add an entry:
 - **Date:** 2026-09-26
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Pipeline Design
-- **Participants:** @W11W11W11, @lukas2510; confirmation by the full team is pending until the laboratory session of 2026-10-13
+- **Participants:** @W11W11W11 decided the `dvc add` form of 2026-09-26, @lukas2510 the current form of 2026-09-30; confirmation by the full team is pending until the laboratory session of 2026-10-13
 - **Decision:** The `download` stage fetches the pinned AutoScout24 CSV from its Zenodo record and writes `data/raw/listings.parquet`, its only output.
   The CSV stays a local cache under `data/external/`, and `download.md5` in `params.yaml` pins its bytes.
   We neither track nor host the CSV.
@@ -528,13 +556,14 @@ How to add an entry:
 - **Rationale:** Once the pipeline exists it should acquire its own input, so a clean clone reproduces with `dvc repro` and no manual step.
   The stage hashes the cached file on every run and refuses any other bytes.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Other: rejected on 2026-09-26, largely adopted on 2026-09-30
-- **Assessment of the AI contribution:** AI recommended fetching from Zenodo and keeping the raw file off our remote.
+- **Response to AI:** Other: rejected on 2026-09-26, partly adopted on 2026-09-30
+- **Assessment of the AI contribution:** AI recommended `dvc import-url`, to keep the raw personal data off our remote.
   @W11W11W11 rejected that for `dvc add`, because the course demo teaches it.
-  Four days later the pointer was retired and the stage fetches from Zenodo, which is close to what AI had recommended.
-  AI's claim that DVC cannot keep such a file in the graph was wrong; an AI review found the option, and we corrected the reasoning.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-26 (issue #3) and 2026-09-30 (issue #33, review of PR #54); the reason given for `dvc add`: "because it follows the demo".
-- **Other evidence:** [Data versioning](../docs/docs/data-versioning.md), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27), [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54), [issue #33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33).
+  Four days later @lukas2510 retired the pointer, so that the pipeline owns its input.
+  That adopts the recommendation only in part: the file comes from Zenodo again, but `dvc import-url` stays rejected and its aim is not met, because the raw Parquet with the same seven personal-data columns is pushed to our public remote (EDN-20).
+  AI's claim that DVC cannot keep such a file in the graph was wrong; an AI review found the option.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-26 (issue #3) and 2026-09-30 (issue #33, review of PR #54).
+- **Other evidence:** [Data versioning](../docs/docs/data-versioning.md), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27), [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54).
 - **In LaTeX:** yes
 
 ### EDN-27: Requirements are separated from their specification
@@ -782,7 +811,7 @@ How to add an entry:
 - **Other evidence:** `Model.predict_eur` in [`model.py`](../recommenditos/modeling/model.py), [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
 - **In LaTeX:** yes
 
-### EDN-53: LightGBM is trained on one thread
+### EDN-53: `train.num_threads` is pinned to 1
 
 > **Absorbs EDN-56** (2026-09-30): `model.json` carries provenance, so the reproducibility claim is about the predictions and the payload file.
 
@@ -851,9 +880,9 @@ How to add an entry:
   The cost is that `evaluate` depends on an id from `train`: a model trained without tracking has no run to append to, and the artefact says so (EDN-54).
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** The design came out of an exchange between the agents working on issues #37 and #39.
-  The second pointed out that one stage covering four variants leaks a run across variants unless each run is closed.
-  AI then verified against the real DagsHub server that resuming creates no additional run.
+- **Assessment of the AI contribution:** The design is AI's: two agents working on issues #37 and #39 agreed it, and one of them saw that a stage covering four variants leaks a run across variants unless each run is closed.
+  AI verified against the real DagsHub server that resuming creates no additional run.
+  Lukas accepted the design as proposed; the original entry records no check of his own.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issues #37 and #39.
 - **Other evidence:** `resume_run` in [`tracking.py`](../recommenditos/tracking.py), [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
 - **In LaTeX:** yes
@@ -880,9 +909,35 @@ How to add an entry:
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI laid out the readings and recommended the blocking one.
   It measured that no segment level reaches 500 rows on the test fixture, so the suite evaluates a second time with a lower bar and gets a real verdict.
-  We moved part of its proposed detail out of `metrics.json` and added one check of our own.
+  We moved the worst segment and the per-field sweep out of `metrics.json` into the per-variant records, and added a check AI had not proposed: a gating segment must be a required input field.
 - **AI interaction evidence:** Claude Code session of 2026-09-30 on issue #39.
 - **Other evidence:** [`metrics.json`](../metrics.json), [`evaluate.py`](../recommenditos/modeling/evaluate.py), [`tests/test_pipeline.py`](../tests/test_pipeline.py), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
+- **In LaTeX:** yes
+
+### EDN-61: An omitted equipment list is read as empty
+
+- **Date:** 2026-10-01
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Feature Encoding, API Design, Evaluation Protocol
+- **Participants:** @lukas2510
+- **Decision:** A request that omits one of the four equipment lists is read as an empty list, so every column that list produces reaches the model as `False` and not as missing.
+  `Model.mask_absent` is the single implementation of what an omitted field is, for the API, for SC-06's masking sweep and for the tests.
+- **Alternatives considered:**
+  - Omitted means absent, with missing values across the list's columns: what EDN-15 asks for in general, but no listing has a null list, so the model would score a state it was never fitted on.
+  - Leave it to each caller: the docstrings said both things at once, and the obvious one-line masking silently chose the missing-value reading.
+- **Rationale:** No measurement decides: on the test set the two readings give identical predictions for the LightGBM variants.
+  That is a property of the tree models and would not hold for a model with missingness indicators, so the rule is fixed on meaning.
+  An empty list is a state the training data holds; an absent one is not.
+  An API model that passes the field on as `None` would choose the other reading, so it defaults to `[]`.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Rejected
+- **Assessment of the AI contribution:** A first AI review of PR #62 found the contradiction and recommended the empty list.
+  A second AI pass argued from the contract's wording for missing values, recommended that and implemented it.
+  Lukas overruled the second pass on a ground neither had weighed: the training data has no null list.
+  A figure the second pass gave for its option came from an error in its own probe.
+  The shared helper is AI's and stayed.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-30 (review of PR #62) and 2026-10-01.
+- **Other evidence:** `Model.mask_absent` in [`model.py`](../recommenditos/modeling/model.py), [`tests/test_model.py`](../tests/test_model.py), [PR #62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62).
 - **In LaTeX:** yes
 
 ### EDN-62: `lgbm-basic` is the candidate model
@@ -919,10 +974,7 @@ How to add an entry:
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Static Analysis, CI/CD
 - **Participants:** @lukas2510
-- **Decision:** Pynblint 0.1.6 runs from its own locked environment in `tools/pynblint-env/`.
-  The wrapper `tools/notebook_lint.py` reads Pynblint's JSON report and fails the build, in `make notebook-lint` and in CI.
-  The table on the Notebooks page lists every rule as enforced or excluded with its reason, and the wrapper reads that table as its configuration.
-  The rules that read execution counts are excluded, because nbstripout removes the counts.
+- **Decision:** Pynblint runs from its own locked environment behind a wrapper that fails the build on a finding, enforcing the rules that the table on the Notebooks page marks as enforced; the rules that read execution counts are excluded, because nbstripout removes the counts.
 - **Alternatives considered:**
   - `uvx pynblint`, as the issue proposed: its transitive dependencies float, and a new click release crashed the tool.
   - Pynblint alone as the CI step: it exits 0 whatever it finds.
@@ -932,10 +984,9 @@ How to add an entry:
   That a notebook runs from top to bottom is shown with `make notebook-run`.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI reproduced the crash, measured the exit code and tested every rule on stripped and unstripped notebooks.
-  It laid out the options and Lukas chose.
-  Later AI reviews found defects in the wrapper's tests and exit codes, which were fixed before merging.
-  The notebook that AI drafted failed the cell-length rule and was restructured; the threshold stayed.
+- **Assessment of the AI contribution:** AI contributed the three measurements, the options and the wrapper with its tests.
+  Lukas chose among the options.
+  The work was checked by two further AI reviews, which found defects in the wrapper's tests and exit codes that were fixed before merging, and by the gate itself: the notebook AI had drafted failed the cell-length rule and was restructured, with the threshold unchanged.
 - **AI interaction evidence:** Claude Code sessions of 2026-10-01 and of 2026-10-05 (review of PR #67).
 - **Other evidence:** [Notebooks](../docs/docs/notebooks.md#pynblint-rules), [`notebook_lint.py`](../tools/notebook_lint.py), [`tools/pynblint-env/`](../tools/pynblint-env/pyproject.toml), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
 - **In LaTeX:** yes
@@ -962,9 +1013,9 @@ How to add an entry:
   Both suites require a minimum row count, so no suite passes on an empty frame.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI tested three assumptions before building on them, and each changed the design.
-  Measuring the store across two builds turned "commit `gx/`" into a cached output.
-  Lukas confirmed the setup.
+- **Assessment of the AI contribution:** Before building, AI tested whether Great Expectations can bound a text date (it cannot), what the store writes across two builds, and whether each rule can hold at its place in the pipeline.
+  Each result changed the design; the second turned "commit `gx/`" into a cached output.
+  Lukas confirmed the setup as proposed.
   An independent AI review then found four faults, among them rules that passed on an empty frame; all were fixed before merging.
 - **AI interaction evidence:** Claude Code sessions of 2026-10-05 (issue #25, review of PR #76) and 2026-10-06 (issue #78).
 - **Other evidence:** [`gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), [`gx_probe_results.txt`](analysis/gx_probe_results.txt), [PR #76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76), [issue #78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78).
@@ -986,6 +1037,7 @@ How to add an entry:
   - The online tracker: it geolocates the machine and would write a contributor's location into a tracked file.
 - **Rationale:** On our machines CodeCarbon cannot read a power counter and falls back to a model: a constant for the RAM plus a share of the CPU's rated power.
   Its figure is therefore a fit time multiplied by a machine-specific constant.
+  The fits use more than one thread although `train.num_threads` is 1, so they are charged more than a single-threaded fit.
   It ranks variants fairly within one run and is no reading in watt-hours that holds across machines.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
@@ -1141,8 +1193,7 @@ How to add an entry:
   Four ideas were on the table, and the team did not weigh them at length.
   The used-car price idea sounded the most feasible and interested us, so we checked that it was feasible and started.
   The other three were not rejected for a reason of their own: they were not picked.
-  Three things confirmed the choice afterwards and were not reasons at the time: a public dataset with a DOI existed (EDN-01), the target is measurable, so the success criteria are numbers (EDN-06), and each LightGBM variant fits in under a minute on a laptop.
-  Two costs showed later: the dataset's skew towards premium brands (EDN-01) and the SC-04 miss on cars over 20 years (EDN-62).
+  Confirmed afterwards, and no reason at the time: a public dataset with a DOI (EDN-01), a measurable target (EDN-06) and fits of under a minute on a laptop.
 - **AI involvement:** Information seeking
 - **Response to AI:** Used as input for further analysis
 - **Assessment of the AI contribution:** As far as @lukas2510 recalls, AI did not take part in choosing among the four ideas.
@@ -1158,18 +1209,15 @@ How to add an entry:
 - **Milestone:** Other (team process)
 - **Activity / Topic:** Use of AI Coding Agents, Code Review
 - **Participants:** @lukas2510 wrote the rule down and proposed the rewording, to be confirmed by the team at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record
-- **Decision:** Coding agents work under the four rules of the [working agreements](../docs/docs/scrum/working-agreements.md).
-  The review rule was reworded on 2026-10-12 to: "Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change."
-  No person signs off each pull request.
+- **Decision:** Agents write and review most changes, people decide and are accountable, and no person signs off each pull request.
+  The rule is one of four in the [working agreements](../docs/docs/scrum/working-agreements.md), and its review clause, reworded on 2026-10-12, reads: "Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change."
 - **Alternatives considered:**
   - Keep the old wording, "The reviewer is a person": a rule the team does not follow.
   - A second person approves every pull request: GitHub blocks approving one's own, and an agent's runs under its author's account, so most merges would wait.
-- **Rationale:** Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
-  The reviews that the pull requests describe were an agent's.
-  People decide.
-  Counted on 2026-10-12 over the 42 entries this notebook keeps from EDN-01 to EDN-78, the AI's proposal was accepted in 28, modified in 12, used as input for further analysis in 1, and rejected and then largely adopted in 1 (EDN-25).
+- **Rationale:** The rule now says what the trace shows: of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
+  People decide: of the 76 original entries EDN-01 to EDN-78, the AI's proposal was accepted in 46, modified in 27, rejected in 2 and used as input in 1; of the 44 kept on 2026-10-12, in 29, 12, 1 and 1, with EDN-25 rejected and then partly adopted.
   Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them.
-  The weak spot: 48 of the 56 were opened and merged under one account with no second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.
+  The weak spot: 48 of the 56 were opened and merged under one account without a second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** The rule's text is AI's, adopted by @lukas2510 on 2026-09-29.
@@ -1188,7 +1236,6 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 |---|---|---|---|
 | EDN-07 | Raw data hosting: import from Zenodo, never push | merged | EDN-25 |
 | EDN-09 | Bump to Python 3.12 | merged | EDN-11 |
-| EDN-17 | Deployment target is the FIB Virtech VM | retired | the course provides the VM, so nothing was chosen |
 | EDN-21 | Report the upstream licence contradiction | retired | documentation wording with no effect on the system |
 | EDN-24 | Keep the pre-registered exclusion | merged | EDN-04 |
 | EDN-26 | NFR-11 window of 1,000 requests, `model` excluded | merged | EDN-14 |
@@ -1211,7 +1258,6 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 | EDN-57 | MLflow retry budget of three requests | retired | a single configuration value |
 | EDN-59 | SC-06 masks API input fields | merged | EDN-15 |
 | EDN-60 | Gating segments are enforced in code | merged | EDN-58 |
-| EDN-61 | An omitted equipment list is the empty list | merged | EDN-15 |
 | EDN-63 | `metrics.json` carries the data source and the estimator | retired | fix after stub metrics, implementation detail |
 | EDN-65 | The Pynblint rule policy | merged | EDN-64 |
 | EDN-66 | NFR-06 and NFR-09 are each split in two | retired | requirement bookkeeping; the result is in the requirements |
@@ -1224,21 +1270,21 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 ## Template
 
 ```markdown
-### EDN-NN: The decision in one clause of at most ten words
+### EDN-NN: The decision in one clause of about ten words
 
 - **Date:** YYYY-MM-DD
 - **Milestone:** M1: Project Inception | M2: Reproducibility | M3: Quality Assurance | M4: Model Deployment | M5: Model Packaging | M6: Monitoring | Other
 - **Activity / Topic:** e.g. Testing Strategy, API Design, Containerization, CI/CD, Monitoring
 - **Participants:** All team members | names
-- **Decision:** What we do, in at most 45 words.
+- **Decision:** What we do, in about 45 words.
 - **Alternatives considered:**
   - An alternative we really weighed: the reason it lost, in one sentence.
-  - At most three of them.
-- **Rationale:** The deciding argument, in at most 60 words and with at most two numbers, each checked against its source.
+  - About three of them.
+- **Rationale:** The deciding argument, in about 60 words and with one or two numbers, each checked against its source.
 - **AI involvement:** Select all that apply: No AI involvement | Information seeking | Alternative generation | Alternative assessment | Recommendation | Solution generation | Other (describe)
 - **Response to AI:** If AI contributed, select one: Accepted | Accepted with modifications | Rejected | Used as input for further analysis | Other (describe)
-- **Assessment of the AI contribution:** If AI contributed: what it contributed and what we checked, changed or rejected, in at most 45 words.
+- **Assessment of the AI contribution:** If AI contributed: what it contributed and what we checked, changed or rejected, in about 45 words.
 - **AI interaction evidence:** The session and its topic, or one quoted prompt.
-- **Other evidence:** At most four links: issue, PR, analysis result, document.
+- **Other evidence:** About four links: issue, PR, analysis result, document.
 - **In LaTeX:** no
 ```

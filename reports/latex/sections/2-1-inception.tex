@@ -149,7 +149,7 @@ The board is linked on the cover.
   \item \textbf{Ceremonies.} A sprint runs from Tuesday to Tuesday. Planning, review and retrospective take place in the Tuesday laboratory session, the only time the whole team is in one room. We have no daily standup.
   \item \textbf{Tickets.} Every issue has an owner, a milestone label (\texttt{M1} to \texttt{M6}) and an area label such as \texttt{area:data}. Sprint~1 had no labels until its last day, so we now add them when the issue is written.
   \item \textbf{Written process.} \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}} hold the roles, the Definition of Done and the working agreements.
-  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 45 entries of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}} record the engineering decisions taken so far with their alternatives.
+  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 47 entries of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}} record the engineering decisions taken so far with their alternatives.
 \end{itemize}
 
 \begin{table}[ht]
@@ -184,14 +184,14 @@ A second person reviewed 2 of the 56 pull requests merged by 11 October 2026.
   Tie the choice to our requirements (model size, memory, cost, how long it has to run).
 }
 
-We deploy on the FIB Virtech virtual machine that the course provides.
+We deploy on the FIB Virtech virtual machine that the course provides (EDN-17).
 The course lists four free alternatives: AWS, Azure, GCP and Okteto.
 
 Memory decided the choice, together with the fact that the course provides the machine.
 Our stack is an API container, Prometheus, Grafana and a scheduled drift job, which does not fit into the 1\,GB and 0.6\,GB of the AWS and GCP free tiers.
 Okteto offers 3\,GB and Azure between 1 and 4\,GB, depending on the instance, so neither has more memory than the 4\,GB of the FIB machine.
 The FIB machine also has 20\,GB of disk and is free for the semester the project runs.
-Because the course provides it, nobody needs a personal cloud account with payment details.
+Because the course provides it, nobody needs a personal cloud account with payment details (EDN-17).
 
 NFR-04 gives the machine a budget: the API container stays below 1\,GB of memory, the drift job runs in its own container, and the metrics and logs are capped so that the disk cannot fill up.
 NFR-12 keeps the choice reversible: the system starts on a fresh machine with one command and needs no paid service, so nothing in the serving path depends on this provider.

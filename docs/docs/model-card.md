@@ -220,7 +220,7 @@ A missing value is passed through unimputed and the estimator decides what to do
 What "missing" means for a field whose domain already represents absence is not left to the caller: `mask_absent` is the one implementation of it, and it is the one the API, SC-06's masking sweep and the tests all go through.
 An omitted assertion flag is `False`, which is all the source can mean (EDN-23), and an omitted equipment list is the **empty** list, so every item of it is `False` too.
 That second one is a decision rather than a reading of the data, and a distributional one: the raw field is always a list, so across the 105,405 scoped listings there is not one null in any of the four equipment fields, while the literal `[]` is 5.2 % to 8.0 % of them per field.
-"Empty" is therefore a state the model was fitted on and "absent" is one it never saw (EDN-15).
+"Empty" is therefore a state the model was fitted on and "absent" is one it never saw (EDN-61).
 The frame handed in is never modified.
 `model.predict_log_price(frame)` is the log of the same number, which is what a future conformal step needs; `predict_interval_eur` is the reserved name for SC-05's intervals and does not exist yet.
 
@@ -733,7 +733,7 @@ Either way it is a one-off cost of choosing the values, paid once per tuning dec
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
 | **Hours used** | Target: at most 15 minutes per training run of the chosen configuration; a hyperparameter search is reported apart (NFR-10, EDN-78). Measured on the tracked run of 2026-10-12: 12.4 s of fitting for the candidate `lgbm-basic`, 58.0 s for the whole ladder; issue #88's search, outside the budget, took 391.3 s of fitting on another laptop. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-73) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
-| **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course. |
+| **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | 0.216 Wh and 37.7 mg CO2eq for the whole ladder on 2026-10-12, measured while other work loaded the laptop (0.157 Wh on 2026-10-06 for identical trees), the configuration the hyperparameter search kept, per variant in the table above, plus 3.6071 Wh and 627.81 mg CO2eq once for the search itself: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
 
@@ -754,7 +754,7 @@ The point estimate and the bounds therefore come from different models, so the b
 
 - **Training:** a laptop CPU.
   No GPU, and none of the planned steps needs one.
-- **Serving:** the FIB Virtech VM, 4 GB RAM and 20 GB disk for the whole stack.
+- **Serving:** the FIB Virtech VM, 4 GB RAM and 20 GB disk for the whole stack (EDN-17).
   The API container stays below 1 GB resident, and the drift job runs in its own scheduled container so its heavier dependency stack never competes with the API for memory (NFR-04).
 
 #### Software
@@ -810,11 +810,12 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-03: the Spanish listings are held out as the new-market scenario.
 - EDN-04: the model covers used passenger cars only.
 - EDN-05: a make is supported from 300 listings.
-- EDN-06: success criteria for the price model.
+- EDN-06: a model is deployable only when it meets the success criteria.
 - EDN-08: the model is baked into the API image.
 - EDN-11: serving explains predictions without the `shap` package.
 - EDN-12: retraining and promotion are started by a person.
-- EDN-15: UC1 required fields and the missing-input criterion SC-06.
+- EDN-15: `/predict` requires ten fields, with missing inputs bounded by SC-06.
+- EDN-17: the component is deployed on the FIB Virtech VM.
 - EDN-18: unseen countries and models are accepted with a warning.
 - EDN-19: the DagsHub repository belongs to a team organisation.
 - EDN-22: listings registered after the reference date are dropped.

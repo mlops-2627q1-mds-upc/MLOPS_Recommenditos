@@ -576,7 +576,7 @@ def test_mask_absent_is_the_one_answer_to_what_an_omitted_field_is(
     non-nullable, so a float64 NaN fails the contract's null check and the caller
     finds out. An equipment column is nullable, so the same assignment upcasts to
     float64, survives `conform` and comes back as `pd.NA` - the field arrives as
-    absent where EDN-15 says it is empty, and nothing says a word about it. No
+    absent where EDN-61 says it is empty, and nothing says a word about it. No
     metric would either: on the real snapshot the two rules give **bit-identical**
     predictions on all 19,665 test rows, for each of the four equipment fields and
     for all 23 optional fields at once. That equivalence is a property of the tree
@@ -2064,7 +2064,7 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
         if name not in required:
             # An unticked checkbox is `False` and the absence of evidence
             # (EDN-23); an equipment list nobody sent is an empty one, so every
-            # item of it is `False` too (EDN-15). Everything else is `None`.
+            # item of it is `False` too (EDN-61). Everything else is `None`.
             row[name] = False if column.dtype in {"bool", "boolean"} else None
         elif column.levels is not None:
             row[name] = str(frame[name].dropna().iloc[0])

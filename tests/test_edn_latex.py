@@ -26,7 +26,9 @@ from tools.edn_latex import (
     Context,
     EdnError,
     check,
+    entry_words,
     main,
+    over_the_cap,
     parse_notebook,
     render_entry,
     render_inline,
@@ -485,6 +487,43 @@ def test_a_reserved_id_is_skipped_until_its_entry_is_written(workspace):
 
 
 # --------------------------------------------------------------------------
+# The word limit of an entry
+# --------------------------------------------------------------------------
+
+
+def test_an_entry_over_the_word_limit_is_named_with_its_count(tmp_path):
+    """The notebook grew to 76 long entries once; the limit is what keeps it short."""
+    edn_md = tmp_path / "edn.md"
+    long_rationale = " ".join(["word"] * 300)
+    edn_md.write_text(
+        notebook(entry_md(1), entry_md(2, Rationale=long_rationale)), encoding="utf-8"
+    )
+
+    (problem,) = over_the_cap(edn_md)
+
+    assert problem.startswith("EDN-02 has 3")
+    assert problem.endswith("the limit is 300")
+
+
+def test_quoted_text_and_link_targets_do_not_count_as_words():
+    quote = " ".join(["quoted"] * 400)
+    plain = entry_md(Decision="Use the dataset.")
+    quoting = entry_md(Decision=f'Use the dataset. "{quote}" [docs](https://example.org/a/b c).')
+    (short,), (long,) = parse_notebook(notebook(plain)), parse_notebook(notebook(quoting))
+
+    assert entry_words(long) == entry_words(short) + 2
+
+
+def test_the_check_fails_on_an_entry_over_the_limit(tmp_path, capsys):
+    edn_md, latex_dir = tmp_path / "edn.md", tmp_path / "edn"
+    edn_md.write_text(notebook(entry_md(Rationale=" ".join(["word"] * 300))), encoding="utf-8")
+    transfer(edn_md, latex_dir)
+
+    assert main(["--check", "--edn-md", str(edn_md), "--latex-dir", str(latex_dir)]) == 1
+    assert "EDN-01 has" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
 # The repository's own notebook
 # --------------------------------------------------------------------------
 
@@ -501,3 +540,8 @@ def test_the_committed_latex_edn_is_what_the_notebook_generates():
 
     assert numbers == sorted(numbers), "entries are kept oldest first"
     assert check(EDN_MD, LATEX_EDN_DIR) == [], "run `make edn` and commit what it writes"
+
+
+def test_no_entry_of_the_notebook_is_over_its_word_limit():
+    """reports/edn.md sets the limit and says how the words are counted."""
+    assert over_the_cap(EDN_MD) == []

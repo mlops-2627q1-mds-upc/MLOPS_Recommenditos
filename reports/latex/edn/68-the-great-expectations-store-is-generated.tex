@@ -25,9 +25,9 @@ Generating the structural checks keeps \texttt{schema.\allowbreak{}py} the one p
 Both suites require a minimum row count, so no suite passes on an empty frame.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted with modifications},
-  assessment = {AI tested three assumptions before building on them, and each changed the design.
-Measuring the store across two builds turned ``commit \texttt{gx/\allowbreak{}}'' into a cached output.
-Lukas confirmed the setup.
+  assessment = {Before building, AI tested whether Great Expectations can bound a text date (it cannot), what the store writes across two builds, and whether each rule can hold at its place in the pipeline.
+Each result changed the design; the second turned ``commit \texttt{gx/\allowbreak{}}'' into a cached output.
+Lukas confirmed the setup as proposed.
 An independent AI review then found four faults, among them rules that passed on an empty frame; all were fixed before merging.},
   aievidence = {Claude Code sessions of 2026-10-05 (issue \#25, review of PR \#76) and 2026-10-06 (issue \#78).},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/data/gx_context_configuration.py}{\texttt{gx\_\allowbreak{}context\_\allowbreak{}configuration.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/gx_probe_results.txt}{\texttt{gx\_\allowbreak{}probe\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76}{PR \#76}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78}{issue \#78}.},

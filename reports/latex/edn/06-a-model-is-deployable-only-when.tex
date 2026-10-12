@@ -2,12 +2,13 @@
 % Do not edit: change reports/edn.md and run `make edn`.
 \ednentry{
   id = {EDN-06},
-  title = {Success criteria for the price model},
+  title = {A model is deployable only when it meets the success criteria},
   date = {2026-09-22},
   milestone = {M1: Project Inception},
   topic = {Performance Criteria},
   participants = {@lukas2510},
-  decision = {A model is deployable when it meets SC-01 to SC-05 on the seller-grouped test set: MdAPE at most 9\,\%, at least 85\,\% of predictions within \ensuremath{\pm}20\,\%, MdAPE at least 30\,\% below the median baseline, MdAPE at most 15\,\% in every segment level with 500 or more test rows, and 88\,\% to 92\,\% coverage of the nominal 90\,\% intervals.},
+  decision = {A model is deployable when it meets SC-01 to SC-05 on the seller-grouped test set: MdAPE at most 9\,\%, at least 85\,\% of predictions within \ensuremath{\pm}20\,\%, MdAPE at least 30\,\% below the median baseline, MdAPE at most 15\,\% in every segment level with 500 or more test rows, and 88\,\% to 92\,\% coverage of the nominal 90\,\% intervals.
+EDN-15 added SC-06, which the gate requires as well.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Baseline comparison only: says nothing about usefulness, and a weak baseline makes it easy to pass.

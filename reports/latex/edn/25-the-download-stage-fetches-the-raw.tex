@@ -7,7 +7,7 @@
   date = {2026-09-26},
   milestone = {M2: Reproducibility},
   topic = {Data Versioning, Pipeline Design},
-  participants = {@W11W11W11, @lukas2510; confirmation by the full team is pending until the laboratory session of 2026-10-13},
+  participants = {@W11W11W11 decided the \texttt{dvc add} form of 2026-09-26, @lukas2510 the current form of 2026-09-30; confirmation by the full team is pending until the laboratory session of 2026-10-13},
   decision = {The \texttt{download} stage fetches the pinned AutoScout24 CSV from its Zenodo record and writes \texttt{data/\allowbreak{}raw/\allowbreak{}listings.\allowbreak{}parquet}, its only output.
 The CSV stays a local cache under \texttt{data/\allowbreak{}external/\allowbreak{}}, and \texttt{download.\allowbreak{}md5} in \texttt{params.\allowbreak{}yaml} pins its bytes.
 We neither track nor host the CSV.
@@ -22,11 +22,12 @@ This replaced, on 2026-09-30, the \texttt{dvc add} pointer chosen on 2026-09-26.
 \emph{Why:} Once the pipeline exists it should acquire its own input, so a clean clone reproduces with \texttt{dvc repro} and no manual step.
 The stage hashes the cached file on every run and refuses any other bytes.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
-  response = {Other: rejected on 2026-09-26, largely adopted on 2026-09-30},
-  assessment = {AI recommended fetching from Zenodo and keeping the raw file off our remote.
+  response = {Other: rejected on 2026-09-26, partly adopted on 2026-09-30},
+  assessment = {AI recommended \texttt{dvc import-\allowbreak{}url}, to keep the raw personal data off our remote.
 @W11W11W11 rejected that for \texttt{dvc add}, because the course demo teaches it.
-Four days later the pointer was retired and the stage fetches from Zenodo, which is close to what AI had recommended.
-AI's claim that DVC cannot keep such a file in the graph was wrong; an AI review found the option, and we corrected the reasoning.},
-  aievidence = {Claude Code sessions of 2026-09-26 (issue \#3) and 2026-09-30 (issue \#33, review of PR \#54); the reason given for \texttt{dvc add}: ``because it follows the demo''.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/data-versioning.md}{Data versioning}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27}{PR \#27}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54}{PR \#54}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33}{issue \#33}.},
+Four days later @lukas2510 retired the pointer, so that the pipeline owns its input.
+That adopts the recommendation only in part: the file comes from Zenodo again, but \texttt{dvc import-\allowbreak{}url} stays rejected and its aim is not met, because the raw Parquet with the same seven personal-data columns is pushed to our public remote (EDN-20).
+AI's claim that DVC cannot keep such a file in the graph was wrong; an AI review found the option.},
+  aievidence = {Claude Code sessions of 2026-09-26 (issue \#3) and 2026-09-30 (issue \#33, review of PR \#54).},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/data-versioning.md}{Data versioning}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27}{PR \#27}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54}{PR \#54}.},
 }

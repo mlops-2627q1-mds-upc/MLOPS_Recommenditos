@@ -67,7 +67,7 @@ milestones:
       - FR-13
       - FR-16
       # Latency, throughput and the request-size limit are measured against a
-      # running API, on the course's VM.
+      # running API, on the machine of EDN-17.
       - NFR-02
       - NFR-03
       # The running system's security, without the repository's secret hygiene,

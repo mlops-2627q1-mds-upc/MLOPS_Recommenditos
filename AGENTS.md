@@ -51,8 +51,8 @@ The course grades how we make engineering decisions and how we use AI in them, s
    Do not pick one silently, even when one option is clearly better.
 3. **Ask.** Ask the user which option they want, and whether the decision should be recorded in the EDN.
    Only continue with the chosen option.
-4. **Record it.** Once decided, and if the user wants it recorded, add an entry to [reports/edn.md](reports/edn.md) following the template and the word budget there.
-   An entry is short, about 220 words: the decision, the alternatives that were really weighed with the reason each lost, the deciding argument, who decided, and what AI contributed and what the team checked, changed or rejected.
+4. **Record it.** Once decided, and if the user wants it recorded, add an entry to [reports/edn.md](reports/edn.md) following the template there, which also sets the shape and the word limit of an entry.
+   An entry is short: the decision, the alternatives that were really weighed with the reason each lost, the deciding argument, who decided, and what AI contributed and what the team checked, changed or rejected.
    Link the evidence (issue, PR, commit, experiment) and do not retell it.
    When a decision is revised, update its entry so that it states the current decision, and do not add a second entry for it.
 

@@ -20,6 +20,7 @@ The estimate was checked once against the RAPL energy counter.},
 \par
 \emph{Why:} On our machines CodeCarbon cannot read a power counter and falls back to a model: a constant for the RAM plus a share of the CPU's rated power.
 Its figure is therefore a fit time multiplied by a machine-specific constant.
+The fits use more than one thread although \texttt{train.\allowbreak{}num\_\allowbreak{}threads} is 1, so they are charged more than a single-threaded fit.
 It ranks variants fairly within one run and is no reading in watt-hours that holds across machines.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},

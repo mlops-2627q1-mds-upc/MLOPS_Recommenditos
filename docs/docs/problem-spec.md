@@ -202,8 +202,8 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-03: the Spanish listings are held out as the new-market scenario.
 - EDN-04: the model covers used passenger cars only.
 - EDN-05: a make is supported from 300 listings.
-- EDN-06: success criteria for the price model.
-- EDN-15: UC1 required fields and the missing-input criterion SC-06.
+- EDN-06: a model is deployable only when it meets the success criteria.
+- EDN-15: `/predict` requires ten fields, with missing inputs bounded by SC-06.
 - EDN-22: listings registered after the reference date are dropped.
 - EDN-23: condition flags are read as one-sided assertions.
 - EDN-48: the supported-make list is applied in the `features` stage.

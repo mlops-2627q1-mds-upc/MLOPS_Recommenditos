@@ -109,6 +109,12 @@ IN_LATEX_LABEL = "In LaTeX"
 #: error names the entry in reports/edn.md rather than in a TeX log.
 REQUIRED_FIELDS = ("milestone", "participants", "decision", "rationale", "ai")
 
+#: The one hard limit reports/edn.md sets on an entry, in words, and the fields
+#: it counts besides the title and the note. The dates, names and labels of the
+#: other fields are not prose and do not count.
+WORD_CAP = 300
+COUNTED_FIELDS = ("decision", "alternatives", "rationale", "assessment", "aievidence", "evidence")
+
 #: The order of the keys in a generated file, which is the order edn.tex prints.
 OUTPUT_KEYS = (
     "id",
@@ -945,6 +951,32 @@ def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> Transfer
     )
 
 
+def entry_words(entry: Entry) -> int:
+    """The words of an entry, counted as reports/edn.md says it counts them.
+
+    The title, the note and the text fields count. A link counts by its text
+    and not by its target, and text in double quotes does not count, so that a
+    rule or a prompt quoted word for word does not push an entry over the cap.
+    """
+    lines = [entry.title, *entry.note]
+    for key in COUNTED_FIELDS:
+        lines += entry.fields.get(key, [])
+    for _label, markdown, _above in entry.extra_fields:
+        lines += markdown
+    text = re.sub(r"\]\([^)\s]*\)", "]", re.sub(r'"[^"\n]*"', " ", "\n".join(lines)))
+    return sum(1 for token in text.split() if re.search(r"[^\W_]", token))
+
+
+def over_the_cap(edn_md: Path = EDN_MD) -> list[str]:
+    """One line per entry longer than `WORD_CAP`; empty when every entry fits."""
+    entries = parse_notebook(edn_md.read_text(encoding="utf-8"))
+    return [
+        f"{entry.id} has {entry_words(entry)} words, and the limit is {WORD_CAP}"
+        for entry in entries
+        if not entry.is_reservation and entry_words(entry) > WORD_CAP
+    ]
+
+
 def check(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> list[str]:
     """What a transfer would change, as one line per file; empty when in sync."""
     target = plan(edn_md.read_text(encoding="utf-8"))
@@ -969,10 +1001,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.check:
             stale = check(args.edn_md, args.latex_dir)
+            too_long = over_the_cap(args.edn_md)
             if stale:
                 print("The LaTeX EDN is behind reports/edn.md; run `make edn` and commit:")
                 for line in stale:
                     print(f"  {line}")
+            if too_long:
+                print("reports/edn.md has an entry over its word limit; shorten it:")
+                for line in too_long:
+                    print(f"  {line}")
+            if stale or too_long:
                 return 1
             print("The LaTeX EDN is in sync with reports/edn.md.")
             return 0

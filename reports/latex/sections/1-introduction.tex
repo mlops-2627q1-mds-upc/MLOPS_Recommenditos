@@ -22,7 +22,7 @@ The scope is used passenger cars (EDN-04) of the makes with at least 300 listing
 For a car outside this scope the component returns a refusal and no estimate (FR-04).
 We hold out all Spanish listings as a market the model never sees, so that Milestone~6 can show drift detection and retraining on real data (EDN-03).
 
-In operation the component is a containerised API on the virtual machine the course provides, with 4\,GB of memory, 20\,GB of disk and no GPU.
+In operation the component is a containerised API on the virtual machine the course provides, with 4\,GB of memory, 20\,GB of disk and no GPU (EDN-17).
 CI builds the released model into the image (EDN-08), and a person decides when to retrain and which model to promote (EDN-12).
 The 16 functional and 15 non-functional requirements are described in \cref{sec:m1-requirements}.
 

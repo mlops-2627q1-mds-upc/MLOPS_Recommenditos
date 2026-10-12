@@ -76,7 +76,7 @@ These requirements exist for the team as operator, not for the seller or the buy
 
 ## 2. Non-functional requirements
 
-The component runs on the single small machine the course provides (4 GB RAM, 20 GB disk, CPU only).
+The component runs on the single small machine the course provides (4 GB RAM, 20 GB disk, CPU only, **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 That machine is a given constraint, not a design choice, and NFR-02 to NFR-04 are written for it.
 Those three targets are themselves **[proposed]**: they are estimates, checked against the first load test in M4 and adjusted there if needed.
 

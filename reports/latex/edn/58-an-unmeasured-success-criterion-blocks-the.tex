@@ -25,7 +25,7 @@ Promotion is a pull-request review (EDN-12) and the reviewer reads the metrics d
   response = {Accepted with modifications},
   assessment = {AI laid out the readings and recommended the blocking one.
 It measured that no segment level reaches 500 rows on the test fixture, so the suite evaluates a second time with a lower bar and gets a real verdict.
-We moved part of its proposed detail out of \texttt{metrics.\allowbreak{}json} and added one check of our own.},
+We moved the worst segment and the per-field sweep out of \texttt{metrics.\allowbreak{}json} into the per-variant records, and added a check AI had not proposed: a gating segment must be a required input field.},
   aievidence = {Claude Code session of 2026-09-30 on issue \#39.},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/metrics.json}{\texttt{metrics.\allowbreak{}json}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/modeling/evaluate.py}{\texttt{evaluate.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/tests/test_pipeline.py}{\texttt{tests/\allowbreak{}test\_\allowbreak{}pipeline.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39}{issue \#39}.},
 }

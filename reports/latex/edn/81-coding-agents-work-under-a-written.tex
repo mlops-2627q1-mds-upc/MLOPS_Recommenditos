@@ -7,21 +7,18 @@
   milestone = {Other (team process)},
   topic = {Use of AI Coding Agents, Code Review},
   participants = {@lukas2510 wrote the rule down and proposed the rewording, to be confirmed by the team at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record},
-  decision = {Coding agents work under the four rules of the \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/working-agreements.md}{working agreements}.
-The review rule was reworded on 2026-10-12 to: ``Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change.''
-No person signs off each pull request.},
+  decision = {Agents write and review most changes, people decide and are accountable, and no person signs off each pull request.
+The rule is one of four in the \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/working-agreements.md}{working agreements}, and its review clause, reworded on 2026-10-12, reads: ``Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change.''},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Keep the old wording, ``The reviewer is a person'': a rule the team does not follow.
 \item A second person approves every pull request: GitHub blocks approving one's own, and an agent's runs under its author's account, so most merges would wait.
 \end{itemize}
 \par
-\emph{Why:} Of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
-The reviews that the pull requests describe were an agent's.
-People decide.
-Counted on 2026-10-12 over the 42 entries this notebook keeps from EDN-01 to EDN-78, the AI's proposal was accepted in 28, modified in 12, used as input for further analysis in 1, and rejected and then largely adopted in 1 (EDN-25).
+\emph{Why:} The rule now says what the trace shows: of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
+People decide: of the 76 original entries EDN-01 to EDN-78, the AI's proposal was accepted in 46, modified in 27, rejected in 2 and used as input in 1; of the 44 kept on 2026-10-12, in 29, 12, 1 and 1, with EDN-25 rejected and then partly adopted.
 Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them.
-The weak spot: 48 of the 56 were opened and merged under one account with no second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.},
+The weak spot: 48 of the 56 were opened and merged under one account without a second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
   assessment = {The rule's text is AI's, adopted by @lukas2510 on 2026-09-29.
