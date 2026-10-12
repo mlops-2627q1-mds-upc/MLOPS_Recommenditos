@@ -13,7 +13,7 @@ LaTeX sources for our two course deliverables:
 | `config.tex` | Team name, members, links and contact. The only place to edit cover page facts. |
 | `sections/` | One file per report section; `2-N-*.tex` is Milestone N. |
 | `edn/` | One EDN entry per file and their list, `entries.tex`, all generated from [reports/edn.md](../edn.md) by `make edn`. |
-| `figures/` | Figures for the report (`../figures/` is searched too). `pipeline.pdf` is drawn from `dvc.yaml` by `figures/pipeline.sh`, which needs the project environment, Graphviz and the DejaVu Sans font; the PDF is committed with the font embedded, so a build needs none of them. |
+| `figures/` | Figures for the report (`../figures/` is searched too, but the Docker and CI builds mount only this folder, so a figure the report uses must lie here). `energy-vs-error.png` is a copy of the `compare-energy` stage's output in `reports/figures/`. `pipeline.pdf` is drawn from `dvc.yaml` by `figures/pipeline.sh`, which needs the project environment, Graphviz and the DejaVu Sans font; the PDF is committed with the font embedded, so a build needs none of them. |
 | `references.bib` | Bibliography (biblatex + biber, IEEE style). |
 | `preamble.tex` | Shared packages, build flags and the `\guidance` / `\tbd` helpers. |
 
@@ -41,11 +41,14 @@ Re-measure them on the delivery commit, after the last merge that goes into it:
 - [ ] Test count, skips and coverage: `make test`, in 2.3.3.
 - [ ] Files `ruff format --check` reports, and that `ruff check` finds nothing: `make lint`, in 2.3.2.
 - [ ] Notebook lint findings: `make notebook-lint`, in 2.3.2.
-- [ ] Tests carrying a `req` marker, and the matrix's counts: `uv run python -m tools.requirement_matrix` and `reports/requirement-matrix.json`, in 2.1.1 and 2.3.3.
-- [ ] Number of EDN entries, in 2.1.4, and `make edn`, whose `--check` must pass.
-- [ ] Gate result, metrics and fit times: `metrics.json`, `reports/metrics/` and the MLflow runs they name, in 1.1, 2.1.3, Table 1 of 2.2.4 and 2.3.1, and the commit those runs carry in 2.2.4.
+- [ ] Tests carrying a `req` marker, and the matrix's counts: `uv run python -m tools.requirement_matrix` and `reports/requirement-matrix.json`, in 2.3.3.
+- [ ] Number of EDN entries (written ones, not reserved headings) and the pull request counts of the coding-agent paragraph, in 2.1.4, and `make edn`, whose `--check` must pass.
+- [ ] Gate result, metrics and fit times: `metrics.json`, `reports/metrics/` and `reports/figures/energy-vs-error.csv`, in the success-criteria table of 1.1, in 2.1.3, in the ladder table and its text in 2.2.4, and in 2.3.1.
+- [ ] The split-noise figures of 1.1 (EDN-79), if the split or the candidate changed: `reports/analysis/split_strategy_results.txt`.
 - [ ] Split and validation figures, if a data stage ran: the dataset card and `reports/data-validation/summary.json`, in 2.1.2 and 2.3.4.
+- [ ] The pipeline is up to date: plain `uv run dvc status` reports nothing changed. `dvc status -c` is not this check: it only compares the cache with the remote, and it passed while six stages were stale.
 - [ ] The pipeline figure, if `dvc.yaml` changed: `reports/latex/figures/pipeline.sh`.
+- [ ] The energy figure and the energy table of 2.3.1, if the ladder was re-run: `cp reports/figures/energy-vs-error.png reports/latex/figures/`, and the rows, the total and the ratios in the text from `reports/figures/energy-vs-error.csv`.
 - [ ] The page count against the limit, and no placeholder left: `make report-submit`, which prints both and the space left on the last page.
 - [ ] Once the DRAFT boxes are gone, every page break: no heading orphaned at the bottom of a page (such as 2.3 with no text under it) and no figure or table pushed away from its text.
 

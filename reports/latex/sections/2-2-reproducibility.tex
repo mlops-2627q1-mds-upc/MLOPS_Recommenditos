@@ -1,8 +1,8 @@
 % Milestone 2a: project structure, code versioning and data versioning.
-% Owner: @W11W11W11. Everything below is a draft assembled from the repository's
-% own evidence so that its owner has a starting point, not finished text. The
-% \tbd right after the heading says so in the PDF as well, and `make
-% report-submit` counts it, so the draft cannot reach a submission unnoticed.
+% Owner: @W11W11W11. The text below is a complete draft written from the
+% repository's evidence. The \tbd right after the heading marks it as awaiting
+% its owner's sign-off, and `make report-submit` counts it, so the draft cannot
+% reach a submission unnoticed.
 % Experiment tracking is the last sub-subsection of this Milestone and lives in
 % sections/2-2b-experiment-tracking.tex, owned by @ulasawczuk and input at the
 % bottom of this file, so that the two people writing about Milestone 2 never
@@ -26,27 +26,16 @@
   Justify any deviations from it (the course allows justified deviations).
 }
 
-We use the Cookiecutter Data Science template \cite{ccds} with \texttt{uv} as dependency manager, and deviate from it in three places.
-The course allows justified deviations; each of ours is recorded in the EDN.
+We use the Cookiecutter Data Science template \cite{ccds} with \texttt{uv} as the dependency manager.
+We changed it where this project needed it:
 
-\paragraph{One module per pipeline stage (EDN-28).}
-The template generates a flat \texttt{dataset.py}, \texttt{features.py} and \texttt{modeling/train.py}.
-We replaced those with one module per DVC stage, under \texttt{recommenditos/data/} and \texttt{recommenditos/modeling/}, which is also the layout the teachers' demo repository uses.
-The technical argument is the dependency graph: a stage's \texttt{deps} should name the code that stage actually runs, so \texttt{dvc repro} reruns the minimum.
-A flat layout cannot express that, because one file backs several stages.
-The organisational argument is that the pipeline is sequential, so parallel work is only possible if each ticket owns its own files.
-
-\paragraph{A \texttt{params.yaml} instead of constants in \texttt{config.py} (EDN-30).}
-The demo keeps the seed, the split ratios and the hyperparameters as Python constants.
-We moved everything configurable into \texttt{params.yaml} and left only paths in \texttt{config.py}.
-A parameter change then reruns exactly the stages that read it, \texttt{dvc params diff} shows what changed between two commits, and \texttt{dvc exp} becomes usable.
-Paths stay in code so that nothing in the project depends on a machine-specific absolute path, which is a wart the demo's \texttt{config.py} does have.
-
-\paragraph{Two stages the demo does not have.}
-\texttt{features} exists because the demo's text model needs no feature engineering and our tabular model does.
-\texttt{evaluate} exists because the demo asserts its metric threshold inside \texttt{tests/test\_model.py}, whereas NFR-01 gates deployment on six success criteria and EDN-12 makes promotion a human decision, so someone has to be able to read the result off an artefact.
-
-We also added \texttt{recommenditos/schema.py}, the structural contract for the processed data, which the stages code against instead of against each other (EDN-31).
+\begin{itemize}
+  \item \textbf{One module per pipeline stage (EDN-28).} The template's three flat modules became one module per stage, in \texttt{recommenditos/\allowbreak data/} and \texttt{recommenditos/\allowbreak modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each ticket also has its own file, so several people can work on the pipeline at once.
+  \item \textbf{Configuration in \texttt{params.yaml} (EDN-30).} Everything configurable is there, and \texttt{config.py} holds only paths. A changed parameter reruns the stages that read it, and \texttt{dvc params diff} shows what changed between two commits.
+  \item \textbf{Two more stages than the course demo.} A tabular model needs a \texttt{features} stage. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12).
+  \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned and processed data (\cref{sec:m3-data-testing}).
+  \item \textbf{Dependency groups (EDN-47).} \texttt{[project] dependencies} is the serving runtime only, and the pipeline and development tools are dependency groups. The API image installs only what serving needs, and a CI job checks that serving code imports nothing from a group.
+\end{itemize}
 
 \subsubsection{Code versioning}
 \label{sec:m2-code-versioning}
@@ -56,30 +45,43 @@ We also added \texttt{recommenditos/schema.py}, the structural contract for the 
   Already in place: GitHub Flow with \texttt{feature/} and \texttt{fix/} branches, branch protection on \texttt{main}, squash merge as the only merge method, Conventional Commits enforced by pre-commit and by a CI check on PR titles, pre-commit hooks (ruff, nbstripout, file hygiene).
 }
 
-We follow GitHub Flow: \texttt{main} is always the released state, every change is a short-lived \texttt{feature/} or \texttt{fix/} branch off it, and it reaches \texttt{main} through a pull request.
-Branch protection blocks direct pushes, and squash merge is the only merge method enabled on the repository, so \texttt{main} carries exactly one commit per pull request and reads as a list of changes rather than of keystrokes.
-Conventional Commits are enforced twice on purpose, by a \texttt{commit-msg} hook locally and by a CI check on the pull request title, because with squash merge the title is what becomes the commit message, so the local hook alone would guard the wrong string.
-Twelve pre-commit hooks from five sources run before every commit and again in CI, where a job of its own scans the whole history for secrets instead of the staged change (EDN-71): \texttt{ruff-check --fix} and \texttt{ruff-format}, \texttt{nbstripout}, \texttt{gitleaks}, and the file-hygiene set (trailing whitespace, end-of-file newline, YAML and TOML syntax, merge-conflict markers, mixed line endings, and a 1\,MB ceiling on every file).
+We follow GitHub Flow.
+\texttt{main} is the released state, every change is made on a short-lived \texttt{feature/} or \texttt{fix/} branch, and it reaches \texttt{main} through a pull request.
 
-Four practices around that baseline are ours.
+Branch protection enforces this.
+Nobody can push to \texttt{main} directly, and a pull request can be merged once the nine required checks of \cref{tab:ci-checks} pass.
+No approval is required; \cref{sec:m1-coordination} describes how changes are reviewed.
+Squash merge is the only merge method, so \texttt{main} has one commit per pull request.
+With squash merge the pull request title becomes the commit message, so Conventional Commits are checked twice: by a \texttt{commit-msg} hook locally and by a CI check on the title.
 
-\emph{Checks gate the merge, approval does not.}
-GitHub blocks self-approval, and a pull request written with a coding agent runs under its author's own account, so a required approval would leave those pull requests permanently unmergeable.
-Requiring one would therefore have bought a rule that has to be broken rather than a review, so we require passing checks instead and say in \texttt{CONTRIBUTING.md} that a teammate reads the change whenever one is free, and that the author is responsible for its content whoever or whatever typed it.
+Twelve pre-commit hooks run before every commit and again in CI: \texttt{ruff} as linter and formatter, \texttt{nbstripout}, \texttt{gitleaks}, and checks for whitespace, YAML and TOML syntax, merge-conflict markers, line endings and files over 1\,MB.
 
-\emph{CI is filtered by path, so the signal stays honest.}
-The workflow first computes which areas a change touches, and the test, documentation and report jobs each run only for their own area.
-A report-only change does not run the test suite, so a green tick means the checks that could have caught something actually ran.
-The pipeline definition and its parameters count as code, because the tests read \texttt{dvc.yaml} and \texttt{params.yaml} and assert that they still describe the modules that exist.
+\begin{table}[ht]
+  \centering\small
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    Required check & What it verifies \\
+    \midrule
+    Lint \& format & The pre-commit hooks on every file (\cref{sec:m3-static-analysis}) \\
+    Tests & The Pytest suite with coverage, on Linux (\cref{sec:m3-model-testing}) \\
+    Tests (Windows) & The same suite on Windows, which one teammate develops on (EDN-75) \\
+    Serving runtime & Serving code imports only the runtime dependencies (EDN-47) \\
+    Requirement matrix & Every requirement due by the current milestone has its evidence (\mbox{NFR-07}) \\
+    Notebook lint (Pynblint) & The notebook rules (\cref{sec:m3-static-analysis}) \\
+    Secret scan (gitleaks) & No secret in any commit of the history (EDN-71) \\
+    Build docs & The documentation site builds \\
+    Conventional commit PR title & The message of the squash commit \\
+    \bottomrule
+  \end{tabularx}
+  \caption{The nine checks that branch protection requires before a merge.}
+  \label{tab:ci-checks}
+\end{table}
 
-\emph{Ignoring data is shaped so that a mistake is impossible rather than unlikely.}
-The root \texttt{.gitignore} excludes \texttt{/data/**} but re-includes directories, \texttt{*.dvc} pointers and DVC's own \texttt{.gitignore} files.
-A bare \texttt{/data/} rule would have hidden the pointer files Git has to see, and Git cannot re-include a file inside an ignored directory, hence the \texttt{**} form.
-The consequence that matters is that a raw file dropped into \texttt{data/raw/} is covered from the moment it lands, so a stray \texttt{git add .} cannot put its personal data into a repository the whole cohort can read.
+CI first detects which areas a change touches and runs the test, documentation and report jobs only for their own area, so a documentation change does not wait for the test suite.
 
-\emph{Two rules came out of things that went wrong.}
-EDN identifiers are reserved on \texttt{main} before the branch that needs one is opened, because sprint~1 handed out EDN-19 twice on parallel branches and the entry that lost the race had to be renumbered while merging.
-And in the 48 hours before a presentation only fixes are merged, because every merge to \texttt{main} deploys (NFR-13) while NFR-05 commits to zero unplanned downtime during the presentation, so the two requirements are in tension exactly then.
+The \texttt{.gitignore} ignores everything under \texttt{data/} except the \texttt{.dvc} pointer files, so a raw file with personal data cannot be committed by accident.
+EDN IDs are reserved on \texttt{main} before a branch uses one, because sprint~1 assigned EDN-19 twice on parallel branches.
+In the 48 hours before a presentation we merge only fixes, because every merge to \texttt{main} will deploy (NFR-13).
 
 \subsubsection{Data versioning}
 \label{sec:m2-data-versioning}
@@ -90,57 +92,37 @@ And in the 48 hours before a presentation only fixes are merged, because every m
   Consider a pipeline figure.
 }
 
-Data and artefacts are versioned with DVC against a DagsHub remote over HTTP, as the course prescribes, and the conventions on top of that are in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/data-versioning.md}{\texttt{docs/docs/data-versioning.md}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{\texttt{docs/docs/pipeline.md}}.
-The remote belongs to a DagsHub organisation the team owns rather than to a member's private account, so push rights follow membership and the data and experiment history survive if anyone leaves or tidies up; the rule behind that, after a cohort member outside the team had already mirrored our public repository, is that the project's infrastructure lives somewhere the team owns (EDN-19).
-Credentials are written with \texttt{dvc remote modify --local}, which lands in \texttt{.dvc/config.local} and never in a commit.
-Tracking is per file: \texttt{data/raw}, \texttt{data/interim} and \texttt{data/processed} have different lifecycles, and one pointer over \texttt{data/} would hide which artefact changed.
+We version the data and the models with DVC.
+The remote is the DagsHub repository of an organisation the team owns, so access follows team membership and does not depend on one member's account (EDN-19).
+Each member's credentials are in \texttt{.dvc/config.local}, which Git ignores.
 
-% One \texttt group per stage: spaces inside a single \texttt group are rigid,
-% so the whole chain could not be broken across lines and ran into the margin.
-The pipeline is \texttt{download} \textrightarrow{} \texttt{preprocess} \textrightarrow{} \texttt{validate-data} \textrightarrow{} \texttt{split} \textrightarrow{} \texttt{features} \textrightarrow{} \texttt{train} \textrightarrow{} \texttt{evaluate} \textrightarrow{} \texttt{compare-energy}, where \texttt{validate-data} also depends on the suites \texttt{configure\_gx} builds, and \texttt{features} and \texttt{train} iterate a mapping in \texttt{params.yaml} through \texttt{foreach}, so their stages are named after the item (\texttt{train@lgbm-basic}) rather than its position (\cref{fig:pipeline}).
-Unlike the demo's, our \texttt{validate-data} stage fails the pipeline when an expectation fails instead of only logging the failure count.
+The pipeline is defined in \texttt{dvc.yaml} (\cref{fig:pipeline}), and the committed \texttt{dvc.lock} records the hash of every input, parameter and output.
+A Git commit therefore identifies the code, the data and the parameters together, and \texttt{dvc pull} restores the artefacts that belong to it.
+\texttt{dvc.lock} is reproducible only within one toolchain, because a Parquet file changes with the versions of the libraries that write it.
+
 % figures/pipeline.pdf is drawn from dvc.yaml by figures/pipeline.sh; rerun it
 % after a change to the stages.
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth]{pipeline}
-  \caption{The DVC pipeline as \texttt{dvc dag} draws it from \texttt{dvc.yaml}.}
+  \caption{The DVC pipeline as \texttt{dvc dag} draws it from \texttt{dvc.yaml}. The \texttt{features} stage exists once per feature set and the \texttt{train} stage once per model variant.}
   \label{fig:pipeline}
 \end{figure}
 
-Four things about this go beyond running the tool.
+Three properties of the pipeline go beyond the course demo:
 
-\emph{The gate sits inside the graph.}
-\texttt{validate-data} writes an uncached \texttt{reports/\allowbreak data-validation/\allowbreak summary.json} that \texttt{split} declares as a dependency.
-Because it is uncached it is tracked by Git, so the validation result appears in the diff of any pull request that changes the data, and because \texttt{split} depends on it, \texttt{dvc repro split} cannot walk past the gate.
-The demo's equivalent stage declares no outputs at all, which makes it a leaf that nothing depends on: a \texttt{dvc repro} there can produce a model from data that never passed validation.
+\begin{itemize}
+  \item \textbf{Raw data.} The \texttt{download} stage fetches the file from the Zenodo DOI and refuses it unless its MD5 equals the checksum Zenodo publishes (EDN-36). We keep no copy of the published CSV.
+  \item \textbf{Parameters.} Each stage lists only the \texttt{params.yaml} keys it reads, and \texttt{foreach} generates the \texttt{features} stage once per feature set and the \texttt{train} stage once per variant. Changing the hyperparameters of one variant retrains only that variant (EDN-30).
+  \item \textbf{Synthetic data.} With \texttt{download.source} set to \texttt{synthetic}, the \texttt{download} stage generates a dataset with the same schema, and \texttt{dvc repro} runs on a clean clone without the 548.6\,MB file and without DagsHub access (EDN-33). The tests use the same generator, so no real listing is committed to Git. \texttt{metrics.json} records which source produced it.
+\end{itemize}
 
-\emph{Every parameter is declared at the granularity of the thing it configures.}
-Each stage lists only the \texttt{params.yaml} keys it reads, and the \texttt{foreach} stages list only their own item, so changing one variant's hyperparameters retrains that variant and leaves the other three alone.
-That was measured rather than assumed: in a scratch repository a coarse declaration retrained every variant and a per-item declaration retrained one (EDN-30).
+The \texttt{validate-data} stage is a gate inside the pipeline, which \cref{sec:m3-data-testing} describes.
 
-\emph{The pipeline and the test suite both run on a clean clone with no credentials.}
-The module \texttt{recommenditos/\allowbreak data/\allowbreak synthetic.py} generates a schema-valid stand-in for the raw snapshot from public catalogues and a seed, and the \texttt{download} stage produces it when \texttt{download.source} is set to \texttt{synthetic}, so \texttt{dvc repro} is green without the 548.6\,MB file and without DagsHub access (EDN-33).
-It is generated and never sampled: a committed sample of real listings would put personal data into the Git history of a repository the whole cohort can read, which a DVC pointer does not (NFR-08).
-The project's own value is \texttt{zenodo} and the committed \texttt{dvc.lock} records that run, so a clean clone gets the real artefacts from \texttt{dvc pull} with every stage up to date, and the stand-in is what somebody without credentials falls back to.
-Making the source a parameter rather than a hard-coded branch is what keeps that honest: the value is recorded in \texttt{dvc.lock}, so \texttt{dvc status} reports a workspace that disagrees with the lock, and \texttt{evaluate} writes the resolved value into \texttt{metrics.json}, so a metric cannot be read without the data behind it.
-\texttt{dvc params diff} does not show it, because it compares the params files of two Git revisions rather than the lock against the workspace; EDN-33 records that correction rather than quietly dropping the claim.
-
-\emph{The stages code against a contract, not against each other.}
-\texttt{recommenditos/schema.py} declares three frozen contracts, \texttt{RAW\_SCHEMA}, \texttt{INTERIM\_SCHEMA} and \texttt{PROCESSED\_SCHEMA}, each fixing column names, dtypes and nullability, and every stage validates after reading and conforms before writing (EDN-31).
-Parquet preserves whatever dtype it is handed rather than normalising it, so without an explicit cast at each boundary the frames drift apart stage by stage and the stage that notices is never the stage that caused it.
-Because \texttt{conform} selects the contract's columns, a column the contract does not name cannot reach an artefact, which is how the PII columns NFR-08 forbids are kept out structurally instead of by every stage remembering to drop them.
-
-What we accepted rather than solved is written down too.
-The raw CSV is fetched by the \texttt{download} stage from the pinned Zenodo DOI and kept as a gitignored local cache, so we neither track nor re-host the published file (EDN-36, retiring the \texttt{dvc add} pointer of EDN-25, which had in turn replaced the \texttt{dvc import-url} of EDN-07).
-\texttt{import-url} was never an option against this source: it derives its change detection from an \texttt{ETag} or \texttt{Content-MD5} header that the Zenodo URL does not send.
-What pins the bytes instead is \texttt{download.md5}, which equals the checksum Zenodo publishes, so anyone can check that our copy is the original and the stage refuses to read bytes that hash to anything else.
-The remote is public (EDN-20) and the derived raw Parquet keeps the seven personal-data columns and is pushed like any other stage output (EDN-34), so our remote holds the same personal data twice.
-That decision was taken on a measurement, not on an estimate: the CSV is 548.6\,MB, the Parquet of all 75 columns 215.3\,MB, and the seven columns 3.1\,MB of it, against data that is already public on the same remote and on Zenodo, so none of the alternatives changed what a reader can reach and two of them cost reproducibility or made the raw layer no longer raw.
-The entry exists so that a later decision to restrict the remote, or a request to remove the data, finds both artefacts named in one place.
-
-NFR-06's evidence is a drill, a clean clone on which \texttt{dvc repro} finds every stage up to date, while tests run every stage end to end in a temporary directory with no data and no credentials, and check that each stage's output satisfies its contract, that the split loses no row, that no seller appears in two sets and that every Spanish listing and no other lands in the holdout.
-The remaining known gaps are named in \texttt{docs/docs/pipeline.md} rather than left to be discovered; the largest is that \texttt{dvc.lock} is reproducible only within one toolchain, because the Parquet a stage writes embeds the pyarrow and pandas versions.
+\paragraph{Scalability.}
+A new snapshot is a change of three parameters, the Zenodo record, the file name and its checksum; DVC then reruns the pipeline, and the list of supported makes is computed from the new data.
+DVC caches each stage's data and models and pushes them to the remote once, while Git tracks the small report files, so a change reruns only the stages it affects; a new model variant adds a \texttt{train} stage, and a \texttt{features} stage only when it brings a new feature set.
+Every stage holds its data in memory with pandas, which is enough for 118,382 rows and would be the first limit for a much larger dataset.
 
 % Experiment tracking, owned by @ulasawczuk.
 \input{sections/2-2b-experiment-tracking}
