@@ -120,9 +120,10 @@ lgbm-extended: OK
 
 
 # Issue #93 (PR #109): the four runs of the dvc repro that pull request committed, made from the clean commit 96875d0
-# with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-12 on 7e7cc4c, whose dvc.lock is that run's (committed in cad5ac1); exit status 0.
+# with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-12 on bd74132, whose dvc.lock records the train and evaluate stages
+# as committed in cad5ac1 and compare-energy as redrawn in 0b7e434; exit status 0.
 
-HEAD 7e7cc4ce3412b0f4cae4a8f2194560a9c77593a3, tree clean, MD5 of its dvc.lock c732d376dfbc03d832fc46fadca94721
+HEAD bd74132e655f2f5844735f67a69585e896321364, tree clean, MD5 of its dvc.lock 26b7d13ccf5357d0765ed4a1b1cd56d3
 
 b0: run b937b54e5c9b4543b1245ed599705f6d (b0, FINISHED)
     dvc_stage train@b0
