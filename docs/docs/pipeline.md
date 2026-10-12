@@ -312,6 +312,8 @@ To get from a run back to what produced it:
 1. **Code and parameters:** `git checkout` the run's `git_commit`, or `evaluate.git_commit` for the evaluation.
    With `git_dirty: false` the code there is what ran, and every code file has the hash its `deps` tag records, which is the plain `md5sum` of its bytes; `params.yaml` at that commit is what the stage read.
    The commit is the one the pipeline ran from, on the branch of its pull request, so after the squash merge it is reachable through the pull request (`git fetch origin pull/<n>/head`) rather than from `main`.
+   That holds only while the commit stays on the branch: a run's `git_commit` tag names a commit of the branch the run was made on, and a rebase replaces that commit with a copy the tag does not name.
+   So a branch is not rebased after a tracked run, it is brought up to date by merging `main` into it, or the tracked run is made last.
 2. **Data:** a data dependency's hash is its address in the DVC cache and on the remote, so it identifies the input whatever happened to the commits.
    `git log --reverse --format=%H -S <hash> -- dvc.lock` lists the commits that added or removed the hash in the lock, oldest first; the first one added it, and its lock records the input.
    `git checkout` that commit and `dvc pull <path>` restores the file or directory.

@@ -420,7 +420,7 @@ The energy metrics are `energy_kwh` (with its `cpu_energy_kwh` and `ram_energy_k
 Every run is tagged with `variant`, `estimator`, `feature_set` and `dvc_stage`, and - by the tracking seam, for NFR-14 - with what produced it: `git_commit` and `git_dirty` for the fit, one `train.deps.<path>` per dependency of its `train` stage holding the hash `dvc.lock` records for it, and the same for the evaluation that appended to it, `evaluate.git_commit`, `evaluate.git_dirty` and `evaluate.deps.<path>` (EDN-74).
 [The DVC pipeline](pipeline.md#from-a-run-to-its-inputs) says what each tag identifies and how to get from a run back to its code, data and parameters.
 The ladder this card reports is four runs of the `recommenditos-price` experiment, one per variant, produced by the `dvc repro` whose lock is committed.
-They were fitted on 2026-10-12 at commit `96875d0` (pull request #109), and the run id in each `models/<variant>/model.json` names them.
+They were fitted on 2026-10-12 at commit `96875d0`, on the branch of pull request #109, and the run id in each `models/<variant>/model.json` names them.
 The comparable view of one pipeline state is the experiment's own table filtered to that state's commit:
 
 ```
@@ -432,15 +432,16 @@ That filter is what picks one chain out of the experiment: the four runs of a `d
 Two things about it are worth knowing before the filter is believed, both checked on this ladder rather than assumed:
 
 - **The commit is the one the pipeline ran from, not the one that holds its lock.**
-  `dvc repro` runs at a commit and its `dvc.lock` and metrics are committed after it, so the runs name the parent of the commit that records them, and `tags.git_dirty` is `false` for all four: what DVC writes while it runs does not count as a change.
-  The commit is on the branch of the pull request that re-ran the pipeline, so after the squash merge it is reached through that pull request.
+  `dvc repro` runs at a commit and its `dvc.lock` and metrics are committed after it, so the runs carry the commit they were made from, which is an earlier commit of the same branch than the one that records them: `96875d0` for this ladder, two commits before `cad5ac1`, which holds its lock.
+  `tags.git_dirty` is `false` for all four: what DVC writes while it runs does not count as a change.
+  That commit is on the branch of pull request #109 and not on `main`, so after the squash merge it is reached through the pull request (`git fetch origin pull/109/head`).
 - **The input tags are what ties a run to the committed lock.**
   For each of the four runs, every `train.deps.<path>` equals the hash the committed `dvc.lock` records for that dependency of `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks that against the server, and its output is committed beside it.
   Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the last ladder made before that date were tagged dirty only because DVC had rewritten `dvc.lock` under them.
 
 The experiment also holds runs that are **not** pipeline runs: the test suite trains the same four variants on the synthetic fixture, and it logs to this experiment whenever a `.env` is present, under the same four run names.
 Their metrics are an order of magnitude worse and they carry a different commit; they also carry no `train.deps.<path>` tags, because DVC did not run them, so since 2026-10-05 a run without those tags is not a pipeline run and its numbers are not the model's.
-A pipeline run is not always a committed one either: the ladder was fitted a second time on 2026-10-12, at commit `8301e07` and on a busier laptop, and the first pass was kept, so the commit above and the run ids in `models/<variant>/model.json` are what name the committed chain.
+A pipeline run is not always a committed one either: the ladder was fitted a second time on 2026-10-12, at commit `8301e07` of the same branch and on a busier laptop, and the first pass was kept, so the commit above and the run ids in `models/<variant>/model.json` are what name the committed chain.
 
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
@@ -459,7 +460,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 
 | Property | Target | Measured |
 |---|---|---|
-| Training time, chosen configuration, hyperparameter search not included | at most 15 minutes on a laptop CPU (NFR-10) | **12.4 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 42.4 s for `lgbm-extended` (1,697 rounds), 58.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-12, on a laptop that other work kept busy). Read as an order of magnitude and not a benchmark: fits of the identical two models between 2026-10-05 and 2026-10-12 took 8.0 s to 19.1 s and 26.4 s to 58.5 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` at the rate EDN-70 measured, and about 125 s at this run's |
+| Training time, chosen configuration, hyperparameter search not included | at most 15 minutes on a laptop CPU (NFR-10) | **12.4 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 42.4 s for `lgbm-extended` (1,697 rounds), 58.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-12, on a laptop that other work kept busy). Read as an order of magnitude and not a benchmark: fits of the identical two models between 2026-10-05 and 2026-10-12 took 8.0 s to 19.1 s and 27.1 s to 58.5 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` at the rate EDN-70 measured, and about 125 s at this run's |
 | Hyperparameter search | no budget: run once per tuning decision, outside `dvc repro`, and reported apart from the final fit (NFR-10, EDN-78) | **391.3 s** of fitting and 3.6071 Wh for the 34 fits of issue #88's search: 112.3 s and 1.0864 Wh over 17 fits for `lgbm-basic`, 279.1 s and 2.5207 Wh over 17 fits for `lgbm-extended`, at `num_threads: 1` on an i7-1360P laptop, so its fit times are not comparable with the i5-10210U figures above (the `results/` record of each sweep's summary run in MLflow) |
 | Model artefact on disk | no target | 7.6 MB (`booster.txt`, 1,243 trees) for the candidate, 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
@@ -558,7 +559,7 @@ What the ladder says, and what it does not:
   What they cost is linear in the trees: 1.3x and 1.7x the boosting rounds and so the fit, 6.2 to 7.6 MB and 6.8 to 10.9 MB of booster, and one row's native SHAP export from 18.9 to 26.1 ms and from 22.3 to 35.4 ms.
   So the 1,000-tree models were a hair short of where their validation curve flattens, not far from it, and the pooled numbers this card used to quote were not a materially pessimistic bound.
   `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was distinguishable from them (EDN-73), and issue #88's search, over both variants and `min_child_samples` as well, kept every value for the same reason (EDN-78, under [Hyperparameters as trained](#hyperparameters-as-trained)).
-- The whole four-variant ladder trains in **58.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models between 2026-10-05 and 2026-10-12, with identical trees, took 8.0 s to 19.1 s and 26.4 s to 58.5 s against 12.4 s and 42.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
+- The whole four-variant ladder trains in **58.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models between 2026-10-05 and 2026-10-12, with identical trees, took 8.0 s to 19.1 s and 27.1 s to 58.5 s against 12.4 s and 42.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
 
 #### Reference values
 
@@ -611,7 +612,8 @@ The ranking and the ratios survive: `lgbm-extended` costs 2.97 times `lgbm-basic
 One variant's package energy varies by a factor of 1.3 to 2.1 between repeats, so only medians are quoted.
 
 The table is the tracked ladder run of 2026-10-12 on the i5-10210U laptop (8 logical CPUs, 15 GB RAM), whose trees are byte-identical to those of the run of 2026-10-06 it replaces.
-The laptop was under other load during the fits, a 1-minute load average of 10 to 12 on its 8 logical CPUs, and fit time and energy vary with that from run to run: `lgbm-basic` took 12.42 s here, 19.08 s in a second pass a few minutes later that was not kept, and 9.25 s on 2026-10-06.
+The laptop was under other load during the fits: the committed table records a machine-wide CPU utilisation (`machine_cpu_utilization_pct`) of 40.0 % and 51.8 % during the two LightGBM fits, against 18.1 % and 32.0 % in the run of 2026-10-06.
+Fit time and energy vary with that from run to run: `lgbm-basic` took 12.42 s here, 19.08 s in a second pass a few minutes later that was not kept, and 9.25 s on 2026-10-06.
 The hyperparameter search of issue #88 kept every value, so it is also the cost of the final configuration.
 
 | Variant | Fit time | Energy | Emissions | MdAPE, every field given | MdAPE, only the fields FR-01 requires |
@@ -650,7 +652,7 @@ Either way it is a one-off cost of choosing the values, paid once per tuning dec
 | **Hours used** | Target: at most 15 minutes per training run of the chosen configuration; a hyperparameter search is reported apart (NFR-10, EDN-78). Measured on the tracked run of 2026-10-12: 12.4 s of fitting for the candidate `lgbm-basic`, 58.0 s for the whole ladder; issue #88's search, outside the budget, took 391.3 s of fitting on another laptop. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-70) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
-| **Carbon emitted** | 0.216 Wh and 37.7 mg CO2eq for the whole ladder on 2026-10-12, the configuration the hyperparameter search kept, per variant in the table above, plus 3.6071 Wh and 627.81 mg CO2eq once for the search itself: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
+| **Carbon emitted** | 0.216 Wh and 37.7 mg CO2eq for the whole ladder on 2026-10-12, measured while other work loaded the laptop (0.157 Wh on 2026-10-06 for identical trees), the configuration the hyperparameter search kept, per variant in the table above, plus 3.6071 Wh and 627.81 mg CO2eq once for the search itself: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
 
 Serving energy is reported as an average per answer from the load test, not per individual request: CodeCarbon's granularity does not match single-digit-millisecond events, and a per-request tracker would eat into the latency budget of NFR-02.
 Whether the VM exposes an energy counter is not known yet, so on the VM the figure is expected to be an estimate of the same kind.
