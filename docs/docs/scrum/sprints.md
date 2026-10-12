@@ -99,7 +99,7 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
   (`recommenditos/data/{download_raw_dataset,preprocess,validate_data,split_data,build_features}.py`
   and `recommenditos/modeling/{train,evaluate}.py`) rather than the flat Cookiecutter layout. It is
   the structure the course demonstrates, it makes the `deps` in `dvc.yaml` precise, and it gives
-  every ticket its own file. The EDN entry for this deviation is still to be written.
+  every ticket its own file. The deviation is recorded in EDN-28.
 - **Four deliberate additions beyond the demo**, each to be defended in the report: `params.yaml`
   instead of configuration in `config.py`; an `evaluate` stage writing `metrics.json` instead of a
   threshold hidden in a test; a `features` stage, which the demo's text model does not need; and a
@@ -107,7 +107,7 @@ for #32 only. #44 sits in the backlog column: writing starts 2026-10-08 at the l
 - **NFR-11 restated** at a window of 1,000 requests with `model` excluded from the drift comparison,
   after measuring that neither change works on its own (EDN-26).
 - **A working rule for coding agents**, written into the [working agreements](working-agreements.md).
-  Its EDN entry follows before the first delivery.
+  The decision and how the rule has been practised are recorded in [EDN-81](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 
 **Known risks carried into the sprint:**
 
