@@ -19,7 +19,7 @@
 }
 
 \paragraph{How the problem was selected.}
-We had four ideas in the first sprint: a used-car price component, a route-safety model, a recommender and a grocery idea.
+We had four ideas before the first sprint: a used-car price component, a route-safety model, a recommender and a grocery idea.
 We chose the used-car price component because it sounded the most feasible and interested the team; we did not compare the four ideas in depth (EDN-80).
 What we did check, against the real data, was that the idea is feasible.
 That check also gave us the dataset (EDN-01) and the scope rules of \cref{sec:goal} (EDN-04, EDN-05).
@@ -149,7 +149,7 @@ The board is linked on the cover.
   \item \textbf{Ceremonies.} A sprint runs from Tuesday to Tuesday. Planning, review and retrospective take place in the Tuesday laboratory session, the only time the whole team is in one room. We have no daily standup.
   \item \textbf{Tickets.} Every issue has an owner, a milestone label (\texttt{M1} to \texttt{M6}) and an area label such as \texttt{area:data}. Sprint~1 had no labels until its last day, so we now add them when the issue is written.
   \item \textbf{Written process.} \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}} hold the roles, the Definition of Done and the working agreements.
-  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 76 engineering decisions taken so far are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
+  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 79 engineering decisions taken so far are recorded with their alternatives in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}}.
 \end{itemize}
 
 \begin{table}[ht]
@@ -171,9 +171,9 @@ The board is linked on the cover.
 
 \paragraph{Coding agents.}
 Coding agents write most of the code, under a rule in our working agreements (EDN-81).
-The rule is that an independent agent with a fresh context reviews every substantive change.
-Branch protection adds the nine required CI checks of \cref{tab:ci-checks} before a merge.
-People decide the questions that go into the EDN and are accountable for the merge.
+In the rule's words, an independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge (\cref{tab:ci-checks} lists the nine).
+A person decides the questions that belong in the EDN and is accountable for the change.
+The team confirms this wording at the laboratory session of 13 October 2026.
 A second person reviewed 2 of the 56 pull requests merged by 11 October 2026.
 
 \subsubsection{Selection of the cloud provider}
@@ -187,11 +187,11 @@ A second person reviewed 2 of the 56 pull requests merged by 11 October 2026.
 We deploy on the FIB Virtech virtual machine that the course provides (EDN-17).
 The course lists four free alternatives: AWS, Azure, GCP and Okteto.
 
-Memory decided the choice.
+Memory decided the choice, together with the fact that the course provides the machine.
 Our stack is an API container, Prometheus, Grafana and a scheduled drift job, which does not fit into the 1\,GB and 0.6\,GB of the AWS and GCP free tiers.
-Okteto offers 3\,GB and Azure between 1 and 4\,GB, depending on the instance.
-The FIB machine has 4\,GB of memory and 20\,GB of disk, and it is free for the semester the project runs.
-The course provides it, so nobody needs a personal cloud account with payment details (EDN-17).
+Okteto offers 3\,GB and Azure between 1 and 4\,GB, depending on the instance, so neither has more memory than the 4\,GB of the FIB machine.
+The FIB machine also has 20\,GB of disk and is free for the semester the project runs.
+Because the course provides it, nobody needs a personal cloud account with payment details (EDN-17).
 
 NFR-04 gives the machine a budget: the API container stays below 1\,GB of memory, the drift job runs in its own container, and the metrics and logs are capped so that the disk cannot fill up.
 NFR-12 keeps the choice reversible: the system starts on a fresh machine with one command and needs no paid service, so nothing in the serving path depends on this provider.

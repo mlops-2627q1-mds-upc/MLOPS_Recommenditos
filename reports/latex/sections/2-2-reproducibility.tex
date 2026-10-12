@@ -98,13 +98,14 @@ Each member's credentials are in \texttt{.dvc/config.local}, which Git ignores.
 
 The pipeline is defined in \texttt{dvc.yaml} (\cref{fig:pipeline}), and the committed \texttt{dvc.lock} records the hash of every input, parameter and output.
 A Git commit therefore identifies the code, the data and the parameters together, and \texttt{dvc pull} restores the artefacts that belong to it.
+\texttt{dvc.lock} is reproducible only within one toolchain, because a Parquet file changes with the versions of the libraries that write it.
 
 % figures/pipeline.pdf is drawn from dvc.yaml by figures/pipeline.sh; rerun it
 % after a change to the stages.
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth]{pipeline}
-  \caption{The DVC pipeline as \texttt{dvc dag} draws it from \texttt{dvc.yaml}. The \texttt{features} and \texttt{train} stages exist once per model variant.}
+  \caption{The DVC pipeline as \texttt{dvc dag} draws it from \texttt{dvc.yaml}. The \texttt{features} stage exists once per feature set and the \texttt{train} stage once per model variant.}
   \label{fig:pipeline}
 \end{figure}
 
@@ -112,7 +113,7 @@ Three properties of the pipeline go beyond the course demo:
 
 \begin{itemize}
   \item \textbf{Raw data.} The \texttt{download} stage fetches the file from the Zenodo DOI and refuses it unless its MD5 equals the checksum Zenodo publishes (EDN-36). We keep no copy of the published CSV.
-  \item \textbf{Parameters.} Each stage lists only the \texttt{params.yaml} keys it reads, and the \texttt{features} and \texttt{train} stages are generated once per variant with \texttt{foreach}. Changing the hyperparameters of one variant retrains only that variant (EDN-30).
+  \item \textbf{Parameters.} Each stage lists only the \texttt{params.yaml} keys it reads, and \texttt{foreach} generates the \texttt{features} stage once per feature set and the \texttt{train} stage once per variant. Changing the hyperparameters of one variant retrains only that variant (EDN-30).
   \item \textbf{Synthetic data.} With \texttt{download.source} set to \texttt{synthetic}, the \texttt{download} stage generates a dataset with the same schema, and \texttt{dvc repro} runs on a clean clone without the 548.6\,MB file and without DagsHub access (EDN-33). The tests use the same generator, so no real listing is committed to Git. \texttt{metrics.json} records which source produced it.
 \end{itemize}
 
@@ -120,10 +121,8 @@ The \texttt{validate-data} stage is a gate inside the pipeline, which \cref{sec:
 
 \paragraph{Scalability.}
 A new snapshot is a change of three parameters, the Zenodo record, the file name and its checksum; DVC then reruns the pipeline, and the list of supported makes is computed from the new data.
-DVC caches the output of every stage and pushes it to the remote once, so a change reruns only the stages it affects, and a new model variant adds its own \texttt{features} and \texttt{train} stage without rerunning the others.
+DVC caches each stage's data and models and pushes them to the remote once, while Git tracks the small report files, so a change reruns only the stages it affects; a new model variant adds a \texttt{train} stage, and a \texttt{features} stage only when it brings a new feature set.
 Every stage holds its data in memory with pandas, which is enough for 118,382 rows and would be the first limit for a much larger dataset.
-
-\texttt{dvc.lock} is reproducible only within one toolchain, because a Parquet file changes with the versions of the libraries that write it.
 
 % Experiment tracking, owned by @ulasawczuk.
 \input{sections/2-2b-experiment-tracking}

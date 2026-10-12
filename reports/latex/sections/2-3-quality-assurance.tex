@@ -59,8 +59,8 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 \end{figure}
 
 \paragraph{Feature sets.}
-\texttt{lgbm-extended} needs 3.0 times the energy of \texttt{lgbm-basic}.
-The accuracy comparison in \cref{sec:m2-experiment-tracking} already favours \texttt{lgbm-basic}, and \cref{fig:energy} adds that the extended features are also the most expensive ones, so they do not earn their energy (EDN-62).
+\texttt{lgbm-extended} needs 3.0 times the energy of \texttt{lgbm-basic} for 0.55 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given (\cref{fig:energy}).
+The extended features therefore do not earn their energy, which together with SC-06 is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
 The whole ladder takes 42 seconds of fitting and 0.157\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
@@ -77,6 +77,7 @@ That is about 23 times the whole ladder; the two were measured on different mach
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
 
+\paragraph{Serving.}
 The energy of serving is not measured yet.
 We will report it in Milestone~4 as an average per answer over the load test, because CodeCarbon cannot resolve a single request of a few milliseconds.
 
