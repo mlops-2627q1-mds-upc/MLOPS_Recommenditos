@@ -297,9 +297,9 @@ Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recom
 - EDN-35: the `download` stage owns `data/raw/`, and the published CSV is a local cache outside the DAG.
 - EDN-36: the `dvc add` pointer of EDN-25 is retired, so we no longer host a copy of the raw CSV.
 
-Made in M1, still to be written up:
+The list above stops at EDN-36 and is not continued here: every later entry is in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), which is the complete record.
 
-- Project choice (car price vs. route safety, recommender and grocery ideas).
+The first decision of M1, the project choice, is EDN-80: the used-car price component sounded the most feasible of four ideas (the others were a route-safety model, a recommender and a grocery idea) and was chosen without a detailed comparison.
 
 **[open]**, to decide with the team:
 
