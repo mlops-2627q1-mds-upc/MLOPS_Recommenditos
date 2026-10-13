@@ -426,7 +426,7 @@ How to add an entry:
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Experiment Tracking
-- **Participants:** @lukas2510, on behalf of the team; confirmation by the full team is pending until the laboratory session of 2026-10-13
+- **Participants:** @lukas2510, on behalf of the team; confirmed by the full team at the laboratory session of 2026-10-13, where all five members also confirmed that they are members of the organisation and can push
 - **Decision:** The DVC remote and MLflow server is `recommenditos/MLOPS_Recommenditos` on DagsHub, owned by a DagsHub organisation of the team and connected through the GitHub integration.
   All five members have write access, granted per repository.
 - **Alternatives considered:**
@@ -453,7 +453,7 @@ How to add an entry:
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Privacy
-- **Participants:** @lukas2510; confirmation by the full team is pending until the laboratory session of 2026-10-13
+- **Participants:** @lukas2510; confirmed by the full team at the laboratory session of 2026-10-13
 - **Decision:** The DagsHub repository that serves as DVC remote and MLflow server stays public.
   The raw Parquet of the `download` stage keeps the seven personal-data columns of the published file and is pushed like any stage output; preprocessing removes them.
   `seller_group_id` is an unsalted hash that groups the split and anonymises nothing, as the dataset card says.
@@ -506,7 +506,7 @@ How to add an entry:
 - **Date:** 2026-09-26
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Pipeline Design
-- **Participants:** @W11W11W11 decided the `dvc add` form of 2026-09-26, @lukas2510 the current form of 2026-09-30; confirmation by the full team is pending until the laboratory session of 2026-10-13
+- **Participants:** @W11W11W11 decided the `dvc add` form of 2026-09-26, @lukas2510 the current form of 2026-09-30; the full team confirmed the current form at the laboratory session of 2026-10-13
 - **Decision:** The `download` stage fetches the pinned AutoScout24 CSV from its Zenodo record and writes `data/raw/listings.parquet`, its only output.
   The CSV stays a local cache under `data/external/`, and `download.md5` in `params.yaml` pins its bytes.
   We neither track nor host the CSV.

@@ -4,7 +4,7 @@ This file holds, word for word, the 42 entries that left [edn.md](edn.md) when t
 It is not part of the graded notebook: `make edn` does not read it and the PDF does not include it.
 It exists so that nothing is lost and an ID cited in an older commit, comment or document can still be looked up.
 The table "Retired and merged IDs" in [edn.md](edn.md#retired-and-merged-ids) says which entry a merged one lives on in and why a retired one was dropped.
-The entries are as they stood on `main` at commit `02e3544`; links between entries that pointed into edn.md no longer resolve here.
+The entries are as they stood on `main` at commit `d8392d6`; links between entries that pointed into edn.md no longer resolve here.
 Do not edit them.
 
 ## Archived entries
@@ -251,7 +251,7 @@ Do not edit them.
 - **Date:** 2026-09-30
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Personal Data
-- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Participants:** @lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.
 - **Decision:** `data/raw/listings.parquet`, the output of the `download` stage, keeps the seven PII columns of the published file and is cached and pushed to the DagsHub remote like any other stage output. No `push: false`, and no PII removal before preprocessing. Our public remote therefore holds the same personal data twice, once as the CSV of EDN-25 and once as this Parquet.
 - **Alternatives considered:**
   - **Option A (chosen): push it, which is DVC's default for a stage output.**
@@ -282,7 +282,7 @@ Do not edit them.
 - **Date:** 2026-09-30
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Pipeline Design
-- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Participants:** @lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.
 - **Decision:** The `download` stage owns `data/raw/`.
   Under `download.source: zenodo` it fetches the pinned file from the Zenodo record itself and writes `data/raw/listings.parquet` as its only output, so acquisition is inside the pipeline instead of a manual step beside it.
   The published CSV is kept as a local cache under `data/external/` and is neither a stage `out` nor a `dep`; `download.md5` in `params.yaml` is the dependency that pins the bytes, and the stage refuses to read a file that hashes to anything else.
@@ -334,7 +334,7 @@ Do not edit them.
 - **Date:** 2026-09-30
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Personal Data
-- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25 itself.
+- **Participants:** @lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.
 - **Decision:** Amends EDN-25, which had tracked the raw CSV with `dvc add` and pushed it to our DagsHub remote.
   The pointer `data/raw/autoscout24_dataset_20251108.csv.dvc` is deleted, the CSV is neither tracked nor pushed by us any more, and the `download` stage acquires it instead (EDN-35).
   The blob the pointer referenced is left on the remote untouched, so checking out an earlier commit and running `dvc pull` still works.

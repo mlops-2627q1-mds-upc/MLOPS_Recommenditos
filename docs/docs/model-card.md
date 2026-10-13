@@ -63,7 +63,7 @@ The same trained booster serves the point estimate, its explanation and, through
 
 - **Repository:** <https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos>
 - **Training data:** [dataset card](dataset-card.md)
-- **Experiment tracking:** MLflow on DagsHub, from Milestone 2 (**[proposed]**, EDN-19, pending confirmation by the full team).
+- **Experiment tracking:** MLflow on DagsHub, from Milestone 2 (**[decided]**, EDN-19, confirmed by the full team on 2026-10-13).
 - **Model artefact:** DVC-tracked pipeline output, baked into the API image at CI build time (FR-12, EDN-08).
 
 ### Model family **[decided, EDN-02]**

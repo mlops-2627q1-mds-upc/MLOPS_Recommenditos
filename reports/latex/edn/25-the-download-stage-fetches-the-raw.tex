@@ -7,7 +7,7 @@
   date = {2026-09-26},
   milestone = {M2: Reproducibility},
   topic = {Data Versioning, Pipeline Design},
-  participants = {@W11W11W11 decided the \texttt{dvc add} form of 2026-09-26, @lukas2510 the current form of 2026-09-30; confirmation by the full team is pending until the laboratory session of 2026-10-13},
+  participants = {@W11W11W11 decided the \texttt{dvc add} form of 2026-09-26, @lukas2510 the current form of 2026-09-30; the full team confirmed the current form at the laboratory session of 2026-10-13},
   decision = {The \texttt{download} stage fetches the pinned AutoScout24 CSV from its Zenodo record and writes \texttt{data/\allowbreak{}raw/\allowbreak{}listings.\allowbreak{}parquet}, its only output.
 The CSV stays a local cache under \texttt{data/\allowbreak{}external/\allowbreak{}}, and \texttt{download.\allowbreak{}md5} in \texttt{params.\allowbreak{}yaml} pins its bytes.
 We neither track nor host the CSV.
