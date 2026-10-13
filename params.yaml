@@ -226,6 +226,37 @@ validate:
   # that has lost a column.
   required_filled_mostly: 0.999
 
+# What a `/predict` request carries, as specification FR-01 states it (EDN-15).
+# A block of its own because more than one stage reads it and they must not come
+# to disagree about what is optional: `evaluate` masks the optional fields for
+# SC-06, `train` omits them in the copies a variant adds to its training rows
+# (EDN-82), and the API refuses a request without a required one.
+request:
+  # The fields `/predict` refuses a request without. Every *other input field*
+  # of a variant's feature set is optional, so this list is what decides which
+  # fields SC-06 masks, on their own and all at once, and which fields a blanked
+  # copy of a training row may omit.
+  required_input_fields:
+    - make
+    - model
+    - registration_date
+    - mileage_km_raw
+    - power_kw
+    - fuel_category
+    - transmission
+    - country_code
+    - body_type
+    - seller_type
+  # The feature column an API input field becomes, where the two differ. FR-01
+  # requires `registration_date`; the model consumes the derived `age_years`, so
+  # without this line the naive difference against the list above would make
+  # `age_years` look optional, and SC-06 and the blanked copies would omit the
+  # most important feature in the model. An equipment field needs no entry: which
+  # multi-hot columns it produced is what the training rows decided, so that is
+  # read from the vocabulary beside the matrices rather than from here.
+  input_field_to_feature:
+    registration_date: age_years
+
 train:
   # One MLflow experiment; each variant below is one run in it (#37).
   mlflow_experiment: recommenditos-price
@@ -306,6 +337,23 @@ train:
     lgbm-basic:
       estimator: lightgbm
       feature_set: basic
+      # Copies of every training row the fit adds, with optional input fields set
+      # to what an omitted field is (EDN-82): one with all of them omitted, which
+      # is the request that carries only what FR-01 requires, and one with a
+      # random subset omitted. Almost no listing leaves every optional field empty
+      # at once, 324 of the 60,378 training rows, so without the copies that
+      # request lies outside what the model saw. Measured on the validation split,
+      # they take its MdAPE there from 8.57 % to 7.19 % and cost nothing
+      # measurable on a complete request, and more copies gained nothing
+      # (reports/analysis/blanked_fields_results.txt). A key left out is no copy
+      # of that kind, and a variant that names no block is fitted on its rows alone.
+      #
+      # `lgbm-extended` names none. With the same copies it is better than this
+      # variant on most requests, but not on one that gives exactly this variant's
+      # six optional fields, which the rule fixed before the measurement excludes.
+      blanked_copies:
+        all: 1
+        random: 1
       params:
         # Searched and kept, on evidence rather than by omission: a 12-point grid
         # of these two around their values is flat on the validation split, and no
@@ -316,6 +364,8 @@ train:
         # 88-lgbm-basic-min-child-samples). A new value goes through the
         # protocol in docs/docs/pipeline.md, "Tuning a hyperparameter", whose
         # decision step is `python -m recommenditos.modeling.tune` (EDN-73).
+        # Those searches fitted on the training rows as they are. The values were
+        # not searched again with the blanked copies above.
         learning_rate: 0.05
         num_leaves: 63
         # `min_child_samples` is not named here on purpose: it is an optional key at
@@ -325,9 +375,9 @@ train:
         # A ceiling for early stopping, not a tree count: early stopping on the
         # validation split decides how many trees the model keeps (EDN-73). At
         # 1,000 the ceiling decided instead, for both LightGBM variants. With no
-        # ceiling in reach, early stopping chooses round 1,243 here and 1,647 for
+        # ceiling in reach, early stopping chose round 1,243 here and 1,647 for
         # `lgbm-extended` (reports/analysis/early_stopping_ceiling_results.txt,
-        # 2026-10-05).
+        # 2026-10-05); with the blanked copies above this variant stops at 1,394.
         #
         # 5,000 rather than higher, because the ceiling is also the worst case of
         # every cost that grows with the trees. Measured per tree on the real
@@ -378,31 +428,6 @@ evaluate:
   price_bucket_edges: [0, 5000, 10000, 20000, 40000, 80000]
   # The model variant SC-03 compares against.
   baseline_variant: b0
-  # The fields specification FR-01 requires of `/predict` (EDN-15). SC-06 masks
-  # every *other input field* of the evaluated variant's feature set, on its own
-  # and all at once, so this list is what decides which fields the criterion
-  # covers. The API reads the same list, so the two cannot disagree about what is
-  # optional.
-  required_input_fields:
-    - make
-    - model
-    - registration_date
-    - mileage_km_raw
-    - power_kw
-    - fuel_category
-    - transmission
-    - country_code
-    - body_type
-    - seller_type
-  # The feature column an API input field becomes, where the two differ. FR-01
-  # requires `registration_date`; the model consumes the derived `age_years`, so
-  # without this line the naive difference against the list above would make
-  # `age_years` look optional and SC-06 would mask the most important feature in
-  # the model. An equipment field needs no entry: which multi-hot columns it
-  # produced is what the training rows decided, so `evaluate` reads that from the
-  # vocabulary in the model bundle rather than from here.
-  input_field_to_feature:
-    registration_date: age_years
   # The partial-input scenario P1 of SC-05 and FR-02, as the exact field list two
   # requirements and one criterion depend on. Everything else is masked.
   sc05_p1_fields:

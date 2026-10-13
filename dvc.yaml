@@ -265,6 +265,12 @@ stages:
         - train.num_threads
         - train.energy
         - train.variants.${key}
+        # The request contract: it says which input fields are optional, and those
+        # are what a variant that names `blanked_copies` omits in the copies of its
+        # training rows (EDN-82). A stage's params cannot be conditional, so a
+        # change to it retrains every variant, also the ones that add no copy and
+        # refit to the same trees.
+        - request
       outs:
         - models/${key}
         - reports/emissions/${key}.csv:
@@ -301,6 +307,8 @@ stages:
       # the recorded value from being able to disagree with the lock.
       - download.source
       - train.variants
+      # The request contract, which says which input fields SC-06 masks.
+      - request
       - evaluate
     outs:
       # The full per-variant record, plus the per-segment table and the masking

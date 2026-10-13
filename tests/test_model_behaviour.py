@@ -157,9 +157,9 @@ _REAL_CARS = {
 
 def _required_features() -> set[str]:
     """The features a request always carries: FR-01's fields, as the matrix names them."""
-    evaluate = project_params()["evaluate"]
-    renamed = evaluate["input_field_to_feature"]
-    return {renamed.get(field, field) for field in evaluate["required_input_fields"]}
+    request = project_params()["request"]
+    renamed = request["input_field_to_feature"]
+    return {renamed.get(field, field) for field in request["required_input_fields"]}
 
 
 def _smallest_request(model: Model, row: pd.DataFrame) -> pd.DataFrame:
@@ -248,7 +248,7 @@ _NEGLIGIBLE_STEPS = {
 #: is a step function: a car standing on a split crosses it with one kilometre,
 #: so some predictions move whatever the fit. One percent is a seventh of the
 #: main model's median error. Measured on 2026-10-13 over the 8,859 real
-#: validation rows, ten kilometres move 2.8 % of the predictions of `lgbm-basic`
+#: validation rows, ten kilometres move 3.4 % of the predictions of `lgbm-basic`
 #: by more than that and 1.6 % of `lgbm-extended`'s.
 _UNMOVED_WITHIN = 0.01
 _MOVED_SHARE = 0.05

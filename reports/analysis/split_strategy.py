@@ -57,7 +57,7 @@ from recommenditos.data import build_features, split_data
 from recommenditos.data.build_features import age_years, read_supported_makes
 from recommenditos.data.split_data import SPLIT_NAMES, assign_split
 from recommenditos.modeling import evaluate
-from recommenditos.modeling.model import Model, fit_variant
+from recommenditos.modeling.model import Model, RequestContract, fit_variant
 from recommenditos.modeling.train import read_matrices
 from recommenditos.pipeline import load_params, read_frame
 
@@ -275,7 +275,10 @@ def measure(seed: int) -> dict:
         tick = time.perf_counter()
         split_data.main(INTERIM_DATA_DIR / "listings.parquet", root / "processed", split_params)
         build_features.main(feature_set, root / "processed", root / "processed" / "features", PARAMS_FILE)
-        data = read_matrices(root / "processed" / "features", feature_set, read_supported_makes(root / "processed"))
+        # With the request contract, as the `train` stage reads them, so the candidate is fitted
+        # with the blanked copies of its training rows it has had since EDN-82.
+        data = read_matrices(root / "processed" / "features", feature_set, read_supported_makes(root / "processed"),
+                             request=RequestContract.from_params(params))
         prepared = time.perf_counter() - tick
         tick = time.perf_counter()
         model = fit_variant(VARIANT, settings, data, seed=committed_seed, num_threads=params["train"]["num_threads"])

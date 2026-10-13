@@ -623,7 +623,7 @@ How to add an entry:
 
 ### EDN-32: The split is 60/10/10/20 by seller, with the snapshot date as seed
 
-> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept.
+> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept; spread re-measured 2026-10-13 (EDN-82).
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
@@ -637,8 +637,8 @@ How to add an entry:
   - A stratified-group split on `make`: better make balance, but about half of the existing rows change set when the `ES` listings join, which confounds FR-15's retrain comparison.
 - **Rationale:** SC-04 checks a segment only from 500 test rows, so the test share decides how many makes the quality gate covers.
   The seed is the snapshot date, so it is obviously not tuned.
-  Over 20 other splits the candidate's test MdAPE is 6.73 % on average, with a standard deviation of 0.27 pp, and SC-01 and SC-02 hold on all 20.
-  Cars older than 20 years miss SC-04 on all 20 as well, at 18.3 % on average, so that miss is no artefact of the draw.
+  Over 20 other splits the candidate's test MdAPE is 6.72 % on average, with a standard deviation of 0.26 pp, and SC-01 and SC-02 hold on all 20.
+  Cars older than 20 years miss SC-04 on all 20 as well, at 18.2 % on average, so that miss is no artefact of the draw.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found a coupling the ticket did not mention: the published per-make analysis assumed a 20 % test share while the split was still unpinned.
@@ -810,6 +810,8 @@ How to add an entry:
 
 ### EDN-62: `lgbm-basic` is the candidate model
 
+> **Revised on 2026-10-13**: `lgbm-basic` is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.
+
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
@@ -821,7 +823,7 @@ How to add an entry:
   - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
   - One model for complete requests and the other for partial ones: two models and a routing rule; left open for the deployment milestone.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
-- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.21 times; the bound is 1.5.
+- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.02 times (1.21 when this was decided); the bound is 1.5.
   On that request the ranking of the two reverses.
   The extended features also make the over-20 segment worse, so they are no remedy for SC-04.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
@@ -987,6 +989,31 @@ How to add an entry:
   On 2026-10-12 AI measured the numbers above, found that the review rule and the trace disagreed, and recommended the rewording, which @lukas2510 chose.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-21, 2026-09-29 and 2026-10-12.
 - **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95), [PR #101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101#issuecomment-6124299563), `gh pr list` and the branch protection of `main`, read on 2026-10-12.
+- **In LaTeX:** yes
+
+### EDN-82: `lgbm-basic` is trained on blanked copies of its listings
+
+> **Revised on 2026-10-13**: first recorded as a measurement only; the adoption followed the same day.
+
+- **Date:** 2026-10-13
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Modelling Approach, Model Evaluation
+- **Participants:** @kadameit proposed the measurement ([issue #116](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/116)); @lukas2510 decided
+- **Decision:** `lgbm-basic`, the candidate, is fitted on its training rows plus two copies of each with optional input fields set to what an omitted field is: one with all six omitted and one with a random subset.
+  `lgbm-extended` is trained as before and does not become the candidate.
+- **Alternatives considered:**
+  - `lgbm-extended` with the copies as the candidate: better on most requests, but worse than `lgbm-basic` as then trained on one giving exactly the basic set's six fields (7.12 % against 6.96 % validation MdAPE), which the rule fixed before the measurement excludes.
+  - Serving both models, routed by how full a request is: two models, a threshold, and still 8.57 % on a required-only request.
+  - No change before the first delivery: the candidate stays worse than necessary on a request FR-01 allows.
+- **Rationale:** All six optional fields are empty together in 324 of 60,378 training rows, so a required-only request was almost absent from what the model saw.
+  With the copies its validation MdAPE on that request falls from 8.57 % to 7.19 %, and no tested request is measurably worse.
+  The test split, read once after the decision, agrees: 8.26 % to 6.86 % there, 6.81 % to 6.73 % on a complete request, and SC-06 at 1.02 times instead of 1.21.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, measured and recommended this option, which @lukas2510 took.
+  Independent agents reviewed the protocol before the fits, adding the condition that excluded `lgbm-extended`, and the code before the pipeline run; no person did.
+- **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: measurement, three options, recommendation.
+- **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), [PR #121](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/121), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs

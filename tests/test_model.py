@@ -75,6 +75,7 @@ from recommenditos.modeling.evaluate import (
 )
 from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
+    BLANKED_COPY_KINDS,
     ESTIMATORS,
     MISSING_LEVEL,
     MODEL_FILE,
@@ -82,6 +83,7 @@ from recommenditos.modeling.model import (
     MedianBaselineModel,
     Model,
     ModelError,
+    RequestContract,
     TrainingData,
     fit_variant,
     load_model,
@@ -451,7 +453,7 @@ def test_predict_eur_does_not_raise_with_every_optional_field_absent(
     destroying the values in the rows beside it.
     """
     model = trained["models"][variant]
-    required = set(project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
+    required = set(project_params()["request"]["required_input_fields"]) | {"age_years"}
     masked = model.mask_absent(
         test_frames[model.feature_set],
         [name for name in model.features if name not in required],
@@ -773,7 +775,12 @@ def test_training_is_reproducible(
     that holds inside one.
     """
     settings = train_variants()[variant]
-    data = train.read_matrices(matrices["features"], settings["feature_set"], supported_makes)
+    data = train.read_matrices(
+        matrices["features"],
+        settings["feature_set"],
+        supported_makes,
+        request=RequestContract.from_params(project_params()),
+    )
     seed = project_params()["seed"]
 
     again = fit_variant(variant, settings, data, seed=seed, num_threads=1)
@@ -796,7 +803,12 @@ def test_the_payload_of_a_refit_is_byte_identical(
     payload is what has to be, and it is the whole of the fitted model.
     """
     for variant, settings in train_variants().items():
-        data = train.read_matrices(matrices["features"], settings["feature_set"], supported_makes)
+        data = train.read_matrices(
+            matrices["features"],
+            settings["feature_set"],
+            supported_makes,
+            request=RequestContract.from_params(project_params()),
+        )
         digests = []
         for attempt in ("first", "second"):
             model = fit_variant(variant, settings, data, seed=17, num_threads=1)
@@ -1624,6 +1636,13 @@ def test_a_run_records_every_parameter_its_stage_declares(
         for key, value in ESTIMATORS[estimator].optional_hyperparameters.items()
         if f"{estimator}.{key}" not in expected
     }
+    # The same for the copies of its training rows a variant adds (EDN-82): one
+    # that names none logs zero of each kind, so every run says which it is.
+    optional |= {
+        f"blanked_copies.{kind}": "0"
+        for kind in BLANKED_COPY_KINDS
+        if f"blanked_copies.{kind}" not in expected
+    }
     logged = dict(run.data.params)
     assert {name: logged.get(name) for name in optional} == optional
     assert set(logged) - set(expected) - set(optional) == NOT_DECLARED_TRAIN_PARAMS, (
@@ -1855,7 +1874,7 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
     JSON, which is why this builds a dict instead of calling `Model.mask_absent`
     on a frame: the values have to survive the trip through `pd.DataFrame`.
     """
-    required = set(project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
+    required = set(project_params()["request"]["required_input_fields"]) | {"age_years"}
     row = {}
     for name in model.features:
         column = schema.column(name)
@@ -2443,7 +2462,7 @@ def test_the_segments_of_the_real_params_are_all_required_input_fields(params):
 #: The optional fields of the basic set, which EDN-15 fixes at six: everything
 #: FR-01 does not require. `age_years` must not be among them - FR-01 requires
 #: `registration_date` and the model consumes the derived column - and that is
-#: the whole reason `evaluate.input_field_to_feature` exists.
+#: the whole reason `request.input_field_to_feature` exists.
 _BASIC_OPTIONAL_FIELDS = (
     "cylinders_volume_cc",
     "drive_train",
@@ -2497,10 +2516,10 @@ def test_a_required_field_the_model_has_no_column_for_is_refused(trained, params
             trained["models"]["b0"],
             {
                 **params,
-                "evaluate": {
-                    **params["evaluate"],
+                "request": {
+                    **params["request"],
                     "required_input_fields": [
-                        *params["evaluate"]["required_input_fields"],
+                        *params["request"]["required_input_fields"],
                         "sunroof",
                     ],
                 },
@@ -2517,8 +2536,8 @@ def test_a_derived_mapping_that_names_a_column_the_model_consumes_is_refused(tra
             trained["models"]["b0"],
             {
                 **params,
-                "evaluate": {
-                    **params["evaluate"],
+                "request": {
+                    **params["request"],
                     "input_field_to_feature": {"make": "age_years"},
                 },
             },
@@ -2535,10 +2554,10 @@ def test_a_column_claimed_by_two_input_fields_is_refused(trained, params):
             model,
             {
                 **params,
-                "evaluate": {
-                    **params["evaluate"],
+                "request": {
+                    **params["request"],
                     "input_field_to_feature": {
-                        **params["evaluate"]["input_field_to_feature"],
+                        **params["request"]["input_field_to_feature"],
                         "sunroof": equipment_column,
                     },
                 },

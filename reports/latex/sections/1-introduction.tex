@@ -43,12 +43,12 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
     \toprule
     & Criterion, measured on the test split & Bound & \texttt{lgbm-basic} & \\
     \midrule
-    SC-01 & MdAPE & $\le$ 9\,\% & 6.81\,\% & met \\
-    SC-02 & Predictions within $\pm$20\,\% of the asking price & $\ge$ 85\,\% & 89.8\,\% & met \\
-    SC-03 & MdAPE reduction against baseline B0 & $\ge$ 30\,\% & 44.0\,\% & met \\
-    SC-04 & MdAPE in every level of make, country, seller type, fuel category and age band with at least 500 test rows & $\le$ 15\,\% & 16.77\,\% & missed \\
+    SC-01 & MdAPE & $\le$ 9\,\% & 6.73\,\% & met \\
+    SC-02 & Predictions within $\pm$20\,\% of the asking price & $\ge$ 85\,\% & 90.0\,\% & met \\
+    SC-03 & MdAPE reduction against baseline B0 & $\ge$ 30\,\% & 44.6\,\% & met \\
+    SC-04 & MdAPE in every level of make, country, seller type, fuel category and age band with at least 500 test rows & $\le$ 15\,\% & 16.80\,\% & missed \\
     SC-05 & Coverage of the 90\,\% price intervals of UC2 & 88--92\,\% & -- & not measured \\
-    SC-06 & MdAPE with optional input fields missing, relative to the MdAPE with every field given & $\le$ 1.5 & 1.21 & met \\
+    SC-06 & MdAPE with optional input fields missing, relative to the MdAPE with every field given & $\le$ 1.5 & 1.02 & met \\
     \bottomrule
   \end{tabularx}
   \caption{The success criteria and the result of the candidate model on the 19,665 test rows (\texttt{metrics.json}, \texttt{reports/metrics/lgbm-basic.json}). For SC-04 and SC-06 the table shows the worst case.}
@@ -58,13 +58,13 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
 \paragraph{Result.}
 No model passes the gate, so no model is released.
 The candidate \texttt{lgbm-basic} meets SC-01, SC-02, SC-03 and SC-06.
-It misses SC-04 in one of the 26 segments the criterion checks: its MdAPE is 16.77\,\% on the 784 test cars older than 20 years, while the next segment is at 10.2\,\%.
+It misses SC-04 in one of the 26 segments the criterion checks: its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next segment is at 10.4\,\%.
 SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented.
 We accept the miss as a limitation of this model and did not move the bound to make it pass (EDN-62).
 
 The verdicts on SC-01, SC-02 and SC-04 do not depend on the seed of the seller-grouped split.
-We refitted the candidate on 20 other split seeds: the test MdAPE was 6.73\,\% on average with a standard deviation of 0.27 percentage points, against 6.81\,\% on the committed split.
-SC-01 and SC-02 held on all 20 splits and SC-04 was missed on all 20, with 18.3\,\% on average for cars older than 20 years; the committed 16.77\,\% is the lowest of the 21 values (EDN-32).
+We refitted the candidate on 20 other split seeds: the test MdAPE was 6.72\,\% on average with a standard deviation of 0.26 percentage points, against 6.73\,\% on the committed split.
+SC-01 and SC-02 held on all 20 splits and SC-04 was missed on all 20, with 18.2\,\% on average for cars older than 20 years; the committed 16.80\,\% is the lowest of the 21 values (EDN-32).
 
 We kept the model simple and put the effort into the engineering practices described in \cref{sec:methodology}.
 The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (MLOps\_\TeamName\_EDN.pdf), which this report cites by entry ID.

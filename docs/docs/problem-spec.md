@@ -167,7 +167,8 @@ Without that matching the criterion would mask `age_years`, the most important f
 "Masked" means the field carries what the API sends when it is omitted, and what that is per field is fixed by [EDN-23](#decision-records) rather than being one missing value for everything: an omitted assertion flag is `False`, an omitted equipment list is empty, and everything else is absent.
 That the two are the same operation is a constraint on the API rather than an assumption: the request model defaults an omitted equipment list to `[]` ([specification](specification.md) FR-01), so what SC-06 masks is what a caller omitting the field actually sends.
 The criterion is relative to the model's own full-input MdAPE, like SC-03 is relative to the baseline, because there is no reference value for it yet and inventing an absolute threshold would be guesswork.
-Which mechanism keeps it (native missing handling or random masking during training, as planned for the interval models) is left to the modelling plan; SC-06 only fixes the observable outcome.
+SC-06 only fixes the observable outcome, and the mechanism that keeps it is part of the candidate's training: `lgbm-basic` is fitted on its training rows plus two copies of each, one with every optional field set to what an omitted field is and one with a random subset of them ([EDN-82](#decision-records)).
+LightGBM's native missing handling alone left a request carrying only the required fields at 1.21 times the full-input MdAPE, and with the copies it is at 1.02 times.
 
 SC-04's per-segment breakdown (including country and seller type) also serves as a basic fairness check across market segments.
 Classification-oriented fairness metrics (e.g. AIF360's demographic parity) do not directly apply to this regression task; per-segment error parity is the task-appropriate equivalent.
@@ -188,9 +189,9 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-03: the exploratory LightGBM is 44 % better than B0.
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   The reference run named this as the known risk of the basic feature set, with the extended features or a scope change for classic cars as the possible remedies.
-  The pipeline has since measured the segment at 16.77 % for the candidate model over 784 test rows (18.3 % on average over 20 other splits, see the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)), and it has ruled the extended features out as the remedy: they make this segment 1.7 pp worse (18.45 %) while improving the pooled figure.
+  The pipeline has since measured the segment at 16.80 % for the candidate model over 784 test rows (18.2 % on average over 20 other splits, see the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)), and it has ruled the extended features out as the remedy: they make this segment 1.6 pp worse (18.45 %) while improving the pooled figure.
   The miss is accepted: SC-04 is recorded as missed, the 15 % threshold and the scope stay as they are, and the release gate stays closed on it ([EDN-62](#decision-records)).
-  The hyperparameter search kept the committed values, which leaves the figure unchanged ([EDN-73](#decision-records)), and the segment is over the bound on 20 of 20 other splits ([EDN-32](#decision-records)).
+  The hyperparameter search kept the committed values ([EDN-73](#decision-records)), and the segment is over the bound on 20 of 20 other splits ([EDN-32](#decision-records)).
   The [model card](model-card.md#bias-risks-and-limitations) states the limitation in full.
 - SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
   The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,889 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
@@ -209,3 +210,4 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-58: an unmeasured success criterion blocks the release gate.
 - EDN-62: `lgbm-basic` is the candidate model.
 - EDN-73: hyperparameters change only under a written tuning protocol.
+- EDN-82: `lgbm-basic` is trained on blanked copies of its listings.

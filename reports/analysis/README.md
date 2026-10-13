@@ -233,3 +233,18 @@ For every run it checks that each `train.deps.<path>` tag equals the `md5` the l
 It needs the tracking credentials in `.env`, `models/` from `dvc pull`, and a clean tree, and runs from the repository root: `uv run python reports/analysis/run_provenance_check.py`.
 `run_provenance_check_results.txt` holds its output section by section: against the runs `main`'s models pointed at before the fix (2026-10-05), against the four runs of the `dvc repro` that fix committed, and against the runs of the pipeline re-runs committed since, the last of which is the ladder `main` points at.
 A third, appended on 2026-10-06, checks the runs of the next committed `dvc repro`, issue #64's, which pass the same way.
+The last section, appended on 2026-10-13, checks the four runs of the `dvc repro` that trains `lgbm-basic` on blanked copies of its listings (EDN-82), which pass the same way.
+
+## Blanked-out optional fields in training (EDN-82, issue #116)
+
+`blanked_fields.py` measures whether training `lgbm-extended` on copies of the listings with optional fields blanked out removes its collapse on sparse requests, and what that costs on a complete request.
+Its docstring is the protocol: the seven configurations, the request levels, the comparison against `lgbm-basic` and the rule a configuration has to meet were all fixed before any fit, in the commit that added the script and in a second one that changed the rule after a review of the protocol.
+It imports the `train` stage's fit, the seam's `mask_absent`, `evaluate`'s metrics and SC-06 sweep and the search's bootstrap, reads the `train` and `validation` matrices only, and logs every fit to the MLflow experiment `recommenditos-price-tuning` as sweep `116-blanked-fields`.
+It needs the tracking credentials in `.env`, the data and the models from `dvc pull`, and a clean tree, and runs from the repository root with its output written outside the repository first, as the docstring shows.
+`blanked_fields_results.txt` is the output of the run recorded in EDN-82 (2026-10-13).
+`blanked_fields_crosscheck.py` was written after that run and is not part of its protocol: it counts the training rows that already look like a required-only request, and fits one model on the ten required columns alone, to reach the run's required-only figures by a route that shares no code with the blanking.
+Its three lines are appended to the results file under their own heading.
+
+Since the measurement was adopted, `lgbm-basic` adds these copies in the pipeline itself (`blanked_copies` in `params.yaml`), and a fit of it needs the request contract: `read_matrices(..., request=RequestContract.from_params(params))`.
+`blanked_fields.py` and the scripts here that refit `lgbm-basic` as committed without passing it (`tuning_sweep.py`, `early_stopping_ceiling.py`, `codecarbon_validity.py`, `rapl_validation.py`) therefore reproduce their results files at the commits they ran on, and stop with a `ModelError` that names the argument when run on a later one.
+`split_strategy.py` passes it, because the pipeline docs ask for that script to be re-run when the candidate changes.

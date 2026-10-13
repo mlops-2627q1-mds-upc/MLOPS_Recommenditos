@@ -65,7 +65,12 @@ from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
-from recommenditos.modeling.model import TrainingData, fit_variant, load_model
+from recommenditos.modeling.model import (
+    RequestContract,
+    TrainingData,
+    fit_variant,
+    load_model,
+)
 from recommenditos.pipeline import load_params, read_frame
 from recommenditos.schema import PROCESSED_SCHEMA
 
@@ -152,6 +157,7 @@ def served(tmp_path_factory) -> dict:
             train=frames["train"],
             validation=frames["validation"],
             supported_makes=supported,
+            request=RequestContract.from_params(params),
         )
         model = fit_variant(
             variant,
