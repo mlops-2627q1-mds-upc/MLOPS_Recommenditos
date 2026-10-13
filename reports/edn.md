@@ -1002,13 +1002,12 @@ How to add an entry:
 - **Decision:** `lgbm-basic`, the candidate, is fitted on its training rows plus two copies of each with optional input fields set to what an omitted field is: one with all six omitted and one with a random subset.
   `lgbm-extended` is trained as before and does not become the candidate.
 - **Alternatives considered:**
-  - `lgbm-extended` with the copies as the candidate: better on most requests, but worse on one giving exactly the basic set's six fields (7.12 % against 6.96 % validation MdAPE), which the rule fixed before the measurement excludes.
+  - `lgbm-extended` with the copies as the candidate: better on most requests, but worse than `lgbm-basic` as then trained on one giving exactly the basic set's six fields (7.12 % against 6.96 % validation MdAPE), which the rule fixed before the measurement excludes.
   - Serving both models, routed by how full a request is: two models, a threshold, and still 8.57 % on a required-only request.
   - No change before the first delivery: the candidate stays worse than necessary on a request FR-01 allows.
 - **Rationale:** All six optional fields are empty together in 324 of 60,378 training rows, so a required-only request was almost absent from what the model saw.
   With the copies its validation MdAPE on that request falls from 8.57 % to 7.19 %, and no tested request is measurably worse.
   The test split, read once after the decision, agrees: 8.26 % to 6.86 % there, 6.81 % to 6.73 % on a complete request, and SC-06 at 1.02 times instead of 1.21.
-  The rule was committed before the first fit.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, measured and recommended this option, which @lukas2510 took.

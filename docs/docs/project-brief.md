@@ -149,7 +149,7 @@ Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 
 **Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
 Measured on the real snapshot on 2026-10-13 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-05, with early stopping deciding the tree count, EDN-73, and step 3 on blanked copies of its training rows, EDN-82): step 1 12.16 %, step 2 9.52 %, step 3 6.73 %, step 4 6.26 %.
-So the extended feature set is worth 0.48 pp on a fully described car - and 3.44 pp *worse* than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 6.86 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+So the extended feature set is worth 0.48 pp on a fully described car, and as the two variants are trained step 4 is 3.44 pp *worse* than step 3 on a request carrying only the ten fields FR-01 requires (10.30 % against 6.86 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 The whole ladder fits in under a minute.
 Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-73), and `learning_rate` and `num_leaves` were searched and kept, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
@@ -173,9 +173,11 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
 Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields_results.txt`): native missing-value handling is not enough for a request with few optional fields.
 Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training split: 324 of its 60,378 served rows have all six optional fields of the basic set empty.
 Trained on the listings plus two blanked copies of each, one with every optional field omitted and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 %, and a complete request is not measurably worse (7.02 % against 6.96 %).
+`lgbm-extended` with the same copies answers it at 7.14 % instead of 10.79 %, so what both models lost on that request came from how they were trained, not from the information they lack.
+These are validation figures from one split and one fit per configuration.
 
 **[decided]**, [EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the pipeline trains `lgbm-basic` on those copies, adopted by @lukas2510, the repository owner, on 2026-10-13 on that measurement.
-`lgbm-extended` is trained without them and does not become the candidate: with them it was worse than `lgbm-basic` on a request giving the basic set's six optional fields and no others (7.12 % against 6.96 %, a margin whose simultaneous 95 % interval includes zero), which the rule fixed before the measurement excludes.
+`lgbm-extended` is trained without them and does not become the candidate: with them it was worse than `lgbm-basic` as then trained on a request giving the basic set's six optional fields and no others (7.12 % against 6.96 %, a margin whose simultaneous 95 % interval includes zero), which the rule fixed before the measurement excludes.
 On the test split, read once for the adopted configuration, `lgbm-basic` answers the required-only request at 6.86 % instead of 8.26 % and SC-06 is at 1.02x instead of 1.21x.
 SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 

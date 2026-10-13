@@ -12,15 +12,14 @@
 \texttt{lgbm-\allowbreak{}extended} is trained as before and does not become the candidate.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item \texttt{lgbm-\allowbreak{}extended} with the copies as the candidate: better on most requests, but worse on one giving exactly the basic set's six fields (7.12\,\% against 6.96\,\% validation MdAPE), which the rule fixed before the measurement excludes.
+\item \texttt{lgbm-\allowbreak{}extended} with the copies as the candidate: better on most requests, but worse than \texttt{lgbm-\allowbreak{}basic} as then trained on one giving exactly the basic set's six fields (7.12\,\% against 6.96\,\% validation MdAPE), which the rule fixed before the measurement excludes.
 \item Serving both models, routed by how full a request is: two models, a threshold, and still 8.57\,\% on a required-only request.
 \item No change before the first delivery: the candidate stays worse than necessary on a request FR-01 allows.
 \end{itemize}
 \par
 \emph{Why:} All six optional fields are empty together in 324 of 60,378 training rows, so a required-only request was almost absent from what the model saw.
 With the copies its validation MdAPE on that request falls from 8.57\,\% to 7.19\,\%, and no tested request is measurably worse.
-The test split, read once after the decision, agrees: 8.26\,\% to 6.86\,\% there, 6.81\,\% to 6.73\,\% on a complete request, and SC-06 at 1.02 times instead of 1.21.
-The rule was committed before the first fit.},
+The test split, read once after the decision, agrees: 8.26\,\% to 6.86\,\% there, 6.81\,\% to 6.73\,\% on a complete request, and SC-06 at 1.02 times instead of 1.21.},
   ai = {Information seeking, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
   assessment = {AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, measured and recommended this option, which @lukas2510 took.

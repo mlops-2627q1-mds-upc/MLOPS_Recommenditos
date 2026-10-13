@@ -212,10 +212,11 @@ def test_no_copies_leaves_the_frame_as_it_is(trained: dict, test_frames: dict):
     pd.testing.assert_frame_equal(result, frame)
 
 
-#: Which of the six fields the measurement's random copy omits in each of six
-#: rows, for the project seed: the draw `reports/analysis/blanked_fields.py` made
-#: when it ran for EDN-82 (commit 4a7cdfe). Written down here, so that a test
-#: need not import a script that is bound to that commit.
+#: Which of six fields a random copy omits in each of six rows, for the project
+#: seed, by the recipe of the measurement: computed with the code of
+#: `reports/analysis/blanked_fields.py` as it ran for EDN-82 (commit 4a7cdfe),
+#: not taken from that run's own, larger frame. Written down here, so that a
+#: test need not import a script that is bound to that commit.
 MEASURED_DRAW = (
     (1, 0, 0, 0, 1, 0),
     (1, 1, 1, 1, 1, 1),
