@@ -53,6 +53,11 @@ jobs:
               # required one.
               - "reports/edn.md"
               - "reports/latex/edn/**"
+              # The figures the pipeline draws and the report's copies of them: a
+              # test asserts that each copy is the stage's output, and a pull
+              # request that changes only a copy has to run it.
+              - "reports/figures/**"
+              - "reports/latex/figures/**"
               - ".github/workflows/ci.yml"
             # The serving job runs `make test-serving`, so a change to that target
             # alone has to run it too.

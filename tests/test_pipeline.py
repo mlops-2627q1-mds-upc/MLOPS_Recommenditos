@@ -22,11 +22,12 @@ from recommenditos.data import (
     download_raw_dataset,
     gx_context_configuration,
     preprocess,
+    profile_data,
     split_data,
     validate_data,
 )
 from recommenditos.data.split_data import SPLIT_NAMES
-from recommenditos.modeling import compare_energy, evaluate, train
+from recommenditos.modeling import compare_energy, compare_segments, evaluate, train
 from recommenditos.modeling.compare_energy import ComparisonError
 from recommenditos.schema import (
     INTERIM_SCHEMA,
@@ -41,6 +42,7 @@ DVC_FILE = PROJ_ROOT / "dvc.yaml"
 #: Stage name to the module that implements it, as EDN-28 lays the package out.
 STAGE_MODULES = {
     "download": "recommenditos.data.download_raw_dataset",
+    "profile-data": "recommenditos.data.profile_data",
     "preprocess": "recommenditos.data.preprocess",
     "configure_gx": "recommenditos.data.gx_context_configuration",
     "validate-data": "recommenditos.data.validate_data",
@@ -49,6 +51,7 @@ STAGE_MODULES = {
     "train": "recommenditos.modeling.train",
     "evaluate": "recommenditos.modeling.evaluate",
     "compare-energy": "recommenditos.modeling.compare_energy",
+    "compare-segments": "recommenditos.modeling.compare_segments",
 }
 
 
@@ -89,6 +92,7 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
     validation_path = root / "data-validation" / "summary.json"
     context_dir = root / "gx"
 
+    profile_data.main(raw_path, figures, params_path)
     preprocess.main(raw_path, interim_path, params_path)
     # Every path is passed explicitly. A stage's defaults point into the real
     # repository, so a test that relies on them writes its result over the
@@ -108,6 +112,7 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
         train.main(variant, features, models, params_path, emissions)
     evaluate.main(features, models, metrics_dir, summary_path, params_path)
     compare_energy.main(models, emissions, metrics_dir, figures, params_path)
+    compare_segments.main(metrics_dir, figures, params_path)
 
     return {
         "raw": raw_path,
@@ -435,7 +440,7 @@ def test_the_energy_comparison_carries_every_variant_in_the_columns_the_report_r
     # A basic and an extended variant both have optional fields to leave out.
     assert rows["mdape_required_fields_only"].notna().all()
     figure = (pipeline["figures"] / compare_energy.FIGURE_FILE).read_bytes()
-    assert figure.startswith(b"\x89PNG\r\n\x1a\n")
+    assert figure.startswith(b"%PDF")
 
 
 def test_the_energy_comparison_refuses_metrics_measured_on_another_fit(pipeline, tmp_path, params):
@@ -451,6 +456,36 @@ def test_the_energy_comparison_refuses_metrics_measured_on_another_fit(pipeline,
 
     with pytest.raises(ComparisonError, match="a-run-of-another-fit"):
         compare_energy.variant_row(variant, pipeline["models"], pipeline["emissions"], metrics)
+
+
+def test_the_raw_file_is_profiled_over_every_listing_it_holds(pipeline):
+    # The shares are of the raw file, which is what the dataset card states and
+    # what the scope rules were decided on, so each dimension's levels have to
+    # account for every row `download` wrote, the ones without a value included.
+    raw = pd.read_parquet(pipeline["raw"], columns=list(profile_data.DIMENSIONS))
+    table = pd.read_csv(
+        pipeline["figures"] / profile_data.TABLE_FILE, float_precision="round_trip"
+    )
+
+    assert list(table.columns) == list(profile_data.COLUMNS)
+    for dimension in profile_data.DIMENSIONS:
+        levels = table[table["dimension"] == dimension]
+        assert levels["listings"].sum() == len(raw), dimension
+        assert levels["share"].sum() == pytest.approx(1.0), dimension
+        assert levels["listings"].is_monotonic_decreasing, dimension
+    figure = (pipeline["figures"] / profile_data.FIGURE_FILE).read_bytes()
+    assert figure.startswith(b"%PDF")
+
+
+def test_the_segment_figure_is_drawn_from_the_candidates_record(pipeline, params):
+    # On the fixture no level may reach SC-04's minimum of test rows. The stage
+    # has to write its figure all the same, or `dvc repro` on generated data,
+    # which is how a clean clone runs, would stop at a missing output.
+    candidate = params["report"]["candidate_variant"]
+    assert (pipeline["metrics_dir"] / f"{candidate}.json").exists()
+
+    figure = (pipeline["figures"] / compare_segments.FIGURE_FILE).read_bytes()
+    assert figure.startswith(b"%PDF")
 
 
 def test_validate_data_fails_the_stage_on_a_broken_frame(pipeline, tmp_path):
@@ -651,6 +686,38 @@ def test_each_train_stage_owns_the_emissions_record_of_its_fit(dvc_stages):
 def test_the_energy_comparison_is_built_from_the_artefacts_it_joins(dvc_stages):
     deps = dvc_stages["compare-energy"]["deps"]
     assert {"models", "reports/emissions", "reports/metrics"} <= set(deps)
+
+
+def test_the_segment_figure_is_built_from_the_evaluation_and_its_bound(dvc_stages, params):
+    # The figure draws `evaluate`'s levels against SC-04's bound, so it has to
+    # be redrawn when either changes, and for the variant the report names.
+    stage = dvc_stages["compare-segments"]
+    assert "reports/metrics" in stage["deps"]
+    assert "evaluate.success_criteria.sc04_segment_mdape_max" in stage["params"]
+    assert "report.candidate_variant" in stage["params"]
+    assert params["report"]["candidate_variant"] in params["train"]["variants"]
+
+
+def test_the_data_profile_is_counted_on_the_raw_file(dvc_stages):
+    stage = dvc_stages["profile-data"]
+    assert "data/raw/listings.parquet" in stage["deps"]
+    assert "split.holdout_country" in stage["params"]
+
+
+def test_every_stage_that_draws_a_figure_depends_on_the_house_style(dvc_stages):
+    # A change to the shared colours or sizes has to redraw every figure, or
+    # the report prints figures in two styles.
+    for stage in ("profile-data", "compare-energy", "compare-segments"):
+        assert "recommenditos/plots.py" in dvc_stages[stage]["deps"], stage
+
+
+def test_every_figure_is_committed_rather_than_cached(dvc_stages):
+    # Uncached, so Git tracks it and a redraw is in the pull request's diff.
+    for stage in ("profile-data", "compare-energy", "compare-segments"):
+        figures = [out for out in dvc_stages[stage]["outs"] if "reports/figures/" in str(out)]
+        assert figures, stage
+        for out in figures:
+            assert isinstance(out, dict) and next(iter(out.values())) == {"cache": False}, out
 
 
 def _resolve(declared: str, definition: dict, params: dict) -> list[str]:

@@ -81,10 +81,18 @@ It documents the AutoScout24 snapshot of \cref{sec:goal}: one scrape dated 2025-
 We profiled the file ourselves, and what we found shaped the project:
 
 \begin{itemize}
-  \item Germany has 38.5\,\% of the rows, and BMW, Porsche, Mercedes-Benz and Audi together have 82.9\,\%. This led to the scope rules, and the card states that the data does not represent the European used-car market as a whole.
+  \item Germany has 38.5\,\% of the rows, and BMW, Porsche, Mercedes-Benz and Audi together have 82.9\,\% (\cref{fig:composition}). This led to the scope rules, and the card states that the data does not represent the European used-car market as a whole.
   \item 6,347 listings are duplicates. The \texttt{vin} column is filled in only 34.0\,\% of the rows, so we find them with a composite key and remove them before the split.
   \item 164 listings are registered after the snapshot date and would have a negative age. We remove them.
 \end{itemize}
+
+% figures/data-composition.pdf is a copy of the `profile-data` stage's output.
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{data-composition}
+  \caption{The share of the 118,382 raw listings per make and per country. The Spanish listings are held out as a market the model never sees (EDN-03); 6,079 of them remain after cleaning.}
+  \label{fig:composition}
+\end{figure}
 
 The card states each limitation together with what it rules out.
 The target is an asking price, not a sale price.

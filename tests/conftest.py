@@ -19,7 +19,14 @@ import pytest
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
 import yaml
 
-from recommenditos.config import METRICS_FILE, MODELS_DIR, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
+from recommenditos.config import (
+    FIGURES_DIR,
+    METRICS_FILE,
+    MODELS_DIR,
+    PARAMS_FILE,
+    PROJ_ROOT,
+    REPORTS_DIR,
+)
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
@@ -92,6 +99,10 @@ def _repo_artefacts_stay_untouched():
     # that trained without redirecting `energy_dir` leaves the file list as it
     # was and adds a row to a git-tracked record of the real ladder's energy.
     emissions_before = _tree_digest(EMISSIONS_DIR)
+    # By content as well: the stages that draw a figure rewrite it under the
+    # same name, and a redraw from a fixture's numbers would be committed as the
+    # report's figure.
+    figures_before = _tree_digest(FIGURES_DIR)
     already_there = [path for path in FORBIDDEN_PATHS if path.exists()]
 
     yield
@@ -110,6 +121,9 @@ def _repo_artefacts_stay_untouched():
     assert _tree_digest(GX_DIR) == context_before, f"the test suite rebuilt {GX_DIR}"
     assert _tree_digest(EMISSIONS_DIR) == emissions_before, (
         f"the test suite wrote an energy measurement into {EMISSIONS_DIR}"
+    )
+    assert _tree_digest(FIGURES_DIR) == figures_before, (
+        f"the test suite drew a figure into {FIGURES_DIR}"
     )
 
     appeared = sorted(

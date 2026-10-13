@@ -16,3 +16,8 @@ reports/metrics/** -text
 reports/data-validation/** -text
 reports/emissions/** -text
 reports/figures/** -text
+
+# The report's figures are PDFs, and the ones a stage draws are byte-for-byte
+# copies of its output above (tests/test_committed_outputs.py compares them), so
+# Git must not guess one to be text and normalise its line endings.
+reports/latex/figures/*.pdf -text

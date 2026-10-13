@@ -73,6 +73,7 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | Stage | Module | Writes |
 |---|---|---|
 | `download` | `recommenditos/data/download_raw_dataset.py` | `data/raw/listings.parquet` |
+| `profile-data` | `recommenditos/data/profile_data.py` | `reports/figures/data-composition.{csv,pdf}` |
 | `preprocess` | `recommenditos/data/preprocess.py` | `data/interim/listings.parquet` |
 | `configure_gx` | `recommenditos/data/gx_context_configuration.py` | `gx/`, the Great Expectations context |
 | `validate-data` | `recommenditos/data/validate_data.py` | `reports/data-validation/`: the summary, the validation results and the Data Docs; a failed expectation fails the pipeline |
@@ -80,9 +81,10 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
 | `train` | `recommenditos/modeling/train.py` | `models/<variant>/`, `reports/emissions/<variant>.csv` |
 | `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs}.csv` |
-| `compare-energy` | `recommenditos/modeling/compare_energy.py` | `reports/figures/energy-vs-error.{csv,png}` |
+| `compare-energy` | `recommenditos/modeling/compare_energy.py` | `reports/figures/energy-vs-error.{csv,pdf}` |
+| `compare-segments` | `recommenditos/modeling/compare_segments.py` | `reports/figures/error-by-segment.pdf` |
 
-`features`, `evaluate` and `compare-energy` have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
+`profile-data`, `features`, `evaluate` and the two `compare` stages have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
 Its text model needs no feature engineering, and it asserts its metric threshold inside `tests/test_model.py` instead of producing a metrics artefact, which is not enough for the gate [NFR-01](specification.md) describes.
 `metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 29 leaves (28 of them rendered while `deployable_variant` is null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
 Five of those leaves are not measurements but provenance - `data_source` and each variant's `estimator` - because a number is only readable as a result once the file says which data produced it and which model answered.
@@ -102,6 +104,12 @@ CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached
 CodeCarbon appends to that file, and DVC deletes a stage's outputs before running it, so after `dvc repro` it holds exactly the one row of the fit that produced the model; a run outside DVC appends a row, and the model's `model.json` names its own by CodeCarbon's run id.
 `compare-energy` joins each model, its emissions row and its metrics on those ids into the table and figure the report's energy section cites.
 On the machines we train on, the figure is CodeCarbon's estimate from the CPU's TDP and the fit's CPU time plus a constant for the RAM, not a meter reading: `recommenditos/modeling/energy.py` says how to read it.
+
+Three stages draw the figures the report prints, so that each is built from the artefact it shows and `dvc repro` redraws it when that artefact changes.
+`profile-data` counts the raw listings per make and per country, `compare-energy` is described above, and `compare-segments` draws the test error of the variant `report.candidate_variant` names in every level SC-04 checks, against the criterion's bound.
+All three import `recommenditos/plots.py`, which holds the colours, the font sizes and the axis treatment, and declare it as a dependency, so a change of style redraws every figure.
+The figures are PDFs, uncached like the other report artefacts, so Git tracks them and a redraw is in the pull request's diff.
+The LaTeX build cannot read `reports/figures/`, so each figure the report includes is committed a second time in `reports/latex/figures/`, and `tests/test_committed_outputs.py` fails when a copy differs from the stage's output.
 
 The contract
 ------------
@@ -352,7 +360,7 @@ Every MLflow run the pipeline makes names the committed state that produced it (
 | `evaluate.git_commit`, `evaluate.git_dirty` | `evaluate` resumes the run | The same for the evaluation, which can run at a later commit than the fit: a change to `evaluate.py` alone reruns only `evaluate`. |
 | `evaluate.deps.<path>` | `evaluate` resumes the run | Each dependency of `evaluate`, by the hash `dvc.lock` records for it under that stage. |
 
-`git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/`, `reports/emissions/`, `reports/figures/energy-vs-error.{csv,png}` and `reports/data-validation/summary.json`.
+`git_dirty` does not count what `dvc repro` writes itself: `dvc.lock`, which DVC rewrites after every stage, and the outputs it does not cache, which git tracks instead, here `metrics.json`, `reports/metrics/`, `reports/emissions/`, the tables and figures in `reports/figures/` and `reports/data-validation/summary.json`.
 Git must hand those back byte for byte, because `dvc.lock` records them by their MD5, so `.gitattributes` marks each of them `-text` and `tests/test_committed_outputs.py` fails for one that is not.
 So the runs of a clean commit reproduced with `dvc repro` are tagged clean, and `true` means a change somebody made, an untracked file included; `unknown` means git named the commit but could not read the tree's status.
 The one write of DVC's that still counts is the line it adds to a `.gitignore` the first time a new cached output is produced, because that file is also the hand-written `.gitignore` of the repository root; commit the line, and the next run is clean.

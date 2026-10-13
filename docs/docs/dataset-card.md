@@ -112,6 +112,8 @@ There are 25 makes in total, but the distribution is extremely skewed:
 | Volvo | 3,643 | 3.1 % |
 | all others (18 makes) | 4,216 | 3.6 % |
 
+The `profile-data` stage of the pipeline recounts both tables on the raw file: `reports/figures/data-composition.csv` holds every make and every country, and `data-composition.pdf` beside it is the figure the report prints.
+
 Other key distributions:
 
 - **Offer type:** 114,127 used (`U`), 4,252 new (`N`), 3 other (`A`). 3,702 of the `U` rows are additionally flagged `is_preregistered`, and 32,199 cars were first registered in 2025.

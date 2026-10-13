@@ -32,7 +32,7 @@ We changed it where this project needed it:
 \begin{itemize}
   \item \textbf{One module per pipeline stage (EDN-28).} The template's three flat modules became one module per stage, in \texttt{recommenditos/\allowbreak data/} and \texttt{recommenditos/\allowbreak modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each ticket also has its own file, so several people can work on the pipeline at once.
   \item \textbf{Configuration in \texttt{params.yaml} (EDN-30).} Everything configurable is there, and \texttt{config.py} holds only paths. A changed parameter reruns the stages that read it, and \texttt{dvc params diff} shows what changed between two commits.
-  \item \textbf{Two more stages than the course demo.} A tabular model needs a \texttt{features} stage. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12).
+  \item \textbf{More stages than the course demo.} A tabular model needs a \texttt{features} stage. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12). Three more stages draw \cref{fig:segments,fig:composition,fig:energy}.
   \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned and processed data (\cref{sec:m3-data-testing}).
   \item \textbf{Dependency groups (EDN-47).} \texttt{[project] dependencies} is the serving runtime only, and the pipeline and development tools are dependency groups. The API image installs only what serving needs, and a CI job checks that serving code imports nothing from a group.
 \end{itemize}
@@ -105,7 +105,7 @@ A Git commit therefore identifies the code, the data and the parameters together
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth]{pipeline}
-  \caption{The DVC pipeline as \texttt{dvc dag} draws it from \texttt{dvc.yaml}. The \texttt{features} stage exists once per feature set and the \texttt{train} stage once per model variant.}
+  \caption{The DVC pipeline, drawn from \texttt{dvc.yaml}; a dependency that a longer path already implies is not drawn. The two stages with a heavy border are gates: \texttt{validate-data} checks the data and \texttt{evaluate} decides on the release. \texttt{features} exists once per feature set and \texttt{train} once per model variant. \texttt{profile-data} draws \cref{fig:composition}, \texttt{compare-segments} \cref{fig:segments} and \texttt{compare-energy} \cref{fig:energy}.}
   \label{fig:pipeline}
 \end{figure}
 

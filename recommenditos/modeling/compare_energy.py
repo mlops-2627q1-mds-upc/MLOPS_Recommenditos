@@ -4,7 +4,7 @@ The course demo stops at logging a number per run. The four variants of the
 experiment ladder differ one rung at a time, so the number can answer a question:
 whether a rung earned what it cost to train. This stage puts the two halves side
 by side, one row per variant, as `reports/figures/energy-vs-error.csv` and the
-figure drawn from it, `reports/figures/energy-vs-error.png`.
+figure drawn from it, `reports/figures/energy-vs-error.pdf`.
 
 It is a stage rather than a notebook cell so that the table and the figure are
 built from the pipeline's artefacts and nothing else, and `dvc repro` rebuilds
@@ -39,6 +39,7 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 import typer
 
+from recommenditos import plots
 from recommenditos.config import FIGURES_DIR, MODELS_DIR, PARAMS_FILE, REPORTS_DIR
 from recommenditos.modeling.energy import EMISSIONS_DIR, read_record
 from recommenditos.modeling.evaluate import ALL_OPTIONAL_FIELDS
@@ -69,26 +70,15 @@ COLUMNS: tuple[str, ...] = (
 )
 
 TABLE_FILE = "energy-vs-error.csv"
-FIGURE_FILE = "energy-vs-error.png"
+FIGURE_FILE = f"energy-vs-error{plots.FIGURE_SUFFIX}"
 
 _WH_PER_KWH = 1000.0
 _MG_PER_KG = 1e6
 _PERCENT = 100.0
 
-# The figure's colours: the first two categorical slots of a palette checked
-# for colour-vision deficiency, text and grid in neutral inks.
-_MARK = "#2a78d6"
-_MARK_SECONDARY = "#eb6834"
-_INK = "#0b0b0b"
-_INK_SECONDARY = "#52514e"
-_GRID = "#e4e3df"
-
-#: The figure's size in inches, which is the size the report prints it at, and its
-#: font sizes in points: at that size they are the sizes on paper, where the
-#: report's own text is 11 pt.
+#: The figure's size in inches, which is the size the report prints it at: two
+#: thirds of the text width.
 _FIGURE_SIZE_IN = (4.2, 3.0)
-_AXIS_PT = 9
-_LABEL_PT = 8
 
 app = typer.Typer()
 
@@ -160,7 +150,7 @@ def write_table(path: Path, rows: list[dict]) -> None:
     logger.info(f"Wrote {len(rows)} row(s) to {path}.")
 
 
-def draw_figure(path: Path, rows: list[dict]) -> None:
+def figure_of(rows: list[dict]) -> Figure:
     """Energy on a log axis against MdAPE, two points per variant.
 
     A log axis because the ladder spans two orders of magnitude of training cost,
@@ -171,19 +161,16 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
     spent on optional columns is spent whether or not a caller sends them. Two
     series, so a legend, above the axes; each pair is labelled with its variant once.
 
+    The two series differ in shape as well as in colour, a filled dot and an open
+    ring, because the two colours print as the same grey. The ring is the larger
+    of the two, so where both conditions give the same error the dot shows inside
+    it and the reader sees that the two coincide.
+
     The x axis names the method, because a reader of the picture alone would
-    otherwise take it for a meter reading. The figure carries no title: the
-    caption of whatever prints it does, and a title inside the picture would be
-    scaled with it.
-
-    It is drawn at the size the report prints it, two thirds of an A4 text width
-    of 16 cm, so the font sizes below are the sizes on paper, and at 300 dpi so
-    the documentation can show it larger.
-
-    A bare `Figure` rather than `pyplot`, so drawing it touches no global state
-    and needs no backend chosen for a process that has no display.
+    otherwise take it for a meter reading. `plots` says why the figure has no
+    title and is drawn at the size it is printed at.
     """
-    figure = Figure(figsize=_FIGURE_SIZE_IN, dpi=300)
+    figure = plots.new_figure(*_FIGURE_SIZE_IN)
     axis = figure.subplots()
     energy = [row["energy_wh"] for row in rows]
     full = [row["mdape"] * _PERCENT for row in rows]
@@ -195,21 +182,32 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
     ]
     for x, low, high in zip(energy, full, required, strict=True):
         if high is not None:
-            axis.plot([x, x], [low, high], color=_GRID, linewidth=2, zorder=2)
-    marks = {"s": 40, "edgecolors": "white", "linewidths": 1.5, "zorder": 3}
-    axis.scatter(energy, full, color=_MARK, label="every field given", **marks)
+            axis.plot([x, x], [low, high], color=plots.MUTED, linewidth=1.2, zorder=2)
     shown = [(x, y) for x, y in zip(energy, required, strict=True) if y is not None]
     axis.scatter(
         [x for x, _ in shown],
         [y for _, y in shown],
-        color=_MARK_SECONDARY,
-        label="only the fields FR-01 requires",
-        **marks,
+        s=46,
+        facecolors="white",
+        edgecolors=plots.ACCENT,
+        linewidths=1.6,
+        zorder=3,
+        label="only the required fields",
+    )
+    axis.scatter(
+        energy,
+        full,
+        s=30,
+        color=plots.MARK,
+        edgecolors="white",
+        linewidths=1.0,
+        zorder=4,
+        label="every field given",
     )
     for row, x, low, high in zip(rows, energy, full, required, strict=True):
         # B0 reads three columns, all required, so its two points are one: the same
         # predictions and so exactly the same MdAPE. The label says so rather than
-        # leaving a reader to look for the hidden point.
+        # leaving a reader to wonder why the pair has no line.
         same = high == low
         axis.annotate(
             f"{row['variant']} (both)" if same else row["variant"],
@@ -217,8 +215,8 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
             xytext=(0, 7),
             textcoords="offset points",
             ha="center",
-            fontsize=_LABEL_PT,
-            color=_INK,
+            fontsize=plots.LABEL_PT,
+            color=plots.INK,
         )
     axis.set_xscale("log")
     axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
@@ -226,16 +224,20 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
     axis.set_xlabel(
         "Training energy of the fit, Wh (log scale)\n"
         f"CodeCarbon's {', '.join(methods)} estimate, not a meter reading",
-        fontsize=_AXIS_PT,
-        color=_INK_SECONDARY,
+        fontsize=plots.AXIS_PT,
+        color=plots.INK_SECONDARY,
     )
-    axis.set_ylabel("Test MdAPE, %", fontsize=_AXIS_PT, color=_INK_SECONDARY)
+    axis.set_ylabel("Test MdAPE, %", fontsize=plots.AXIS_PT, color=plots.INK_SECONDARY)
     # Above the axes, not inside them: a frameless legend in the data area puts
-    # its two handles among the points, where they read as a fifth variant.
+    # its two handles among the points, where they read as a fifth variant. The
+    # filled dot first, as it is the condition the other one is compared with.
+    handles, labels = axis.get_legend_handles_labels()
     axis.legend(
-        fontsize=_LABEL_PT,
+        handles[::-1],
+        labels[::-1],
+        fontsize=plots.LABEL_PT,
         frameon=False,
-        labelcolor=_INK_SECONDARY,
+        labelcolor=plots.INK_SECONDARY,
         loc="lower left",
         bbox_to_anchor=(0.0, 1.0),
         ncols=2,
@@ -244,19 +246,14 @@ def draw_figure(path: Path, rows: list[dict]) -> None:
         handletextpad=0.2,
         columnspacing=1.2,
     )
-    axis.grid(True, which="major", color=_GRID, linewidth=0.8)
-    axis.set_axisbelow(True)
-    axis.tick_params(which="both", labelsize=_LABEL_PT, colors=_INK_SECONDARY)
-    for side in ("top", "right"):
-        axis.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        axis.spines[side].set_color(_GRID)
+    plots.style_axes(axis)
     axis.margins(x=0.2, y=0.18)
     figure.tight_layout()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # No `Software` entry, so the bytes depend on the data and the matplotlib
-    # version, not on anything else about the machine that drew them.
-    figure.savefig(path, metadata={"Software": None})
+    return figure
+
+
+def draw_figure(path: Path, rows: list[dict]) -> None:
+    plots.save_figure(figure_of(rows), path)
     logger.info(f"Wrote {path}.")
 
 

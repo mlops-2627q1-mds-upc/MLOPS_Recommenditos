@@ -13,7 +13,7 @@ LaTeX sources for our two course deliverables:
 | `config.tex` | Team name, members, links and contact. The only place to edit cover page facts. |
 | `sections/` | One file per report section; `2-N-*.tex` is Milestone N. |
 | `edn/` | One EDN entry per file and their list, `entries.tex`, all generated from [reports/edn.md](../edn.md) by `make edn`. |
-| `figures/` | Figures for the report (`../figures/` is searched too, but the Docker and CI builds mount only this folder, so a figure the report uses must lie here). `energy-vs-error.png` is a copy of the `compare-energy` stage's output in `reports/figures/`. `pipeline.pdf` is drawn from `dvc.yaml` by `figures/pipeline.sh`, which needs the project environment, Graphviz and the DejaVu Sans font; the PDF is committed with the font embedded, so a build needs none of them. |
+| `figures/` | Figures for the report (`../figures/` is searched too, but the Docker and CI builds mount only this folder, so a figure the report uses must lie here). `data-composition.pdf`, `energy-vs-error.pdf` and `error-by-segment.pdf` are copies of what the `profile-data`, `compare-energy` and `compare-segments` stages write to `reports/figures/`; the test suite fails when a copy differs from the stage's output. `pipeline.pdf` is drawn from `dvc.yaml` by `figures/pipeline.sh`, which needs the project environment, Graphviz and the DejaVu Sans font; the PDF is committed with the font embedded, so a build needs none of them. |
 | `references.bib` | Bibliography (biblatex + biber, IEEE style). |
 | `preamble.tex` | Shared packages, build flags and the `\guidance` / `\tbd` helpers. |
 
@@ -24,6 +24,9 @@ LaTeX sources for our two course deliverables:
 - `\tbd{...}` marks a placeholder.
   It renders in red in every build, and `make report-submit` counts the ones left.
 - Refer to EDN entries by ID in the report, e.g. "(EDN-03)".
+- A figure that shows data is drawn by a pipeline stage, not by hand: the stage writes a PDF to `reports/figures/`, and its copy in `figures/` is what the report includes.
+  `recommenditos/plots.py` holds the style every such figure shares, and its docstring says how colour and size are used; `recommenditos/modeling/compare_segments.py` is the stage to copy from.
+  Draw a figure at the size it is printed at, and check it on the built page and in a greyscale print before it goes in.
 - EDN entries are written in [reports/edn.md](../edn.md), and only there, and transferred here with `make edn` (`tools/edn_latex.py`).
   It writes one `\ednentry` file per entry into `edn/` and the list of them into `edn/entries.tex`, deletes the file of an entry whose title changed, and sets each entry's **In LaTeX** to yes in the Markdown.
   It is idempotent, and only the entries edited since the last run change; never edit the generated files.
@@ -56,7 +59,9 @@ Re-measure them on the delivery commit:
 - [ ] The split-noise figures of 1.1 (EDN-32), if the split or the candidate changed: `reports/analysis/split_strategy_results.txt`.
 - [ ] Split and validation figures, if a data stage ran: the dataset card and `reports/data-validation/summary.json`, in 2.1.2 and 2.3.4.
 - [ ] The pipeline figure, if `dvc.yaml` changed: `reports/latex/figures/pipeline.sh`.
-- [ ] The energy figure and the energy table of 2.3.1, if the ladder was re-run: `cp reports/figures/energy-vs-error.png reports/latex/figures/`, and the rows, the total and the ratios in the text from `reports/figures/energy-vs-error.csv`.
+- [ ] The three figures the pipeline draws, if a stage redrew one: `cp reports/figures/*.pdf reports/latex/figures/`. `tests/test_committed_outputs.py` fails while a copy is stale.
+- [ ] The energy table of 2.3.1, if the ladder was re-run: the rows, the total and the ratios in the text from `reports/figures/energy-vs-error.csv`.
+- [ ] The captions of the segment figure in 1.1 and of the composition figure in 2.1.2, if the candidate or the data changed: the numbers they state are in `reports/metrics/segments.csv` and `reports/figures/data-composition.csv`.
 
 The commit itself, after `dvc pull`:
 

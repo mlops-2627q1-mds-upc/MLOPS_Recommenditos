@@ -23,7 +23,10 @@ mlruns/
 *.pdf
 *.docx
 # Except the report's figures: the LaTeX build includes them, and neither it nor CI
-# has DVC or Graphviz to redraw them (reports/latex/figures/pipeline.sh does).
+# has DVC or Graphviz to redraw them (reports/latex/figures/pipeline.sh does). The
+# pipeline stages that draw one write it to reports/figures/, uncached, and the
+# copy the build reads lies in reports/latex/figures/.
+!reports/figures/*.pdf
 !reports/latex/figures/*.pdf
 
 # Mac OS-specific storage files
