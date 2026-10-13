@@ -86,7 +86,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
   The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
   That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
-  Measured on 2026-10-12 ([EDN-79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.3 % on average for cars older than 20 years against 16.77 % on the committed one.
+  Measured on 2026-10-12 ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.3 % on average for cars older than 20 years against 16.77 % on the committed one.
   The split strategy is therefore decided: the seller-grouped hash split stays as it is, and its figures are reported with their spread over other splits.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
@@ -125,11 +125,11 @@ The report describes this check as part of the data decisions.
   A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-23).
   This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around.
 - **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
-  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them, and the Great Expectations suites bound the date at the reference date: hard on the cleaned frame, with `mostly=0.99` on the raw one (EDN-22, [Data validation](pipeline.md#data-validation)).
+  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them, and the Great Expectations suites bound the date at the reference date: hard on the cleaned frame, with `mostly=0.99` on the raw one ([Data validation](pipeline.md#data-validation)).
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   The price range is a scope filter in preprocessing and a hard expectation on the cleaned frame.
-  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing (EDN-22).
+  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing.
 
 ## 4. Modelling plan
 
@@ -148,12 +148,12 @@ Experiment ladder (each step is one or more MLflow runs in the same experiment):
 Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 
 **Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
-Measured on the real snapshot on 2026-10-05 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-48, with early stopping deciding the tree count, EDN-73): step 1 12.16 %, step 2 9.52 %, step 3 6.81 %, step 4 6.26 %.
+Measured on the real snapshot on 2026-10-05 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-05, with early stopping deciding the tree count, EDN-73): step 1 12.16 %, step 2 9.52 %, step 3 6.81 %, step 4 6.26 %.
 So the extended feature set is worth 0.55 pp on a fully described car - and 2.04 pp *worse* than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 The whole ladder fits in under a minute.
 Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-73), and `learning_rate` and `num_leaves` were searched and kept, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
-Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-78).
+Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-73).
 The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so `params.yaml` and the committed metrics are unchanged.
 Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
@@ -225,8 +225,8 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Its license is Business Source License 1.1 (free for non-production use); mention this in the report.
 - **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9, so it is never a project dependency.
   It pins typer but not click, and typer 0.12 crashes on click 8.2 and newer (released 2025-05-10) on every Python version, so a bare `uvx pynblint` does not run at all.
-  **[decided]**, [EDN-64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): it runs from its own locked environment in `tools/pynblint-env/` (`pynblint==0.1.6`, `click<8.2`, a hash-verified `uv.lock` of its own) via `make notebook-lint`.
-  It exits 0 whatever it finds, so `tools/notebook_lint.py` reads its JSON report and is the gate; the rules it enforces are the table in [Notebooks](notebooks.md#pynblint-rules) (EDN-64).
+  **[decided]**: it runs from its own locked environment in `tools/pynblint-env/` (`pynblint==0.1.6`, `click<8.2`, a hash-verified `uv.lock` of its own) via `make notebook-lint`.
+  It exits 0 whatever it finds, so `tools/notebook_lint.py` reads its JSON report and is the gate; the rules it enforces are the table in [Notebooks](notebooks.md#pynblint-rules).
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
   It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.

@@ -150,7 +150,7 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
 - **Classic and old cars: an accepted limitation.**
   The candidate misses SC-04 for cars older than 20 years: its MdAPE there is 16.77 % over 784 test rows against the 15 % bound, and 18.3 % on average over 20 other splits (standard deviation 0.76 pp, range 16.98 % to 19.68 %), so the committed figure is the most favourable of 21 draws.
   The team accepted the miss and reports the criterion as missed (EDN-62), because an upper age bound would pass SC-04 by removing the rows it fails on and a higher threshold would fit the criterion to its result: the 15 % bound, the scope and the age breakdown stay as they are, and NFR-01's gate stays closed on SC-04.
-  The extended features make the segment worse (18.45 %), the hyperparameter search kept the committed values after 34 fits, which leaves the model and this figure unchanged (EDN-78), and the segment is over the bound on 20 of 20 other splits (EDN-79).
+  The extended features make the segment worse (18.45 %), the hyperparameter search kept the committed values after 34 fits, which leaves the model and this figure unchanged (EDN-73), and the segment is over the bound on 20 of 20 other splits (EDN-32).
   What a user must know: an estimate for a car older than 20 years is less reliable than for a younger one, with half of these estimates off by more than 16.77 % of the listing price against 6.81 % over all cars, and 55.5 % of them within 20 % of it against 89.8 %.
   The limitation is accepted for this model and this delivery, and a scope change of the kind EDN-04 made for price or a segment-specific model would be a new decision.
 - **Reference-date drift.**
@@ -242,12 +242,12 @@ The pipeline is built in Milestone 2; these steps are fixed by decisions already
 
 1. **Scope.** Keep used passenger cars that are not pre-registered (EDN-04).
    The pre-registered filter reads a flag whose `False` also means "not stated", so a residual number of unmarked pre-registered listings stays in the data, knowingly (EDN-04).
-2. **Drop impossible rows.** Listings registered after the 2025-11-08 reference date would have a negative age and are treated as data errors (EDN-22).
+2. **Drop impossible rows.** Listings registered after the 2025-11-08 reference date would have a negative age and are treated as data errors.
    Prices outside 500 EUR to 2M EUR are dropped as errors or collector outliers.
 3. **Deduplicate**, before anything is split off, on a composite key rather than on `vin`, which is only 34 % filled ([dataset card](dataset-card.md#known-data-issues)).
 4. **Hold out `ES`** as the new-market drift set (EDN-03).
    It never reaches training, validation or calibration.
-5. **Restrict to supported makes** (EDN-05), computed by `split` from the cleaned data and applied by `features` to every frame, the `ES` holdout included, before any level or column is decided (EDN-48).
+5. **Restrict to supported makes** (EDN-05), computed by `split` from the cleaned data and applied by `features` to every frame, the `ES` holdout included, before any level or column is decided.
 6. **Drop PII, identifiers, leaking and redundant columns** as listed in the [problem specification](problem-spec.md#4-features).
    `seller_company_name` survives only as a hash, as the split's grouping key.
 7. **Split** into train, validation, calibration and test **grouped by seller**, so no seller appears in two sets.
@@ -262,7 +262,7 @@ Every stage runs under DVC, and a clean clone reproduces the same splits and met
 The two feature sets are defined in the [problem specification](problem-spec.md#4-features).
 What the data-dependent parts of them currently amount to is measured, not specified, because both thresholds are parameters the experiment ladder sweeps.
 All at `equipment_min_frequency` 0.01, `model_version_tokens` 1 and `model_version_min_frequency` 0.0005.
-What the training split decides is measured on 2026-10-05 by [`reports/analysis/served_vocabulary.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/served_vocabulary.py) over the **60,378 training rows of the supported makes**, which is the population the vocabulary is fitted on (EDN-48); the script builds it over all 61,180 training rows too, and that figure is given beside it.
+What the training split decides is measured on 2026-10-05 by [`reports/analysis/served_vocabulary.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/served_vocabulary.py) over the **60,378 training rows of the supported makes**, which is the population the vocabulary is fitted on (EDN-05); the script builds it over all 61,180 training rows too, and that figure is given beside it.
 The properties of the raw columns are measured on 2026-09-30 by [`reports/analysis/extended_features.py`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/extended_features.py) over the scoped, deduplicated snapshot (105,405 listings).
 
 | Measurement | Value |
@@ -291,11 +291,11 @@ The Great Expectations suites (issue #25) do not bound it either: the column is 
 #### Training
 
 The `train` stage fits one variant of the [experiment ladder](project-brief.md#4-modelling-plan) per `dvc.yaml` stage, so `dvc repro train@lgbm-basic` retrains that variant alone.
-Every variant is fitted only on the makes the API serves: `split` records them in `data/processed/supported_makes.json`, `features` restricts every frame to them before it builds the vocabulary, and `train` refuses a matrix holding any other make rather than filtering it again (EDN-48).
+Every variant is fitted only on the makes the API serves: `split` records them in `data/processed/supported_makes.json`, `features` restricts every frame to them before it builds the vocabulary, and `train` refuses a matrix holding any other make rather than filtering it again (EDN-05).
 So no make the API refuses with a 422 is in the model's training data, and none decided the levels and columns the model is encoded in.
 
 - **Target:** `log(price)`, predictions transformed back with `exp`.
-  **No bias correction** is applied to the inverse transform (EDN-49).
+  **No bias correction** is applied to the inverse transform.
   `exp(E[log P | x])` is the conditional median, which is what every metric here reports, and a Duan smearing correction targets the conditional mean instead, so it biases every prediction upward and away from the typical asking price a seller wants.
   Measured on the real snapshot when the decision was taken, with the LightGBM variants still at the former 1,000-tree budget, it makes every variant worse: smearing factor 1.0258 and MdAPE 9.52 % to 9.83 % for `b1`, 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`, 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`.
   `b0` needs no inverse transform at all, because it is fitted on `price` directly.
@@ -320,7 +320,7 @@ All of these live in `params.yaml`, so a change reruns exactly the variant it af
 | `lgbm-basic` | 3 | LightGBM | basic | `learning_rate: 0.05`, `num_leaves: 63`, `n_estimators: 5000`, `early_stopping_rounds: 50` |
 | `lgbm-extended` | 4 | LightGBM | extended | as `lgbm-basic` |
 
-Both LightGBM variants also fit with `min_child_samples: 20`, the fewest training rows a leaf may hold, which is LightGBM's own default and which `params.yaml` does not name: the key is optional, so leaving it out fits exactly the booster that setting it to 20 fits, and it appears in `params.yaml` only if a search adopts another value (EDN-78).
+Both LightGBM variants also fit with `min_child_samples: 20`, the fewest training rows a leaf may hold, which is LightGBM's own default and which `params.yaml` does not name: the key is optional, so leaving it out fits exactly the booster that setting it to 20 fits, and it appears in `params.yaml` only if a search adopts another value (EDN-73).
 The search of issue #88 adopted none, so every value in the table is the one the models were first fitted with, now measured against its neighbours on the validation split rather than assumed (see "How the values were found" below).
 
 The settings that are **not** parameters are modelling choices rather than knobs a sweep should touch, and they are the same for both LightGBM variants: `objective="regression"` (squared error on log price, because the log transform already handles the multiplicative error structure) and `metric="l1"` with `first_metric_only=True` for early stopping.
@@ -335,19 +335,19 @@ Raising the ceiling is also what showed how closely the stopping metric tracks t
 Between 1,000 trees and the round early stopping chose, the validation L1 in log space keeps falling - by 0.2 % for `lgbm-basic` and 0.6 % for `lgbm-extended` - while validation MdAPE is flat or marginally worse, 6.947 % to 6.956 % and 6.448 % to 6.453 % (`reports/analysis/early_stopping_ceiling_results.txt`).
 L1 is a mean and MdAPE a median, so the last few hundred trees improve the tail of the errors rather than the typical one; on the test split they moved MdAPE by 0.02 pp and 0.07 pp (see [the ladder](#the-experiment-ladder-as-measured)).
 
-`learning_rate: 0.05` and `num_leaves: 63` were **searched and kept**: no point of the grids around them is distinguishable from them on the validation split (EDN-73, EDN-78).
+`learning_rate: 0.05` and `num_leaves: 63` were **searched and kept**: no point of the grids around them is distinguishable from them on the validation split (EDN-73).
 EDN-73 swept them first, for the candidate alone.
 A grid of `learning_rate` 0.025, 0.05 and 0.1 against `num_leaves` 31, 63, 127 and 255 for the candidate, every point with early stopping deciding its trees, is flat on the validation split: validation MdAPE spans 6.88 % to 7.04 %, and no point is distinguishable from the committed one.
 The closest, `learning_rate` 0.025, is 0.0003 lower in validation L1 with a per-point 95 % interval of -0.0009 to +0.0003 under a paired bootstrap by seller group, and would cost 1.6x the trees; the two metrics do not even agree on which point is best (`reports/analysis/tuning_sweep_results.txt`).
 That holds simultaneously as well: widened by the max-statistic bootstrap so that the intervals of all eleven comparisons hold together, its interval is -0.0011 to +0.0005, and only two points, both at `learning_rate` 0.1, remain measurably worse.
 Any tuning, the search of issue #88 included, follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter): `recommenditos/modeling/tune.py` fits every point of a grid on the train and validation splits only, measures and tracks each fit in the MLflow experiment `recommenditos-price-tuning`, and adopts a value only when its simultaneous interval of the validation L1 difference lies below zero.
 
-**How the values were found (issue #88, EDN-78).**
+**How the values were found (issue #88, EDN-73).**
 EDN-73's sweep covered `lgbm-basic` alone, so `lgbm-extended`'s `learning_rate` and `num_leaves` were the values it was first fitted with, carried over from the candidate rather than measured on its own feature set.
 Issue #88 extends the search to both variants: EDN-73's grid of `learning_rate` and `num_leaves` for each, then a second grid of `min_child_samples` 5, 10, 20, 50 and 100 with the first grid's winner fixed, every fit measured by CodeCarbon and logged as its own run, under the same adoption rule.
 The search ran on 2026-10-06, and all four sweeps kept their reference, so `params.yaml` is unchanged and the committed test metrics are those of the configuration it kept; the search never read the test split.
 Every one of its 34 fits was ended by early stopping, not by the 20,000-tree ceiling.
-Each sweep's record - the results, the readable table and CodeCarbon's row for every fit - is in the MLflow experiment `recommenditos-price-tuning` on DagsHub, as the `results/` artifacts of the run tagged `sweep_role` `summary` and `sweep` with the sweep's id below, not in the repository (EDN-78).
+Each sweep's record - the results, the readable table and CodeCarbon's row for every fit - is in the MLflow experiment `recommenditos-price-tuning` on DagsHub, as the `results/` artifacts of the run tagged `sweep_role` `summary` and `sweep` with the sweep's id below, not in the repository (EDN-73).
 
 - **`lgbm-basic`, `learning_rate` x `num_leaves`: keep** (sweep `88-lgbm-basic-lr-leaves`).
   It reproduces EDN-73's twelve fits exactly, with the same best rounds, validation L1, validation MdAPE and intervals as `reports/analysis/tuning_sweep_results.txt`, which checks the search module against the recorded evidence.
@@ -376,7 +376,7 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
 - **Seed:** `params.yaml`'s project-wide `seed`, passed to LightGBM as `random_state` so `feature_fraction_seed`, `bagging_seed` and `data_random_seed` all derive from it.
   Worth being exact about: with `feature_fraction` and `bagging_fraction` at their defaults of 1.0, **none of the four estimators consumes randomness at all** today.
   The seed is recorded for provenance and to make a future subsampled configuration reproducible; it is inert as configured, so a test asserting that a different seed changes the result would fail.
-- **Threads:** `train.num_threads: 1`, never LightGBM's default of every core (EDN-53).
+- **Threads:** `train.num_threads: 1`, never LightGBM's default of every core.
   The trees are already thread-independent - identical at 1, 2, 4 and 8 threads - but LightGBM writes the count into `booster.txt`, so a default would make the artefact's hash depend on the machine that ran `dvc repro`.
   1 rather than a larger pinned value because only 1 is a value every machine can honour.
   It costs something, and against a specific alternative: measured on the real snapshot as medians of three fits on an idle 8-core machine, `lgbm-extended` fits in 18.3 s at 1 thread against 12.8 s at 2 and 12.2 s at 4, so a *pinned* 2 or 4 would buy back about a third of the fit.
@@ -464,7 +464,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 | Property | Target | Measured |
 |---|---|---|
 | Training time, chosen configuration, hyperparameter search not included | at most 15 minutes on a laptop CPU (NFR-10) | **12.4 s** for the candidate `lgbm-basic` (1,293 boosting rounds), 42.4 s for `lgbm-extended` (1,697 rounds), 58.0 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot (the tracked run of 2026-10-12, on a laptop that other work kept busy). Read as an order of magnitude and not a benchmark: fits of the identical two models between 2026-10-05 and 2026-10-12 took 8.0 s to 19.1 s and 27.1 s to 58.5 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` at the rate measured for the archived entry EDN-70, and about 125 s at this run's |
-| Hyperparameter search | no budget: run once per tuning decision, outside `dvc repro`, and reported apart from the final fit (NFR-10, EDN-78) | **391.3 s** of fitting and 3.6071 Wh for the 34 fits of issue #88's search: 112.3 s and 1.0864 Wh over 17 fits for `lgbm-basic`, 279.1 s and 2.5207 Wh over 17 fits for `lgbm-extended`, at `num_threads: 1` on an i7-1360P laptop, so its fit times are not comparable with the i5-10210U figures above (the `results/` record of each sweep's summary run in MLflow) |
+| Hyperparameter search | no budget: run once per tuning decision, outside `dvc repro`, and reported apart from the final fit (NFR-10, EDN-73) | **391.3 s** of fitting and 3.6071 Wh for the 34 fits of issue #88's search: 112.3 s and 1.0864 Wh over 17 fits for `lgbm-basic`, 279.1 s and 2.5207 Wh over 17 fits for `lgbm-extended`, at `num_threads: 1` on an i7-1360P laptop, so its fit times are not comparable with the i5-10210U figures above (the `results/` record of each sweep's summary run in MLflow) |
 | Model artefact on disk | no target | 7.6 MB (`booster.txt`, 1,243 trees) for the candidate, 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
@@ -487,7 +487,7 @@ A model is released only if it meets all six ([requirements](requirements.md#2-n
 ### How comparable the sets are, and how much a figure moves with the split
 
 The split assigns whole sellers by a hash of the seed and the seller key and stratifies on nothing, so the four sets are comparable only as far as the draw makes them.
-**That was measured, and the split is kept as it is (EDN-79).**
+**That was measured, and the split is kept as it is (EDN-32).**
 What changed is the reporting: this section states the distribution of every set, and a figure of the committed split is given with its spread over 20 other splits.
 It was enough to keep the split because the three things that could have argued against it did not show: the committed draw is better balanced than most, the pooled criteria hold on every split tried, and the one criterion that fails, SC-04, fails on every one of them.
 A stratified-group split would have narrowed the largest make gap from 4.86 pp to 2.04 pp, and would have moved 52.6 % of the rows between sets as soon as the `ES` listings join the pool, which is the retrain FR-15 compares against the current model; the hash split moves none.
@@ -579,7 +579,7 @@ The two failures are the interesting half of this card, and neither is a surpris
   The [problem specification](problem-spec.md#8-success-criteria) already recorded cars over 20 years at 15.3 % as the known risk, and the pipeline measures them worse than that: **16.77 % for the candidate** (18.3 % on average over 20 other splits) and 18.45 % for `lgbm-extended`, over 784 test rows.
   Letting early stopping decide the tree count (EDN-73) moved the candidate 0.35 pp closer to the bar and not under it.
   The specification named two possible remedies, "the extended features or a scope change for classic cars", and measurement has **ruled the first one out**: the extended set makes this segment 1.7 pp worse while improving the pooled figure by 0.55 pp, so the extra features do not carry information about old cars.
-  The hyperparameter search kept the committed values (EDN-78), so it leaves the figure where it is.
+  The hyperparameter search kept the committed values (EDN-73), so it leaves the figure where it is.
   That is a finding about the features and the model, not a reason to move the bar: the threshold stays at 15 %, no upper age bound is added, and the criterion is reported as missed.
   Nothing is unblocked by softening it in any case, because SC-05 blocks the gate regardless.
 - **SC-06 passes for the candidate and fails on `lgbm-extended`, and there only when every optional field is absent at once.** Each of the 23 optional fields masked on its own costs at most 9.7 % of the MdAPE (`equipment_extra`, 1.10x), which is comfortably inside the bound; all 23 together cost 64.6 % (6.26 % to 10.30 %). `lgbm-basic` passes at 1.21x (6.81 % to 8.26 %), because it has six optional fields to lose rather than 23, and `b0` and `b1` pass at 1.00x and 1.16x.
@@ -614,7 +614,7 @@ The price buckets are deliberately not part of this statement: their profile is 
 
 #### The experiment ladder, as measured
 
-One run of the whole chain on the real snapshot on 2026-10-05 (`download.source: zenodo`, 118,382 raw listings, 105,405 after the scope and deduplication funnel), fitted on the 11 supported makes and encoded in the vocabulary their training rows decided (EDN-48): 60,378 training rows, 8,859 validation rows and 19,665 test rows, which are the served rows of the 61,180, 8,992 and 19,985 in the split.
+One run of the whole chain on the real snapshot on 2026-10-05 (`download.source: zenodo`, 118,382 raw listings, 105,405 after the scope and deduplication funnel), fitted on the 11 supported makes and encoded in the vocabulary their training rows decided (EDN-05): 60,378 training rows, 8,859 validation rows and 19,665 test rows, which are the served rows of the 61,180, 8,992 and 19,985 in the split.
 It is the run the committed `dvc.lock` records, so `dvc pull` reproduces these artefacts exactly, and it is tracked: one MLflow run per variant, found with the `tags.git_commit` filter under [Experiment tracking](#experiment-tracking).
 Every number is from the test split, at `train.num_threads: 1`, and MdAPE is the primary metric.
 The bold figures are the lowest of the ladder; they are not the candidate, which SC-06 decided against them (EDN-62).
@@ -636,8 +636,8 @@ What the ladder says, and what it does not:
   For `lgbm-extended` that comes with a larger dependence on its optional fields, SC-06 1.58x to 1.65x, and a worse old-car segment, 17.86 % to 18.45 %, while the candidate's old-car segment improves from 17.12 % to 16.77 %.
   What they cost is linear in the trees: 1.3x and 1.7x the boosting rounds and so the fit, 6.2 to 7.6 MB and 6.8 to 10.9 MB of booster, and one row's native SHAP export from 18.9 to 26.1 ms and from 22.3 to 35.4 ms.
   So the 1,000-tree models were a hair short of where their validation curve flattens, not far from it, and the pooled numbers this card used to quote were not a materially pessimistic bound.
-  `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was distinguishable from them (EDN-73), and issue #88's search, over both variants and `min_child_samples` as well, kept every value for the same reason (EDN-78, under [Hyperparameters as trained](#hyperparameters-as-trained)).
-- The whole four-variant ladder trains in **58.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models between 2026-10-05 and 2026-10-12, with identical trees, took 8.0 s to 19.1 s and 27.1 s to 58.5 s against 12.4 s and 42.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core (EDN-53 measured the same variance from the other side).
+  `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was distinguishable from them (EDN-73), and issue #88's search, over both variants and `min_child_samples` as well, kept every value for the same reason (see [Hyperparameters as trained](#hyperparameters-as-trained)).
+- The whole four-variant ladder trains in **58.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models between 2026-10-05 and 2026-10-12, with identical trees, took 8.0 s to 19.1 s and 27.1 s to 58.5 s against 12.4 s and 42.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core.
 
 #### Reference values
 
@@ -654,7 +654,7 @@ Same scope as above without `ES`, deduplicated, 96,831 listings, 80/20 split gro
 The ladder reproduces the reference run, and the first three criteria pass with margin for both LightGBM variants: the candidate `lgbm-basic` is at 6.81 % MdAPE against SC-01's 9 %, 89.8 % within 20 % against SC-02's 85 %, and 44.0 % below the median baseline against SC-03's 30 %.
 Nothing is released on that, because NFR-01's word is "every": SC-04 fails for every variant and SC-05 has no measurement until the UC2 intervals exist.
 The chosen model is therefore `lgbm-basic` **as a candidate**, chosen over the lower pooled MdAPE of `lgbm-extended` because it is the one that meets SC-06 (EDN-62).
-Early stopping decides its tree count (EDN-73), which turned out to be worth 0.02 pp, and its `learning_rate`, `num_leaves` and `min_child_samples` are the values it was first fitted with because the search around them found nothing the validation split can tell apart, for either LightGBM variant (EDN-73, EDN-78).
+Early stopping decides its tree count (EDN-73), which turned out to be worth 0.02 pp, and its `learning_rate`, `num_leaves` and `min_child_samples` are the values it was first fitted with because the search around them found nothing the validation split can tell apart, for either LightGBM variant (EDN-73).
 So the honest statement about it is not that it is tuned to an optimum but that the obvious knobs have been searched and kept, because none of them buys a resolvable gain.
 
 Three risks going into the rest of Milestone 3, all three now measured rather than anticipated:
@@ -682,7 +682,7 @@ Explanations are part of the product, not an afterthought: every valuation ships
 
 ## Environmental Impact
 
-CodeCarbon records the energy and emissions of every fit, and only of the fit, into `reports/emissions/<variant>.csv` and into the variant's MLflow run beside its accuracy (NFR-10, EDN-69).
+CodeCarbon records the energy and emissions of every fit, and only of the fit, into `reports/emissions/<variant>.csv` and into the variant's MLflow run beside its accuracy (NFR-10).
 **The figure is an estimate, not a reading.**
 RAPL, the CPU's energy counter, is root-only on Linux since kernel 5.10, so on every machine we train on CodeCarbon falls back to its `cpu_load` model: 10 W for the RAM plus the CPU's TDP times the share of its logical CPUs the fit kept busy.
 On the i5-10210U the ladder is trained on, that is 15 W / 8 x the fit's CPU time plus 10 W x its wall time, so a single-threaded fit is charged 11.75 to 11.80 W for every second it runs, and the RAM constant is most of it.
@@ -712,7 +712,7 @@ It earns that only when the user supplies the extra fields: given only the field
 The whole ladder is 0.216 Wh, 37.7 mg CO2eq and 58.0 s of fitting, against NFR-10's 15 minutes.
 The search of issue #88 changed no value, so these numbers and the conclusion stand for the final configuration.
 
-The hyperparameter search of issue #88 is measured the same way, fit by fit, and kept apart from these figures: its CodeCarbon rows (`results/emissions.csv`) and its totals (the JSON record beside them under `results/`) are artifacts of each sweep's summary run in the MLflow experiment `recommenditos-price-tuning`, not files in the repository, because the table above is the cost of the models that were chosen, and a search is the cost of choosing them (NFR-10, EDN-78).
+The hyperparameter search of issue #88 is measured the same way, fit by fit, and kept apart from these figures: its CodeCarbon rows (`results/emissions.csv`) and its totals (the JSON record beside them under `results/`) are artifacts of each sweep's summary run in the MLflow experiment `recommenditos-price-tuning`, not files in the repository, because the table above is the cost of the models that were chosen, and a search is the cost of choosing them (NFR-10, EDN-73).
 It ran on 2026-10-06 on another laptop, a 13th Gen Intel Core i7-1360P (16 logical CPUs) under Windows, with CodeCarbon 3.3.1's estimate and the same pinned 174.05 g CO2eq/kWh.
 
 | Sweep | Fits | Fit time | Energy | Emissions |
@@ -732,7 +732,7 @@ Either way it is a one-off cost of choosing the values, paid once per tuning dec
 | | |
 |---|---|
 | **Hardware type** | Laptop CPU for training, the course VM's CPU for serving. No GPU anywhere (NFR-04). |
-| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration; a hyperparameter search is reported apart (NFR-10, EDN-78). Measured on the tracked run of 2026-10-12: 12.4 s of fitting for the candidate `lgbm-basic`, 58.0 s for the whole ladder; issue #88's search, outside the budget, took 391.3 s of fitting on another laptop. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-73) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
+| **Hours used** | Target: at most 15 minutes per training run of the chosen configuration; a hyperparameter search is reported apart (NFR-10, EDN-73). Measured on the tracked run of 2026-10-12: 12.4 s of fitting for the candidate `lgbm-basic`, 58.0 s for the whole ladder; issue #88's search, outside the budget, took 391.3 s of fitting on another laptop. Fit time, and so energy, is linear in the boosting rounds: letting early stopping decide them (EDN-73) costs the candidate 1.3x the rounds for 0.02 pp of MdAPE. |
 | **Cloud provider** | None for training. Serving runs on the FIB Virtech VM provided by the course (EDN-17). |
 | **Compute region** | Barcelona, Spain. |
 | **Carbon emitted** | 0.216 Wh and 37.7 mg CO2eq for the whole ladder on 2026-10-12, measured while other work loaded the laptop (0.157 Wh on 2026-10-06 for identical trees), the configuration the hyperparameter search kept, per variant in the table above, plus 3.6071 Wh and 627.81 mg CO2eq once for the search itself: CodeCarbon's estimate (`cpu_load`) against the Spanish grid. |
@@ -818,14 +818,10 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-17: the component is deployed on the FIB Virtech VM.
 - EDN-18: unseen countries and models are accepted with a warning.
 - EDN-19: the DagsHub repository belongs to a team organisation.
-- EDN-22: listings registered after the reference date are dropped.
 - EDN-23: condition flags are read as one-sided assertions.
-- EDN-48: the supported-make list is applied in the `features` stage.
-- EDN-49: predictions are not bias-corrected after the log transform.
+- EDN-32: the split is 60/10/10/20 by seller, with the snapshot date as seed.
 - EDN-62: `lgbm-basic` is the candidate model.
 - EDN-73: hyperparameters change only under a written tuning protocol.
-- EDN-78: the hyperparameter search covers both LightGBM variants.
-- EDN-79: the seller-grouped hash split stays.
 
 ## Model Card Authors
 

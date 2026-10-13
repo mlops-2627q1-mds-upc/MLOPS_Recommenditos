@@ -61,7 +61,7 @@ repository root.
 The `split` block of `params.yaml` is copied into it rather than loaded, the way `nfr11_check.py`
 keeps its own `P_VAL`, so the committed output stays attached to the values it was measured at.
 
-## How comparable the sets are, and the split noise (EDN-79, issue #89)
+## How comparable the sets are, and the split noise (EDN-32, issue #89)
 
 `split_strategy.py` is the evidence behind the decision on the split strategy.
 It reports the committed split set by set (rows, make shares, price quantiles, the share of cars over 20 years), traces the low Mercedes-Benz share of the calibration set to individual dealers, and puts the committed draw beside 1,000 other seeds of the same hash assignment.
@@ -69,7 +69,7 @@ It then measures the split noise of the reported metrics: the real `split` and `
 The seeds are fixed in the script before any of them was run, and none of them is a candidate: the script measures noise, it does not select a split.
 Only the split seed varies; every fit uses the committed `seed` and hyperparameters, and the run of the committed seed must reproduce `metrics.json` exactly, which the output states.
 The last blocks hold an adversarial-validation check, the stratified-group alternative as an assignment (its make balance, and how many sellers move when the `ES` listings join the pool), and the state of SC-05.
-`split_strategy_results.txt` is the output of the run recorded in EDN-79 and cited in the model card (2026-10-12).
+`split_strategy_results.txt` is the output of the run recorded in EDN-32 and cited in the model card (2026-10-12).
 
 Like `split_gate.py` it imports the stages' own functions and runs from the repository root after `dvc pull`, and it writes nothing under `data/`, `models/` or `metrics.json`:
 
@@ -94,7 +94,7 @@ an engine letter - and what range `weight_kg` covers once parsed out of its text
 `extended_features_results.txt` is the output of the run cited in the archived EDN-41, the model card and the
 dataset card (2026-09-30).
 
-## The feature space over the served makes (EDN-48, model card)
+## The feature space over the served makes (EDN-05, model card)
 
 `served_vocabulary.py` builds the `features` stage's vocabulary twice from the same `split` output,
 once over every training row and once over the training rows of the supported makes, and reports
@@ -104,7 +104,7 @@ It is the before-and-after of moving the supported-make filter in front of the v
 Like `split_gate.py` it imports the stage's own functions, so it runs from the repository root, and
 it reads the `split` artefacts under `data/processed/` rather than the raw CSV, so `dvc pull` is all
 it needs.
-`served_vocabulary_results.txt` is the output of the run cited in EDN-48, the model card and
+`served_vocabulary_results.txt` is the output of the run cited in EDN-05, the model card and
 `params.yaml` (2026-10-05).
 
 ## Where early stopping lands, and what tuning could still buy (EDN-73, issue #64)
@@ -116,7 +116,7 @@ It is the evidence behind the committed ceiling of 5,000.
 `tuning_sweep.py` is the evidence behind EDN-73, not a tuning run: a small grid of `learning_rate` and `num_leaves` for the candidate `lgbm-basic`, each point fitted with early stopping deciding the trees, and a paired bootstrap by seller group of whether the validation split can tell any point from the committed one.
 `tuning_sweep_results.txt` is its output (2026-10-05).
 It was also the first decision step of the tuning protocol in `docs/docs/pipeline.md`, which adopts a point only when its simultaneous interval, from a max-statistic bootstrap over all the points, lies below zero.
-Since issue #88 that step is `recommenditos/modeling/tune.py`, which runs it for any grid and variant and measures and tracks every fit (EDN-78); its results are kept in MLflow, in the experiment `recommenditos-price-tuning`, not here.
+Since issue #88 that step is `recommenditos/modeling/tune.py`, which runs it for any grid and variant and measures and tracks every fit (EDN-73); its results are kept in MLflow, in the experiment `recommenditos-price-tuning`, not here.
 Its first sweep, `88-lgbm-basic-lr-leaves`, repeats this grid and reproduces `tuning_sweep_results.txt` exactly, apart from the fit times.
 This script now imports the seller-group join, the paired bootstrap and the simultaneous intervals from that module, with the same draws from the same seed, so it still reproduces `tuning_sweep_results.txt`.
 
@@ -141,7 +141,7 @@ It needs no data and no credentials: every token is generated and lives only in 
 Run it from the repository root with the gitleaks binary the CI job pins, `python reports/analysis/secret_scan_dagshub_token.py path/to/gitleaks`; it fetches detect-secrets through `uvx`.
 `secret_scan_dagshub_token_results.txt` is the output of the run recorded in EDN-71 (2026-10-05).
 
-## What CodeCarbon measures on our machines (EDN-69, issue #38)
+## What CodeCarbon measures on our machines (issue #38, archived EDN-69)
 
 `codecarbon_validity.py` tests the assumption issue #38 was written on - that CodeCarbon *measures* the energy of a fit - before any figure is quoted.
 It asks which CPU power method CodeCarbon 3.3.1 falls back to when RAPL is root-only, whether its figure follows the CPU work of four different workloads in `process` and in `machine` mode, whether the offline tracker makes any network call, how completely `measure_power_secs` of 1 s and 15 s integrate a fit, what the tracker costs on the test fixture, and what `on_csv_write="append"` does to a DVC stage output.
@@ -153,7 +153,7 @@ Unlike the scripts below it needs no raw data: it uses the synthetic fixture and
 uv run python reports/analysis/codecarbon_validity.py
 ```
 
-`rapl_validation.py` is the one-off check EDN-69 chose instead of granting RAPL access permanently: it measures an idle baseline and three fits of each ladder variant with the RAPL counters themselves, with CodeCarbon's `cpu_load` estimate forced as the pipeline gets it, and with CodeCarbon's own RAPL figure, all around the same fit.
+`rapl_validation.py` is the one-off check the archived EDN-69 chose instead of granting RAPL access permanently: it measures an idle baseline and three fits of each ladder variant with the RAPL counters themselves, with CodeCarbon's `cpu_load` estimate forced as the pipeline gets it, and with CodeCarbon's own RAPL figure, all around the same fit.
 It refuses to run on a busy machine, because RAPL counts the whole package, and when the counters are not readable it prints the command that makes them readable.
 `rapl_validation_results.txt` is its output.
 
@@ -186,7 +186,7 @@ cd "$ROOT/data/external" && PYTHONPATH="$ROOT/reports/analysis" python "$ROOT/re
 ```
 
 The scope of these scripts follows the pipeline: used cars only (EDN-04), listings registered
-after the age reference date dropped (EDN-22), the training price range, deduplicated before any
+after the age reference date dropped, the training price range, deduplicated before any
 split. Re-run them whenever a decision changes that scope, because their outputs are cited as
 EDN evidence.
 
@@ -222,9 +222,9 @@ It needs no data: `uv run python reports/analysis/gx_probe.py`.
 `gx_fingerprint_cost.py` runs the real `validate-data` stage on the real snapshot with Great Expectations' batch fingerprint switched off, as the stage does, or on, against a context in a temporary directory, so the pipeline's outputs are not touched.
 Run each mode under `/usr/bin/time -v`; `gx_fingerprint_cost_results.txt` holds the wall time and peak RSS of both runs cited in EDN-68 (2026-10-05).
 
-`mileage_scope.py` measures the alternative EDN-22 rejected for the mileage rule: dropping the three cleaned listings above FR-03's 1,000,000 km in preprocessing.
+`mileage_scope.py` measures the alternative the archived EDN-22 rejected for the mileage rule: dropping the three cleaned listings above FR-03's 1,000,000 km in preprocessing.
 It runs the real `split`, `features`, `train` and `evaluate` stages on the interim frame without them, in a temporary directory with tracking off, and compares the result with the committed `metrics.json`.
-`mileage_scope_results.txt` is the output of the run cited in EDN-22 (2026-10-05), taken against the `metrics.json` of commit `abea241`.
+`mileage_scope_results.txt` is the output of the run cited in the archived EDN-22 (2026-10-05), taken against the `metrics.json` of commit `abea241`.
 
 ## What a run's provenance tags identify (archived EDN-74, issue #79)
 

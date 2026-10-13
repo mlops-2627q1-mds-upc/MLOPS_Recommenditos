@@ -178,7 +178,7 @@ stages:
   #
   # `supported_makes.json` is a dependency because this stage applies it: every
   # frame, the `ES` holdout included, is restricted to the makes the API serves
-  # before the vocabulary is built (EDN-48). A change to which makes
+  # before the vocabulary is built (EDN-05). A change to which makes
   # those are therefore changes both the rows of every matrix and the feature
   # space they are encoded in, and a matrix built against the old list has to be
   # rebuilt rather than reused. How `train` and `evaluate` check the result is in
@@ -226,7 +226,7 @@ stages:
   # `supported_makes.json` is a dependency because the stage reads it: it checks
   # that the matrices hold the makes the API serves and no others, and records
   # the list in the bundle, which is where the API takes FR-04's scope from
-  # (EDN-48). A changed list already reruns this stage through the
+  # (EDN-05). A changed list already reruns this stage through the
   # matrices; declaring it is what keeps the recorded list from disagreeing with
   # the lock.
   #

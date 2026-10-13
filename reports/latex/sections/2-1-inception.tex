@@ -88,12 +88,12 @@ We profiled the file ourselves, and what we found shaped the project:
 
 The card states each limitation together with what it rules out.
 The target is an asking price, not a sale price.
-The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-79).
+The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-32).
 The raw file contains seven columns with personal data of sellers: they never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20).
 
 After the scope, price, date and deduplication rules, 105,405 of the 118,382 listings remain.
 The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
-We reviewed this split strategy after training and kept it (EDN-79).
+We reviewed this split strategy after training and kept it.
 \Cref{tab:split} shows the result.
 The validation set is used for early stopping and tuning, the calibration set is reserved for the price intervals of UC2, and the test set is what the release gate reads.
 
@@ -125,7 +125,7 @@ Its main points:
 
 \begin{itemize}
   \item \textbf{Model.} LightGBM on $\log(\mathrm{price})$, compared with two baselines: B0, the median price per make, model and age band, and B1, a Ridge regression (EDN-02).
-  \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73, EDN-78). Early stopping chose 1,243 trees under a ceiling of 5,000 (EDN-73), and the model file has 7.6\,MB.
+  \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). Early stopping chose 1,243 trees under a ceiling of 5,000, and the model file has 7.6\,MB.
   \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment and the energy of each training run (\cref{sec:m3-energy}).
   \item \textbf{Who is affected by a wrong answer.} A seller acts on one number, and an estimate that is 10\,\% too low costs them money without their noticing. This is why a valuation comes with an explanation (FR-08). A buyer uses the price interval to check an offer, which is what SC-05 bounds.
   \item \textbf{Limitations.} The error on cars older than 20 years is above SC-04's bound, which we accept as a limitation of this model (EDN-62). Honda, Hyundai, Aston Martin and Volkswagen are served but have fewer than 500 test rows each, so SC-04 does not check them.
@@ -149,7 +149,7 @@ The board is linked on the cover.
   \item \textbf{Ceremonies.} A sprint runs from Tuesday to Tuesday. Planning, review and retrospective take place in the Tuesday laboratory session, the only time the whole team is in one room. We have no daily standup.
   \item \textbf{Tickets.} Every issue has an owner, a milestone label (\texttt{M1} to \texttt{M6}) and an area label such as \texttt{area:data}. Sprint~1 had no labels until its last day, so we now add them when the issue is written.
   \item \textbf{Written process.} \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}} hold the roles, the Definition of Done and the working agreements.
-  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 47 entries of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}} record the engineering decisions taken so far with their alternatives.
+  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 37 entries of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}} record the engineering decisions taken so far with their alternatives.
 \end{itemize}
 
 \begin{table}[ht]

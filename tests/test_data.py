@@ -39,12 +39,12 @@ def test_a_different_seed_gives_a_different_fixture():
 @pytest.mark.parametrize(
     ("description", "predicate"),
     [
-        # EDN-22: age would be negative for these.
+        # Age would be negative for these.
         (
             "registered after the snapshot",
             lambda f: pd.to_datetime(f.registration_date) > SNAPSHOT_DATE,
         ),
-        # EDN-22 again, from the other side: the bound is inclusive, and no body
+        # The same rule from the other side: the bound is inclusive, and no body
         # row can show it because they are all registered on the first of a month.
         (
             "registered on the snapshot",

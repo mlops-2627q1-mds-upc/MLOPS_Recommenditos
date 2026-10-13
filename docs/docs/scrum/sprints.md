@@ -155,7 +155,7 @@ Written from the merged pull requests and the closed issues, to be confirmed by 
 - The pipeline skeleton and the processed-data contract ([#32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32)), then every stage on top of it: download ([#33](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/33)), preprocess ([#34](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/34)), split ([#35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35)), features ([#36](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/36)), train ([#37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37)) and evaluate ([#39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39)).
 - Great Expectations suites on the raw and the cleaned frame that fail the pipeline on a broken rule ([#25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25)).
 - The pipeline on the real Zenodo snapshot, with the artefacts pushed to DagsHub ([#57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57), [#59](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/59)).
-- CodeCarbon around every training fit, with the model ladder compared by energy against error ([#38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38), EDN-69).
+- CodeCarbon around every training fit, with the model ladder compared by energy against error ([#38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38)).
 - CI: requirement markers and the traceability matrix ([#40](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/40)), Pynblint ([#41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41)), gitleaks on every commit, grouped dependencies so the API image does not carry the training stack ([#61](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/61)), and the test suite on Windows ([#84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/84), EDN-75).
 - Early stopping now decides the LightGBM tree count under a 5,000-tree ceiling ([#64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/64)), and every run's provenance tags identify a committed state ([#79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/79)).
 - DagsHub access, the board, its labels and milestones, and the coding-agent rule ([#42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42), [#43](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/43)).
@@ -185,7 +185,7 @@ The first report is due on 2026-10-19 at 23:59 and the M1-M3 presentation is on 
   The grid search of [#88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), with the method decision recorded in the EDN before the search runs, and the split strategy of [#89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89).
   Both move every number the report quotes, so they land first.
 - **Carbon emissions.**
-  Build on the CodeCarbon measurement of [#38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38) and EDN-69.
+  Build on the CodeCarbon measurement of [#38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38).
   The ticket for this scope is still to be written, with an owner and the oracle that says when it is done.
 
 **Backlog:**
@@ -269,7 +269,7 @@ Drafted from the sprint's record on 2026-10-06, to be confirmed by the team in t
 - **What to improve:**
     - The work is still unevenly distributed: 27 of the 29 pull requests merged since planning were authored under @lukas2510's account, 2 under @kadameit's, and 23 of the 26 closed issues were assigned to @lukas2510.
       The laboratory grade carries an individual factor based on contributions, and the account that opens an agent's pull request does not show who did the thinking.
-    - EDN numbers were again taken without reserving them on `main` first (EDN-69 and EDN-75), after the sprint 1 retrospective made reserving them an action item.
+    - EDN numbers were again taken without reserving them on `main` first (EDN-69, since archived, and EDN-75), after the sprint 1 retrospective made reserving them an action item.
     - Two pull requests moved the lab from Tuesday to Wednesday because the course PDF's session dates were read as 2026 dates and never checked against the day the lab actually meets.
       #97 corrected it.
     - Tuning and the split strategy were left until after the pipeline worked, so they now sit in front of a delivery date.

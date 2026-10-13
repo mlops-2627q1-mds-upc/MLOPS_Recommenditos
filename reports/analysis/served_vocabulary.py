@@ -1,4 +1,4 @@
-"""The feature space over every training row against over the served training rows (EDN-48).
+"""The feature space over every training row against over the served training rows (EDN-05).
 
 Issue #63 moves the supported-make filter in front of the vocabulary: the `features` stage now
 restricts every frame to the makes `split` lists before it decides which levels and columns exist.

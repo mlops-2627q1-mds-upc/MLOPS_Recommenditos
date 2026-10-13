@@ -3,7 +3,7 @@
 Uninstalled 1 package in 0.37ms
 Installed 1 package in 0.76ms
 raw rows: 118,382
-dropped, registered after the reference date (EDN-22): 27
+dropped, registered after the reference date: 27
 scoped and deduplicated: 105,405
 training scope (non-ES, 11 supported makes): 97,889
 ES holdout, as the API would accept it: 5,979

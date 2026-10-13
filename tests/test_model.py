@@ -175,7 +175,7 @@ def test_frames(matrices: dict) -> dict:
     """The test matrix per feature set, as `features` wrote it.
 
     Already the population `evaluate` reports on, because the stage restricts
-    every frame to the makes the API serves (EDN-48), so a test that
+    every frame to the makes the API serves (EDN-05), so a test that
     scores a model here scores it on the same rows the stage would.
     """
     return {
@@ -291,7 +291,7 @@ def test_the_bundle_carries_the_feature_space_it_was_fitted_against(trained: dic
 def test_the_model_is_fitted_on_the_supported_makes_only(
     trained: dict, supported_makes: tuple[str, ...], matrices: dict
 ):
-    """EDN-48: the model's training rows are the population the API serves.
+    """EDN-05: the model's training rows are the population the API serves.
 
     Checked rather than intended, which is the fourth of the obligations
     docs/docs/pipeline.md lists for the make list. Asserted on the row count as
@@ -299,7 +299,7 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
     row would pass a check that only read the metadata.
 
     Counted on the frames `split` wrote rather than on the matrices, because
-    `features` is where the restriction happens now (EDN-48): a matrix holds only
+    `features` is where the restriction happens now (EDN-05): a matrix holds only
     supported makes, so it cannot show that anything was removed, while the split
     frames still hold every make and say what the model should have been fitted
     on.
@@ -321,7 +321,7 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
         # the fit on one population and report a number about another.
         assert model.metadata["training"]["n_validation_rows"] == expected["validation"], variant
         # And the encoding the model was fitted in knows no other make, which is
-        # the half of EDN-48 a row count cannot see (obligation 2).
+        # the half of EDN-05 a row count cannot see (obligation 2).
         assert set(model.space.vocabulary.categories["make"]) <= set(supported_makes), variant
 
 
@@ -664,7 +664,7 @@ def test_align_returns_only_float64_and_category_columns(trained: dict, test_fra
 
     So this is a contract assertion, not a regression test for a bug anyone has
     seen, and the cast is insurance of the same kind as `deterministic=True` and
-    `solver="lsqr"` (EDN-53). It is stated rather than removed because the
+    `solver="lsqr"`. It is stated rather than removed because the
     property a new estimator depends on should not rest on two libraries
     independently choosing to be tolerant.
     """
@@ -1524,7 +1524,7 @@ def test_training_refuses_matrices_built_against_another_make_list(
 
     The way it happens: `split.min_listings_per_make` is swept, the list is
     rewritten and the matrices are not rebuilt. `features` owns the restriction
-    (EDN-48), so `train` does not filter again - that would quietly repair the
+    (EDN-05), so `train` does not filter again - that would quietly repair the
     rows while keeping a vocabulary decided over a different population - but it
     checks that every row it is about to fit is a make the list names, and says
     which list it checked against.
@@ -1723,7 +1723,7 @@ NOT_DECLARED_TRAIN_PARAMS = frozenset(
         "n_train_rows",
         "n_validation_rows",
         "n_supported_makes",
-        # How the energy figure was produced (EDN-69). Facts about the machine and
+        # How the energy figure was produced. Facts about the machine and
         # the library rather than `params.yaml` keys - nobody sets a CPU model -
         # and logged because an estimate from a TDP and a counter reading are not
         # comparable, so a run has to say which its figure is. The settings that
@@ -1819,7 +1819,7 @@ def test_a_run_records_every_parameter_its_stage_declares(
     }
 
     # An optional key the block leaves out is logged at the value the fit used
-    # (EDN-78): not declared, because it is not in params.yaml, yet a parameter
+    # (EDN-73): not declared, because it is not in params.yaml, yet a parameter
     # of the fit all the same.
     optional = {
         f"{estimator}.{key}": str(value)
@@ -2324,7 +2324,7 @@ def test_an_age_bucket_is_left_closed_and_names_both_absences(age, expected, par
     # The last two rows are the levels that keep a data-quality defect visible: a
     # null `registration_date` and a listing registered after the reference date
     # are different findings, and folding a negative age into the youngest bucket
-    # would hide the second one (EDN-22 removes it in `preprocess`).
+    # would hide the second one (`preprocess` removes it).
     levels = bucket_levels(
         pd.Series([age], dtype="float64"), params["evaluate"]["age_bucket_edges"]
     )
@@ -2594,7 +2594,7 @@ def test_a_test_matrix_holding_a_make_the_model_was_not_fitted_on_is_refused(
     trained, matrices, tmp_path
 ):
     # Reachable only when the test matrix and the model's make list come from
-    # different `split` runs. `features` owns the restriction (EDN-48), so the
+    # different `split` runs. `features` owns the restriction (EDN-05), so the
     # stage checks the test rows against the model's own list instead of
     # filtering them again: a filter here would report on a population chosen by
     # whichever run the model came from, with no error anywhere.
@@ -2611,7 +2611,7 @@ def test_a_test_matrix_holding_a_make_the_model_was_not_fitted_on_is_refused(
 
 
 def test_a_per_make_level_the_api_would_reject_is_refused():
-    # EDN-48's third obligation. Without this the report would print an error
+    # EDN-05's third obligation. Without this the report would print an error
     # figure for a make FR-04 answers with a 422, which is worse than printing
     # nothing, and the restriction upstream would be an intention rather than a
     # checked property.

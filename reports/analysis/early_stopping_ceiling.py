@@ -24,7 +24,7 @@ off, because nothing here belongs in the ladder's MLflow experiment:
 
 The fits run at `train.num_threads`, as the stage does, so the seconds are comparable with the
 stage's `fit_seconds`; like every fit time in this project they move with whatever else holds a
-core (EDN-53), and the ratios within one run are the measurement.
+core, and the ratios within one run are the measurement.
 """
 
 from pathlib import Path

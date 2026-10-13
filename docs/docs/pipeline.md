@@ -83,7 +83,7 @@ Five of those leaves are not measurements but provenance - `data_source` and eac
 Two stages iterate a mapping in `params.yaml` with `foreach`, so they are named after the item rather than its position: `features@basic`, `train@lgbm-extended`.
 Each declares only its own slice under `params:`, so changing one variant's hyperparameters retrains that variant and no other.
 
-`train` measures the energy of its fit with CodeCarbon and nothing else of the stage (issue #38, EDN-69).
+`train` measures the energy of its fit with CodeCarbon and nothing else of the stage (issue #38).
 CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached so that a retrain's energy is in the pull request diff, and into the MLflow run beside the accuracy metrics `evaluate` appends.
 CodeCarbon appends to that file, and DVC deletes a stage's outputs before running it, so after `dvc repro` it holds exactly the one row of the fit that produced the model; a run outside DVC appends a row, and the model's `model.json` names its own by CodeCarbon's run id.
 `compare-energy` joins each model, its emissions row and its metrics on those ids into the table and figure the report's energy section cites.
@@ -133,12 +133,12 @@ A categorical carries its level list, because a code is a level's position: two 
 The supported makes
 -------------------
 
-The model is fitted, and the SC-01 to SC-06 gate measured, only on the makes the API serves ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+The model is fitted, and the SC-01 to SC-06 gate measured, only on the makes the API serves ([EDN-05](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 Three stages share that rule, and each has one job in it:
 
 - `split` **records** the list and writes it as `data/processed/supported_makes.json`, but removes no row.
   It stays a lossless partition, so EDN-05's threshold can be revisited without re-running the split, and no row disappears without an artefact saying where it went.
-- `features` **applies** it, in `build_features.served_rows`, and is the only stage that does ([EDN-48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+- `features` **applies** it, in `build_features.served_rows`, and is the only stage that does.
   It restricts all five frames - train, validation, calibration, test and the `ES` holdout - and it does so before the vocabulary is built, so the `make` levels, the equipment columns and the `model_version` levels are decided by served training rows alone.
   It declares the artefact as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
   It also refuses a supported make that no training row holds, naming it: `split` counts support over all four sets, so after a change to `seed` or to the threshold every seller of a make can land outside train, and the API would then accept a make the model has never seen.
@@ -147,7 +147,7 @@ Three stages share that rule, and each has one job in it:
   A second filter would never remove a row from matrices `features` wrote; on any other matrices it would quietly repair the rows while keeping a feature space decided over another population, which is the one outcome worse than a failure.
   `evaluate` takes the list out of the model's own metadata, so the evaluated population is checked against the trained one, and `check_make_levels_are_served` then refuses a per-make SC-04 segment outside it.
 
-EDN-48 named four guarantees this arrangement owes, and each has an owner and a test:
+This arrangement owes four guarantees, and each has an owner and a test:
 
 1. The filter is applied to train, validation, calibration, test **and** the `ES` holdout.
    **`features`**, asserted by `tests/test_features.py::test_every_frame_the_stage_writes_holds_only_supported_makes`.
@@ -171,7 +171,7 @@ The problem they pose is a different one: the reported population would not be t
 The split
 ---------
 
-`split` assigns whole sellers to train, validation, calibration and test by a hash of `seed` and the seller key, at 60/10/10/20, after the `ES` holdout has left, and it stratifies on nothing ([EDN-79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+`split` assigns whole sellers to train, validation, calibration and test by a hash of `seed` and the seller key, at 60/10/10/20, after the `ES` holdout has left, and it stratifies on nothing ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 That keeps two properties a stratified assignment gives up.
 A clean clone reproduces the split from the seed and the key alone (NFR-06), and adding sellers leaves every seller already there in its set, which is what makes FR-15's retrain with `ES` comparable to the model before it.
 Measured on the real snapshot, a stratified-group split on `make` moves 52.6 % of the existing rows when the `ES` listings join the pool, and the hash split moves none.
@@ -200,7 +200,7 @@ A suite with no expectations, or a run that returns fewer results than its suite
 |---|---|---|---|
 | Column list, dtypes and non-null columns | asserted | asserted | `schema.py`, generated |
 | No PII column (NFR-08) and no `is_used` (EDN-23) | - | asserted, through the column list | `schema.py` |
-| `registration_date` at or before the reference date (EDN-22) | tolerated up to `validate.raw_mostly` | hard | `reference_date` |
+| `registration_date` at or before the reference date | tolerated up to `validate.raw_mostly` | hard | `reference_date` |
 | `price` inside the training range | - | hard | `preprocess.price_min_eur`, `preprocess.price_max_eur` |
 | `mileage_km_raw` inside the range FR-03 accepts | tolerated up to `validate.mileage_mostly` | tolerated up to `validate.mileage_mostly` | `validate.mileage_min_km`, `validate.mileage_max_km` |
 | `make`, `body_type` and the four equipment lists filled ([#78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78)) | tolerated up to `validate.required_filled_mostly`: a gap in a scrape is reported here, not as a contract error in `download` | tolerated up to `validate.required_filled_mostly`: a check on preprocessing | `params.yaml` |
@@ -241,7 +241,7 @@ A parameter change reruns the stages that read it, `dvc params diff` shows what 
 Tuning a hyperparameter
 -----------------------
 
-A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), extended by EDN-78 for issue #88).
+A committed hyperparameter changes only through this protocol ([EDN-73](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 The protocol exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
 Its decision step is `recommenditos/modeling/tune.py`, which fits every point of a grid, measures and tracks each fit, and decides on the validation split; queued `dvc exp` runs can **screen** a wider set of candidates first, but they are optional.
 
@@ -271,7 +271,7 @@ And these rules:
   The search's validation figures are optimistic, because early stopping picks each point's tree count on the same validation rows that score it.
 - **The reference is always fitted.** It is the variant as `params.yaml` has it, with any `--fix` applied, whether or not the grid names it, because every difference is taken against it.
 - **Every fit is measured and tracked** (issue #88). Each one is wrapped in `energy.measure` exactly as `train` wraps its fit and logged as its own run in the MLflow experiment `recommenditos-price-tuning`, so `recommenditos-price` holds only pipeline runs. A point's run is tagged `sweep`, `sweep_role=point`, `point`, `is_reference` and `variant` when it opens, so the run of a fit that fails still names its sweep and point, and carries its hyperparameters under the names `train` uses, its validation L1 and MdAPE, its fit time and its energy, but no model bundle; one `sweep_role=summary` run carries the sweep's totals, its verdict and its `reference_point`.
-- **MLflow is a sweep's only store** (EDN-78). Its record is uploaded to its summary run, under `results/`: `sweep.json`, every fit, comparison, total and the verdict; `sweep.txt`, the same as a table, which is also logged to the console when the sweep ends; and `emissions.csv`, CodeCarbon's row for every fit, with the columns that say how each figure was produced. Nothing of a sweep is written into the repository.
+- **MLflow is a sweep's only store** (EDN-73). Its record is uploaded to its summary run, under `results/`: `sweep.json`, every fit, comparison, total and the verdict; `sweep.txt`, the same as a table, which is also logged to the console when the sweep ends; and `emissions.csv`, CodeCarbon's row for every fit, with the columns that say how each figure was produced. Nothing of a sweep is written into the repository.
   The four sweeps of issue #88 ran before the two files got these fixed names, so their summary runs hold `<sweep id>.json` and `<sweep id>.txt` instead.
   Their runs' `git_commit` tags name commits of pull request #101's branch, which a squash merge keeps out of `main` and GitHub keeps under `refs/pull/101/head`.
 - **The search's energy is not the product's.** It is never written to `reports/emissions/<variant>.csv`, which holds the fit that produced the model. NFR-10's 15-minute budget is for that final fit; the search runs outside `dvc repro` and is reported on its own ([specification](specification.md) NFR-10).
@@ -302,7 +302,7 @@ A sweep id is used once: a second run under it is refused when the MLflow experi
 The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
 Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files.
 On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, and it did when the search ran on 2026-10-06: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
-All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-78).
+All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-73).
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:
 

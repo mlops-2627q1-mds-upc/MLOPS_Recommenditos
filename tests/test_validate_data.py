@@ -158,7 +158,7 @@ def test_validation_renders_the_data_docs_outside_the_context(stage, built):
 
 
 # --------------------------------------------------------------------------
-# EDN-22: registration dates after the reference date
+# Registration dates after the reference date
 # --------------------------------------------------------------------------
 
 
@@ -202,7 +202,7 @@ def test_the_raw_tolerance_is_the_one_params_yaml_sets(context, raw_frame, param
 
 
 def test_a_late_registration_in_the_cleaned_frame_fails_the_stage(built, frames, tmp_path):
-    # The hard half of EDN-22, through the stage itself: a failed expectation
+    # The hard half of the registration-date rule, through the stage itself: a failed expectation
     # fails `validate-data`, which is what stops `split` and everything after
     # it. The course demo only logs the failure count.
     interim = frames["interim"].copy()
