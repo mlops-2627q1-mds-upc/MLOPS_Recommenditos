@@ -6,7 +6,7 @@
   date = {2026-09-30},
   milestone = {M2: Reproducibility},
   topic = {Data Versioning, Personal Data},
-  participants = {@lukas2510. Open to revisit at the next sprint review, like EDN-25 itself.},
+  participants = {@lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.},
   decision = {Amends EDN-25, which had tracked the raw CSV with \texttt{dvc add} and pushed it to our DagsHub remote.
 The pointer \texttt{data/\allowbreak{}raw/\allowbreak{}autoscout24\_\allowbreak{}dataset\_\allowbreak{}20251108.\allowbreak{}csv.\allowbreak{}dvc} is deleted, the CSV is neither tracked nor pushed by us any more, and the \texttt{download} stage acquires it instead (EDN-35).
 The blob the pointer referenced is left on the remote untouched, so checking out an earlier commit and running \texttt{dvc pull} still works.
