@@ -1,7 +1,3 @@
-   Building recommenditos @ file:///home/lukas/Documents/Studium/Master/UPC/MLOps/MLOPS_Recommenditos
-      Built recommenditos @ file:///home/lukas/Documents/Studium/Master/UPC/MLOps/MLOPS_Recommenditos
-Uninstalled 1 package in 0.37ms
-Installed 1 package in 0.76ms
 raw rows: 118,382
 dropped, registered after the reference date: 27
 scoped and deduplicated: 105,405

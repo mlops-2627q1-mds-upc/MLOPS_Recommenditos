@@ -321,7 +321,7 @@ def test_the_model_is_fitted_on_the_supported_makes_only(
         # the fit on one population and report a number about another.
         assert model.metadata["training"]["n_validation_rows"] == expected["validation"], variant
         # And the encoding the model was fitted in knows no other make, which is
-        # the half of EDN-05 a row count cannot see (obligation 2).
+        # the half of the rule a row count cannot see (obligation 2 in docs/docs/pipeline.md).
         assert set(model.space.vocabulary.categories["make"]) <= set(supported_makes), variant
 
 
@@ -2611,8 +2611,9 @@ def test_a_test_matrix_holding_a_make_the_model_was_not_fitted_on_is_refused(
 
 
 def test_a_per_make_level_the_api_would_reject_is_refused():
-    # EDN-05's third obligation. Without this the report would print an error
-    # figure for a make FR-04 answers with a 422, which is worse than printing
+    # The third obligation docs/docs/pipeline.md lists for the make list. Without
+    # this the report would print an error figure for a make FR-04 answers with a
+    # 422, which is worse than printing
     # nothing, and the restriction upstream would be an intention rather than a
     # checked property.
     rows = [{"segment": "make", "level": name} for name in ("BMW", "Trabant")]

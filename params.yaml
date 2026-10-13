@@ -309,7 +309,7 @@ train:
       params:
         # Searched and kept, on evidence rather than by omission: a 12-point grid
         # of these two around their values is flat on the validation split, and no
-        # point of it is distinguishable from them (EDN-73,
+        # point of it is measurably better than them (EDN-73,
         # reports/analysis/tuning_sweep_results.txt). Issue #88's search repeated
         # that grid exactly and then swept `min_child_samples`, with the same
         # verdict (EDN-73; MLflow sweeps 88-lgbm-basic-lr-leaves and

@@ -36,7 +36,7 @@ It does not forecast future prices.
   That is the scenario rather than a bug - the model genuinely has never seen that market - and it is the treatment [EDN-18](#decision-records) requires of an unseen value, which is why the `features` stage logs a warning naming any column a split leaves entirely empty instead of dropping or renaming it.
 - **Price range used for training:** 500 EUR to 2M EUR; listings outside it are treated as data errors or collector outliers.
 - **Registration date up to the reference date:** 164 listings in the raw file are registered after the 2025-11-08 snapshot, which would give them a negative age.
-  114 of them are new cars and fall outside the used-car scope anyway; the 26 that survive the scope filters are treated as data errors and dropped.
+  114 of them are new cars and fall outside the used-car scope anyway; the 27 that survive the scope filters are treated as data errors and dropped.
 
 ### Out of scope
 

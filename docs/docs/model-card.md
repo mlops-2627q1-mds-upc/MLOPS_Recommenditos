@@ -335,15 +335,15 @@ Raising the ceiling is also what showed how closely the stopping metric tracks t
 Between 1,000 trees and the round early stopping chose, the validation L1 in log space keeps falling - by 0.2 % for `lgbm-basic` and 0.6 % for `lgbm-extended` - while validation MdAPE is flat or marginally worse, 6.947 % to 6.956 % and 6.448 % to 6.453 % (`reports/analysis/early_stopping_ceiling_results.txt`).
 L1 is a mean and MdAPE a median, so the last few hundred trees improve the tail of the errors rather than the typical one; on the test split they moved MdAPE by 0.02 pp and 0.07 pp (see [the ladder](#the-experiment-ladder-as-measured)).
 
-`learning_rate: 0.05` and `num_leaves: 63` were **searched and kept**: no point of the grids around them is distinguishable from them on the validation split (EDN-73).
-EDN-73 swept them first, for the candidate alone.
-A grid of `learning_rate` 0.025, 0.05 and 0.1 against `num_leaves` 31, 63, 127 and 255 for the candidate, every point with early stopping deciding its trees, is flat on the validation split: validation MdAPE spans 6.88 % to 7.04 %, and no point is distinguishable from the committed one.
+`learning_rate: 0.05` and `num_leaves: 63` were **searched and kept**: no point of the grids around them is measurably better on the validation split (EDN-73).
+The first sweep (issue #64) covered the candidate alone.
+A grid of `learning_rate` 0.025, 0.05 and 0.1 against `num_leaves` 31, 63, 127 and 255 for the candidate, every point with early stopping deciding its trees, is flat on the validation split: validation MdAPE spans 6.88 % to 7.04 %, and no point is measurably better than the committed one.
 The closest, `learning_rate` 0.025, is 0.0003 lower in validation L1 with a per-point 95 % interval of -0.0009 to +0.0003 under a paired bootstrap by seller group, and would cost 1.6x the trees; the two metrics do not even agree on which point is best (`reports/analysis/tuning_sweep_results.txt`).
 That holds simultaneously as well: widened by the max-statistic bootstrap so that the intervals of all eleven comparisons hold together, its interval is -0.0011 to +0.0005, and only two points, both at `learning_rate` 0.1, remain measurably worse.
 Any tuning, the search of issue #88 included, follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter): `recommenditos/modeling/tune.py` fits every point of a grid on the train and validation splits only, measures and tracks each fit in the MLflow experiment `recommenditos-price-tuning`, and adopts a value only when its simultaneous interval of the validation L1 difference lies below zero.
 
 **How the values were found (issue #88, EDN-73).**
-EDN-73's sweep covered `lgbm-basic` alone, so `lgbm-extended`'s `learning_rate` and `num_leaves` were the values it was first fitted with, carried over from the candidate rather than measured on its own feature set.
+The first sweep (issue #64) covered `lgbm-basic` alone, so `lgbm-extended`'s `learning_rate` and `num_leaves` were the values it was first fitted with, carried over from the candidate rather than measured on its own feature set.
 Issue #88 extends the search to both variants: EDN-73's grid of `learning_rate` and `num_leaves` for each, then a second grid of `min_child_samples` 5, 10, 20, 50 and 100 with the first grid's winner fixed, every fit measured by CodeCarbon and logged as its own run, under the same adoption rule.
 The search ran on 2026-10-06, and all four sweeps kept their reference, so `params.yaml` is unchanged and the committed test metrics are those of the configuration it kept; the search never read the test split.
 Every one of its 34 fits was ended by early stopping, not by the 20,000-tree ceiling.
@@ -636,7 +636,7 @@ What the ladder says, and what it does not:
   For `lgbm-extended` that comes with a larger dependence on its optional fields, SC-06 1.58x to 1.65x, and a worse old-car segment, 17.86 % to 18.45 %, while the candidate's old-car segment improves from 17.12 % to 16.77 %.
   What they cost is linear in the trees: 1.3x and 1.7x the boosting rounds and so the fit, 6.2 to 7.6 MB and 6.8 to 10.9 MB of booster, and one row's native SHAP export from 18.9 to 26.1 ms and from 22.3 to 35.4 ms.
   So the 1,000-tree models were a hair short of where their validation curve flattens, not far from it, and the pooled numbers this card used to quote were not a materially pessimistic bound.
-  `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was distinguishable from them (EDN-73), and issue #88's search, over both variants and `min_child_samples` as well, kept every value for the same reason (see [Hyperparameters as trained](#hyperparameters-as-trained)).
+  `learning_rate` and `num_leaves` were then swept for the candidate on the validation split and left where they were, because no point of the grid was measurably better (EDN-73), and issue #88's search, over both variants and `min_child_samples` as well, kept every value for the same reason (see [Hyperparameters as trained](#hyperparameters-as-trained)).
 - The whole four-variant ladder trains in **58.0 seconds** of fitting, against NFR-10's 15-minute budget, so nothing about the budget constrains the tuning. The figure is worth an order of magnitude of slack and not one second of precision: other fits of the same two LightGBM models between 2026-10-05 and 2026-10-12, with identical trees, took 8.0 s to 19.1 s and 27.1 s to 58.5 s against 12.4 s and 42.4 s here, because a fit at `num_threads: 1` competes with whatever else holds a core.
 
 #### Reference values

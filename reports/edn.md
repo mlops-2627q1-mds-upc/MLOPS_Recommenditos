@@ -137,7 +137,7 @@ How to add an entry:
 
 ### EDN-05: A make is supported from 300 listings
 
-> **Absorbs EDN-48** (2026-10-05): `features` is the one stage that applies the list.
+> **Absorbs EDN-48 and EDN-67** (2026-09-30, 2026-10-05): `features` is the one stage that applies the list.
 
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
@@ -362,7 +362,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI measured the fill rates and separated the API contract from the training mechanism.
   It found that a criterion over feature columns would count the car's age as optional.
   Its proposal to mask the condition flags as missing values was rejected, because it contradicts EDN-23 and the contract.
-  For the endpoints it contributed the monitoring argument; Lukas dropped its further suggestions, a shared base schema and a combined endpoint.
+  For the endpoints it contributed the monitoring argument; Lukas dropped its further suggestions, a shared base schema and a combined convenience endpoint.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-29 (PR #19) and 2026-09-30 (issues #37 and #39).
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, FR-06 and FR-07, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), [`evaluate.py`](../recommenditos/modeling/evaluate.py).
 - **In LaTeX:** yes
@@ -631,19 +631,19 @@ How to add an entry:
 - **Participants:** @lukas2510
 - **Decision:** The listings outside `ES` are split 60 % train, 10 % validation, 10 % calibration and 20 % test, with the seed `20251108`, both pinned in `params.yaml`.
   Whole sellers are assigned by a hash of the seed and `seller_group_id`, without stratification.
-  The model card states the spread over 20 other splits; a temporal split is impossible, because the snapshot has no listing dates.
+  The model card states the spread over 20 other splits and, as a limitation, that the snapshot has no listing dates for a temporal split.
 - **Alternatives considered:**
   - 70/10/10/10: halves the test set, so Volvo and Suzuki would fall under the 500 test rows SC-04 needs.
   - A stratified-group split on `make`: better make balance, but about half of the existing rows change set when the `ES` listings join, which confounds FR-15's retrain comparison.
 - **Rationale:** SC-04 checks a segment only from 500 test rows, so the test share decides how many makes the quality gate covers.
-  The seed is the snapshot date, so it is recognisable and obviously not tuned.
+  The seed is the snapshot date, so it is obviously not tuned.
   Over 20 other splits the candidate's test MdAPE is 6.73 % on average, with a standard deviation of 0.27 pp, and SC-01 and SC-02 hold on all 20.
-  Cars older than 20 years exceed the SC-04 bound on all 20 as well, at 18.3 % on average, so that miss is no artefact of the draw.
+  Cars older than 20 years miss SC-04 on all 20 as well, at 18.3 % on average, so that miss is no artefact of the draw.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found a coupling the ticket did not mention: the published per-make analysis assumed a 20 % test share while the split was still unpinned.
   It recommended 60/10/10/20, and Lukas accepted.
-  For the review of 2026-10-12 it wrote and ran the evidence script, corrected the premise of the issue, which Lukas had written, and recommended keeping the split.
+  For the review of 2026-10-12 it wrote and ran the evidence script, corrected the premise of the issue, which Lukas had written, and recommended keeping the split, which Lukas did.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-29 (pinning the split) and 2026-10-12 (issue #89).
 - **Other evidence:** [`params.yaml`](../params.yaml), [`make_support_results.txt`](analysis/make_support_results.txt), [`split_strategy_results.txt`](analysis/split_strategy_results.txt), [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32), [issue #89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89), [PR #107](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107).
 - **In LaTeX:** yes
@@ -898,23 +898,24 @@ How to add an entry:
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Hyperparameter Tuning, Evaluation Protocol
 - **Participants:** @lukas2510; @kadameit decided the search over both variants (2026-10-06)
-- **Decision:** `learning_rate` 0.05 and `num_leaves` 63 stay, because no search found a point that the validation split can tell apart from them.
-  A committed hyperparameter is replaced only under the protocol in the pipeline docs: selection on the validation split alone, by validation L1, and only when the simultaneous 95 % interval of the difference lies below zero.
+- **Decision:** `learning_rate` 0.05 and `num_leaves` 63 stay, because no search found a point measurably better on the validation split.
+  A committed hyperparameter is replaced only under the protocol in the pipeline docs: selection on the validation split alone, by L1, and only when the simultaneous 95 % interval of the difference lies below zero.
   `n_estimators` is a ceiling of 5,000 with early stopping after 50 rounds.
-  `tune.py` runs a search outside `dvc repro`; its record lives in MLflow only, and its energy is reported apart from NFR-10's budget.
+  `tune.py` runs a search outside `dvc repro` and keeps its record in MLflow only.
+  NFR-10's 15 minutes cover the final fit; a search's energy is reported apart.
 - **Alternatives considered:**
   - Adopt the point with the lowest validation L1: its gain lies inside the noise.
   - Random or Optuna search with cross-validation: a new dependency and about five times the fits, for a region found flat.
 - **Rationale:** Across the twelve points of the first grid, no interval of the difference to the committed point lies below zero.
-  With the higher ceiling, the validation curve decides how many trees a model keeps.
-  The search of 2026-10-06 covered both LightGBM variants and `min_child_samples`, reproduced the first grid, and kept the committed values in all four sweeps.
+  At 1,000 the ceiling ended both fits; at 5,000 the validation curve decides the tree count.
+  The search of 2026-10-06 covered both LightGBM variants and `min_child_samples`, reproduced the first grid and kept every committed value.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI designed the first sweep and stopped for the decision instead of committing a tuned value.
   An independent AI review corrected the protocol: its first rule used an interval per point, which is not safe across eleven comparisons.
   For the search of 2026-10-06 AI recommended committing the sweep records beside MLflow; Kevin had it check the course demo, which keeps its emissions in MLflow only, and chose that.
 - **AI interaction evidence:** Claude Code sessions of 2026-10-05 (issue #64) and of 2026-10-06 and 2026-10-09 (issue #88).
-- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [`tune.py`](../recommenditos/modeling/tune.py), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88).
+- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88).
 - **In LaTeX:** yes
 
 ### EDN-75: The test suite also runs on Windows in CI

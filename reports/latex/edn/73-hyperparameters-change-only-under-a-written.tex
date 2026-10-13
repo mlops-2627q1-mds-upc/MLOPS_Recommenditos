@@ -8,10 +8,11 @@
   milestone = {M3: Quality Assurance},
   topic = {Hyperparameter Tuning, Evaluation Protocol},
   participants = {@lukas2510; @kadameit decided the search over both variants (2026-10-06)},
-  decision = {\texttt{learning\_\allowbreak{}rate} 0.05 and \texttt{num\_\allowbreak{}leaves} 63 stay, because no search found a point that the validation split can tell apart from them.
-A committed hyperparameter is replaced only under the protocol in the pipeline docs: selection on the validation split alone, by validation L1, and only when the simultaneous 95\,\% interval of the difference lies below zero.
+  decision = {\texttt{learning\_\allowbreak{}rate} 0.05 and \texttt{num\_\allowbreak{}leaves} 63 stay, because no search found a point measurably better on the validation split.
+A committed hyperparameter is replaced only under the protocol in the pipeline docs: selection on the validation split alone, by L1, and only when the simultaneous 95\,\% interval of the difference lies below zero.
 \texttt{n\_\allowbreak{}estimators} is a ceiling of 5,000 with early stopping after 50 rounds.
-\texttt{tune.\allowbreak{}py} runs a search outside \texttt{dvc repro}; its record lives in MLflow only, and its energy is reported apart from NFR-10's budget.},
+\texttt{tune.\allowbreak{}py} runs a search outside \texttt{dvc repro} and keeps its record in MLflow only.
+NFR-10's 15 minutes cover the final fit; a search's energy is reported apart.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Adopt the point with the lowest validation L1: its gain lies inside the noise.
@@ -19,13 +20,13 @@ A committed hyperparameter is replaced only under the protocol in the pipeline d
 \end{itemize}
 \par
 \emph{Why:} Across the twelve points of the first grid, no interval of the difference to the committed point lies below zero.
-With the higher ceiling, the validation curve decides how many trees a model keeps.
-The search of 2026-10-06 covered both LightGBM variants and \texttt{min\_\allowbreak{}child\_\allowbreak{}samples}, reproduced the first grid, and kept the committed values in all four sweeps.},
+At 1,000 the ceiling ended both fits; at 5,000 the validation curve decides the tree count.
+The search of 2026-10-06 covered both LightGBM variants and \texttt{min\_\allowbreak{}child\_\allowbreak{}samples}, reproduced the first grid and kept every committed value.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted with modifications},
   assessment = {AI designed the first sweep and stopped for the decision instead of committing a tuned value.
 An independent AI review corrected the protocol: its first rule used an interval per point, which is not safe across eleven comparisons.
 For the search of 2026-10-06 AI recommended committing the sweep records beside MLflow; Kevin had it check the course demo, which keeps its emissions in MLflow only, and chose that.},
   aievidence = {Claude Code sessions of 2026-10-05 (issue \#64) and of 2026-10-06 and 2026-10-09 (issue \#88).},
-  evidence = {``Tuning a hyperparameter'' in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{the pipeline docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/tuning_sweep_results.txt}{\texttt{tuning\_\allowbreak{}sweep\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/early_stopping_ceiling_results.txt}{\texttt{early\_\allowbreak{}stopping\_\allowbreak{}ceiling\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/modeling/tune.py}{\texttt{tune.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77}{PR \#77}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88}{issue \#88}.},
+  evidence = {``Tuning a hyperparameter'' in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{the pipeline docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/tuning_sweep_results.txt}{\texttt{tuning\_\allowbreak{}sweep\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/early_stopping_ceiling_results.txt}{\texttt{early\_\allowbreak{}stopping\_\allowbreak{}ceiling\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77}{PR \#77}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88}{issue \#88}.},
 }

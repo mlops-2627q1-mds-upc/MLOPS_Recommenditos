@@ -833,7 +833,7 @@ _UNSERVED_MAKE = "Trabant"
 
 
 def test_every_frame_the_stage_writes_holds_only_supported_makes(run_stage):
-    # The first obligation of the supported-make rule (EDN-05), in the one stage
+    # The first obligation docs/docs/pipeline.md lists for the make list, in the one stage
     # that now owns it: train, validation, calibration, test and the `ES` holdout.
     # The holdout is the one people forget, and it is the set NFR-11 and FR-15
     # rest on.
@@ -865,7 +865,7 @@ def test_every_frame_the_stage_writes_holds_only_supported_makes(run_stage):
 
 
 def test_the_vocabulary_is_decided_by_the_served_training_rows_alone(run_stage):
-    # The second obligation of the supported-make rule (EDN-05): the filter comes
+    # The second obligation docs/docs/pipeline.md lists for the make list: the filter comes
     # before anything is fitted on the training rows. Ten served rows and ten
     # unserved ones, built so that every data-dependent part of the vocabulary
     # comes out differently if the unserved rows are counted at all:

@@ -67,6 +67,6 @@ It also takes 3.4 times as long to fit.
 We therefore put \texttt{lgbm-basic} forward as the candidate (EDN-62).
 
 The hyperparameter search is tracked separately.
-Its 34 fits are runs in a second experiment, \texttt{recommenditos-price-tuning}, so they do not mix with the ladder (EDN-73).
+Its 34 fits are runs in a second experiment, \texttt{recommenditos-price-tuning}, so they do not mix with the ladder.
 The search compared \texttt{learning\_rate}, \texttt{num\_leaves} and \texttt{min\_child\_samples} on the validation split for both LightGBM variants and found no value that is measurably better than the committed ones.
 The results in \cref{tab:runs} are therefore those of the searched configuration.
