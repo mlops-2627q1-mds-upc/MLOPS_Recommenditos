@@ -6,7 +6,7 @@
   date = {2026-09-30},
   milestone = {M2: Reproducibility},
   topic = {Data Versioning, Pipeline Design},
-  participants = {@lukas2510. Open to revisit at the next sprint review, like EDN-25.},
+  participants = {@lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.},
   decision = {The \texttt{download} stage owns \texttt{data/\allowbreak{}raw/\allowbreak{}}.
 Under \texttt{download.\allowbreak{}source: zenodo} it fetches the pinned file from the Zenodo record itself and writes \texttt{data/\allowbreak{}raw/\allowbreak{}listings.\allowbreak{}parquet} as its only output, so acquisition is inside the pipeline instead of a manual step beside it.
 The published CSV is kept as a local cache under \texttt{data/\allowbreak{}external/\allowbreak{}} and is neither a stage \texttt{out} nor a \texttt{dep}; \texttt{download.\allowbreak{}md5} in \texttt{params.\allowbreak{}yaml} is the dependency that pins the bytes, and the stage refuses to read a file that hashes to anything else.

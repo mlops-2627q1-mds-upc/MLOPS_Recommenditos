@@ -6,7 +6,7 @@
   date = {2026-09-30},
   milestone = {M2: Reproducibility},
   topic = {Data Versioning, Personal Data},
-  participants = {@lukas2510. Open to revisit at the next sprint review, like EDN-25.},
+  participants = {@lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.},
   decision = {\texttt{data/\allowbreak{}raw/\allowbreak{}listings.\allowbreak{}parquet}, the output of the \texttt{download} stage, keeps the seven PII columns of the published file and is cached and pushed to the DagsHub remote like any other stage output. No \texttt{push: false}, and no PII removal before preprocessing. Our public remote therefore holds the same personal data twice, once as the CSV of EDN-25 and once as this Parquet.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]

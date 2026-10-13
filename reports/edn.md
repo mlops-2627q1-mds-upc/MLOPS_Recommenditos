@@ -483,7 +483,7 @@ How to add an entry:
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Experiment Tracking
-- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Pending confirmation by the full team at the next sprint review.
+- **Participants:** @lukas2510 (Scrum Master), on behalf of the team. Confirmed by the full team at the laboratory session of 2026-10-13, where all five members also confirmed that they are members of the organisation and can push.
 - **Decision:** A DagsHub **organisation** owned by the team hosts the connected repository, and every team member joins it with push rights (option A).
   The repository is <https://dagshub.com/recommenditos/MLOPS_Recommenditos>, owned by the `recommenditos` DagsHub organisation and connected through DagsHub's GitHub integration.
   A first decision for `pauadal03/MLOPS_Recommenditos` was taken and withdrawn on the same day, once it turned out that pauadal03 is not a member of this team: they hold read-only access to our GitHub repository, have never contributed to it, and are not on the roster.
@@ -542,7 +542,7 @@ How to add an entry:
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Privacy
-- **Participants:** @lukas2510 (Scrum Master). Pending confirmation by the full team at the next sprint review.
+- **Participants:** @lukas2510 (Scrum Master). Confirmed by the full team at the laboratory session of 2026-10-13.
 - **Decision:** The DagsHub repository that serves as our DVC remote and MLflow tracking server stays public.
   We accept that the raw file's PII columns are readable by anyone with a DagsHub account, which follows from EDN-25 tracking the raw file with `dvc add` and pushing it to that remote.
   The additional exposure this creates is small, because the identical file is already publicly downloadable from the pinned Zenodo DOI under the MIT license.
@@ -696,7 +696,7 @@ How to add an entry:
 - **Date:** 2026-09-26
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning
-- **Participants:** @W11W11W11, confirmed by @lukas2510 on 2026-09-29 when the premise below was corrected. Pending confirmation by the full team at the next sprint review.
+- **Participants:** @W11W11W11, confirmed by @lukas2510 on 2026-09-29 when the premise below was corrected. The full team confirmed the decision in its current state, as amended by EDN-36, at the laboratory session of 2026-10-13.
 - **Decision:** Amends EDN-07, which had proposed importing the raw file from Zenodo and never pushing it to our own remote.
   Download the raw file `autoscout24_dataset_20251108.csv` once from Zenodo, track it with `dvc add data/raw/autoscout24_dataset_20251108.csv` and push it to our DagsHub remote.
   Teammates get it with `dvc pull`; the PII columns are removed later in preprocessing.
@@ -961,7 +961,7 @@ How to add an entry:
 - **Date:** 2026-09-30
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Personal Data
-- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Participants:** @lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.
 - **Decision:** `data/raw/listings.parquet`, the output of the `download` stage, keeps the seven PII columns of the published file and is cached and pushed to the DagsHub remote like any other stage output. No `push: false`, and no PII removal before preprocessing. Our public remote therefore holds the same personal data twice, once as the CSV of EDN-25 and once as this Parquet.
 - **Alternatives considered:**
   - **Option A (chosen): push it, which is DVC's default for a stage output.**
@@ -992,7 +992,7 @@ How to add an entry:
 - **Date:** 2026-09-30
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Pipeline Design
-- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25.
+- **Participants:** @lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.
 - **Decision:** The `download` stage owns `data/raw/`.
   Under `download.source: zenodo` it fetches the pinned file from the Zenodo record itself and writes `data/raw/listings.parquet` as its only output, so acquisition is inside the pipeline instead of a manual step beside it.
   The published CSV is kept as a local cache under `data/external/` and is neither a stage `out` nor a `dep`; `download.md5` in `params.yaml` is the dependency that pins the bytes, and the stage refuses to read a file that hashes to anything else.
@@ -1044,7 +1044,7 @@ How to add an entry:
 - **Date:** 2026-09-30
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Versioning, Personal Data
-- **Participants:** @lukas2510. Open to revisit at the next sprint review, like EDN-25 itself.
+- **Participants:** @lukas2510. Confirmed by the full team at the laboratory session of 2026-10-13, together with EDN-25.
 - **Decision:** Amends EDN-25, which had tracked the raw CSV with `dvc add` and pushed it to our DagsHub remote.
   The pointer `data/raw/autoscout24_dataset_20251108.csv.dvc` is deleted, the CSV is neither tracked nor pushed by us any more, and the `download` stage acquires it instead (EDN-35).
   The blob the pointer referenced is left on the remote untouched, so checking out an earlier commit and running `dvc pull` still works.
