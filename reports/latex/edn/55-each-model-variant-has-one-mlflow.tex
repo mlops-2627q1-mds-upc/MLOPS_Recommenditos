@@ -3,27 +3,31 @@
 \ednentry{
   id = {EDN-55},
   title = {Each model variant has one MLflow run across stages},
+  note = {\textbf{Absorbs EDN-54} (2026-09-30): a stage runs without MLflow unless tracking is required.},
   date = {2026-09-30},
   milestone = {M3: Quality Assurance},
   topic = {Experiment Tracking, Evaluation Protocol},
   participants = {@lukas2510},
   decision = {\texttt{train@\allowbreak{}<variant>} creates the MLflow run and writes its id into \texttt{models/\allowbreak{}<variant>/\allowbreak{}model.\allowbreak{}json}.
 \texttt{evaluate} reopens that run and appends the test metrics and the gate verdict.
-A metric that a stage could not measure is not logged.},
+Without a reachable server a stage runs untracked and says so in \texttt{model.\allowbreak{}json}; \texttt{RECOMMENDITOS\_\allowbreak{}REQUIRE\_\allowbreak{}TRACKING=\allowbreak{}1} turns a tracking failure into a failed stage.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item One run per DVC stage joined by a tag, as in the course demo: the hyperparameters and the error they produced land in different rows.
 \item Nested runs under a parent: the four \texttt{train} stages are independent, so the parent has no natural owner.
+\item Fail whenever tracking is unavailable: CI and a fresh clone have no DagsHub credentials, so \texttt{pytest} and \texttt{dvc repro} would fail for everyone.
 \end{itemize}
 \par
 \emph{Why:} The rubric asks for results that can be compared and understood.
 With one run per variant, MLflow's own table shows parameters, losses, energy figures and test metrics side by side, without joining.
-The cost is that \texttt{evaluate} depends on an id from \texttt{train}: a model trained without tracking has no run to append to, and the artefact says so (EDN-54).},
+The cost is that \texttt{evaluate} depends on an id from \texttt{train}: a model trained without tracking has no run to append to.
+The switch serves whoever produces the numbers for the report: with it, a misconfiguration cannot pass while logging nothing.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
-  assessment = {The design is AI's: two agents working on issues \#37 and \#39 agreed it, and one of them saw that a stage covering four variants leaks a run across variants unless each run is closed.
+  assessment = {The design is AI's: two agents working on issues \#37 and \#39 agreed it.
 AI verified against the real DagsHub server that resuming creates no additional run.
+It proposed the switch and saw that a fallback to a local store would leave a database in the repository.
 Lukas accepted the design as proposed; no check by a person is recorded.},
   aievidence = {Claude Code sessions of 2026-09-30 on issues \#37 and \#39.},
-  evidence = {\texttt{resume\_\allowbreak{}run} in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/tracking.py}{\texttt{tracking.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{model card}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37}{issue \#37}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39}{issue \#39}.},
+  evidence = {\texttt{resume\_\allowbreak{}run} and \texttt{optional\_\allowbreak{}run} in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/tracking.py}{\texttt{tracking.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{model card}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37}{issue \#37}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39}{issue \#39}.},
 }

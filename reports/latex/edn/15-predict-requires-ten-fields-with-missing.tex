@@ -3,19 +3,20 @@
 \ednentry{
   id = {EDN-15},
   title = {\texorpdfstring{\texttt{/\allowbreak{}predict}}{/predict} requires ten fields, with missing inputs bounded by SC-06},
-  note = {\textbf{Absorbs EDN-59} (2026-09-30): how SC-06 is measured.},
+  note = {\textbf{Absorbs EDN-16 and EDN-59} (2026-09-29, 2026-09-30): UC2's own endpoint, and how SC-06 is measured.},
   date = {2026-09-29},
   milestone = {M1: Project Inception},
   topic = {Requirements Engineering, API Design, Performance Criteria},
   participants = {@lukas2510},
   decision = {\texttt{/\allowbreak{}predict} requires \texttt{body\_\allowbreak{}type} and \texttt{seller\_\allowbreak{}type} on top of the eight core fields; the other basic fields stay optional.
-SC-06 bounds the result: with each optional input field masked on its own, and with all of them masked at once, MdAPE stays at or below 1.5 times the full-input MdAPE.
-SC-06 masks API input fields, mapped to the columns they produce.},
+UC2 keeps its own endpoint, \texttt{/\allowbreak{}price-\allowbreak{}range}, which requires far fewer fields.
+SC-06 bounds the result: with each optional input field masked on its own, and with all of them masked at once, MdAPE stays at or below 1.5 times the full-input MdAPE.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item All basic fields optional, relying on LightGBM's handling of missing values: the model never sees the two fields absent, so the contract would promise untested behaviour.
+\item All basic fields optional: the model never sees the two fields absent, so the contract would promise untested behaviour.
 \item Require every basic field: \texttt{nr\_\allowbreak{}prev\_\allowbreak{}owners} is filled in only 61.0\,\% of the listings.
-\item SC-06 over feature columns: it would treat the car's age as optional and mask single equipment items, which no request can omit.
+\item SC-06 over feature columns: it would mask the car's age and single equipment items, which no request can omit.
+\item One \texttt{/\allowbreak{}valuation} endpoint for both use cases: two contracts in one conditional schema, and a changed mix of clients would look like drift (EDN-14).
 \end{itemize}
 \par
 \emph{Why:} In the 97,889 listings of the training scope, \texttt{body\_\allowbreak{}type} is filled in 100.000\,\% and \texttt{seller\_\allowbreak{}type} in 99.986\,\%.
@@ -23,9 +24,10 @@ The model cannot learn their absence, and whoever owns the car knows both.
 With SC-06 in the NFR-01 gate, the gate also covers the partial requests FR-01 allows.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted with modifications},
-  assessment = {AI measured the fill rates and separated the API contract from the training mechanism, which we accepted.
-It also found, before any code existed, that a criterion over feature columns would count the car's age as optional.
-Its proposal to mask the condition flags as missing values was rejected, because it contradicts EDN-23 and the contract.},
+  assessment = {AI measured the fill rates and separated the API contract from the training mechanism.
+It found that a criterion over feature columns would count the car's age as optional.
+Its proposal to mask the condition flags as missing values was rejected, because it contradicts EDN-23 and the contract.
+For the endpoints it contributed the monitoring argument; Lukas dropped its further suggestions, a shared base schema and a combined endpoint.},
   aievidence = {Claude Code sessions of 2026-09-29 (PR \#19) and 2026-09-30 (issues \#37 and \#39).},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{Specification} FR-01, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/problem-spec.md}{problem specification} SC-06, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/fillrates_results.txt}{\texttt{fillrates\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/modeling/evaluate.py}{\texttt{evaluate.\allowbreak{}py}}.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{Specification} FR-01, FR-06 and FR-07, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/problem-spec.md}{problem specification} SC-06, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/fillrates_results.txt}{\texttt{fillrates\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/modeling/evaluate.py}{\texttt{evaluate.\allowbreak{}py}}.},
 }

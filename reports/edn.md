@@ -10,7 +10,7 @@ The course asks for a selected set of short entries.
 Record a decision when it meaningfully affects the design, quality, development, deployment or operation of the ML system and could reasonably have gone differently.
 A bug fix, an implementation detail, the use of a tool the course prescribes and a choice without a realistic alternative get no entry; they belong in the code, the docs or the pull request.
 
-On 2026-10-12 the entries EDN-01 to EDN-78 were trimmed from 76 to the 44 that meet this criterion, and every kept entry was rewritten to the shape below.
+On 2026-10-12 and 2026-10-13 the 79 entries EDN-01 to EDN-81 were trimmed to the 37 that meet this criterion, and every kept entry was rewritten to the shape below.
 An entry that amended, reversed or continued another one was merged into the surviving entry, which states the decision as it stands now.
 The originals are kept word for word in [edn-archive.md](edn-archive.md), which the PDF does not include, and [Retired and merged IDs](#retired-and-merged-ids) at the end of this file says what became of each ID.
 
@@ -28,7 +28,7 @@ How to add an entry:
   The figures per field are guide values:
   - title: one clause of about ten words that states the decision;
   - **Decision**: what we do, in about 45 words;
-  - **Alternatives considered**: only alternatives we really weighed, about three, one line each with the reason it lost;
+  - **Alternatives considered**: only alternatives we really weighed, one line each with the reason it lost; one is enough, and more than three is rare;
   - **Rationale**: the deciding argument, in about 60 words and with one or two numbers, each checked against its source; link the analysis and do not retell it;
   - **Assessment of the AI contribution**: what AI contributed and what we checked, changed or rejected, in about 45 words;
   - **AI interaction evidence**: the session and its topic, or one quoted prompt, in about 20 words;
@@ -97,7 +97,6 @@ How to add an entry:
   The holdout is selected per listing, and the `split` stage reports any seller that also lists outside `ES`.
 - **Alternatives considered:**
   - DataMarket as a stress test on the shared makes: market, year, portal and brand mix shift together, so an alarm could not be attributed, and it has no licence file.
-  - No drift scenario: leaves M6 without a realistic case.
   - Holding out whole sellers that touch `ES`: puts non-Spanish rows into the holdout and gains nothing, since no seller crosses the border in the real snapshot.
 - **Rationale:** The supervisor asked whether DataMarket is feasible as a new market.
   It is not: 36.5 % of its rows are makes the model never sees.
@@ -138,24 +137,31 @@ How to add an entry:
 
 ### EDN-05: A make is supported from 300 listings
 
+> **Absorbs EDN-48** (2026-10-05): `features` is the one stage that applies the list.
+
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
-- **Activity / Topic:** Problem Specification
+- **Activity / Topic:** Problem Specification, Data Preparation
 - **Participants:** @lukas2510
 - **Decision:** Only makes with at least 300 listings in the cleaned used-car data, counted after the `ES` holdout and before the split, are supported.
-  The pipeline computes the list and the API rejects every other make.
+  The `split` stage computes the list and removes no rows.
+  The `features` stage restricts every frame to it, the `ES` holdout included, before it builds any vocabulary.
+  The API rejects every other make.
 - **Alternatives considered:**
-  - Accept all 25 makes and flag rare ones as low confidence: weak predictions for makes with a few dozen listings, and the warning needs a threshold of its own anyway.
-  - Accept all makes without a rule: no scope statement, and a hidden weakness for rare makes.
+  - Accept all 25 makes and flag rare ones as low confidence: weak predictions for makes with a few dozen listings.
+  - Filter in `split`: the split becomes lossy, and the threshold cannot be revisited without a new split.
+  - Record the list and measure the metrics over every make: the gate would cover listings the API refuses with a 422.
 - **Rationale:** The dataset is skewed toward premium brands (EDN-01).
   A threshold turns that limit into an explicit, testable rule.
   At 300 it keeps 11 of the 25 makes and 98.6 % of the split listings.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+  Applying it in `features` makes the reported population the served one, and `train` and `evaluate` fail when that does not hold.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI counted the listings per make after scoping and deduplication, compared thresholds of 200, 300 and 500, and recommended the threshold.
   Lukas accepted because it states the brand skew openly instead of hiding it behind a warning.
-- **AI interaction evidence:** Claude Code session of 2026-09-22 on issue #2; prompt: "How do we handle the 25 makes, many of which have very few listings?".
-- **Other evidence:** [Problem specification](../docs/docs/problem-spec.md) section 2, [dataset card](../docs/docs/dataset-card.md), [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17).
+  AI later found that the code and two documents disagreed on where the filter belongs, raised that as a decision, and corrected its own claim that out-of-scope rows would inflate the metrics.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-22 (issue #2), 2026-09-30 (issue #35) and 2026-10-05 (issue #63); prompt: "How do we handle the 25 makes, many of which have very few listings?".
+- **Other evidence:** [Problem specification](../docs/docs/problem-spec.md) section 2, "The supported makes" in [the pipeline docs](../docs/docs/pipeline.md), [`served_vocabulary_results.txt`](analysis/served_vocabulary_results.txt), [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17), [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71).
 - **In LaTeX:** yes
 
 ### EDN-06: A model is deployable only when it meets the success criteria
@@ -334,50 +340,31 @@ How to add an entry:
 
 ### EDN-15: `/predict` requires ten fields, with missing inputs bounded by SC-06
 
-> **Absorbs EDN-59** (2026-09-30): how SC-06 is measured.
+> **Absorbs EDN-16 and EDN-59** (2026-09-29, 2026-09-30): UC2's own endpoint, and how SC-06 is measured.
 
 - **Date:** 2026-09-29
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Requirements Engineering, API Design, Performance Criteria
 - **Participants:** @lukas2510
 - **Decision:** `/predict` requires `body_type` and `seller_type` on top of the eight core fields; the other basic fields stay optional.
+  UC2 keeps its own endpoint, `/price-range`, which requires far fewer fields.
   SC-06 bounds the result: with each optional input field masked on its own, and with all of them masked at once, MdAPE stays at or below 1.5 times the full-input MdAPE.
-  SC-06 masks API input fields, mapped to the columns they produce.
 - **Alternatives considered:**
-  - All basic fields optional, relying on LightGBM's handling of missing values: the model never sees the two fields absent, so the contract would promise untested behaviour.
+  - All basic fields optional: the model never sees the two fields absent, so the contract would promise untested behaviour.
   - Require every basic field: `nr_prev_owners` is filled in only 61.0 % of the listings.
-  - SC-06 over feature columns: it would treat the car's age as optional and mask single equipment items, which no request can omit.
+  - SC-06 over feature columns: it would mask the car's age and single equipment items, which no request can omit.
+  - One `/valuation` endpoint for both use cases: two contracts in one conditional schema, and a changed mix of clients would look like drift (EDN-14).
 - **Rationale:** In the 97,889 listings of the training scope, `body_type` is filled in 100.000 % and `seller_type` in 99.986 %.
   The model cannot learn their absence, and whoever owns the car knows both.
   With SC-06 in the NFR-01 gate, the gate also covers the partial requests FR-01 allows.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI measured the fill rates and separated the API contract from the training mechanism, which we accepted.
-  It also found, before any code existed, that a criterion over feature columns would count the car's age as optional.
+- **Assessment of the AI contribution:** AI measured the fill rates and separated the API contract from the training mechanism.
+  It found that a criterion over feature columns would count the car's age as optional.
   Its proposal to mask the condition flags as missing values was rejected, because it contradicts EDN-23 and the contract.
+  For the endpoints it contributed the monitoring argument; Lukas dropped its further suggestions, a shared base schema and a combined endpoint.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-29 (PR #19) and 2026-09-30 (issues #37 and #39).
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), [`evaluate.py`](../recommenditos/modeling/evaluate.py).
-- **In LaTeX:** yes
-
-### EDN-16: UC1 and UC2 have separate endpoints
-
-- **Date:** 2026-09-29
-- **Milestone:** M1: Project Inception
-- **Activity / Topic:** API Design
-- **Participants:** @lukas2510
-- **Decision:** UC1 and UC2 keep their own endpoints, `POST /predict` and `POST /price-range` (FR-06, FR-07).
-- **Alternatives considered:**
-  - One `/valuation` endpoint returning the estimate and the interval: the required fields would depend on the use case inside one schema, and both kinds of traffic would land in one log.
-- **Rationale:** The endpoints differ in their input contract: `/predict` requires ten fields (EDN-15) and `/price-range` far fewer.
-  One endpoint would hide two contracts in a conditional schema.
-  Monitoring settles it: a change in the mix of clients would look like drift on the completeness features the `ES` scenario relies on (EDN-14).
-  A combined endpoint can be added later without breaking clients.
-- **AI involvement:** Alternative assessment, Recommendation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI contributed the monitoring argument, which was written down nowhere, and withdrew its own first claim that the question blocked the merge.
-  Lukas dropped its further suggestions, a shared base schema and a combined convenience endpoint, as unnecessary for a course project.
-- **AI interaction evidence:** Claude Code session of 2026-09-29; Lukas replied (translated from German): "I do not want overkill, it should stay simple, it is only a university course".
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-06 and FR-07, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, FR-06 and FR-07, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), [`evaluate.py`](../recommenditos/modeling/evaluate.py).
 - **In LaTeX:** yes
 
 ### EDN-17: The component is deployed on the FIB Virtech VM
@@ -486,33 +473,6 @@ How to add an entry:
 - **Other evidence:** [Dataset card](../docs/docs/dataset-card.md), [PR #26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/26), [PR #48](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/48), [PR #56](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/56).
 - **In LaTeX:** yes
 
-### EDN-22: Listings registered after the reference date are dropped
-
-> **Absorbs EDN-72** (2026-10-05): the mileage range is a tolerant check, not a filter.
-
-- **Date:** 2026-09-29
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Data Validation and Preprocessing
-- **Participants:** @lukas2510
-- **Decision:** Preprocessing drops every listing whose `registration_date` lies after the age reference date, which is the snapshot date in training and the request date in serving.
-  The Great Expectations suites assert the rule hard on the cleaned frame and with a tolerance on the raw frame.
-  The mileage range of FR-03, 0 to 1,000,000 km, is only a tolerant check on both frames, and the three listings above it stay.
-- **Alternatives considered:**
-  - Clamp the age at zero: invents a registration date, and a clamped zero looks like a new car, the group EDN-04 scopes out.
-  - Keep negative ages: the API would have to accept them too.
-  - Drop the three high-mileage rows as well: changes the training rows and every published count, and moves no gate verdict.
-- **Rationale:** 164 raw listings carry such a date, and 27 of them reach this rule after scoping.
-  Dropping them makes a non-negative age an invariant that the pipeline, the tests and the API rely on.
-  The tolerance on the raw frame keeps a later scrape with many such rows visible as a failed rule.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI profiled the affected rows, laid out the options and recommended dropping them.
-  For the mileage range it ran the suites on the real snapshot, measured the effect of dropping the three rows with the real stages and recommended the tolerant check.
-  Lukas accepted both.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-29 and 2026-10-05 on issue #25; Lukas chose "drop them" and "keep the tolerant check".
-- **Other evidence:** [`preprocess_funnel_results.txt`](analysis/preprocess_funnel_results.txt), [`mileage_scope_results.txt`](analysis/mileage_scope_results.txt), [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25).
-- **In LaTeX:** yes
-
 ### EDN-23: Condition flags are read as one-sided assertions
 
 - **Date:** 2026-09-29
@@ -601,7 +561,6 @@ How to add an entry:
   The course demo repository is structured the same way.
 - **Alternatives considered:**
   - The flat Cookiecutter layout as generated: download, preprocessing and split would share one file, so an edit to it reruns every stage that depends on it.
-  - Split a file only where a collision forces it: follows neither the template nor the demo.
 - **Rationale:** The course prescribes Cookiecutter Data Science and allows justified deviations.
   A stage's `deps` should name the code that stage runs, so that `dvc repro` reruns the minimum.
   One file per ticket also lets several people build a sequential pipeline in parallel.
@@ -662,27 +621,31 @@ How to add an entry:
 - **Other evidence:** [`schema.py`](../recommenditos/schema.py), [`tests/test_schema.py`](../tests/test_schema.py), [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
 - **In LaTeX:** yes
 
-### EDN-32: The split is 60/10/10/20 with the snapshot date as seed
+### EDN-32: The split is 60/10/10/20 by seller, with the snapshot date as seed
+
+> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept.
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Evaluation Protocol
 - **Participants:** @lukas2510
-- **Decision:** The listings outside `ES` are split 60 % train, 10 % validation, 10 % calibration and 20 % test, grouped by `seller_group_id`, with the seed `20251108`.
-  Both are pinned in `params.yaml`.
+- **Decision:** The listings outside `ES` are split 60 % train, 10 % validation, 10 % calibration and 20 % test, with the seed `20251108`, both pinned in `params.yaml`.
+  Whole sellers are assigned by a hash of the seed and `seller_group_id`, without stratification.
+  The model card states the spread over 20 other splits; a temporal split is impossible, because the snapshot has no listing dates.
 - **Alternatives considered:**
   - 70/10/10/10: halves the test set, so Volvo and Suzuki would fall under the 500 test rows SC-04 needs.
-  - 64/8/8/20: slightly more training data for proportions that are harder to explain.
-- **Rationale:** The test share is the binding constraint.
-  SC-04 checks a segment only from 500 test rows, so the proportions decide how many makes the quality gate covers.
-  The seed is the snapshot date, so it is recognisable in a log and obviously not tuned.
-- **AI involvement:** Information seeking, Alternative assessment, Recommendation
+  - A stratified-group split on `make`: better make balance, but about half of the existing rows change set when the `ES` listings join, which confounds FR-15's retrain comparison.
+- **Rationale:** SC-04 checks a segment only from 500 test rows, so the test share decides how many makes the quality gate covers.
+  The seed is the snapshot date, so it is recognisable and obviously not tuned.
+  Over 20 other splits the candidate's test MdAPE is 6.73 % on average, with a standard deviation of 0.27 pp, and SC-01 and SC-02 hold on all 20.
+  Cars older than 20 years exceed the SC-04 bound on all 20 as well, at 18.3 % on average, so that miss is no artefact of the draw.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found a coupling the ticket did not mention: the published per-make analysis assumed a 20 % test share while the split was still unpinned.
-  It laid out the options against that constraint and recommended 60/10/10/20.
-  Lukas accepted.
-- **AI interaction evidence:** Claude Code session of 2026-09-29, pinning the split.
-- **Other evidence:** [`params.yaml`](../params.yaml), [`make_support_results.txt`](analysis/make_support_results.txt), [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32).
+  It recommended 60/10/10/20, and Lukas accepted.
+  For the review of 2026-10-12 it wrote and ran the evidence script, corrected the premise of the issue, which Lukas had written, and recommended keeping the split.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-29 (pinning the split) and 2026-10-12 (issue #89).
+- **Other evidence:** [`params.yaml`](../params.yaml), [`make_support_results.txt`](analysis/make_support_results.txt), [`split_strategy_results.txt`](analysis/split_strategy_results.txt), [issue #32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/32), [issue #89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89), [PR #107](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107).
 - **In LaTeX:** yes
 
 ### EDN-33: Tests and a clean clone run on a generated fixture
@@ -763,109 +726,9 @@ How to add an entry:
 - **Other evidence:** [Issue #61](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/61), [PR #69](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/69), [`runtime_footprint_results.txt`](analysis/runtime_footprint_results.txt), the Dependencies section of [CONTRIBUTING.md](../CONTRIBUTING.md).
 - **In LaTeX:** yes
 
-### EDN-48: The supported-make list is applied in the `features` stage
-
-> **Absorbs EDN-67** (2026-10-05): `features` became the one stage that applies the list.
-
-- **Date:** 2026-09-30
-- **Milestone:** M2: Reproducibility
-- **Activity / Topic:** Evaluation Protocol, Data Preparation
-- **Participants:** @lukas2510
-- **Decision:** The `split` stage computes the supported-make list (EDN-05) and writes it as `data/processed/supported_makes.json`, but removes no rows: every cleaned row lands in exactly one of its five artefacts.
-  The `features` stage restricts all five frames, the `ES` holdout included, to those makes before it builds any vocabulary.
-  `train` and `evaluate` check the property and fail when it does not hold.
-- **Alternatives considered:**
-  - Filter in `split`: the split becomes lossy, and the threshold cannot be revisited without a new split.
-  - Record the list and measure the metrics over every make: the gate would cover listings the API refuses with a 422.
-  - Filter only the training rows: the holdout matrix would hold rows the model never receives.
-- **Rationale:** The reported population has to be the served population, and a vocabulary fitted on rows the API refuses would put unservable makes into the model's inputs.
-  Of the 6,079 holdout rows, 5,979 are a supported make.
-  One stage owns the rule, and its consumers check it.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI found that the code comments and the two documents disagreed on where the filter belongs, and raised it as a decision instead of implementing one reading.
-  It corrected its own claim that out-of-scope rows would inflate the metrics.
-  An independent AI review later corrected the reasoning about the M6 replay, which reads the split frame and not a matrix.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-30 (issue #35) and 2026-10-05 (issue #63, review of PR #71).
-- **Other evidence:** "The supported makes" in [the pipeline docs](../docs/docs/pipeline.md), [`served_vocabulary_results.txt`](analysis/served_vocabulary_results.txt), [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71).
-- **In LaTeX:** yes
-
-### EDN-49: Predictions are not bias-corrected after the log transform
-
-- **Date:** 2026-09-30
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Modelling Approach, Evaluation Protocol
-- **Participants:** @lukas2510
-- **Decision:** `predict_eur` is `exp` of the model's log-space prediction, without Duan's smearing factor and without a lognormal variance correction.
-  The model estimates the conditional median price, which is what every metric we report measures.
-- **Alternatives considered:**
-  - Duan's smearing estimator: targets the conditional mean, so it shifts every prediction upward; measured on the test set, it made each variant slightly worse.
-  - Lognormal variance correction: the same, with a distributional assumption on top.
-- **Rationale:** Squared error on `log(price)` estimates the mean of the log, and `exp` of that is the median of the price.
-  MdAPE, the share within ±20 % and the conformal intervals are all about the median or about quantiles.
-  A correction would also add a fitted constant that has to travel with the model and be applied identically in training, evaluation and the API.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
-- **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI raised the question unprompted and argued from the target of the estimate, which decides it.
-  Its first write-up quoted effect sizes from a different run as if they were ours.
-  Re-measured on our data, the effect is an order of magnitude smaller, in the same direction.
-- **AI interaction evidence:** Claude Code session of 2026-09-30 on issue #37.
-- **Other evidence:** `Model.predict_eur` in [`model.py`](../recommenditos/modeling/model.py), [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** yes
-
-### EDN-53: `train.num_threads` is pinned to 1
-
-> **Absorbs EDN-56** (2026-09-30): `model.json` carries provenance, so the reproducibility claim is about the predictions and the payload file.
-
-- **Date:** 2026-09-30
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Reproducibility, Modelling Approach
-- **Participants:** @lukas2510
-- **Decision:** `train.num_threads` in `params.yaml` is 1 and is passed to LightGBM, so the fitted `booster.txt` is byte-identical on any machine.
-  `models/<variant>/model.json` carries `trained_at` and the MLflow run id, so the model directory as a whole is not byte-reproducible.
-  NFR-06 is asserted on the predictions and on the payload file.
-- **Alternatives considered:**
-  - LightGBM's default of every core: it writes the thread count into `booster.txt`, so the DVC hash would depend on who ran the pipeline.
-  - A pin of 2 or 4 threads: faster, but machine-independent only where that many cores exist.
-  - Provenance outside the bundle: the API image has no MLflow client and no `dvc.lock`, and still has to say which model it serves.
-- **Rationale:** The trees do not depend on the thread count; only the recorded setting does, and DVC hashes the file.
-  1 is the only value every machine can honour.
-  A pinned 2 to 4 threads would fit faster, and that is the cost we accept.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI found that LightGBM records the thread count in the artefact and proposed the pin.
-  Three of its supporting claims were wrong and were corrected by measuring: which flags make the trees thread-independent, that the pin costs nothing, and how it compares with the default.
-  The decision held and its stated reasons changed.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issue #37 and on the review of PR #62.
-- **Other evidence:** [`params.yaml`](../params.yaml), `test_the_payload_of_a_refit_is_byte_identical` in `tests/test_model.py`, [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** yes
-
-### EDN-54: A pipeline stage runs without MLflow unless tracking is required
-
-- **Date:** 2026-09-30
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** CI/CD, Experiment Tracking
-- **Participants:** @lukas2510
-- **Decision:** A stage opens its MLflow run through `optional_run`.
-  When no server is configured or reachable, the stage logs nothing, runs to completion and records `tracking_mode: "disabled"` in `model.json`.
-  `RECOMMENDITOS_REQUIRE_TRACKING=1` turns a tracking failure into a failed stage.
-  There is no fallback to a local tracking store.
-- **Alternatives considered:**
-  - Fail whenever tracking is unavailable: CI and a fresh clone have no DagsHub credentials, so `pytest` and `dvc repro` would fail for everyone.
-  - Fall back to a local store: MLflow would write a database into the repository root on every run.
-  - No switch that makes it fatal: nobody could show that the runs behind the reported numbers reached the server.
-- **Rationale:** Training without credentials is the normal mode for CI and for contributors.
-  The switch serves whoever produces the numbers for the report: with it, a misconfiguration cannot pass while logging nothing.
-  The artefact itself says whether a run was recorded.
-- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI saw that failing fast, which is right for a credential check, is wrong for a pipeline stage, and that a local fallback would leave a database in the repository.
-  It proposed the switch and used it in its own verification against the DagsHub server.
-- **AI interaction evidence:** Claude Code session of 2026-09-30 on issue #37.
-- **Other evidence:** `optional_run` in [`tracking.py`](../recommenditos/tracking.py), `tests/test_model.py`, [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
-- **In LaTeX:** yes
-
 ### EDN-55: Each model variant has one MLflow run across stages
+
+> **Absorbs EDN-54** (2026-09-30): a stage runs without MLflow unless tracking is required.
 
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
@@ -873,20 +736,23 @@ How to add an entry:
 - **Participants:** @lukas2510
 - **Decision:** `train@<variant>` creates the MLflow run and writes its id into `models/<variant>/model.json`.
   `evaluate` reopens that run and appends the test metrics and the gate verdict.
-  A metric that a stage could not measure is not logged.
+  Without a reachable server a stage runs untracked and says so in `model.json`; `RECOMMENDITOS_REQUIRE_TRACKING=1` turns a tracking failure into a failed stage.
 - **Alternatives considered:**
   - One run per DVC stage joined by a tag, as in the course demo: the hyperparameters and the error they produced land in different rows.
   - Nested runs under a parent: the four `train` stages are independent, so the parent has no natural owner.
+  - Fail whenever tracking is unavailable: CI and a fresh clone have no DagsHub credentials, so `pytest` and `dvc repro` would fail for everyone.
 - **Rationale:** The rubric asks for results that can be compared and understood.
   With one run per variant, MLflow's own table shows parameters, losses, energy figures and test metrics side by side, without joining.
-  The cost is that `evaluate` depends on an id from `train`: a model trained without tracking has no run to append to, and the artefact says so (EDN-54).
+  The cost is that `evaluate` depends on an id from `train`: a model trained without tracking has no run to append to.
+  The switch serves whoever produces the numbers for the report: with it, a misconfiguration cannot pass while logging nothing.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** The design is AI's: two agents working on issues #37 and #39 agreed it, and one of them saw that a stage covering four variants leaks a run across variants unless each run is closed.
+- **Assessment of the AI contribution:** The design is AI's: two agents working on issues #37 and #39 agreed it.
   AI verified against the real DagsHub server that resuming creates no additional run.
+  It proposed the switch and saw that a fallback to a local store would leave a database in the repository.
   Lukas accepted the design as proposed; no check by a person is recorded.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issues #37 and #39.
-- **Other evidence:** `resume_run` in [`tracking.py`](../recommenditos/tracking.py), [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
+- **Other evidence:** `resume_run` and `optional_run` in [`tracking.py`](../recommenditos/tracking.py), [model card](../docs/docs/model-card.md), [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39).
 - **In LaTeX:** yes
 
 ### EDN-58: An unmeasured success criterion blocks the release gate
@@ -968,31 +834,6 @@ How to add an entry:
 - **Other evidence:** [Model card](../docs/docs/model-card.md) (Results), [`masked-inputs.csv`](metrics/masked-inputs.csv), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65).
 - **In LaTeX:** yes
 
-### EDN-64: Pynblint runs from a locked environment behind a wrapper
-
-> **Absorbs EDN-65** (2026-10-01): which Pynblint rules are enforced.
-
-- **Date:** 2026-10-01
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Static Analysis, CI/CD
-- **Participants:** @lukas2510
-- **Decision:** Pynblint runs from its own locked environment behind a wrapper that fails the build on a finding, enforcing the rules that the table on the Notebooks page marks as enforced; the rules that read execution counts are excluded, because nbstripout removes the counts.
-- **Alternatives considered:**
-  - `uvx pynblint`, as the issue proposed: its transitive dependencies float, and a new click release crashed the tool.
-  - Pynblint alone as the CI step: it exits 0 whatever it finds.
-  - `nbstripout --keep-count`, so the execution rules can fire: the counts churn in every diff and do not show that a fresh kernel runs the notebook.
-- **Rationale:** Three measured facts about Pynblint decided how to run it: it breaks on an unpinned dependency, it exits 0 with findings, and environment variables reconfigure it.
-  A rule is enforced where it can fire on a committed notebook and excluded where it cannot.
-  That a notebook runs from top to bottom is shown with `make notebook-run`.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI contributed the three measurements, the options and the wrapper with its tests.
-  Lukas chose among the options.
-  The work was checked by two further AI reviews, which found defects in the wrapper's tests and exit codes that were fixed before merging, and by the gate itself: the notebook AI had drafted failed the cell-length rule and was restructured, with the threshold unchanged.
-- **AI interaction evidence:** Claude Code sessions of 2026-10-01 and of 2026-10-05 (review of PR #67).
-- **Other evidence:** [Notebooks](../docs/docs/notebooks.md#pynblint-rules), [`notebook_lint.py`](../tools/notebook_lint.py), [`tools/pynblint-env/`](../tools/pynblint-env/pyproject.toml), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
-- **In LaTeX:** yes
-
 ### EDN-68: The Great Expectations store is generated and cached
 
 > **Absorbs EDN-77** (2026-10-06): fill rates are asserted by the suites, not by the raw contract.
@@ -1023,34 +864,6 @@ How to add an entry:
 - **Other evidence:** [`gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), [`gx_probe_results.txt`](analysis/gx_probe_results.txt), [PR #76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76), [issue #78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78).
 - **In LaTeX:** yes
 
-### EDN-69: CodeCarbon's figure is reported as an estimate
-
-- **Date:** 2026-10-05
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Energy Efficiency, Experiment Tracking
-- **Participants:** @lukas2510
-- **Decision:** `train` measures only the model fit with CodeCarbon's `OfflineEmissionsTracker`, in `process` mode and against the Spanish grid, with its settings in `params.yaml`.
-  The row goes to `reports/emissions/<variant>.csv` and into the variant's MLflow run.
-  Every place that shows the figure calls it an estimate, and variants are compared within one run on one machine.
-  The estimate was checked once against the RAPL energy counter.
-- **Alternatives considered:**
-  - Permanent RAPL read access on the training laptop: unprivileged power readings are a known side channel, and RAPL counts the whole package, not the process.
-  - Compare the variants on fit seconds alone: drops the energy comparison the issue and the rubric ask for.
-  - The online tracker: it geolocates the machine and would write a contributor's location into a tracked file.
-- **Rationale:** On our machines CodeCarbon cannot read a power counter and falls back to a model: a constant for the RAM plus a share of the CPU's rated power.
-  Its figure is therefore a fit time multiplied by a machine-specific constant.
-  The fits use more than one thread although `train.num_threads` is 1, so they are charged more than a single-threaded fit.
-  It ranks variants fairly within one run and is no reading in watt-hours that holds across machines.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI found the limitation by reading CodeCarbon's source and measuring on the laptop and on a GitHub runner, before it wrote the module.
-  The issue and the course demo had assumed a measurement.
-  It recommended the estimate with a one-off check, and Lukas chose that.
-  It did not obtain RAPL access by another route that was open to it.
-- **AI interaction evidence:** Claude Code session of 2026-10-05 on issue #38.
-- **Other evidence:** [`energy.py`](../recommenditos/modeling/energy.py), [`rapl_validation_results.txt`](analysis/rapl_validation_results.txt), [model card](../docs/docs/model-card.md), [PR #68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/68).
-- **In LaTeX:** yes
-
 ### EDN-71: Secrets are scanned with gitleaks before commit and in CI
 
 - **Date:** 2026-10-05
@@ -1079,29 +892,29 @@ How to add an entry:
 
 ### EDN-73: Hyperparameters change only under a written tuning protocol
 
-> **Absorbs EDN-70** (2026-10-05): `n_estimators` is a ceiling of 5,000, so early stopping decides the tree count.
+> **Absorbs EDN-70 and EDN-78** (2026-10-05, 2026-10-06): the tree ceiling, and the search over both LightGBM variants.
 
 - **Date:** 2026-10-05
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Hyperparameter Tuning, Evaluation Protocol
-- **Participants:** @lukas2510
-- **Decision:** `learning_rate` 0.05 and `num_leaves` 63 stay, because a bounded sweep found no point that the validation split can tell apart from them.
+- **Participants:** @lukas2510; @kadameit decided the search over both variants (2026-10-06)
+- **Decision:** `learning_rate` 0.05 and `num_leaves` 63 stay, because no search found a point that the validation split can tell apart from them.
   A committed hyperparameter is replaced only under the protocol in the pipeline docs: selection on the validation split alone, by validation L1, and only when the simultaneous 95 % interval of the difference lies below zero.
   `n_estimators` is a ceiling of 5,000 with early stopping after 50 rounds.
+  `tune.py` runs a search outside `dvc repro`; its record lives in MLflow only, and its energy is reported apart from NFR-10's budget.
 - **Alternatives considered:**
-  - Adopt the point with the lowest validation L1: its gain lies inside the noise, so it would fail the protocol.
-  - Pick by the test metrics that `dvc exp show` prints: leaks the test split into the model the gate judges.
-  - Keep the ceiling at 1,000 trees: it ended both fits before early stopping could, so a parameter decided the tree count.
-- **Rationale:** Across the twelve points of the grid, no interval of the difference to the committed point lies below zero.
-  The interval is simultaneous because the best-looking of eleven noisy comparisons is the one most likely to look better than it is.
+  - Adopt the point with the lowest validation L1: its gain lies inside the noise.
+  - Random or Optuna search with cross-validation: a new dependency and about five times the fits, for a region found flat.
+- **Rationale:** Across the twelve points of the first grid, no interval of the difference to the committed point lies below zero.
   With the higher ceiling, the validation curve decides how many trees a model keeps.
+  The search of 2026-10-06 covered both LightGBM variants and `min_child_samples`, reproduced the first grid, and kept the committed values in all four sweeps.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI designed the sweep, added the paired bootstrap grouped by seller, and stopped for the decision instead of committing a tuned value.
+- **Assessment of the AI contribution:** AI designed the first sweep and stopped for the decision instead of committing a tuned value.
   An independent AI review corrected the protocol: its first rule used an interval per point, which is not safe across eleven comparisons.
-  With simultaneous intervals the conclusion held.
-- **AI interaction evidence:** Claude Code session of 2026-10-05 on issue #64.
-- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77).
+  For the search of 2026-10-06 AI recommended committing the sweep records beside MLflow; Kevin had it check the course demo, which keeps its emissions in MLflow only, and chose that.
+- **AI interaction evidence:** Claude Code sessions of 2026-10-05 (issue #64) and of 2026-10-06 and 2026-10-09 (issue #88).
+- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [`tune.py`](../recommenditos/modeling/tune.py), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88).
 - **In LaTeX:** yes
 
 ### EDN-75: The test suite also runs on Windows in CI
@@ -1126,59 +939,6 @@ How to add an entry:
   The fixes, the tests written to fail first and the analysis of the failures the new job found were AI's.
 - **AI interaction evidence:** Claude Code session of 2026-10-06 on issue #84 and on the review of PR #73 and PR #75.
 - **Other evidence:** [Issue #84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/84), [PR #85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85), the [failing run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37438994409) before the fix, `.github/workflows/ci.yml`.
-- **In LaTeX:** yes
-
-### EDN-78: The hyperparameter search covers both LightGBM variants
-
-- **Date:** 2026-10-06
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Hyperparameter Tuning, Experiment Tracking, Energy Efficiency
-- **Participants:** @kadameit
-- **Decision:** `recommenditos/modeling/tune.py` searches the LightGBM hyperparameters outside `dvc repro`, under the protocol of EDN-73.
-  It sweeps both variants over `learning_rate` and `num_leaves`, then over `min_child_samples`.
-  Every fit is measured with CodeCarbon and logged as its own MLflow run, and a sweep's record lives in MLflow only.
-  NFR-10's 15-minute budget applies to the fit of the final configuration, and a search's energy is reported apart.
-- **Alternatives considered:**
-  - The issue as written, where the best validation point goes into `params.yaml`: adopts noise, which EDN-73 measured.
-  - Random or Optuna search with cross-validation: a new dependency and about five times the fits, for a region found flat.
-  - Commit the sweep records under `reports/tuning/` as well: the same data in two places, and a commit needed between sweeps.
-- **Rationale:** EDN-73 answered how a value may be adopted; the issue added scope and record-keeping.
-  The first grid repeats EDN-73's fits for `lgbm-basic` and reproduced them, which checks the new module against recorded evidence.
-  All four sweeps kept the committed values, so nothing was adopted.
-  The results and the cost of the search are in MLflow and in the model card.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
-- **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI compared the issue with EDN-73 and showed where the issue had become stale.
-  Kevin accepted its four recommendations before the search ran.
-  For the sweep records AI recommended committing them beside MLflow.
-  Asked by Kevin, it checked the course demo, which keeps its emissions in MLflow only, and Kevin chose that.
-- **AI interaction evidence:** Claude Code sessions of 2026-10-06 and 2026-10-09 on issue #88.
-- **Other evidence:** [`tune.py`](../recommenditos/modeling/tune.py), [`tests/test_tune.py`](../tests/test_tune.py), "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88).
-- **In LaTeX:** yes
-
-### EDN-79: The seller-grouped hash split stays
-
-- **Date:** 2026-10-12
-- **Milestone:** M3: Quality Assurance
-- **Activity / Topic:** Evaluation Protocol, Data Splitting
-- **Participants:** @lukas2510
-- **Decision:** The split stays as it is: whole sellers assigned by a hash of the seed and the seller key, 60/10/10/20, unstratified, with the committed seed.
-  The model card states the distribution of every set and gives a figure of the committed split with its spread over 20 other splits.
-  An adversarial-validation check is recorded once, and the missing temporal split is a stated limitation.
-- **Alternatives considered:**
-  - A stratified-group split on `make`: better make balance, but about half of the existing rows change set when the `ES` listings join, which confounds FR-15's retrain comparison.
-  - Choose a seed for a better mix: a split selected by its outcome.
-  - A temporal split: impossible, because the snapshot has no listing dates.
-- **Rationale:** Over 20 other splits the candidate's test MdAPE is 6.73 % on average, with a standard deviation of 0.27 pp, and SC-01 and SC-02 hold on all 20.
-  Cars older than 20 years exceed the SC-04 bound on all 20 as well, at 18.3 % on average, so that miss is no artefact of the draw.
-  The 20 splits share one pool of listings, so the spread describes how a figure moves with the assignment and is not a confidence interval for new data.
-- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI wrote and ran the evidence script against the stages' own code and first checked that it reproduces the committed metrics.
-  It corrected the premise of the issue, which Lukas had written: the largest dealer raises the make's share in train, and calibration is not short.
-  It laid out the options, recommended this one and stopped for the decision.
-- **AI interaction evidence:** Claude Code session of 2026-10-12 on issue #89.
-- **Other evidence:** [Issue #89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89), [PR #107](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107), [`split_strategy_results.txt`](analysis/split_strategy_results.txt), [model card](../docs/docs/model-card.md).
 - **In LaTeX:** yes
 
 ### EDN-80: The project is the used-car price component
@@ -1217,7 +977,7 @@ How to add an entry:
   - Keep the old wording, "The reviewer is a person": a rule the team does not follow.
   - A second person approves every pull request: GitHub blocks approving one's own, and an agent's runs under its author's account, so most merges would wait.
 - **Rationale:** The rule now says what the trace shows: of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
-  People decide: of the 76 original entries EDN-01 to EDN-78, the AI's proposal was accepted in 46, modified in 27, rejected in 2 and used as input in 1; of the 44 kept on 2026-10-12, in 29, 12, 1 and 1, with EDN-25 rejected and then partly adopted.
+  People decide: of the 76 original entries EDN-01 to EDN-78, the AI's proposal was accepted in 46, modified in 27, rejected in 2 and used as input in 1; of the 35 kept after the trim, in 23, 9, 1 and 1, with EDN-25 rejected and then partly adopted.
   Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them.
   The weak spot: 48 of the 56 were opened and merged under one account without a second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
@@ -1230,7 +990,7 @@ How to add an entry:
 
 ## Retired and merged IDs
 
-These IDs had entries until the notebook was trimmed on 2026-10-12.
+These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
 A merged entry lives on in the entry named in the last column; a retired one did not meet the criterion at the top of this file.
 The original text of each is in [edn-archive.md](edn-archive.md), and no ID is reused.
 
@@ -1238,7 +998,9 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 |---|---|---|---|
 | EDN-07 | Raw data hosting: import from Zenodo, never push | merged | EDN-25 |
 | EDN-09 | Bump to Python 3.12 | merged | EDN-11 |
+| EDN-16 | UC1 and UC2 have separate endpoints | merged | EDN-15 |
 | EDN-21 | Report the upstream licence contradiction | retired | documentation wording with no effect on the system |
+| EDN-22 | Listings registered after the reference date are dropped | retired | a cleaning rule for 27 listings; it is in the dataset card |
 | EDN-24 | Keep the pre-registered exclusion | merged | EDN-04 |
 | EDN-26 | NFR-11 window of 1,000 requests, `model` excluded | merged | EDN-14 |
 | EDN-29 | Drift significance level of 0.005 | merged | EDN-14 |
@@ -1253,21 +1015,29 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 | EDN-43 | The contract carries a categorical's levels | retired | fix of a defect in our own design |
 | EDN-45 | A `req` marker is verification only for automated evidence | merged | EDN-44 |
 | EDN-46 | DagsHub credentials live in two stores | retired | DVC offers no alternative, so nothing was chosen |
+| EDN-48 | The supported-make list is applied in the `features` stage | merged | EDN-05 |
+| EDN-49 | Predictions are not bias-corrected after the log transform | retired | modelling detail; it is in the model card |
 | EDN-50 | One-hot encoding for the Ridge baseline | retired | implementation detail of a baseline |
 | EDN-51 | Mean fill and missingness indicators for the Ridge baseline | retired | implementation detail of a baseline |
 | EDN-52 | `predict_eur` bounds predictions to the training range | retired | implementation guard |
-| EDN-56 | The model bundle carries its own provenance | merged | EDN-53 |
+| EDN-53 | `train.num_threads` is pinned to 1 | retired | a single configuration value |
+| EDN-54 | A pipeline stage runs without MLflow unless tracking is required | merged | EDN-55 |
+| EDN-56 | The model bundle carries its own provenance | retired | was part of EDN-53, retired with it |
 | EDN-57 | MLflow retry budget of three requests | retired | a single configuration value |
 | EDN-59 | SC-06 masks API input fields | merged | EDN-15 |
 | EDN-60 | Gating segments are enforced in code | merged | EDN-58 |
 | EDN-63 | `metrics.json` carries the data source and the estimator | retired | fix after stub metrics, implementation detail |
-| EDN-65 | The Pynblint rule policy | merged | EDN-64 |
+| EDN-64 | Pynblint runs from a locked environment behind a wrapper | retired | how a prescribed tool is run; it is on the Notebooks page |
+| EDN-65 | The Pynblint rule policy | retired | was part of EDN-64, retired with it |
 | EDN-66 | NFR-06 and NFR-09 are each split in two | retired | requirement bookkeeping; the result is in the requirements |
-| EDN-67 | `features` applies the supported-make list to every frame | merged | EDN-48 |
+| EDN-67 | `features` applies the supported-make list to every frame | merged | EDN-05 |
+| EDN-69 | CodeCarbon's figure is reported as an estimate | retired | how a prescribed tool's figure is reported; it is in the model card |
 | EDN-70 | `n_estimators` is a ceiling of 5,000 | merged | EDN-73 |
-| EDN-72 | The mileage range is a tolerant check | merged | EDN-22 |
+| EDN-72 | The mileage range is a tolerant check | retired | was part of EDN-22, retired with it |
 | EDN-74 | Runs are tagged with the hashes of their stage's inputs | retired | fix of a provenance tag, implementation detail |
 | EDN-77 | Fill rates are asserted by the Great Expectations suites | merged | EDN-68 |
+| EDN-78 | The hyperparameter search covers both LightGBM variants | merged | EDN-73 |
+| EDN-79 | The seller-grouped hash split stays | merged | EDN-32 |
 
 ## Template
 
@@ -1281,7 +1051,6 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 - **Decision:** What we do, in about 45 words.
 - **Alternatives considered:**
   - An alternative we really weighed: the reason it lost, in one sentence.
-  - About three of them.
 - **Rationale:** The deciding argument, in about 60 words and with one or two numbers, each checked against its source.
 - **AI involvement:** Select all that apply: No AI involvement | Information seeking | Alternative generation | Alternative assessment | Recommendation | Solution generation | Other (describe)
 - **Response to AI:** If AI contributed, select one: Accepted | Accepted with modifications | Rejected | Used as input for further analysis | Other (describe)

@@ -1,10 +1,10 @@
 # Engineering Decision Notebook - archive of retired and merged entries
 
-This file holds, word for word, the 32 entries that left [edn.md](edn.md) when the notebook was trimmed on 2026-10-12.
+This file holds, word for word, the 42 entries that left [edn.md](edn.md) when the notebook was trimmed on 2026-10-12 and 2026-10-13.
 It is not part of the graded notebook: `make edn` does not read it and the PDF does not include it.
 It exists so that nothing is lost and an ID cited in an older commit, comment or document can still be looked up.
 The table "Retired and merged IDs" in [edn.md](edn.md#retired-and-merged-ids) says which entry a merged one lives on in and why a retired one was dropped.
-The entries are as they stood on `main` at commit `7b3a434`; links between entries that pointed into edn.md no longer resolve here.
+The entries are as they stood on `main` at commit `02e3544`; links between entries that pointed into edn.md no longer resolve here.
 Do not edit them.
 
 ## Archived entries
@@ -56,6 +56,28 @@ Do not edit them.
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-08; [project brief](../docs/docs/project-brief.md) section 6 (tooling constraints); `pyproject.toml`, `.github/workflows/ci.yml`; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
+### EDN-16: Separate `/predict` and `/price-range` instead of one valuation endpoint
+
+- **Date:** 2026-09-29
+- **Milestone:** M1: Project Inception (API contract; implemented in M4: Model Deployment)
+- **Activity / Topic:** API Design
+- **Participants:** @lukas2510
+- **Decision:** UC1 and UC2 keep their own endpoints, `POST /predict` and `POST /price-range` (FR-06, FR-07). They are no longer marked `[proposed]`.
+- **Alternatives considered:**
+  - **Option A (chosen): one endpoint per use case.**
+    Pros: each endpoint has one input contract, which matters because `/predict` requires ten fields (FR-01, EDN-15) and `/price-range` requires only `make` (FR-02); FR-16's per-endpoint OpenAPI examples and FR-01's per-field 422 stay straightforward; the prediction log (FR-13) keeps the two traffic shapes apart, so FR-14's drift job does not read a change in the UC1/UC2 mix as input drift on exactly the completeness features the `ES` scenario relies on (EDN-14); consistent with `/comparables` (FR-09), which is already its own endpoint.
+    Cons: two request schemas to keep in step, and a client that wants the estimate and the interval calls twice.
+  - **Option B: one `/valuation` endpoint returning the estimate and the interval.**
+    Pros: one path, one call for a client that wants both.
+    Cons: the required fields would depend on the use case inside one schema, so the two contracts would be rebuilt as a conditional rule instead of disappearing; mixes both traffic shapes in one log; leaving `/comparables` separate would be inconsistent, and merging it too would put SHAP, intervals and the comparables lookup in every request against NFR-02's latency budget.
+- **Rationale:** The two endpoints differ in their input contract rather than in their output, and EDN-15 widened that gap from eight required fields to ten against one. A single endpoint would therefore not remove the two contracts, only hide them in a conditional schema. The monitoring side settles it: FR-14 and NFR-11 compare the logged input distribution of a window against the training reference, and UC2 allows every optional field to be absent, so a shift in the client mix would look like drift on the same completeness features that make the `ES` replay detectable. The decision is also the reversible one: a combined endpoint can be added later as a convenience, while splitting one apart under `/v1` would be a breaking change.
+- **AI involvement:** Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** Asked to re-examine the split before merging PR #19, AI first called it a merge blocker and then withdrew that: no test or report cites FR-06 or FR-07 yet, so the practical cost of deciding later starts with the M4 API tests, not with the merge. It found that the two endpoints do not differ in their output, since FR-07 already returns the point estimate, and contributed the monitoring argument above, which had not been written down anywhere. Lukas kept the scope deliberately small and dropped AI's further suggestions (a shared base schema stated in the requirement, a combined convenience endpoint) as implementation detail or as unnecessary for a course project.
+- **AI interaction evidence:** Claude Code session on 2026-09-29: Lukas asked (translated from German) "analyse that again, then explain it to me and give me a reasoned recommendation on what the best way is" about the endpoint split, and after the recommendation replied "I do not want overkill, it should stay simple, it is only a university course".
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-06, FR-07, FR-09; [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **In LaTeX:** yes
+
 ### EDN-21: Report the upstream licence contradiction instead of resolving it
 
 - **Date:** 2026-09-29
@@ -82,6 +104,43 @@ Do not edit them.
 - **Assessment of the AI contribution:** AI found the contradiction while re-validating PR #22, and in doing so corrected its own earlier review, which had asserted that the card's restrictive wording was simply wrong and contradicted the MIT licence recorded in the project brief. Fetching the Zenodo API record showed that both statements come from the same source, so the card's author had not made a mistake and the project brief's flat "License: MIT" was itself incomplete. AI laid out the four options above and recommended option A. The team accepted the recommendation but rejected the accompanying suggestion to contact the author, on the grounds that it is disproportionate for a university project.
 - **AI interaction evidence:** Claude Code session on 2026-09-29 while reviewing PR #22. AI fetched `https://zenodo.org/api/records/17643343` and reported that `metadata.license.id` is `mit-license` while the description text welcomes use for research, education and analysis, which reads as narrower than MIT; it then flagged the choice as EDN-worthy rather than deciding it. Lukas replied, in German, that the team should not be pedantic and should simply take the recommendation, since this is a small university-course project, which settled option A and ruled out option D.
 - **Other evidence:** [PR #22](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/22), the Licensing section of [the dataset card](../docs/docs/dataset-card.md), Zenodo record [10.5281/zenodo.17643343](https://doi.org/10.5281/zenodo.17643343).
+- **In LaTeX:** yes
+
+### EDN-22: Drop listings registered after the age reference date
+
+> **Evidence corrected on 2026-09-29.** The decision said preprocessing drops "the 164 listings". 164 is the raw-file count;
+> preprocessing runs after scoping, so it removes 27 of them. The alternatives below already said 26, measured after deduplication.
+> The decision itself is unchanged.
+>
+> **Description corrected on 2026-09-30.** The decision described the 27 as what survives "the EDN-04 scope and the training price range".
+> The rule order implemented in issue #34 puts this rule above the price range, so the 27 survive the scope alone.
+> The number is the same either way, because all 27 are inside the range; only the description of how it was obtained was wrong.
+> The decision itself is unchanged.
+
+- **Date:** 2026-09-29
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Data Validation and Preprocessing
+- **Participants:** @lukas2510
+- **Decision:** Preprocessing drops every listing whose `registration_date` is after the age reference date (the 2025-11-08 snapshot date in training, the request date in serving). There are 164 such listings in the raw file, of which **27** survive the EDN-04 scope, the one rule the implemented order puts above this one, and so are the ones preprocessing actually removes; all 27 are inside the training price range, which runs after this rule, so the count is the same whichever of the two goes first; 26 remain if deduplication runs first, the difference being one duplicate row. The Great Expectations suite asserts `registration_date <= reference date` on the processed data as a hard expectation, and the same rule on the raw data with `mostly=0.99`, so a future scrape that suddenly carries many such rows is flagged instead of silently cleaned away.
+- **Alternatives considered:**
+  - **Option A (chosen): drop the rows.**
+    Pros: 164 of 118,382 raw rows is 0.14 %, and only 26 of them survive the EDN-04 scope, so nothing measurable is lost; makes `age >= 0` a genuine invariant that the pipeline, the tests and the API contract can all rely on; no special case anywhere in the feature code.
+    Cons: throws away the other, possibly correct attributes of those listings; the rule has to live in preprocessing, so the raw expectation has to tolerate what preprocessing removes.
+  - **Option B: clamp the age at zero.**
+    Pros: keeps the rows and their remaining attributes; a single `max(0, ...)` in the feature code.
+    Cons: invents a registration date that the source does not support, and does so for rows whose date is demonstrably wrong (the latest is 2026-11-01, almost a year after the snapshot); a clamped zero is indistinguishable from a genuinely new car, which is exactly the group EDN-04 scopes out.
+  - **Option C: keep the rows with a negative age.**
+    Pros: no data loss, no cleaning rule; gradient boosting tolerates the values.
+    Cons: the API would have to accept a negative age too, or training and serving would disagree; removes the cheapest available sanity check on the most important feature.
+  - **Option D: repair the date from `production_year`.**
+    Pros: would keep the rows with a defensible value.
+    Cons: `production_year` is only 19 % filled, so it repairs almost none of them; a repair rule needs its own validation for a group this small.
+- **Rationale:** For the rows this decision actually governs, a registration date after the snapshot is a data-entry error rather than a rare but real phenomenon: 137 of the 164 sit in a single month, January 2026, which looks like a year typo. The reading is weaker for the 114 new cars among them, where a dealer entering a planned first-registration date is plausible, but those fall outside the used-car scope before preprocessing runs; only 26 of the 164 reach it. At that share the cost of dropping them is nil, while every alternative either fabricates a value or gives up the `age >= 0` invariant. Bounding the raw data with `mostly=0.99` rather than a hard rule keeps the raw suite honest about what the source actually contains while still catching a systematic worsening, which matters because the `ES` holdout and the M6 drift scenario re-run these checks on data we have not profiled.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI profiled the 164 rows, laid out the four options above and recommended dropping them, together with the split between a hard expectation on the processed data and a `mostly` bound on the raw data. Lukas accepted the recommendation because the dropped share is negligible and the invariant is worth more than the rows.
+- **AI interaction evidence:** Claude Code session on 2026-09-29 while analysing [issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25): AI presented the options as a decision question, Lukas chose "drop them".
+- **Other evidence:** [Issue #25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/25), [PR #24](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/24), [problem specification](../docs/docs/problem-spec.md) section 2.
 - **In LaTeX:** yes
 
 ### EDN-24: Keep the pre-registered exclusion although the flag behind it is unreliable
@@ -553,6 +612,72 @@ Do not edit them.
 - **Other evidence:** [issue #42](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/42); [PR #50](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/50); [EDN-19](#edn-19-which-dagshub-repository-the-team-uses-as-dvc-remote-and-mlflow-server); NFR-15 in [the specification](../docs/docs/specification.md), which held this as part of NFR-09 when this entry was written ([EDN-66](#edn-66-nfr-06-and-nfr-09-are-each-split-in-two-and-each-id-keeps-the-half-its-citations-mean)).
 - **In LaTeX:** yes
 
+### EDN-48: `split` records the supported-make list and stays a lossless partition; the downstream stages apply it
+
+> **Amended by EDN-67** (2026-10-05): `features` is now the one stage that applies the list, to all five frames and before the vocabulary is built, and `train` and `evaluate` check it rather than filtering again.
+> All four guarantees listed below are discharged; `docs/docs/pipeline.md` records where under "The supported makes".
+
+- **Date:** 2026-09-30
+- **Milestone:** M2: Reproducibility (shapes M3: Quality Assurance)
+- **Activity / Topic:** Evaluation Protocol, Data Preparation
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** The `split` stage computes the supported-make list (EDN-05) and writes it as `data/processed/supported_makes.json`, but it does **not** remove the rows of unsupported makes: every interim row lands in exactly one of the five artefacts. The `features`, `train` and `evaluate` stages read that artefact and apply it, so the model is fitted and the SC-01 to SC-06 gate measured only on the makes the API serves. `dvc.yaml` gives `features` the artefact as a dependency, so changing `split.min_listings_per_make` reruns the matrices, the models and the metrics.
+- **Alternatives considered:**
+  - **Option A: filter in `split`, and write the removed rows to a sixth artefact.**
+    Pros: the frames leaving `split` are already in scope, so no downstream stage can forget the filter, which is the failure this decision is most exposed to. The skeleton pointed this way: `schema.py` said "the supported-make filter and the ES holdout belong to `split`", `preprocess.py` said the filter "is deliberately NOT here [...] which happens in `split`", and every "training scope" figure in the docs is post-filter.
+    Cons: it makes `split` lossy, so "the split loses no row" stops being a testable invariant and becomes a claim about two artefacts plus a sixth one. EDN-05's threshold could no longer be revisited without re-running the split, which is the irreversible direction: a downstream stage can always apply a list, but it cannot recover rows the split threw away. The sixth artefact also needs its own `dvc.yaml` output and its own contract, which is outside issue #35.
+  - **Option B: record the list, and measure the metrics over every make anyway.**
+    Pros: nothing to wire; the split stays lossless and no stage has to remember anything.
+    Cons: it reports a number the product cannot deliver. The gate would be computed over 1,437 listings whose make the API refuses with a 422 (FR-04), and `evaluate`'s per-make segments would include makes that are out of scope, so SC-04 would check a segment the API never answers.
+  - **Option C (chosen): record the list in `split`, and restrict the model input and the metrics downstream.**
+    Pros: keeps both properties that matter. `split` stays a lossless partition, so the threshold stays revisitable and no row disappears without an artefact saying where it went; and the reported population is the served population, because the stages that build model input and measure the gate apply the list. It is also the reversible direction, and `dvc.lock` ties the artefact's hash to the stages that consume it.
+    Cons: the guarantee now lives in three stages rather than in one, so it has to be written down and tested rather than being true by construction. That is the cost this entry accepts, and `docs/docs/pipeline.md` carries the four obligations so they are not only in a squash-merge commit message.
+- **Rationale:** The authority on what the split does is problem-spec section 5, the evaluation protocol, and it removes nothing but `ES`: "The remaining listings are split into train, validation, calibration and test sets grouped by seller". Section 2 scopes the *model*, not the split, and EDN-05 already places the rejection at the API: "the pipeline computes the list and the API rejects other makes". The repository owner read the two documents the same way and confirmed option C.
+
+  The measurements say the choice is cheap in both directions. Applying the list moves every realised share by at most **0.08 pp** (99,326 rows to 97,889), so restricting downstream does not disturb the split proportions the gate of EDN-39 checks. Of the **6,079** holdout rows, **5,979** are a supported make and **100** are not, which matches EDN-14's count of the `ES` rows the API would accept under FR-04, so the holdout needs the same filter and the drift and retrain work is unaffected by where the filter sits.
+
+  One framing from the original write-up is corrected here, because it would have gone into the report wrong. The 1,437 out-of-scope rows would **not** inflate the reported metrics: rare makes are harder to price, so a pooled figure computed over them is if anything pessimistic. The real problem is a different one, and it is about comparability rather than optimism: the reported population would not be the served population, and it would not be comparable to the reference values in problem-spec section 8, which are all post-filter. That is why the metrics are restricted even though leaving them unrestricted would not flatter the model.
+
+  What the chosen option owes, and what `docs/docs/pipeline.md` records under "The supported makes", is four guarantees from #36, #37 and #39, none of them optional: the filter applied to train, validation, calibration, test **and** the `ES` holdout; applied **before** any training-derived vocabulary or statistic is computed, since fitting on rows the API refuses puts unservable makes into the model's own inputs; `evaluate`'s per-make segments restricted to the listed makes; and a test asserting that the filtered frames contain only supported makes, so the guarantee is checked rather than intended.
+  How each was discharged: the third by `evaluate` in #39 (`check_make_levels_are_served`); the first and second together by `features` in #63 ([EDN-67](#edn-67-features-applies-the-supported-make-list-to-every-frame-the-es-holdout-included-before-the-vocabulary-is-built)), which replaced the train-and-validation filter #37 had put in `train` and the test filter #39 had put in `evaluate` with checks that fail instead of filtering; and the fourth by a test for each of the three, every one of which first asserts that its input holds an unsupported make.
+
+  Two stale claims were a consequence of this decision, and are now applied: the comments in `recommenditos/schema.py` and `recommenditos/data/preprocess.py` said the supported-make filter belongs to, or happens in, `split`. Both now say that `split` computes the list and the stages building model input apply it.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found that the skeleton contained evidence for both readings and that the two documents behind them disagree, rather than implementing one and moving on: `schema.py` and `preprocess.py` place the filter in `split`, while problem-spec section 5 and EDN-05 place it at the API. It laid out the options with the irreversibility argument that decided it, and flagged the choice as an EDN candidate before acting on it. It also measured the consequences instead of asserting them, which is what produced the 0.08 pp share shift and the 5,979 of 6,079 holdout figure, and it corrected its own earlier framing that the out-of-scope rows would inflate the metrics once it checked the direction of the effect. Lukas confirmed option C.
+- **AI interaction evidence:** Claude Code sessions on 2026-09-30 while implementing and then adversarially reviewing issue #35: the first flagged the two readings and asked for a decision rather than choosing silently; the adversarial review verified the numbers and found that the obligation existed only in the pull request body, with issues #36, #37 and #39 mentioning the make list nowhere at all.
+- **Other evidence:** [`recommenditos/data/split_data.py`](../recommenditos/data/split_data.py); the `supported_makes.json` dependency on the `features` stage in [`dvc.yaml`](../dvc.yaml); [pipeline docs](../docs/docs/pipeline.md), "The supported makes", for the four downstream guarantees; [`reports/analysis/split_gate.py`](analysis/split_gate.py) for the 0.08 pp and 5,979 measurements; [EDN-05](#edn-05-supported-makes-minimum-listing-support-per-make); [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one); [EDN-39](#edn-39-the-splits-size-gate-is-four-rules-with-an-unconditional-floor-not-one-bound-derived-from-the-realised-data); [issue #35](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/35); [PR #53](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/53).
+- **In LaTeX:** yes
+
+### EDN-49: No bias correction on the log-to-euro inverse transform
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Modelling Approach, Evaluation Protocol
+- **Participants:** @lukas2510
+- **Decision:** `predict_eur` is `exp` of the model's log-space prediction, with no Duan smearing factor and no lognormal variance correction. The target functional is the conditional **median** price, and that is what every metric this project reports measures.
+- **Alternatives considered:**
+  - **Option A (chosen): naive `exp`.**
+    Pros: it is the conditional median of price, which is exactly what MdAPE, the +/-20 % share and the conformal intervals are about; it needs no statistic fitted on the training residuals, so nothing extra has to be persisted, versioned or kept in step between `train`, `evaluate` and the API; and it is what the model card already told readers the model does.
+    Cons: it is *not* an unbiased estimate of the mean price, so anyone reading the estimate as an expected sale value is reading it wrong. The model card and the response schema say "typical price" for that reason.
+  - **Option B: Duan's smearing estimator.** Multiply by the mean of `exp(residual)` over the training rows.
+    Pros: the textbook correction for a log-linear model, non-parametric, and it is what a reviewer who knows the retransformation problem will ask about.
+    Cons: it targets the conditional mean, so it shifts every prediction upward, away from the typical asking price. Measured on the real snapshot's 19,665 test rows it makes every variant worse: factor 1.0258 and MdAPE 9.52 % to 9.83 % for `b1`; 1.0052 and 6.83 % to 6.86 % for `lgbm-basic`; 1.0028 and 6.32 % to 6.37 % for `lgbm-extended`. It also adds a fitted constant to the artefact that has to travel with the model and be applied identically in three places.
+  - **Option C: lognormal variance correction,** multiply by `exp(sigma^2 / 2)`.
+    Pros: closed form, no residual pass needed.
+    Cons: everything option B has, plus a distributional assumption the residuals do not have to satisfy; it is strictly weaker than smearing, which estimates the same quantity without the assumption.
+- **Rationale:** The correction answers a question nobody here asks. Fitting with squared error on `log(price)` estimates `E[log P | x]`, so `exp` of it is the geometric mean, which for the conditional distribution of a price is the median. Every number in problem-spec section 6 and every criterion in section 8 is median- or quantile-flavoured: MdAPE is the primary metric, SC-02 is a share within a band, and SC-05's intervals are conformal and therefore calibrated after the fact on held-out data, so they need no correction either. A mean-targeting correction would make each of those numbers worse, and the measurements say it does, on all three variants that have an inverse transform at all.
+
+  `b0` is the reason the decision is visible in the code rather than implicit. The median baseline is fitted on `price` directly, not on `log_price`, because a median commutes with a monotone transform: `exp(median(log price))` and `median(price)` are the same number, and the readable one is the one worth storing in a lookup table a person can audit. So B0 needs no inverse transform, B1 and the two LightGBM variants share one, and the seam puts it inside the model - `predict_eur` returns euros and `predict_log_price` is defined as its log - so `evaluate` and the API cannot come to disagree about it.
+
+  The honest limit of this entry: the effect is small. The largest degradation measured is 0.32 pp, on the interpretable baseline rather than on the deployed candidate. It is recorded because the retransformation problem is a standard question about a log-target model, the answer has numbers behind it, and the alternative would have quietly cost accuracy.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI raised the retransformation question unprompted, named the two standard corrections and argued from the target functional rather than from convention, which is the argument that decides it. Its first write-up carried the effect sizes from a different run (0.5 to 2.2 pp) as if they were ours; those were re-measured on the real snapshot and are an order of magnitude smaller, so the entry now claims what this project measured and says that the effect is small. The direction of the effect - worse on every variant - reproduced.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the smearing factor and the paired MdAPE per variant were computed on the real snapshot in a scratchpad run of the whole chain, with the numbers reproduced in the model card.
+- **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.predict_eur` and `MedianBaselineModel`; [model card](../docs/docs/model-card.md), Training Procedure, Training; `tests/test_model.py::test_predict_log_price_is_exactly_the_log_of_predict_eur`; [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
+- **In LaTeX:** yes
+
 ### EDN-50: One-hot encoding for the Ridge baseline only, against EDN-02's "no one-hot"
 
 - **Date:** 2026-09-30
@@ -661,6 +786,84 @@ Do not edit them.
 - **Assessment of the AI contribution:** AI proposed the clip and the float-limit argument for applying it in log space, which is the part that makes the interface's promise structural. Its justifying measurement did not hold up: the 487,417 EUR case it cited is inside the training range and would never be clipped, which was found by measuring the range instead of assuming it. Re-measuring over the whole test split produced the case that does justify the clip, and the entry and the code now claim that one and explicitly disclaim the other. AI also proposed the test; the test was strengthened to replace the estimator with one returning an absurd log price, so that it fails when the clip is removed rather than depending on how far a particular fit happens to extrapolate.
 - **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the unbounded predictions of all four variants were computed over the real test split, and the make-only probe was re-run at both data scales before the justification in the entry was rewritten.
 - **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `Model.predict_eur` and the range guard in `Model.__init__`; `tests/test_model.py::test_a_prediction_that_would_overflow_is_bounded_to_the_training_range`, `::test_a_training_price_range_that_cannot_bound_a_price_is_refused` and the range assertions in `::test_predict_eur_contract`; [model card](../docs/docs/model-card.md), Training Procedure, Training; [PR #62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/62); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
+- **In LaTeX:** yes
+
+### EDN-53: `train.num_threads` is pinned to 1, trading fit speed for a machine-independent artefact
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Reproducibility, Modelling Approach
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** `params.yaml` carries `train.num_threads: 1` and `train` passes it to LightGBM as `n_jobs`. It is never left at LightGBM's default of `-1`, which means every core. The reproducibility it buys is a `booster.txt` that is byte-identical on any machine. What it costs is narrower than first recorded: measured against a pin of 2 or 4 threads it costs about 1.5x the fit, and measured against the default it actually *saves* time and, more to the point, removes an enormous variance.
+- **Alternatives considered:**
+  - **Option A: leave `n_jobs` at its default of `-1`.**
+    Pros: nothing to configure. Not, as it turns out, the fastest fit: see the rationale.
+    Cons: LightGBM writes the thread count into `booster.txt` as a `[num_threads: N]` line, so the artefact - and therefore its DVC hash and `dvc.lock` - depends on the core count of whoever ran `dvc repro`. Two contributors with different laptops would produce different artefacts from identical data and parameters, and `dvc status` could never say the model was unchanged. On top of that, on an 8-core machine the default is both slower and wildly variable at real scale, and it makes the test suite's cost unpredictable, which matters because the suite fits all four variants on 744 rows.
+  - **Option B (chosen): pin to 1.**
+    Pros: makes `booster.txt` byte-identical across thread counts, which is a stronger claim than NFR-06's "metrics within 0.1 percentage points" and is the one the reproducibility test asserts. It also removes oversubscription if the four independent `train@*` stages are ever run at once, and it is the value with by far the smallest spread between repeated fits at either data scale - which is what makes a reported fit time worth reporting.
+    Cons: it is measurably slower than a **pinned** 2 or 4. On the 60,378-row training split `lgbm-extended` fits in a median 18.3 s at 1 thread against 12.2 s at 4, so option C would buy back about a third of the fit per variant. It is not slower than the default it actually replaces.
+  - **Option C: pin to a fixed larger number, 2 or 4.**
+    Pros: the same machine independence as option B, because the value is pinned rather than discovered, with most of the speed back. This, and not option A, is the alternative that the pin genuinely costs something against.
+    Cons: it is only machine-independent on machines that *have* that many cores. LightGBM silently uses what is available, so a 2-core CI runner asked for 4 would write a different `booster.txt` than an 8-core laptop, and the property would hold right up until the first machine that breaks it - the worst kind of guarantee. 1 is the only value every machine can honour.
+- **Rationale:** The measurement that decides the direction is that the **trees are already thread-independent and only the recorded setting is not**. Fitting `lgbm-basic` on the fixture in separate processes at 1, 2, 4 and 8 threads gives the same `best_iteration` (98) and a byte-identical model file once the `[num_threads: N]` line is normalised away, at every thread count; the md5 of the whole file differs at every one of them. So pinning the value does not make the model reproducible - it already is - it makes the *file* reproducible, which is what DVC hashes.
+
+  That also corrects a claim worth not repeating. The design this work followed said `deterministic=True` and `force_row_wise=True` are what keep the trees stable across thread counts. They are not, at this data size: with both flags **off**, the normalised file is still byte-identical across 1, 2, 4 and 8 threads. What the flags do change is *which* trees are built - the normalised md5 differs between the flags on and off - so they are not free of consequence, they are simply not what makes the result thread-independent here. They are kept as insurance documented by LightGBM, and the code and the model card now say that rather than claiming a measurement that does not exist.
+
+  The cost side was measured rather than assumed, and the first version of this entry stated it against a configuration the default never produces. The full real-scale curve, medians of three fits per thread count on the 60,378-row training split, on an 8-core machine with nothing else running:
+
+  | Variant | 1 thread | 2 | 4 | 8 (the default here) |
+  |---|---|---|---|---|
+  | `lgbm-basic` | 7.1 s (7.0 to 7.2) | 5.6 s (5.3 to 6.8) | 6.8 s (6.4 to 7.4) | 17.7 s (16.5 to 36.5) |
+  | `lgbm-extended` | 18.3 s (17.9 to 18.9) | 12.8 s (12.7 to 13.1) | 12.2 s (11.3 to 14.3) | 29.2 s (12.6 to 38.7) |
+
+  Two things follow, and the second is the correction. More threads do help, so the design's "there is no performance reason to use more" is wrong: 2 to 4 threads are consistently the fastest, and the pin costs about 1.5x the fit for `lgbm-extended` and 1.27x for `lgbm-basic` against them. But the alternative this decision actually rejects is not a pin of 2 or 4, it is LightGBM's **default of every core**, and against that the pin is free or a gain: 18.3 s against 29.2 s for `lgbm-extended`, 7.1 s against 17.7 s for `lgbm-basic`. So the trade is with option C, not with option A.
+
+  The spread matters more than the median. At 1 thread the three fits of a variant land within 0.2 s and 1.0 s of each other; at 8 they span 20 s and 26 s, and the fastest `lgbm-extended` fit of the whole sweep (12.6 s) and the slowest (38.7 s) are both at 8 threads. A number that varies threefold between identical runs is not a fit time anyone can report, which is a reproducibility argument for the pin quite apart from the artefact's hash.
+
+  The earlier entry attributed the reversal at 8 threads to the 744-row fixture, where the direction is even sharper: 0.33 s at 1 thread, 0.27 s at 2, 0.48 s at 4 and a median of **28.58 s at 8**, with one fit of 143.71 s, on a machine already at load 13 to 19. That reading was too narrow. The reversal is not about the row count but about the work per thread: it happens at 60,378 rows too, and on `lgbm-basic` - 16 features - more decisively than on `lgbm-extended`'s 162, which is where the extra threads have something to divide. Since the test suite fits every variant on the fixture, on whatever CI runner picks up the job, the pin is what keeps the suite's cost predictable as well.
+
+  Absolute seconds here are machine- and load-dependent and are not comparable with the ladder table's one-off fit times in the model card; the ratios within one sweep are the measurement.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI identified that LightGBM records the thread count in the artefact, which is the fact the whole decision rests on, and proposed pinning it. Three of its supporting claims were wrong and were corrected by measuring. That `deterministic=True` and `force_row_wise=True` are what make the trees thread-independent: they are not at this size, the trees are identical with the flags off, though the flags do change which trees are built. That pinning to 1 costs nothing at real scale: it costs about 1.5x the fit against a pin of 2 to 4. And then the correction to that correction - the entry's own second version stated the cost against 2 to 4 as if that were what the default does, and put eight threads at real scale under "not measured". Measuring it reversed the comparison that matters: against the default the pin is free or a gain. The entry now names which alternative the cost is against, and the code comments were rewritten to match.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: `booster.txt` was hashed with the `[num_threads: N]` line normalised away across four thread counts and both settings of the determinism flags. The thread sweep was then redone during the review of pull request #62, as medians of three fits at 1, 2, 4 and 8 threads on both LightGBM variants at real scale on an idle machine, after a first attempt was discarded for having shared the machine with a test run - which is also how the size of the variance at 8 threads came to light.
+- **Other evidence:** [`recommenditos/modeling/model.py`](../recommenditos/modeling/model.py), `LightGBMModel.fit`; the `num_threads` comment in [`params.yaml`](../params.yaml); `tests/test_model.py::test_num_threads_is_pinned_from_params`, which trains at a value the project does not use so a hard-coded 1 would fail it, and `::test_the_payload_of_a_refit_is_byte_identical`; [model card](../docs/docs/model-card.md), Training Procedure, Determinism; [requirements](../docs/docs/requirements.md) NFR-06 and NFR-10; [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
+- **In LaTeX:** yes
+
+### EDN-54: Tracking degrades silently when it is not configured, with an environment variable to make it fatal
+
+- **Date:** 2026-09-30
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** CI/CD, Experiment Tracking
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** A pipeline stage opens its MLflow run through `optional_run`, which yields a real run handle when the server is configured and reachable and a `DisabledRun` that logs nothing when it is not - whether because nothing is configured, because the credentials are refused or because the server cannot be reached. The stage runs to completion either way and records `mlflow.tracking_mode` in `model.json`. Setting `RECOMMENDITOS_REQUIRE_TRACKING=1` turns any of those failures back into a failed stage. There is never a fallback to a local tracking store.
+- **Alternatives considered:**
+  - **Option A: fail the stage whenever tracking is not available,** which is what `tracked_run` does and what EDN-46's helper was built for.
+    Pros: a run that was not recorded never happened, which is the strongest possible reading of NFR-06; and the failure is the cheapest one, before the fit.
+    Cons: CI has no DagsHub credentials and a fresh clone has none either, so `pytest` and `dvc repro` would both fail on the one path every contributor and every pull request takes. The suite's whole premise, stated in `tests/conftest.py`, is that it runs on a clean clone with no credentials and no network; this option contradicts it.
+  - **Option B: fall back to a local tracking store when the server is not configured.**
+    Pros: the run is recorded somewhere, so nothing is lost and the code path is the same.
+    Cons: since MLflow 3.16 an unset tracking URI resolves to `sqlite:///$PWD/mlflow.db`, and for a DVC stage `$PWD` is the repository root. The fallback therefore drops a database into the repository on every run of every contributor, gitignored so nothing would ever point it out. `tests/conftest.py` already guards `mlflow.db` and `mlruns/` as forbidden paths for exactly this reason, and writing the guard for `models/` caught a real instance of it: a local store puts its *artifacts* in `./mlruns` too.
+  - **Option C (chosen): degrade silently, with `RECOMMENDITOS_REQUIRE_TRACKING=1` as the escape hatch.**
+    Pros: every contributor and CI can train, which is a property of the whole pipeline rather than of this stage. And the runs whose numbers are cited can be made to fail loudly, so "the runs are on the server" is something a person can verify instead of something a reader has to take on trust.
+    Cons: two behaviours instead of one, and the quiet one is the default. A contributor who *meant* to record a run and mistyped a variable gets a warning line in a long stage log and a model that looks finished. The mitigation is that `model.json` carries `tracking_mode: "disabled"` and a null `run_id`, so the artefact itself says it was not recorded, and `evaluate` says so again when it finds no run to resume.
+  - **Option D: degrade silently with no escape hatch.**
+    Pros: one behaviour, nothing to remember.
+    Cons: it makes the report's claim unfalsifiable. Nobody could demonstrate that a given set of runs reached the server, because the successful and the skipped path are indistinguishable from the outside.
+- **Rationale:** The two halves of the decision answer two different audiences and neither can be dropped.
+
+  Silence is right for the default audience, which is CI and a contributor on a fresh clone. Training with no credentials is not a degraded mode for this project; it is the normal mode for everything except the handful of runs that produce numbers for the report, and a gate that turns red for everyone stops being read.
+
+  The escape hatch is right for the other audience, which is whoever produces those numbers. It was not hypothetical: the live verification of this stage against the team's DagsHub server was run with `RECOMMENDITOS_REQUIRE_TRACKING=1` precisely so that a misconfiguration could not let the check pass while logging nothing. Without it the verification would have proved that the stage finishes, which it does in either case, rather than that the runs landed.
+
+  The rule that there is never a local fallback is what makes "no tracking URI means tracking is off" a statement with content, and it is the same reasoning `recommenditos/config.py` already applies to loading `.env` from a named path rather than searching upwards.
+
+  One consequence was measured rather than assumed, and it is recorded in EDN-57: detecting "the server is not reachable" is not free, because MLflow retries. That is why the retry budget is pinned, and the two decisions have to be read together.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI identified that the existing helper's fail-fast behaviour, which EDN-46 chose deliberately for a credential check, is the wrong behaviour for a pipeline stage, and that the obvious repair - a local fallback - would put a database in the repository root under MLflow 3.16's changed default. It proposed the null-object handle so the branch exists once rather than in front of every log call, and the environment variable so the quiet default stays falsifiable. It also used the variable in its own live verification rather than only testing it, which is what showed the hatch earns its place.
+- **AI interaction evidence:** Claude Code session on 2026-09-30 implementing issue #37: the DagsHub verification was run with `RECOMMENDITOS_REQUIRE_TRACKING=1` and the throwaway experiment deleted afterwards; the `mlruns` leak was found by the new `models/` guard in `tests/conftest.py` failing.
+- **Other evidence:** [`recommenditos/tracking.py`](../recommenditos/tracking.py), `optional_run`, `Run` and `DisabledRun`; `tests/test_model.py::test_a_tracking_failure_does_not_fail_training`, `::test_require_tracking_makes_a_failure_fatal`, `::test_tracking_is_disabled_without_a_tracking_uri` and `::test_require_tracking_refuses_a_model_with_no_run_to_resume`; the `FORBIDDEN_PATHS` guard in [`tests/conftest.py`](../tests/conftest.py); [EDN-46](#edn-46-dagshub-credentials-live-in-two-gitignored-stores-and-the-token-is-entered-twice); [EDN-57](#edn-57-the-mlflow-retry-budget-is-pinned-to-three-requests); [issue #37](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/37).
 - **In LaTeX:** yes
 
 ### EDN-56: The model bundle carries its own provenance, so `models/` is deliberately not byte-reproducible
@@ -809,6 +1012,61 @@ Do not edit them.
 - **Assessment of the AI contribution:** Issue #57 had already identified the defect and asked for the source and the estimator in `metrics.json`, so the problem was not AI's to find. What AI contributed is the shape and the two things that make it hold: declaring `download.source` under the stage's `params:` rather than reading an undeclared key, and noticing that the test fixture would start mislabelling its own artefacts as soon as the project's source flipped. The second one is the kind of defect this project has repeatedly produced - a claim the code does not back - and it would have shipped as a passing test suite.
 - **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #57: the four options were laid out against the existing docstring's 24-leaf constraint, and the fixture's mislabelling was found by asking what `params["download"]["source"]` would resolve to inside the test run rather than inside the pipeline.
 - **Other evidence:** [`recommenditos/modeling/evaluate.py`](../recommenditos/modeling/evaluate.py), `gate_summary` and `_evaluate_variant`; `tests/test_pipeline.py::test_the_metrics_artefacts_say_which_data_and_which_estimator_produced_them`; `metrics.json`; [EDN-12](#edn-12-retraining-and-promotion-are-human-triggered-not-automated), [EDN-33](#edn-33-a-generated-synthetic-fixture-and-a-downloadsource-parameter-so-the-skeleton-runs-without-the-raw-file); [issue #57](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/57).
+- **In LaTeX:** yes
+
+### EDN-64: Pynblint runs from its own locked environment, and a wrapper that reads its JSON report is the gate
+
+- **Date:** 2026-10-01
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Static Analysis, CI/CD
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** Pynblint 0.1.6 runs from a dedicated tool environment in `tools/pynblint-env/`, with its own `pyproject.toml` (`pynblint==0.1.6`, `click<8.2`, Python 3.12) and its own hash-verified `uv.lock`, invoked as `uv run --project tools/pynblint-env --locked`.
+  A stdlib-only wrapper, `tools/notebook_lint.py`, runs inside that environment, lints each notebook, reads Pynblint's JSON report and is what fails the build, because Pynblint itself exits 0 whatever it finds.
+  `make notebook-lint` is the one command, and the CI job `Notebook lint (Pynblint)` runs exactly that target.
+- **Alternatives considered:**
+  - **Option A (chosen): a locked tool environment, plus a wrapper that is the gate.**
+    Pros: all 63 packages are pinned and their hashes verified, so the tool cannot change under us; `--locked` fails when the `pyproject.toml` and the lock drift apart; the root `uv.lock` is untouched and the directory is not a workspace member; and the lock is a file Dependabot can read.
+    The wrapper runs Pynblint with an allowlisted environment in an empty working directory, so no stray variable or `.pynblint` file can reconfigure it, and it fails loudly when Pynblint crashes instead of reading a crash as a clean run.
+    Cons: two more files, one of them a generated 75 KB lock, a wrapper of its own with tests, and a deviation from the issue's literal "via `uvx pynblint`".
+  - **Option B: `uvx --python 3.12 --with 'click==8.1.8' pynblint==0.1.6`.**
+    Pros: one line, and the closest to what the issue asked for.
+    Cons: about 59 transitive dependencies float, and that is exactly how the tool broke: a click release nobody chose crashed it, so CI can turn red on a pull request that changed nothing near it, and a run cannot be reproduced later.
+  - **Option C: the same, plus `--exclude-newer <date>`.**
+    Pros: the whole resolution is frozen in time, still in one line.
+    Cons: no hash verification, a magic date in the Makefile, and no lock file for the dependency graph or Dependabot to see.
+  - **Option D: a hashed requirements file passed to `uvx -c`.**
+    Pros: looks like a lock without a second project.
+    Cons: `uvx` silently ignores the hashes; a deliberately tampered hash still ran with exit 0, while `uv pip install -r` on the same file failed with "Hash mismatch".
+  - **Option E: a pre-commit hook with `additional_dependencies`.**
+    Pros: feedback at commit time, and CI's existing lint job would run it.
+    Cons: the dependencies float as in option B, and the raw hook reported "Passed" on a notebook with findings, so it needs the same wrapper anyway.
+  - **Option F: a dependency group in the root project, kept apart with uv's `conflicts`.**
+    Pros: one lock file for everything.
+    Cons: it ties our lock to an unmaintained tool's `typer<0.13` and `ipython<9`, and every resolution of the project would carry that weight.
+  - **For the gate: `jq -e` over the JSON in the Makefile, or the wrapper run in the project environment.**
+    Pros: `jq` needs no code; the project environment would let the wrapper use typer and loguru like `tools/requirement_matrix.py`.
+    Cons: `jq` is not on every contributor's machine and prints no reasons; the project environment would make a seconds-long CI job install mlflow, lightgbm and DVC just to lint.
+- **Rationale:** The decision rests on three measured facts about Pynblint 0.1.6, each reproduced rather than read from its documentation.
+  First, it does not run as the issue proposed: it pins `typer<0.13` but not click, and typer 0.12 crashes on click 8.2 and newer (released 2025-05-10) with `TypeError: Secondary flag is not valid for non-boolean flag`, on Python 3.12, 3.13 and 3.14 alike.
+  A tool that broke once through a dependency nobody pinned should not be run in a way that lets it break again, which rules out options B and E and makes the lock worth its two files.
+  Second, it exits 0 with findings: a notebook with eleven findings still returned 0 in both file and directory mode, so a CI step that only runs it can never fail and something has to read the report.
+  Third, its configuration leaks in from outside: its settings are read from environment variables with no prefix, so an ordinary `INCLUDE=/usr/include` crashed a run with a validation error, and a `.pynblint` file in the current directory reconfigures it silently.
+  The wrapper is the smallest thing that answers all three: it pins nothing itself, it isolates the process, and its exit code is the finding count.
+  It is stdlib only so that it can run in the tool environment, which keeps the CI job free of the project's own dependencies.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI did the experiments the decision rests on: it reproduced the click crash and pinned it to click rather than to the Python version, measured the exit code with findings, found that `uvx -c` ignores hashes by tampering with one, and timed every isolation option cold and warm.
+  It also found that the issue's own premise, "run it isolated via `uvx pynblint`", did not work as written.
+  AI then laid out options A to F with a recommendation, and the owner chose A.
+  AI also wrote the wrapper and its tests, test-first, and two further AI review passes, one on the code and one on the documents, found defects that were fixed before the pull request was opened.
+  A mutation run showed that no test noticed when the gate stopped passing the exclusions to Pynblint; an enforced repository rule would have been reported as checked although it never runs on a single notebook; and a report of an unexpected shape exited 1, which reads as findings, instead of 2.
+  Each now has a test.
+  An independent AI review of the pull request then found two more: the Pynblint answers the tests replay were recorded once and never checked against the real tool, so a release that stopped reporting findings would have passed every test, and a report that could not be written exited 1, which reads as findings.
+  A test that runs the real Pynblint from the tool environment and a fix for the exit code followed.
+  The owner reviews the result in the pull request.
+- **AI interaction evidence:** Claude Code session on 2026-10-01 implementing issue #41: a research run on Pynblint 0.1.6 in a scratch directory (rule catalogue, configuration, exit codes, isolation options with timings), then an architecture pass that turned the measurements into options with pros and cons; the owner was given the isolation and gate options with these measurements and chose the locked environment with the wrapper.
+  Claude Code review session on 2026-10-05 of PR #67, which ran the gate on deliberately broken copies of the notebook and checked the tests' recorded answers against the real Pynblint.
+- **Other evidence:** [`tools/pynblint-env/pyproject.toml`](../tools/pynblint-env/pyproject.toml), [`tools/notebook_lint.py`](../tools/notebook_lint.py), `tests/test_notebook_lint.py`, the `Notebook lint (Pynblint)` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); [EDN-65](#edn-65-the-pynblint-policy-enforce-what-can-fire-on-a-committed-notebook-and-show-execution-by-running-it); [issue #41](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/41), [PR #67](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/67).
 - **In LaTeX:** yes
 
 ### EDN-65: The Pynblint policy: enforce what can fire on a committed notebook, and show execution by running it
@@ -977,6 +1235,46 @@ Do not edit them.
   The independent review of PR #71 on the same day found the replay argument and the untrained-make diagnosis, and reproduced the second with a training split holding only BMW against the list BMW and Audi.
   The measurement behind the numbers is `reports/analysis/served_vocabulary_results.txt` and the ladder re-run the committed `dvc.lock` records, tracked as one MLflow run per variant.
 - **Other evidence:** [issue #63](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/63); [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71); [`recommenditos/data/build_features.py`](../recommenditos/data/build_features.py) (`served_rows`, `check_served_makes_only`); `tests/test_features.py::test_every_frame_the_stage_writes_holds_only_supported_makes` and `::test_the_vocabulary_is_decided_by_the_served_training_rows_alone`; [`reports/analysis/served_vocabulary.py`](analysis/served_vocabulary.py) and its results file (2026-10-05); [pipeline docs](../docs/docs/pipeline.md), "The supported makes"; [model card](../docs/docs/model-card.md), "Feature space" and the ladder; [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one), [EDN-42](#edn-42-a-categorical-value-the-training-rows-never-saw-becomes-missing-and-the-holdouts-country-is-allowed-to-vanish), [EDN-48](#edn-48-split-records-the-supported-make-list-and-stays-a-lossless-partition-the-downstream-stages-apply-it).
+- **In LaTeX:** yes
+
+### EDN-69: CodeCarbon measures the fit alone, offline and per process, and its figure is reported as the estimate it is
+
+- **Date:** 2026-10-05
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Energy Efficiency, Experiment Tracking, Evaluation Protocol
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** `train` measures exactly the `fit_variant` call with CodeCarbon 3.3.1's `OfflineEmissionsTracker`, in `process` mode, against the Spanish grid (`ESP`, 174.05 g CO2eq/kWh) and with `measure_power_secs: 15`, all three from `params.yaml`'s `train.energy`, which the `train` stages declare. CodeCarbon's row goes to `reports/emissions/<variant>.csv` and into the MLflow run that also receives the variant's test metrics, as metrics, with the CPU power method and the machine behind them as parameters. A `compare-energy` stage joins each model, its row and its metrics into `reports/figures/energy-vs-error.{csv,png}`. On every machine we train on the figure is CodeCarbon's estimate, not a reading: 10 W for the RAM plus the CPU's TDP times the share of its logical CPUs the fit kept busy. We keep that estimate in the pipeline, word every comparison as one of fit times expressed in energy, within one run on one machine, and checked the estimate once against the RAPL energy counter, with read access granted for that check only.
+- **Alternatives considered:**
+  - **How the figure is obtained, given that it is an estimate.**
+    - **Option A: keep CodeCarbon's estimate and word it as what it is.**
+      Pros: nothing changes on anyone's machine; the same mechanism and settings everywhere, hermetic, with no network call; it is the prescribed tool used as prescribed.
+      Cons: the energy axis adds no information beyond the fit time it is computed from, and the absolute watt-hours are model output that depends on the machine and on its load.
+    - **Option B: grant read access to RAPL on Lukas's laptop permanently,** with a udev or tmpfiles rule, so that CodeCarbon reads the package counter there.
+      Pros: a hardware counter rather than a model.
+      Cons: RAPL is root-only on purpose since kernel 5.10, because unprivileged power readings are a side channel that has been used to extract keys (Platypus, CVE-2020-8694), and this laptop has SGX. RAPL counts the whole package and CodeCarbon does not apportion it to the process, so on a laptop several agents share - the 1-minute load ranged from 10 to 31 on the day of the measurement - it would charge each fit for the others. Only Lukas's runs would read it, so a teammate's `dvc repro` would write a figure of another kind into the same files. And it is a standing change to a personal machine that somebody has to remember.
+    - **Option C (chosen): A, plus a one-off check of the estimate against the counter.** Read access is granted with a `chmod` that does not survive a reboot, the four fits and an idle baseline are measured with both, and access is revoked again.
+      Pros: the report can say what the estimate is worth instead of only what it is, at no standing cost to the laptop's security, and the pipeline stays as in A.
+      Cons: it needs Lukas's `sudo` and an otherwise idle laptop, and it validates one machine on one day, not every run.
+    - **Option D: compare the ladder on fit seconds and CPU-seconds, and keep CodeCarbon's figure only as NFR-10's log.**
+      Pros: both are direct measurements.
+      Cons: it drops the energy comparison issue #38 and the rubric ask for, and the comparison would show the same ratios under another name.
+  - **`process` against `machine` mode.** `machine` charges the fit for the load of the whole machine: on the shared laptop, a process that only slept was charged 4.5 W of CPU in `machine` mode and 0.3 W in `process` mode. `process` reads the fit's own CPU time.
+  - **The online tracker against the offline one with a pinned country.** Per CodeCarbon's source, the online tracker geolocates the machine through a call to geojs, writes its latitude and longitude into the CSV, and queries the AWS, Azure and GCP metadata endpoint, switching to the provider's regional factor when one answers, which on a GitHub runner, an Azure VM, one would. The emissions of an identical fit would then depend on where it ran, a git-tracked file would carry a contributor's location, and the test suite would make network calls. With every socket connection made to fail, the offline tracker made none.
+  - **The demo's `measure_power_secs=1` against CodeCarbon's default of 15.** The power is sampled every second by a separate thread either way; this setting is how often the samples are integrated, and at 1 s that integration races the tracker's own shutdown. Against CodeCarbon's own model, 1 s gave 0.86x to 1.07x on a single-threaded LightGBM fit and up to 4.31x on a busy loop's RAM half, an interval counted several times over; 15 s gave 0.987x to 0.993x on the same fit.
+- **Rationale:** Issue #38 was written on the assumption that CodeCarbon measures the energy of a fit, and the first thing done was to test that on the laptop the ladder is trained on, before any number was quoted. It does not. Since kernel 5.10 RAPL is root-only, so CodeCarbon falls back to its `cpu_load` model, with the i5-10210U's TDP of 15 W from its own table and a constant 10 W for the RAM, its floor of two DIMMs for any x86 machine. The energy of a fit is then 10 W times its wall time plus 15 W / 8 logical CPUs times its CPU time, and for a single-threaded fit that is its duration times 11.75 to 11.80 W, to within 1 % over repeated fits. The real fits are charged more, 13 to 18 W for every second in the ladder run of 2026-10-06, because they use more than one thread although `train.num_threads` is 1: the LightGBM variants' CPU time is 1.6 to 2.2 times their wall time. The RAM constant is 68 % of the `lgbm-basic` fit's figure and 77 % of the `lgbm-extended` fit's. On a GitHub runner, an AMD EPYC 7763 with four vCPUs and no powercap interface at all, the same model charges 80 W per second, because it divides the chip's 280 W TDP by the four vCPUs the VM sees. So the figure is a fit time multiplied by a machine-specific constant, and it moves with the machine's load as well as with the work: the same `lgbm-basic` fit took 33.0 s on a laptop shared with other jobs and 8.6 s on a quiet one, and was charged accordingly.
+
+  That makes the comparison the issue asked for weaker than it reads, not wrong. Between two variants fitted in one run on one machine the ratio of their energies follows the ratio of their fit times closely (3.2 against 3.6 for `lgbm-extended` over `lgbm-basic`), which is a fair measure of their relative cost. What it cannot be is a statement in watt-hours that holds across machines, or evidence that a variant uses energy differently from how it uses time. So the pipeline keeps the estimate (option A), every place that shows the figure says what it is - the CSV, the `codecarbon.cpu_power_method` parameter of every run, the subtitle of the figure, the model card and the report - and the one check that can say how far the estimate is from the hardware was made once (option C) rather than built into every run (option B). NFR-10's specification says the same since this decision, because "CodeCarbon measures" was not true of any machine we have.
+
+  The RAPL check, `reports/analysis/rapl_validation.py`, measured an idle baseline and three fits of each variant on an idle laptop with the package, core, uncore, DRAM and platform counters, CodeCarbon's forced `cpu_load` estimate and CodeCarbon's own RAPL figure, all around the same fit. On 2026-10-06, before hyperparameter tuning, the idle package draw was 6.6 W. The estimate's total is about 70 % of the counter's package energy for the three fitted variants and 112 % for `b0`, whose whole fit is about 1 J, and its CPU half is 27 % to 41 % of the energy above idle. The ranking and the ratios hold: `lgbm-extended` costs 2.97 times `lgbm-basic` by the counter and 2.97 times by the estimate. One variant's package energy varies by a factor of 1.3 to 2.1 between repeats, and in one fit other processes used 28.8 CPU-seconds despite the idle check, so only medians are quoted. The estimate is therefore good for ranking variants on one machine in one run, and about 30 % low in absolute terms.
+
+  The rest of the design follows from treating the figure as evidence that has to be checkable. Only the fit is inside the tracker, as the demo does, which `tests/test_model.py::test_only_the_fit_is_measured` asserts by making the read and the write slow. Every CodeCarbon argument is passed explicitly, because it reads `~/.codecarbon.config`, `./.codecarbon.config` and any `CODECARBON_*` variable for every argument it is not given, so a contributor's configuration could switch on its API output or force a CPU power. CodeCarbon swallows every exception in its constructor, `start` and `stop`, so the module reads its row back by CodeCarbon's run id and by column name and fails the stage when it is missing, and refuses a country CodeCarbon would silently measure against the world average. The row is joined to its model by that run id, which `model.json` records, and `fit_cpu_seconds` is logged beside the energy because it is a measurement and the CPU half is proportional to it. DVC deletes a stage's outputs before running it, so the CSV CodeCarbon appends to holds exactly one row after `dvc repro` (measured: one row after three `dvc repro --force`, three with `persist: true`).
+
+  What the comparison concluded, on the ladder of 2026-10-06 (pull request #68, before hyperparameter tuning, so the numbers are replaced when the ladder is re-run): `b0` 0.09 s, 0.0003 Wh, 0.06 mg CO2eq, MdAPE 12.2 %; `b1` 1.34 s, 0.0066 Wh, 1.15 mg, 9.5 %; `lgbm-basic` 8.42 s, 0.0342 Wh, 5.96 mg, 6.8 %; `lgbm-extended` 30.02 s, 0.1082 Wh, 18.82 mg, 6.3 %. `lgbm-extended` costs 3.2 times the energy of `lgbm-basic` for 0.55 percentage points of MdAPE, 0.07 Wh more in absolute terms, so the extra energy is not what decides between them. What does is that, given only the fields FR-01 requires, it is worse (10.3 % against 8.3 %): it earns its place only when the user supplies the extra inputs. The whole ladder is 0.149 Wh and 40 s of fitting, against NFR-10's 15-minute budget.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found the limitation the decision is about, by reading CodeCarbon's source and then measuring it on the laptop and on a GitHub runner, before writing the module; the issue, the course demo and the report draft all assumed a measurement. It laid out the four options with the security and the shared-machine arguments against B, recommended A with C, and Lukas chose that. It also chose the tracker's settings on measurements rather than on the demo: `process` mode, the offline tracker, and 15 s rather than the demo's 1 s once it was shown to race the tracker's shutdown. It did not grant itself RAPL access by other means, although Lukas's `docker` group would have allowed it, because that would have bypassed the permission boundary this decision is partly about.
+- **AI interaction evidence:** Claude Code session on 2026-10-05 implementing issue #38: probes of CodeCarbon 3.3.1 with every socket blocked, on four workloads in both modes and at both integration intervals, a DVC repository testing the append, and a temporary CI step on pull request #68 that printed what CodeCarbon does on a GitHub runner; then the four options above with a recommendation, which Lukas decided as option C.
+- **Other evidence:** [`recommenditos/modeling/energy.py`](../recommenditos/modeling/energy.py), whose docstring states what the figure is, and [`recommenditos/modeling/compare_energy.py`](../recommenditos/modeling/compare_energy.py); `train.energy` in [`params.yaml`](../params.yaml); [`tests/test_energy.py`](../tests/test_energy.py) and `tests/test_model.py::test_every_training_run_records_its_emissions_beside_its_accuracy` and `::test_only_the_fit_is_measured`; [`reports/analysis/codecarbon_validity.py`](analysis/codecarbon_validity.py) with its results, [`codecarbon_github_runner.txt`](analysis/codecarbon_github_runner.txt) and [`rapl_validation.py`](analysis/rapl_validation.py) with its results; `reports/figures/energy-vs-error.png`; [specification](../docs/docs/specification.md) NFR-10; [model card](../docs/docs/model-card.md), Environmental Impact; [issue #38](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/38), [pull request #68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/68).
 - **In LaTeX:** yes
 
 ### EDN-70: `n_estimators` is a ceiling of 5,000 that early stopping stays under, not a tree count
@@ -1160,4 +1458,132 @@ Do not edit them.
   Issue #78 had already named the problem and the two open questions, the tolerance and the fate of the interim rule, which the options settle.
 - **AI interaction evidence:** Claude Code session of 2026-10-06: the options were put to Lukas with a recommendation before any code changed, and he chose "1A + 2A with 0.999" and asked for an EDN entry.
 - **Other evidence:** [issue #78](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/78), found in the review of [#76](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/76); [`recommenditos/schema.py`](../recommenditos/schema.py); [`recommenditos/data/gx_context_configuration.py`](../recommenditos/data/gx_context_configuration.py), `REQUIRED_FILLED_COLUMNS`; [`tests/test_validate_data.py`](../tests/test_validate_data.py); [pipeline docs](../docs/docs/pipeline.md), Data validation; EDN-68 is the entry for #25, whose suites this changes.
+- **In LaTeX:** yes
+
+### EDN-78: The hyperparameter search extends EDN-73's protocol to both LightGBM variants and `min_child_samples`, and measures and tracks every fit
+
+- **Date:** 2026-10-06
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Hyperparameter Tuning, Experiment Tracking, Energy Efficiency, Requirements
+- **Participants:** @kadameit, who decided, with AI assistance
+- **Decision:** The LightGBM hyperparameters are searched by `recommenditos/modeling/tune.py`, outside `dvc repro`, under the protocol EDN-73 wrote down, extended in four ways.
+  Both variants are swept, `lgbm-basic` and `lgbm-extended`, on EDN-73's grid: `learning_rate` 0.025, 0.05 and 0.1 against `num_leaves` 31, 63, 127 and 255, every point at a ceiling of 20,000 trees so early stopping decides it.
+  A second grid follows for each variant, over `min_child_samples` 5, 10, 20, 50 and 100, with `learning_rate` and `num_leaves` fixed at the first grid's winner, which is the committed point when nothing was adopted; `min_child_samples` becomes an optional LightGBM key at LightGBM's own default of 20, the value every committed model already used, so `params.yaml` names it only if a search adopts another value.
+  The adoption rule is EDN-73's, unchanged: a point replaces the reference only when the simultaneous 95 % interval of its validation L1 difference, from the paired bootstrap resampled by seller group and widened by the max-statistic bootstrap over all the grid's points, lies entirely below zero. The search never reads the test or calibration split.
+  Every fit is measured with CodeCarbon and logged as its own MLflow run in `recommenditos-price-tuning`, tagged with its sweep, `sweep_role=point` and its variant, carrying its validation metrics, fit time and energy; one `sweep_role=summary` run per sweep carries the totals and the verdict.
+  A sweep's record - its results as JSON, the same as a readable table, and CodeCarbon's row for every fit as a CSV - is kept in MLflow only, as artifacts under `results/` of the sweep's summary run, `sweep.json`, `sweep.txt` and `emissions.csv` for a sweep run from now on; nothing of a search is committed.
+  The four sweeps of #88 ran before this, so their summary runs carry the JSON and the table under the names the module then used, `results/<sweep id>.json` and `.txt`, and their CodeCarbon CSV, until then committed, was uploaded to the same run as `results/emissions.csv`.
+  The search's energy is reported as its own total there, never in `reports/emissions/<variant>.csv`, which belongs to the fit of the final configuration.
+  NFR-10 is reworded to match: the 15-minute budget applies to fitting the final chosen configuration, and a search runs separately, with its energy recorded per fit and reported apart from the final fit's.
+- **Alternatives considered:**
+  - **Option A (chosen): extend EDN-73's protocol, and build its decision step into the package.**
+    Pros: the first grid for `lgbm-basic` repeats EDN-73's twelve fits exactly, so the new tool is checked against recorded evidence before anything new is read from it; the simultaneous interval still guards against the winner's curse within each grid; the cost is bounded and small, about 34 fits in all, and EDN-73's twelve `lgbm-basic` fits took 127 s of fitting; and issue #88's acceptance criteria - a tagged run per configuration with its metric, fit time and energy, the search's emissions apart, NFR-10 reworded - are met by code that runs every time rather than by hand once.
+    Cons: on `lgbm-basic` the likely outcome is EDN-73's again, "keep", so the model card may still have to say the model is untuned; one validation split stays the only source of selection noise; the two grids are run one after the other, so an interaction between `min_child_samples` and the first grid's knobs is not searched; nothing corrects across the two grids or the two variants, because the max-statistic interval is taken per sweep, and the second grid is chosen after the first on the same validation split; and `feature_fraction` and L2 regularisation are still not parameters.
+  - **Option B: the issue as written - grid search, and the best validation point goes into `params.yaml`.**
+    Pros: the least machinery, it matches the issue text, and the model can be called tuned.
+    Cons: it adopts noise. EDN-73 measured exactly this case: the lowest validation L1 of its grid, `(0.025, 63)`, is indistinguishable from the committed point even point by point, and the two metrics disagree on which point is best. It would also overturn the adoption rule EDN-73 decided, move every number in the report for no measurable gain, and with the issue's 0.03 the grid would no longer be comparable with EDN-73's measured 0.025.
+  - **Option C: random or Optuna search over more knobs, selected by seller-grouped k-fold cross-validation on train plus validation.**
+    Pros: cross-validation is a less noisy selection than one split, and a larger space might hold a real gain.
+    Cons: a new dependency and new code; about five times the fits per point, so five times the energy, for a region EDN-73 found flat; early stopping then needs a validation fold inside every fold; and it departs from the problem specification's "the validation set is used for early stopping and tuning". EDN-73 left it for the day a criterion depends on a fraction of a point, and none does.
+  - **Option D: close #88 as covered by EDN-73.**
+    Pros: no work and no compute.
+    Cons: `lgbm-extended` would never have been swept and `min_child_samples` never examined, although many `model` values occur only once; EDN-73's screening runs carry no energy figure per point; and NFR-10 would still say "no hyperparameter search" with no rule for where a search's energy goes. None of #88's acceptance criteria would be met.
+  - **Where a sweep's record is stored (decided 2026-10-09, after the search had run).** The pipeline's own `reports/emissions/<variant>.csv` stays git-tracked whichever is chosen, because the `compare-energy` stage reads it; this is about the search's record only.
+    - **Option A: the results and CodeCarbon's CSV committed under `reports/tuning/`, as well as the runs in MLflow.**
+      Pros: the numbers can be checked from the repository without access to the DagsHub tracking server, and it follows the convention of `reports/analysis/`, whose results files are committed beside their scripts.
+      Cons: the same data in two places, which can disagree; and a commit is needed between sweeps, because a sweep's uncommitted files make every later run `git_dirty` (EDN-74).
+    - **Option B (chosen): MLflow only, with CodeCarbon's CSV uploaded as an artifact of the summary run.**
+      Pros: one source of truth; the closest to the course demo, which logs CodeCarbon's row to MLflow as metrics and parameters and commits no emissions file; no commit between sweeps; and the raw CSV keeps how each figure was produced - CodeCarbon's version, the CPU and RAM power columns, the operating system - which matters because EDN-69 calls the figure an estimate, and an estimate is checked by its method.
+      Cons: the numbers this entry and the model card quote can be checked only with access to the DagsHub tracking server.
+    - **Option C: B without the upload, exactly as the course demo does, with the CSV discarded.**
+      Pros: the least to store, and nothing beyond what the demo does.
+      Cons: rejected, because it loses the columns that say how each figure was produced, which the per-run metrics and parameters carry only in part.
+- **Rationale:** EDN-73 already answered how a value may be adopted; what #88 added was scope and record-keeping, so the protocol was extended rather than replaced.
+  Two parts of the issue were stale against EDN-73, which landed after it was written: it proposed `learning_rate` 0.03 where EDN-73 measured 0.025, and it said the winning values go into `params.yaml`, where EDN-73 adopts only a value whose simultaneous interval lies below zero.
+  0.025 was kept because a repeat of EDN-73's grid is the one check of the new code against numbers already on record, and because 0.03 lies inside the 0.025 to 0.05 range EDN-73 found flat.
+  `min_child_samples` is the knob the issue named as optional, and the data gives it a reason: a leaf of fewer rows can fit one listing of a `model` seen once.
+  Making it optional at LightGBM's default rather than writing `min_child_samples: 20` into `params.yaml` keeps every committed parameter value as it is, and a test holds that leaving it out and setting it to 20 fit the same booster.
+  The second grid holds the first grid's winner fixed because a joint grid would be 60 fits per variant instead of 5, for an interaction nothing so far suggests.
+
+  The decision step became a module of the package, run from the command line, rather than staying an analysis script, because #88 asks for every searched configuration to be a tracked run with its energy, and that is what `train` already does for one fit: the search reuses its `read_matrices`, `fit_variant`, `energy.measure` and run logging, so a search run and a pipeline run are measured and named alike.
+  It is not a DVC stage, because a search's result is a verdict a person acts on through a reviewed change to `params.yaml`, not an artefact a later stage consumes, and its cost scales with the grid rather than with the product.
+  For the same reason NFR-10's 15 minutes apply to the final fit: the budget exists to keep retraining the product cheap, and a search is run once per decision, not once per retraining.
+  The search's energy is not written beside the variants' CSVs, because each of those is the record of the fit that produced its model, and because `compare-energy` declares the whole `reports/emissions` directory as a dependency, so a search writing there would make that stage stale.
+  Where it is kept instead is the sub-decision above: MLflow alone, as artifacts of each sweep's summary run, so a sweep refuses to start when tracking is not configured, opens its runs so that a server it cannot reach fails it rather than silently dropping them, and refuses a sweep id the experiment already holds runs for.
+  Queued `dvc exp` screening stays available as EDN-73 describes, and is now optional, because the decision step measures and logs every fit itself.
+  EDN-73's bootstrap moved into the module unchanged: `tuning_sweep.py` now imports it and computes bit-identical draws and multipliers, so EDN-73's recorded evidence still reproduces.
+
+  **Results (2026-10-06).** All four sweeps kept their reference, `learning_rate` 0.05, `num_leaves` 63 and `min_child_samples` 20, so nothing is adopted: `params.yaml` and `dvc.lock` are unchanged, and the committed test metrics and gate verdict, computed once by the committed pipeline run, are those of the configuration the search kept; the search never read the test split.
+  The search ran from clean commits on a 13th Gen Intel Core i7-1360P laptop (Windows, CodeCarbon 3.3.1's estimate, `num_threads` 1), into the DagsHub MLflow experiment `recommenditos-price-tuning`; every one of the 34 fits was ended by early stopping, not by the 20,000-tree ceiling.
+  - `88-lgbm-basic-lr-leaves` reproduces EDN-73's twelve fits exactly: the same best round, validation L1 and validation MdAPE at every point, and the same per-point and simultaneous intervals, so the new module is checked against the recorded evidence, and only the fit times differ, because the machine does.
+    Its lowest validation L1 is again `(0.025, 63)`, 0.00031 below the reference with a simultaneous interval of -0.00109 to +0.00047, and only `(0.1, 127)` and `(0.1, 255)` are measurably worse; validation MdAPE spans 6.88 % to 7.04 %.
+  - `88-lgbm-extended-lr-leaves`: the lowest validation L1 is `(0.025, 127)`, 0.00040 below the reference with a simultaneous interval of -0.00150 to +0.00070.
+    `(0.025, 255)` is the case the rule exists for: it is 0.20 pp better in validation MdAPE, 6.25 % against 6.45 %, with a per-point interval of -0.385 % to -0.060 %, entirely below zero, and a search that took the best validation MdAPE would have adopted it.
+    But MdAPE is not the selection metric, its L1 difference, -0.00039, has a per-point interval of -0.00146 to +0.00069 that the split cannot resolve, and even its MdAPE difference, widened to hold for all eleven points at once, spans zero at -0.427 % to +0.028 %: the best of eleven noisy comparisons looks better than it is, which is the winner's curse.
+    Five points are measurably worse under the simultaneous L1 interval: all four at `learning_rate` 0.1, whose simultaneous intervals start at +0.00037 or higher, and `(0.05, 31)`, at +0.00003 to +0.00243; validation MdAPE spans 6.25 % to 6.69 %.
+  - `88-lgbm-basic-min-child-samples`: the lowest validation L1 is `min_child_samples` 10, 0.00043 below the reference with a simultaneous interval of -0.00124 to +0.00038, and 100 is measurably worse, at +0.00010 to +0.00210; validation MdAPE spans 6.92 % to 7.03 %.
+  - `88-lgbm-extended-min-child-samples`: the reference, 20, has the lowest validation L1 of the five, no point is resolved either way under the simultaneous interval, and validation MdAPE spans only 6.45 % to 6.49 %.
+
+  The search cost 34 fits, 391.3 s of fitting (1,069.0 CPU-s), 3.6071 Wh and 627.81 mg CO2eq: 17 fits, 112.3 s, 1.0864 Wh and 189.09 mg for `lgbm-basic`, and 17 fits, 279.1 s, 2.5207 Wh and 438.73 mg for `lgbm-extended`, each sweep's totals on the "search totals" line of its table.
+  On the search's own machine that is about 20 times the energy of one fit of `lgbm-basic`'s committed configuration (0.0549 Wh) and 16 times one of `lgbm-extended`'s (0.1584 Wh); its fit times are not comparable with the ladder's energy table in the model card, which was measured on another laptop, an i5-10210U.
+  Because nothing was adopted, the final configuration is the committed one, and its fit time against NFR-10's 15 minutes is the one already on record: 8.3 s for `lgbm-basic` and 27.9 s for `lgbm-extended` in the tracked run of 2026-10-06; the search itself sits outside that budget, as the reworded NFR-10 says.
+  As option A's cons anticipated, the verdict on `lgbm-basic` is EDN-73's again, and the model card now says the values were searched and kept rather than that they are untuned.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI compared issue #88 with EDN-73 and the code, and pointed out where the issue had become stale: it proposed 0.03 where EDN-73 measured 0.025, and it said the winning values go into `params.yaml` where EDN-73 adopts only a value its rule resolves.
+  It laid out options A to D with their pros and cons and recommended option A, a second grid over `min_child_samples` with the first grid's winner fixed, recording the method decision as a new entry extending EDN-73, and `learning_rate` 0.025.
+  Kevin weighed the options and accepted all four recommendations before the search was implemented or run.
+  The NFR-10 rewording and reporting the search's energy apart were not separate choices: they follow from the scope of issue #88.
+  AI also pointed out that the search's emissions could not go under `reports/emissions/` without making the `compare-energy` stage stale.
+  On where a sweep's record should live, AI first recommended option A of that sub-decision, committing it under `reports/tuning/` beside MLflow, so the numbers could be checked without an account; on Kevin's question it checked the course demo repository and found that the demo keeps its emissions in MLflow only.
+  Kevin chose MLflow only, with CodeCarbon's CSV uploaded as an artifact, which is the modification.
+- **AI interaction evidence:** Claude Code session of 2026-10-06 on issue #88: the comparison with EDN-73 and options A to D with a recommendation, put to Kevin before the search was implemented; Claude Code session of 2026-10-09: the options for where a sweep's record is stored, with a recommendation for option A, the check of the course demo repository Kevin asked for, and his choice of option B.
+- **Other evidence:** [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88); [`recommenditos/modeling/tune.py`](../recommenditos/modeling/tune.py) and [`tests/test_tune.py`](../tests/test_tune.py); [`reports/analysis/tuning_sweep.py`](analysis/tuning_sweep.py), now importing the module's statistics; the search's results in the [DagsHub MLflow server](https://dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow), experiment `recommenditos-price-tuning`: the sweeps `88-lgbm-basic-lr-leaves`, `88-lgbm-extended-lr-leaves`, `88-lgbm-basic-min-child-samples` and `88-lgbm-extended-min-child-samples`, each found with the filter `tags.sweep = "<id>"` and its record under `results/` of the run with `tags.sweep_role = "summary"`, compared with EDN-73's [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt); [pipeline docs](../docs/docs/pipeline.md), "Tuning a hyperparameter"; [specification](../docs/docs/specification.md) and [requirements](../docs/docs/requirements.md) NFR-10; [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol), [EDN-69](#edn-69-codecarbon-measures-the-fit-alone-offline-and-per-process-and-its-figure-is-reported-as-the-estimate-it-is), [EDN-70](#edn-70-n_estimators-is-a-ceiling-of-5000-that-early-stopping-stays-under-not-a-tree-count).
+- **In LaTeX:** yes
+
+### EDN-79: The seller-grouped hash split stays, and its figures are reported with their spread over other splits
+
+- **Date:** 2026-10-12
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Evaluation Protocol, Data Splitting
+- **Participants:** @lukas2510, decided by the repository owner
+- **Decision:** The split stays as it is: whole sellers assigned by a hash of the seed and the seller key, 60/10/10/20, unstratified, with the committed seed.
+  What changes is the reporting: the model card states the distribution of every set, and a figure of the committed split is given with its spread over 20 other splits.
+  An adversarial-validation check is recorded once and not made a standing check, and the missing temporal split is a stated limitation.
+- **Alternatives considered:**
+  - **Option A (chosen): keep the grouped hash split and report the set distributions.**
+    Pros: no rerun and no number moves a week before the delivery; adding sellers moves no seller already there, measured at 0.00 % of the rows when the `ES` listings join the pool, which is what FR-15's retrain comparison rests on; the committed draw is better balanced than 72 % of 1,000 seeds.
+    Cons: the balance is the luck of this draw, not a property of the design, and Mercedes-Benz stays at 8.67 % of the calibration set against 13.54 % of the pool.
+  - **Option B: a stratified-group split on `make`.**
+    Pros: the largest gap of any make's share in any set to its pool share falls from 4.86 pp to 2.04 pp, and calibration reaches 11.5 % Mercedes-Benz.
+    Cons: the assignment depends on all sellers at once, so 52.6 % of the existing rows change set when the `ES` listings join, about as many as a new seed moves, which confounds FR-15's before-and-after comparison; a full pipeline rerun and new split code, with every reported number changing; and it cannot balance the make either, because one dealer holds 25.2 % of the Mercedes-Benz listings and has to go somewhere whole.
+  - **Option C (chosen, with A): repeated grouped splits, reporting the spread beside the single figure.**
+    Pros: it answers what was never measured, how much a figure depends on which sellers landed where, in about 15 minutes and without touching the pipeline.
+    Cons: an analysis script rather than a stage, so it has to be re-run by hand when the candidate or the data changes.
+  - **Option D (recorded once): adversarial validation.**
+    Pros: one classifier, AUC 0.495 on held-out sellers, so train and test are indistinguishable.
+    Cons: nearly a tautology for a random assignment of sellers; run row-wise it reports 0.599, which is the dealer signature EDN-14 found and not a difference between the sets, so as a standing check it would mostly raise false alarms.
+  - **Option E: choose a seed for a better mix.**
+    Pros: none that survives a question.
+    Cons: a new split selected by its outcome; and the committed seed already gives the most favourable SC-04 figure of 21 draws, so a reseed would either worsen that number or look chosen for it.
+  - **Option F: a temporal split.**
+    Pros: the strongest test for a price model.
+    Cons: impossible, the snapshot has no listing dates; it is stated as a limitation.
+- **Rationale:** The question was whether the default split deserved to stay, and three measurements could have said no; none did.
+  The imbalance that prompted the issue has one cause, and it is not what the issue assumed: the largest seller group is a single dealer with 3,383 listings, 3,382 of them Mercedes-Benz, that landed in train, so train is raised (14.95 %, 9.97 % without it) rather than calibration being short, and the calibration share is at the 21st percentile of its own distribution over 1,000 seeds.
+  The verdict on the pooled criteria does not depend on the draw: over 20 other splits the candidate's test MdAPE is 6.73 % on average with a standard deviation of 0.27 pp, against 6.81 % committed, and SC-01 and SC-02 hold on all 20.
+  And SC-04's miss is not an artefact of it: cars older than 20 years are over the bound on 20 of 20 splits, at 18.3 % on average, so the committed 16.77 % understates the miss.
+  Against that, option B buys 2.8 pp of make balance for the one property the split was built for.
+  The same run puts EDN-73 in context: the validation MdAPE moves by 0.42 pp (standard deviation) between splits, more than the 0.16 pp the whole tuning grid spans on one.
+  The 20 splits share one pool of listings, so the spread describes how a figure moves with the assignment and is not a confidence interval for new data.
+  The issue's criterion that the UC2 interval coverage be checked per make is deferred to the work that builds the intervals: no model has an interval method and SC-05 is not measured, so there is nothing to compute a coverage from.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI wrote and ran the evidence script against the stages' own split, feature and fit code, checked first that it reproduces the committed `metrics.json` exactly, and ran 20 seeds instead of the ten asked for after timing one.
+  It corrected the issue's premise, which Lukas had written: the largest dealer is the cause of the Mercedes-Benz gap, but by raising train, not by leaving calibration short.
+  It laid out the six options with their measured costs, recommended A with C, and stopped for the decision; Lukas chose A with C as recommended, with D recorded once and F as a limitation.
+  It also reported that the interval-coverage criterion could not be met and proposed deferring it rather than producing a number.
+  The recommendation was accepted without change because every claim in it is a line of the results file that can be re-run.
+- **AI interaction evidence:** Claude Code session on 2026-10-12 implementing issue #89: the agent measured, reported the options with the numbers of `reports/analysis/split_strategy_results.txt` and its recommendation, and Lukas decided on that report.
+- **Other evidence:** [issue #89](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/89); [PR #107](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/107); [`reports/analysis/split_strategy.py`](analysis/split_strategy.py) and [its results file](analysis/split_strategy_results.txt) (2026-10-12); [model card](../docs/docs/model-card.md), "How comparable the sets are, and how much a figure moves with the split"; [pipeline docs](../docs/docs/pipeline.md), "The split"; [EDN-14](#edn-14-nfr-11s-drift-control-is-an-iid-sample-not-a-seller-grouped-one), [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
 - **In LaTeX:** yes
