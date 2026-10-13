@@ -52,10 +52,18 @@ make test
 ```
 
 The model tests check behaviour as well as the contract and the gate.
-Adding 20,000 km or a year of age has to lower more predictions than it raises for `b1` and the two LightGBM variants, counted over all rows because boosted trees are not monotone row by row, with a row that does not move counting for neither side.
-A column that is not a feature (`vin`, `seller_group_id`, the label itself) has to leave every prediction bit-identical.
-CI has no data, so it asserts the direction on the fixture-trained models only and never runs the test on the real bundle.
-That test runs in a developer's `make test` once `dvc pull` has restored `models/` and the feature matrices, over the real validation rows.
+`tests/test_model_behaviour.py` holds the behavioural tests of the trained models, one test class per type:
+
+| Type | What has to hold | Variants |
+|------|------------------|----------|
+| Minimum functionality (MFT) | A car whose price is known is priced within a factor of 1.5 of it. On the fixture that is three cars at the quartiles of its rows against the generator's formula, and on the real bundle a BMW 116, a BMW 320 and a Porsche 992, requested with the required fields alone, against the median price of comparable training listings. | `b1`, `lgbm-basic`, `lgbm-extended` |
+| Invariance (INV) | A column that is not a feature (`vin`, `seller_group_id`, the label itself) leaves every prediction bit-identical. 10 km more, or a first registration one day earlier, moves at most 5 % of the predictions by more than 1 %. | all four |
+| Directional expectation (DIR) | 20,000 km more or a year of age lowers more predictions than it raises, and 20 kW more raises more than it lowers. | `b1`, `lgbm-basic`, `lgbm-extended` |
+
+The two bounds on a share are counted over all rows, because a boosted tree is a step function and not monotone row by row, and a row that does not move counts for neither side of a direction.
+`b0` is a lookup on make, model and a two-year age band, so it has no mileage or power to react to, and `tests/test_model.py` checks what it answers by hand.
+Every type runs in CI on the models trained from the synthetic fixture.
+The cases on the real bundle, over the real validation rows, run in a developer's `make test` once `dvc pull` has restored `models/` and the feature matrices, and are skipped in CI, which has no data.
 
 Stages
 ------

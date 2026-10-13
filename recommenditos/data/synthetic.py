@@ -426,17 +426,26 @@ def _seller_columns(rng, n_rows) -> dict[str, pd.Series]:
     }
 
 
+def noise_free_price(age_years, mileage_km, power_kw):
+    """The price of a car before its listing's own noise is applied.
+
+    Price rises with power and falls with age and mileage, so the baselines have
+    something to learn and a metric on the fixture is not pure noise. Public
+    because it is the one price the fixture knows for certain: the noise has a
+    median of 1, so this is the median price of such a car, and a test can hold a
+    model fitted on the fixture against it.
+    """
+    return (8000.0 + power_kw * 180.0) * np.exp(-0.09 * age_years - mileage_km / 900_000.0)
+
+
 def _price_columns(rng: np.random.Generator, frame: pd.DataFrame) -> pd.DataFrame:
     n_rows = len(frame)
-    # Price falls with age and mileage, so the baselines have something to
-    # learn and a metric on the fixture is not pure noise.
     age_years = (
         (SNAPSHOT_DATE - pd.to_datetime(frame["registration_date"])).dt.days.fillna(3650) / 365.25
     ).to_numpy()
     mileage = frame["mileage_km_raw"].fillna(100_000).to_numpy()
     power = frame["power_kw"].fillna(100).to_numpy()
-    base = 8000.0 + power * 180.0
-    price = base * np.exp(-0.09 * age_years - mileage / 900_000.0)
+    price = noise_free_price(age_years, mileage, power)
     price = np.round(price * rng.lognormal(0.0, 0.18, size=n_rows), -1).clip(600.0, 1_900_000.0)
     frame["price"] = price
     frame["price_currency"] = pd.Series(["EUR"] * n_rows)

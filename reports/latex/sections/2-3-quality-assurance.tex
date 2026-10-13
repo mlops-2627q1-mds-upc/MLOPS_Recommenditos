@@ -124,7 +124,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-In CI it has 779 tests, of which 769 pass and 10 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+In CI it has 830 tests, of which 800 pass and 30 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
@@ -151,10 +151,26 @@ In CI it has 779 tests, of which 769 pass and 10 are skipped, and it covers 98\,
 The gate tests check the logic of the gate, not the accuracy of the model.
 The accuracy is measured by the \texttt{evaluate} stage on the real test split, and on every run under different conditions: in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
 
-Three parametrised behavioural tests with 28 cases check the trained models.
-For the Ridge baseline and both LightGBM variants, 20,000\,km more or a first registration one year earlier must lower more predictions than it raises.
-A column that is not a feature, such as an identifier or the price itself, must leave every prediction unchanged.
-CI runs the direction test on models trained from the synthetic data, and with the real data pulled the same test runs on the real models: 20,000\,km more lowers 92.5\,\% of the 8,859 validation predictions of \texttt{lgbm-basic} and raises 7.0\,\%.
+Behavioural tests check the trained models, with one test class for each of the three types (\cref{tab:behavioural-tests}).
+
+\begin{table}[ht]
+  \centering\small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.17\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+    \toprule
+    Type & What must hold & Measured on the real models \\
+    \midrule
+    Minimum functionality & A car with a known price is priced within a factor of 1.5 of it. & Three common cars, requested with the required fields only, are within a factor of 1.35 of the median price of comparable listings. \\
+    \addlinespace[2pt]
+    Invariance & A column that is not a feature leaves every prediction unchanged; 10\,km more moves at most 5\,\% of them by more than 1\,\%. & 10\,km more moves 2.8\,\% of the predictions of \texttt{lgbm-basic} by more than 1\,\%. \\
+    \addlinespace[2pt]
+    Directional expectation & 20,000\,km more or one more year of age lowers more predictions than it raises; 20\,kW more raises more than it lowers. & 20,000\,km more lowers 92.5\,\% of the predictions of \texttt{lgbm-basic} and raises 7.0\,\%. \\
+    \bottomrule
+  \end{tabularx}
+  \caption{The behavioural tests of the trained models, by type.}
+  \label{tab:behavioural-tests}
+\end{table}
+
+Of the 68 cases, 42 run in CI on models trained from the synthetic data; the other 26 need the real models and their 8,859 validation rows and are skipped in CI.
 
 \paragraph{Traceability.}
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).
