@@ -40,32 +40,53 @@ Scenarios, on all 8,859 validation rows and identical for every configuration:
   Level 0 is the required-only request and level 23 the complete one. A basic model is scored on
   the same requests, so it sees whichever of its 6 optional fields a request gives. "Given" means
   not blanked here: a field the listing itself leaves empty stays empty.
+- the basic request: exactly the 6 optional fields of the basic set are given and the other 17
+  blanked. It is the request the candidate is built for and answers at its best, and random
+  subsets never produce it.
 - SC-06 as `evaluate` computes it, on validation rows: each optional field blanked on its own, and
   all at once.
 
 Differences are taken against `basic`, the candidate, by the paired bootstrap of
 `recommenditos/modeling/tune.py`: 2,000 draws resampled by seller group, the same draws for every
-configuration, with per-point and simultaneous (max-statistic) 95 % intervals. The metric is
-MdAPE, because SC-06 and the candidate decision are stated in it; validation L1 in log price is
-reported beside it.
+configuration, with per-point and simultaneous (max-statistic) 95 % intervals, on every request.
+The metric is MdAPE, because SC-06 and the candidate decision are stated in it; validation L1 in
+log price is reported beside it.
 
 The rule. A blanked `lgbm-extended` configuration qualifies only if all four hold on validation:
 
 1. SC-06 passes: every single-field ratio and the required-only ratio are at most 1.5.
-2. On the required-only request it is not measurably worse than `basic`: the per-point interval of
-   its MdAPE difference does not lie entirely above zero. Per-point because it is the narrower
-   interval, so the stricter test of "not worse".
+2. On every request that is not complete - the levels 0 to 20 and the basic request - it is not
+   measurably worse than `basic`: the per-point interval of its MdAPE difference does not lie
+   entirely above zero. Per-point because it is the narrower interval, so the stricter test of
+   "not worse". Every request and not only the required-only one, because a configuration trained
+   on complete and fully blanked rows alone could match `basic` at both ends and lose in between.
 3. On the complete request it is measurably better than `basic`: the simultaneous interval of its
    MdAPE difference lies entirely below zero. Simultaneous because six configurations are compared.
-4. Early stopping ended its fit, and the fit took less than NFR-10's 15 minutes.
+4. Early stopping ended its fit inside the committed ceiling of 5,000 trees, and the fit took less
+   than NFR-10's 15 minutes.
+
+What the rule can and cannot show, measured on the two committed bundles before any fit. On the
+complete request `extended` is 0.50 pp below `basic` with a per-point half-width of 0.21 pp, so
+the simultaneous interval is about 0.27 pp wide to each side and condition 3 passes only a
+configuration that keeps about half of that advantage. A configuration that fails it is "not
+resolved as better", which is not "no better". On the required-only request the half-width is
+0.33 pp, so condition 2 is an absence of evidence and not a proof of equivalence: it can pass a
+configuration up to about 0.3 pp worse than `basic`. The upper end of every interval is therefore
+printed, and it is the number to read.
+
+A fit the ceiling ends fails condition 4, and its figures are reported as those of a model that
+was still improving. It is not refitted with more trees: 5,000 is a bound of the product, set by
+what one row's SHAP export may cost against NFR-02 (EDN-70), so a configuration that needs more
+cannot be served as the pipeline stands, and raising the bound would be a decision of its own.
 
 Of those that qualify, the one with the lowest mean MdAPE over the seven request levels is the
 measured recommendation. Adopting it is not this script's decision: it changes the candidate
 (EDN-62) and is taken by the team.
 
-Also reported, deciding nothing: the better of the two committed models per request level, which
-is what serving both models could reach at best, since a real routing rule sees only how many
-fields a request gives.
+Also reported, deciding nothing: the better of the two committed models per request level. That
+is what serving both models reaches when the rule routes on how many fields a request gives, with
+the threshold chosen in hindsight. A rule that looks at which fields are given could do better, so
+the row is not an upper bound on serving both.
 
 Every fit is measured with CodeCarbon as `train` measures one and logged as its own run in the
 MLflow experiment `recommenditos-price-tuning`, tagged `sweep=116-blanked-fields` and
@@ -73,7 +94,8 @@ MLflow experiment `recommenditos-price-tuning`, tagged `sweep=116-blanked-fields
 CodeCarbon's rows. The sweep id is used once, as for a search (EDN-78).
 
 Run from the repository root after `dvc pull`, from a clean commit so the runs are not `git_dirty`,
-with the output written outside the repository and copied in afterwards (about 15 minutes):
+with the output written outside the repository and copied in afterwards, and with nothing else
+heavy running on the machine, because condition 4 reads wall time (about 15 minutes):
 
     uv run python reports/analysis/blanked_fields.py > /tmp/blanked_fields_results.txt
     cp /tmp/blanked_fields_results.txt reports/analysis/blanked_fields_results.txt
@@ -101,7 +123,7 @@ from recommenditos.modeling.model import Model, TrainingData, fit_variant, load_
 from recommenditos.modeling.train import log_fit, logged_params, read_matrices
 from recommenditos.pipeline import load_params
 from recommenditos.provenance import input_tags
-from recommenditos.tracking import DisabledRun, Run
+from recommenditos.tracking import DisabledRun
 
 SWEEP = "116-blanked-fields"
 RESULTS_FILE = "blanked_fields_results.txt"
@@ -110,6 +132,11 @@ EMISSIONS_FILE = "emissions.csv"
 
 #: How many of the extended set's optional fields a request gives. Fixed before the first fit.
 GIVEN_LEVELS = (0, 2, 5, 10, 15, 20, 23)
+REQUIRED_ONLY, COMPLETE = GIVEN_LEVELS[0], GIVEN_LEVELS[-1]
+#: The request that gives exactly the basic set's optional fields and no other.
+BASIC_REQUEST = "basic"
+#: Every scored request, in the order they are reported. Condition 2 reads all but the last.
+REQUESTS = (*GIVEN_LEVELS[:-1], BASIC_REQUEST, COMPLETE)
 #: NFR-10's budget for fitting the final configuration, in seconds.
 FIT_BUDGET_SECONDS = 15 * 60
 SMOKE_ROWS, SMOKE_TREES = 4_000, 40
@@ -178,7 +205,7 @@ def subsets(rng: np.random.Generator, sizes: np.ndarray, n_fields: int) -> np.nd
 
 
 def check_blank(frame: pd.DataFrame, model: Model, fields: tuple[str, ...]) -> None:
-    """The two identities `blank` has to satisfy, on the frame it is about to be used on."""
+    """The two identities `blank` has to satisfy, checked on a frame it is used on."""
     nothing = np.zeros((len(frame), len(fields)), dtype=bool)
     pd.testing.assert_frame_equal(blank(frame, model, fields, nothing), frame)
     pd.testing.assert_frame_equal(blank(frame, model, fields, ~nothing), model.mask_absent(frame, fields))
@@ -199,12 +226,19 @@ def training_frame(
     return pd.concat(frames, ignore_index=True) if len(frames) > 1 else train
 
 
-def request_masks(n_rows: int, n_fields: int, seed: int) -> dict[int, np.ndarray]:
-    """Per request level, which of the extended set's optional fields each row leaves out."""
+def request_masks(n_rows: int, n_fields: int, basic: tuple[int, ...], seed: int) -> dict:
+    """Per request, which of the extended set's optional fields each row leaves out.
+
+    `basic` is where the basic set's optional fields sit among them: the basic request gives
+    exactly those, in every row.
+    """
     rng = np.random.default_rng([seed, 116, 1])
-    return {
+    masks: dict = {
         given: subsets(rng, np.full(n_rows, n_fields - given), n_fields) for given in GIVEN_LEVELS
     }
+    masks[BASIC_REQUEST] = np.ones((n_rows, n_fields), dtype=bool)
+    masks[BASIC_REQUEST][:, list(basic)] = False
+    return {request: masks[request] for request in REQUESTS}
 
 
 # --------------------------------------------------------------------------------------------
@@ -218,17 +252,18 @@ class Result:
     training: dict
     n_train_rows: int
     cost: FitMeasurement
-    #: Per request level: the absolute percentage error and the absolute log error of every row.
-    ape: dict[int, np.ndarray]
-    log_error: dict[int, np.ndarray]
+    #: Per request: the absolute percentage error and the absolute log error of every row.
+    ape: dict
+    log_error: dict
     sc06: list[dict]
     run_id: str | None
 
-    def mdape(self, given: int) -> float:
-        return float(np.median(self.ape[given]))
+    def mdape(self, request) -> float:
+        return float(np.median(self.ape[request]))
 
     @property
     def mean_mdape(self) -> float:
+        """Over the seven request levels; the basic request is not one of them."""
         return float(np.mean([self.mdape(given) for given in GIVEN_LEVELS]))
 
     @property
@@ -259,30 +294,30 @@ class Variant:
     position: tuple[int, ...]
 
 
-def score(model: Model, variant: Variant, masks: dict[int, np.ndarray]) -> tuple[dict, dict, list]:
-    """The per-row errors of every request level, and the gate's own SC-06 sweep."""
+def score(model: Model, variant: Variant, masks: dict) -> tuple[dict, dict, list]:
+    """The per-row errors of every request, and the gate's own SC-06 sweep."""
     validation = variant.data.validation
     price = validation["price"]
     log_price = validation["log_price"].to_numpy(dtype="float64")
     ape, log_error = {}, {}
-    for given, mask in masks.items():
-        request = blank(validation, model, variant.optional, mask[:, list(variant.position)])
-        predicted = model.predict_eur(request)
-        ape[given] = evaluate.relative_error(price, predicted).to_numpy(dtype="float64")
-        log_error[given] = np.abs(np.log(predicted.to_numpy(dtype="float64")) - log_price)
+    for request, mask in masks.items():
+        frame = blank(validation, model, variant.optional, mask[:, list(variant.position)])
+        predicted = model.predict_eur(frame)
+        ape[request] = evaluate.relative_error(price, predicted).to_numpy(dtype="float64")
+        log_error[request] = np.abs(np.log(predicted.to_numpy(dtype="float64")) - log_price)
     full = evaluate.point_metrics(price, model.predict_eur(validation))["mdape"]
     sc06 = evaluate.masking_sweep(model, validation, variant.scenarios, full_mdape=full)
     # The level scenarios and the gate's own sweep are two routes to the same two requests.
     (required_only,) = [row for row in sc06 if row["field"] == evaluate.ALL_OPTIONAL_FIELDS]
-    assert np.isclose(np.median(ape[GIVEN_LEVELS[-1]]), full, rtol=0, atol=1e-12)
-    assert np.isclose(np.median(ape[0]), required_only["mdape"], rtol=0, atol=1e-12)
+    assert np.isclose(np.median(ape[COMPLETE]), full, rtol=0, atol=1e-12)
+    assert np.isclose(np.median(ape[REQUIRED_ONLY]), required_only["mdape"], rtol=0, atol=1e-12)
     return ape, log_error, sc06
 
 
 def run_configuration(
     configuration: Configuration,
     variant: Variant,
-    masks: dict[int, np.ndarray],
+    masks: dict,
     params: dict,
     *,
     workdir: Path,
@@ -332,7 +367,7 @@ def run_configuration(
             model,
             cost=cost,
             params={
-                **logged_params(configuration.variant, data, params),
+                **logged_params(configuration.variant, data, _with_settings(params, configuration.variant, settings)),
                 **cost.params(),
                 "blank.all_copies": configuration.all_copies,
                 "blank.random_copies": configuration.random_copies,
@@ -342,8 +377,9 @@ def run_configuration(
         )
         run.log_metrics(
             {
-                "validation_mdape": result.mdape(GIVEN_LEVELS[-1]),
-                "validation_mdape_required_only": result.mdape(0),
+                "validation_mdape": result.mdape(COMPLETE),
+                "validation_mdape_required_only": result.mdape(REQUIRED_ONLY),
+                "validation_mdape_basic_request": result.mdape(BASIC_REQUEST),
                 "validation_mdape_mean_over_levels": result.mean_mdape,
                 **{f"validation_mdape_given_{given}": result.mdape(given) for given in GIVEN_LEVELS},
                 "validation_sc06_required_only_ratio": result.required_only_ratio,
@@ -353,9 +389,15 @@ def run_configuration(
     logger.warning(
         f"{configuration.name}: {len(data.train):,} rows, best round "
         f"{result.training['best_iteration']}, {cost.fit_seconds:.0f} s, MdAPE complete "
-        f"{result.mdape(GIVEN_LEVELS[-1]):.2%}, required only {result.mdape(0):.2%}"
+        f"{result.mdape(COMPLETE):.2%}, required only {result.mdape(REQUIRED_ONLY):.2%}"
     )
     return result
+
+
+def _with_settings(params: dict, variant: str, settings: dict) -> dict:
+    """`params` with the settings a fit really used, so its run logs those and not params.yaml's."""
+    variants = {**params["train"]["variants"], variant: settings}
+    return {**params, "train": {**params["train"], "variants": variants}}
 
 
 def _check_it_is_the_committed_model(model: Model, variant: Variant) -> None:
@@ -384,17 +426,18 @@ def _run(name: str, *, smoke: bool):
 # --------------------------------------------------------------------------------------------
 
 
-def differences(results: dict[str, Result], given: int, groups: np.ndarray, seed: int, errors: str):
-    """Every configuration against the candidate on one request level, by the search's bootstrap."""
-    statistic, plain = (
-        (tune.median_error, np.median) if errors == "ape" else (tune.mean_error, np.mean)
+def differences(results: dict[str, Result], request, groups: np.ndarray, seed: int) -> dict:
+    """Every configuration's MdAPE against the candidate's on one request, by the search's bootstrap."""
+    per_row = {name: result.ape[request] for name, result in results.items()}
+    _, comparisons = tune.compare(
+        per_row, CANDIDATE, tune.median_error, np.median, tune.Bootstrap(groups, seed)
     )
-    per_row = {name: getattr(result, errors)[given] for name, result in results.items()}
-    _, comparisons = tune.compare(per_row, CANDIDATE, statistic, plain, tune.Bootstrap(groups, seed))
     return {comparison.point: comparison for comparison in comparisons}
 
 
-def verdict(results: dict[str, Result], sparse: dict, complete: dict, threshold: float) -> dict:
+def verdict(results: dict[str, Result], comparisons: dict, threshold: float) -> dict:
+    """The four conditions of the rule for every blanked `lgbm-extended` configuration."""
+    incomplete = [request for request in REQUESTS if request != COMPLETE]
     checks = {}
     for name, result in results.items():
         configuration = result.configuration
@@ -405,8 +448,10 @@ def verdict(results: dict[str, Result], sparse: dict, complete: dict, threshold:
                 result.worst_single["mdape_ratio"] <= threshold
                 and result.required_only_ratio <= threshold
             ),
-            "required_only_not_worse_than_candidate": bool(sparse[name].per_point[0] <= 0),
-            "complete_better_than_candidate": bool(complete[name].simultaneous[1] < 0),
+            "incomplete_requests_not_worse_than_candidate": all(
+                comparisons[request][name].per_point[0] <= 0 for request in incomplete
+            ),
+            "complete_better_than_candidate": bool(comparisons[COMPLETE][name].simultaneous[1] < 0),
             "early_stopped_within_budget": bool(
                 result.training["early_stopped"] and result.cost.fit_seconds < FIT_BUDGET_SECONDS
             ),
@@ -437,11 +482,16 @@ def title(lines: list[str], text: str) -> None:
     lines.extend(["", "=" * 110, text, "=" * 110])
 
 
+def label(request) -> str:
+    """A request as a column heads it and as the record keys it."""
+    return "basic's 6" if request == BASIC_REQUEST else str(request)
+
+
 def report(results: dict[str, Result], comparisons: dict, outcome: dict, context: dict) -> list[str]:
-    names = list(results)
-    width = max(len(name) for name in names) + 2
+    width = max(len(name) for name in results) + 2
     lines = [
-        "# reports/analysis/blanked_fields.py on the real snapshot" + ("  [SMOKE RUN, NOT EVIDENCE]" if context["smoke"] else ""),
+        "# reports/analysis/blanked_fields.py on the real snapshot"
+        + ("  [SMOKE RUN, NOT EVIDENCE]" if context["smoke"] else ""),
         f"issue #116, EDN-82; MLflow experiment {tune.TUNING_EXPERIMENT}, sweep {SWEEP}; seed {context['seed']}",
         f"train {context['n_train']:,} rows, validation {context['n_validation']:,} rows in "
         f"{context['n_groups']:,} seller groups; the test and calibration splits are not read",
@@ -462,35 +512,43 @@ def report(results: dict[str, Result], comparisons: dict, outcome: dict, context
             f"{result.cost.metrics()['energy_kwh'] * 1000:>11.4f}"
         )
     lines.append(
-        "The two committed variants are refitted unchanged; their validation predictions equal the "
-        "committed bundles'."
+        "The two committed variants are refitted unchanged. "
+        + (
+            "A smoke run does not compare them with the committed bundles."
+            if context["smoke"]
+            else "Their validation predictions equal the committed bundles'."
+        )
     )
 
-    title(
-        lines,
-        f"2. Validation MdAPE by how many of the {GIVEN_LEVELS[-1]} optional fields a request gives",
-    )
+    title(lines, f"2. Validation MdAPE by how many of the {COMPLETE} optional fields a request gives")
     header = "".join(f"{given:>9}" for given in GIVEN_LEVELS)
-    lines.append(f"{'configuration':{width}}{header}{'mean':>9}")
+    lines.append(f"{'configuration':{width}}{header}{'mean':>9}{label(BASIC_REQUEST):>12}")
     lines.append(f"{'':{width}}{'required':>9}{'':>{9 * (len(GIVEN_LEVELS) - 2)}}{'complete':>9}")
     for name, result in results.items():
         cells = "".join(f"{pct(result.mdape(given)):>9}" for given in GIVEN_LEVELS)
-        lines.append(f"{name:{width}}{cells}{pct(result.mean_mdape):>9}")
-    routed = [min(results[CANDIDATE].mdape(given), results["extended"].mdape(given)) for given in GIVEN_LEVELS]
+        lines.append(f"{name:{width}}{cells}{pct(result.mean_mdape):>9}{pct(result.mdape(BASIC_REQUEST)):>12}")
+    routed = {
+        request: min(results[CANDIDATE].mdape(request), results["extended"].mdape(request))
+        for request in (*GIVEN_LEVELS, BASIC_REQUEST)
+    }
     lines.append(
-        f"{'best committed':{width}}" + "".join(f"{pct(value):>9}" for value in routed)
-        + f"{pct(float(np.mean(routed))):>9}"
+        f"{'best committed':{width}}" + "".join(f"{pct(routed[given]):>9}" for given in GIVEN_LEVELS)
+        + f"{pct(float(np.mean([routed[given] for given in GIVEN_LEVELS]))):>9}{pct(routed[BASIC_REQUEST]):>12}"
     )
     lines.append(
-        "'best committed' is the better of basic and extended per column: the most that serving both "
-        "models could reach."
+        "'mean' is over the seven levels. \"basic's 6\" gives exactly the basic set's optional fields. "
+        "'best committed' is the better of"
+    )
+    lines.append(
+        "basic and extended per column: serving both, routed on how many fields a request gives. "
+        "Routing on which fields are given could do better."
     )
 
     title(lines, "3. The same in validation L1 of the log price (reported, decides nothing)")
-    lines.append(f"{'configuration':{width}}{header}")
+    lines.append(f"{'configuration':{width}}{header}{'':>9}{label(BASIC_REQUEST):>12}")
     for name, result in results.items():
         cells = "".join(f"{np.mean(result.log_error[given]):>9.4f}" for given in GIVEN_LEVELS)
-        lines.append(f"{name:{width}}{cells}")
+        lines.append(f"{name:{width}}{cells}{'':>9}{np.mean(result.log_error[BASIC_REQUEST]):>12.4f}")
 
     title(lines, f"4. SC-06 on the validation split (bound {context['threshold']}x)")
     lines.append(
@@ -499,10 +557,10 @@ def report(results: dict[str, Result], comparisons: dict, outcome: dict, context
     for name, result in results.items():
         worst = result.worst_single
         single = f"{worst['field']} {worst['mdape_ratio']:.3f}x"
-        required = f"{pct(result.mdape(0))} {result.required_only_ratio:.3f}x"
+        required = f"{pct(result.mdape(REQUIRED_ONLY))} {result.required_only_ratio:.3f}x"
         passes = max(worst["mdape_ratio"], result.required_only_ratio) <= context["threshold"]
         lines.append(
-            f"{name:{width}}{pct(result.mdape(GIVEN_LEVELS[-1])):>10}{single:>34}{required:>22}"
+            f"{name:{width}}{pct(result.mdape(COMPLETE)):>10}{single:>34}{required:>22}"
             f"{'yes' if passes else 'NO':>8}"
         )
 
@@ -511,10 +569,17 @@ def report(results: dict[str, Result], comparisons: dict, outcome: dict, context
         "5. MdAPE difference to basic, the candidate, in percentage points "
         "(paired bootstrap by seller group, 2,000 draws, 95 %)",
     )
-    for label, key in (("required-only request", "sparse"), ("complete request", "complete")):
-        lines.append(f"{label}:")
+    lines.append(
+        "Negative is better than basic. Condition 2 reads the per-point interval of every request but "
+        "the complete one, condition 3 the"
+    )
+    lines.append("simultaneous interval of the complete one. The upper end is how much worse a configuration may still be.")
+    for request in REQUESTS:
+        given = {REQUIRED_ONLY: "required only", COMPLETE: "complete"}.get(request)
+        heading = f"request gives {label(request)} of the optional fields" + (f" ({given})" if given else "")
+        lines.append(f"{heading}:")
         lines.append(f"  {'configuration':{width}}{'difference':>11}{'per-point':>20}{'simultaneous':>20}")
-        for name, comparison in comparisons[key].items():
+        for name, comparison in comparisons[request].items():
             lines.append(
                 f"  {name:{width}}{pp(comparison.difference):>11}{interval(comparison.per_point):>20}"
                 f"{interval(comparison.simultaneous):>20}"
@@ -523,21 +588,21 @@ def report(results: dict[str, Result], comparisons: dict, outcome: dict, context
     title(lines, "6. What blanking costs on a complete request, against extended as committed")
     lines.append(f"{'configuration':{width}}{'MdAPE':>9}{'difference pp':>15}{'L1 log price':>14}{'difference':>12}")
     reference = results["extended"]
-    full = GIVEN_LEVELS[-1]
     for name, result in results.items():
         if result.configuration.variant != EXTENDED:
             continue
         lines.append(
-            f"{name:{width}}{pct(result.mdape(full)):>9}{pp(result.mdape(full) - reference.mdape(full)):>15}"
-            f"{np.mean(result.log_error[full]):>14.4f}"
-            f"{np.mean(result.log_error[full]) - np.mean(reference.log_error[full]):>+12.4f}"
+            f"{name:{width}}{pct(result.mdape(COMPLETE)):>9}"
+            f"{pp(result.mdape(COMPLETE) - reference.mdape(COMPLETE)):>15}"
+            f"{np.mean(result.log_error[COMPLETE]):>14.4f}"
+            f"{np.mean(result.log_error[COMPLETE]) - np.mean(reference.log_error[COMPLETE]):>+12.4f}"
         )
 
     title(lines, "7. The rule fixed before the fits")
-    columns = ("SC-06", "sparse: not worse", "complete: better", "early stop, < 15 min")
-    lines.append(f"{'configuration':{width}}" + "".join(f"{column:>22}" for column in columns) + f"{'qualifies':>11}")
+    columns = ("1 SC-06", "2 incomplete: not worse", "3 complete: better", "4 early stop, < 15 min")
+    lines.append(f"{'configuration':{width}}" + "".join(f"{column:>25}" for column in columns) + f"{'qualifies':>11}")
     for name, passed in outcome["checks"].items():
-        cells = "".join(f"{'yes' if value else 'NO':>22}" for value in passed.values())
+        cells = "".join(f"{'yes' if value else 'NO':>25}" for value in passed.values())
         lines.append(f"{name:{width}}{cells}{'yes' if all(passed.values()) else 'NO':>11}")
     if outcome["recommended"] is None:
         lines.append("No blanked configuration qualifies.")
@@ -578,6 +643,45 @@ def load_variant(name: str, params: dict, extended_optional: tuple[str, ...] | N
     return Variant(name, data, committed, optional, scenarios, tuple(reference.index(f) for f in optional))
 
 
+def record_of(results: dict[str, Result], comparisons: dict, outcome: dict) -> dict:
+    """Everything the report prints, as numbers, for the summary run."""
+    return {
+        "sweep": SWEEP,
+        "requests": [label(request) for request in REQUESTS],
+        "verdict": outcome,
+        "configurations": {
+            name: {
+                "variant": result.configuration.variant,
+                "all_copies": result.configuration.all_copies,
+                "random_copies": result.configuration.random_copies,
+                "mlflow_run_id": result.run_id,
+                "n_train_rows": result.n_train_rows,
+                "best_iteration": result.training["best_iteration"],
+                "early_stopped": result.training["early_stopped"],
+                "fit_seconds": result.cost.fit_seconds,
+                "energy_kwh": result.cost.metrics()["energy_kwh"],
+                "validation_mdape": {label(request): result.mdape(request) for request in REQUESTS},
+                "validation_l1_log_price": {
+                    label(request): float(np.mean(result.log_error[request])) for request in REQUESTS
+                },
+                "sc06": result.sc06,
+            }
+            for name, result in results.items()
+        },
+        "mdape_difference_to_candidate": {
+            label(request): {
+                name: {
+                    "difference": comparison.difference,
+                    "per_point": comparison.per_point,
+                    "simultaneous": comparison.simultaneous,
+                }
+                for name, comparison in table.items()
+            }
+            for request, table in comparisons.items()
+        },
+    }
+
+
 def main(smoke: bool) -> None:
     # The stages log through loguru; only warnings are kept, on stderr, beside this script's own.
     logger.remove()
@@ -589,15 +693,16 @@ def main(smoke: bool) -> None:
     extended = load_variant(EXTENDED, params, None)
     basic = load_variant(BASIC, params, extended.optional)
     variants = {EXTENDED: extended, BASIC: basic}
-    if len(extended.optional) != GIVEN_LEVELS[-1]:
-        raise RuntimeError(f"the request levels assume {GIVEN_LEVELS[-1]} optional fields, not {len(extended.optional)}")
+    if len(extended.optional) != COMPLETE:
+        raise RuntimeError(f"the request levels assume {COMPLETE} optional fields, not {len(extended.optional)}")
     if not np.array_equal(extended.data.validation["price"].to_numpy(), basic.data.validation["price"].to_numpy()):
         raise RuntimeError("the two validation matrices do not hold the same rows in the same order")
     for variant in variants.values():
-        check_blank(variant.data.validation, variant.committed, variant.optional)
+        for frame in (variant.data.train, variant.data.validation):
+            check_blank(frame, variant.committed, variant.optional)
 
     groups = tune.validation_seller_groups(PROCESSED_DATA_DIR, extended.data, extended.data.supported_makes)
-    masks = request_masks(len(extended.data.validation), len(extended.optional), seed)
+    masks = request_masks(len(extended.data.validation), len(extended.optional), basic.position, seed)
     if not smoke:
         tune._require_tracking_configured()
         tune._refuse_a_tracked_sweep_id(SWEEP, tune.TUNING_EXPERIMENT)
@@ -610,11 +715,8 @@ def main(smoke: bool) -> None:
             )
             for configuration in CONFIGURATIONS
         }
-        comparisons = {
-            "sparse": differences(results, 0, groups, seed, "ape"),
-            "complete": differences(results, GIVEN_LEVELS[-1], groups, seed, "ape"),
-        }
-        outcome = verdict(results, comparisons["sparse"], comparisons["complete"], threshold)
+        comparisons = {request: differences(results, request, groups, seed) for request in REQUESTS}
+        outcome = verdict(results, comparisons, threshold)
         context = {
             "smoke": smoke,
             "seed": seed,
@@ -629,40 +731,9 @@ def main(smoke: bool) -> None:
         if smoke:
             return
         (workdir / RESULTS_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        record = {
-            "sweep": SWEEP,
-            "given_levels": list(GIVEN_LEVELS),
-            "verdict": outcome,
-            "configurations": {
-                name: {
-                    "variant": result.configuration.variant,
-                    "all_copies": result.configuration.all_copies,
-                    "random_copies": result.configuration.random_copies,
-                    "mlflow_run_id": result.run_id,
-                    "n_train_rows": result.n_train_rows,
-                    "best_iteration": result.training["best_iteration"],
-                    "early_stopped": result.training["early_stopped"],
-                    "fit_seconds": result.cost.fit_seconds,
-                    "energy_kwh": result.cost.metrics()["energy_kwh"],
-                    "validation_mdape_by_given": {str(g): result.mdape(g) for g in GIVEN_LEVELS},
-                    "validation_l1_by_given": {str(g): float(np.mean(result.log_error[g])) for g in GIVEN_LEVELS},
-                    "sc06": result.sc06,
-                }
-                for name, result in results.items()
-            },
-            "mdape_difference_to_candidate": {
-                key: {
-                    name: {
-                        "difference": comparison.difference,
-                        "per_point": comparison.per_point,
-                        "simultaneous": comparison.simultaneous,
-                    }
-                    for name, comparison in table.items()
-                }
-                for key, table in comparisons.items()
-            },
-        }
-        (workdir / RECORD_FILE).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        (workdir / RECORD_FILE).write_text(
+            json.dumps(record_of(results, comparisons, outcome), indent=2) + "\n", encoding="utf-8"
+        )
         with tune._tracked(tune.TUNING_EXPERIMENT, f"{SWEEP}-summary") as run:
             run.set_tags(
                 {

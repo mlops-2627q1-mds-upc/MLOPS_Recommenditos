@@ -2829,13 +2829,13 @@ How to add an entry:
   - **Option C: keep `lgbm-basic` without measuring.**
     No work, but the project brief's open question on masking stays open.
 - **Rationale:** Single optional fields are empty in 1 % to 95 % of the 60,378 training rows, but all 23 are empty together in only 5, so a request with only the required fields lies outside what the model saw, and blanked copies put it inside.
-  A configuration qualifies only if it passes SC-06, is not measurably worse than `lgbm-basic` on the required-only request and is measurably better on the complete one, on the validation split, by the paired bootstrap of [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
+  A configuration qualifies only if it passes SC-06, is not measurably worse than `lgbm-basic` on any incomplete request and is measurably better on the complete one, on the validation split, by the paired bootstrap of [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
   The result and what follows from it are added here once measured.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI checked the issue's premise on the training rows and corrected it: the fields are often empty one at a time and almost never together.
   It proposed the configurations and the rule and wrote the script.
-  An independent agent reviewed both before the fits; no person did.
+  An independent agent reviewed both before the fits and found that the rule read only the required-only and the complete request, so it was extended to every incomplete request; no person reviewed the protocol.
 - **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: "validate that this is a good idea and how we best test it, then test it".
 - **Other evidence:** [`reports/analysis/blanked_fields.py`](analysis/blanked_fields.py); MLflow experiment `recommenditos-price-tuning`, sweep `116-blanked-fields`; [project brief](../docs/docs/project-brief.md), section 4.
 - **In LaTeX:** yes

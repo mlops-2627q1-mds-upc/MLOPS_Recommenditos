@@ -20,13 +20,13 @@ No work, but the project brief's open question on masking stays open.
 \end{itemize}
 \par
 \emph{Why:} Single optional fields are empty in 1\,\% to 95\,\% of the 60,378 training rows, but all 23 are empty together in only 5, so a request with only the required fields lies outside what the model saw, and blanked copies put it inside.
-A configuration qualifies only if it passes SC-06, is not measurably worse than \texttt{lgbm-\allowbreak{}basic} on the required-only request and is measurably better on the complete one, on the validation split, by the paired bootstrap of \hyperref[EDN-73]{EDN-73}.
+A configuration qualifies only if it passes SC-06, is not measurably worse than \texttt{lgbm-\allowbreak{}basic} on any incomplete request and is measurably better on the complete one, on the validation split, by the paired bootstrap of \hyperref[EDN-73]{EDN-73}.
 The result and what follows from it are added here once measured.},
   ai = {Information seeking, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
   assessment = {AI checked the issue's premise on the training rows and corrected it: the fields are often empty one at a time and almost never together.
 It proposed the configurations and the rule and wrote the script.
-An independent agent reviewed both before the fits; no person did.},
+An independent agent reviewed both before the fits and found that the rule read only the required-only and the complete request, so it was extended to every incomplete request; no person reviewed the protocol.},
   aievidence = {Claude Code session of 2026-10-13 on issue \#116: ``validate that this is a good idea and how we best test it, then test it''.},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/blanked_fields.py}{\texttt{reports/\allowbreak{}analysis/\allowbreak{}blanked\_\allowbreak{}fields.\allowbreak{}py}}; MLflow experiment \texttt{recommenditos-\allowbreak{}price-\allowbreak{}tuning}, sweep \texttt{116-\allowbreak{}blanked-\allowbreak{}fields}; \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/project-brief.md}{project brief}, section 4.},
 }
