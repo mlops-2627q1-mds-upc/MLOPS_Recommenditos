@@ -8,9 +8,7 @@ the seam's row-wise `mask_absent`, the copies themselves, and the fit and the
 stage that use them.
 """
 
-import importlib.util
 import json
-import sys
 from typing import ClassVar
 
 import numpy as np
@@ -18,7 +16,6 @@ import pandas as pd
 import pytest
 from tests.conftest import params_override, project_params, train_variants
 
-from recommenditos.config import PROJ_ROOT
 from recommenditos.modeling import evaluate, train
 from recommenditos.modeling.model import (
     ESTIMATORS,
@@ -215,44 +212,39 @@ def test_no_copies_leaves_the_frame_as_it_is(trained: dict, test_frames: dict):
     pd.testing.assert_frame_equal(result, frame)
 
 
-def _measurement():
-    """`reports/analysis/blanked_fields.py`, the script that measured the copies (EDN-82)."""
-    name = "blanked_fields_measurement"
-    spec = importlib.util.spec_from_file_location(
-        name, PROJ_ROOT / "reports" / "analysis" / "blanked_fields.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        del sys.modules[name]
-    return module
+#: Which of the six fields the measurement's random copy omits in each of six
+#: rows, for the project seed: the draw `reports/analysis/blanked_fields.py` made
+#: when it ran for EDN-82 (commit 4a7cdfe). Written down here, so that a test
+#: need not import a script that is bound to that commit.
+MEASURED_DRAW = (
+    (1, 0, 0, 0, 1, 0),
+    (1, 1, 1, 1, 1, 1),
+    (1, 1, 1, 1, 1, 0),
+    (1, 0, 1, 0, 1, 0),
+    (1, 0, 1, 1, 1, 1),
+    (1, 1, 1, 1, 0, 1),
+)
 
 
-def test_the_copies_are_the_ones_the_measurement_fitted_on(trained: dict, test_frames: dict):
+def test_the_random_copies_are_the_draw_the_measurement_made(trained: dict, test_frames: dict):
     """What EDN-82 adopted is the configuration it measured, down to the draws.
 
-    The measurement built its training frame with its own code, and `params.yaml`
-    names its `all+random` configuration. So the pipeline's frame for those counts
-    and that seed has to be the measurement's, or the figures the decision rests
-    on are those of another model.
+    `params.yaml` names the measurement's `all+random` configuration, and the
+    figures the decision rests on are those of the frame the measurement built.
+    So the pipeline's random copy for the project seed has to omit what the
+    measurement's did, or the adopted model is another one.
     """
-    measured = _measurement()
     model = trained["models"]["lgbm-basic"]
-    frame = test_frames["basic"].reset_index(drop=True)
+    frame = test_frames["basic"]
+    given = frame[frame[list(BASIC_OPTIONAL)].notna().all(axis=1)].head(6).reset_index(drop=True)
+    assert len(given) == len(MEASURED_DRAW)
     seed = project_params()["seed"]
-    configuration = measured.Configuration(
-        "all+random", "lgbm-basic", all_copies=1, random_copies=1
-    )
+    assert seed == 20251108, "the draw above is the one of this seed"
 
-    result = with_blanked_copies(
-        model, frame, BASIC_OPTIONAL, copies={"all": 1, "random": 1}, seed=seed
-    )
+    result = with_blanked_copies(model, given, BASIC_OPTIONAL, copies={"random": 1}, seed=seed)
 
-    pd.testing.assert_frame_equal(
-        result, measured.training_frame(configuration, frame, model, BASIC_OPTIONAL, seed)
-    )
+    omitted = result.iloc[len(given) :][list(BASIC_OPTIONAL)].isna().to_numpy()
+    assert omitted.astype(int).tolist() == [list(row) for row in MEASURED_DRAW]
 
 
 @pytest.mark.parametrize("variant", ["lgbm-basic", "lgbm-extended"])

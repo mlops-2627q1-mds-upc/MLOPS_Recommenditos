@@ -810,6 +810,8 @@ How to add an entry:
 
 ### EDN-62: `lgbm-basic` is the candidate model
 
+> **Revised on 2026-10-13**: `lgbm-basic` is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.
+
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
@@ -821,7 +823,7 @@ How to add an entry:
   - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
   - One model for complete requests and the other for partial ones: two models and a routing rule; left open for the deployment milestone.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
-- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.21 times; the bound is 1.5.
+- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.02 times (1.21 when this was decided); the bound is 1.5.
   On that request the ranking of the two reverses.
   The extended features also make the over-20 segment worse, so they are no remedy for SC-04.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
@@ -989,31 +991,30 @@ How to add an entry:
 - **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95), [PR #101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101#issuecomment-6124299563), `gh pr list` and the branch protection of `main`, read on 2026-10-12.
 - **In LaTeX:** yes
 
-### EDN-82: Blanked-out optional fields are measured under a rule fixed beforehand
+### EDN-82: `lgbm-basic` is trained on blanked copies of its listings
+
+> **Revised on 2026-10-13**: first recorded as a measurement only; the adoption followed the same day.
 
 - **Date:** 2026-10-13
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
-- **Participants:** @kadameit proposed it ([issue #116](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/116)); @lukas2510 decided to measure it and left the protocol to the AI
-- **Decision:** We measured whether training `lgbm-extended` on copies of the listings with optional fields blanked out removes its collapse on sparse requests, the reason `lgbm-basic` is the candidate (EDN-62).
-  Configurations, scenarios and rule were committed before the first fit; the test split was not read.
-  Under the rule no configuration replaces the candidate; whether the pipeline adopts blanking is decided separately.
+- **Participants:** @kadameit proposed the measurement ([issue #116](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/116)); @lukas2510 decided
+- **Decision:** `lgbm-basic`, the candidate, is fitted on its training rows plus two copies of each with optional input fields set to what an omitted field is: one with all six omitted and one with a random subset.
+  `lgbm-extended` is trained as before and does not become the candidate.
 - **Alternatives considered:**
-  - Serve both models, routed by how full a request is: two models and a threshold, and still 8.57 % on a required-only request.
-  - Keep `lgbm-basic` without measuring: the project brief's open masking question stays open.
-- **Rationale:** All 23 optional fields are empty together in 5 of 60,378 training rows, so a required-only request is almost absent from what the model saw.
-  With one fully and one randomly blanked copy of every row, `lgbm-extended` answers it at 7.14 % validation MdAPE instead of 10.79 %, passes SC-06 at 1.14x and answers a complete request at 6.29 % instead of 6.45 %.
-  It beats `lgbm-basic` at every level of sparsity, but is worse on a request giving exactly the basic set's six fields, 7.12 % against 6.96 %.
-  The margin is thin (per-point 95 % interval +0.02 to +0.31 pp), and the rule excludes it.
-  The same copies take `lgbm-basic` itself from 8.57 % to 7.19 % on the required-only request.
+  - `lgbm-extended` with the copies as the candidate: better on most requests, but worse on one giving exactly the basic set's six fields (7.12 % against 6.96 % validation MdAPE), which the rule fixed before the measurement excludes.
+  - Serving both models, routed by how full a request is: two models, a threshold, and still 8.57 % on a required-only request.
+  - No change before the first delivery: the candidate stays worse than necessary on a request FR-01 allows.
+- **Rationale:** All six optional fields are empty together in 324 of 60,378 training rows, so a required-only request was almost absent from what the model saw.
+  With the copies its validation MdAPE on that request falls from 8.57 % to 7.19 %, and no tested request is measurably worse.
+  The test split, read once after the decision, agrees: 8.26 % to 6.86 % there, 6.81 % to 6.73 % on a complete request, and SC-06 at 1.02 times instead of 1.21.
+  The rule was committed before the first fit.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Used as input for further analysis
-- **Assessment of the AI contribution:** AI corrected the issue's premise: several fields are often empty singly, but almost never all together.
-  It proposed configurations and rule and wrote the script.
-  An independent agent's review before the fits extended the rule to every incomplete request, the condition that then failed.
-  No person reviewed the protocol.
-- **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: "validate that this is a good idea and how we best test it, then test it".
-- **Other evidence:** [`blanked_fields.py`](analysis/blanked_fields.py) and [its results](analysis/blanked_fields_results.txt); MLflow experiment `recommenditos-price-tuning`, sweep `116-blanked-fields`; [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118).
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, measured and recommended this option, which @lukas2510 took.
+  Independent agents reviewed the protocol before the fits, adding the condition that excluded `lgbm-extended`, and the code before the pipeline run; no person did.
+- **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: measurement, three options, recommendation.
+- **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs

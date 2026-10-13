@@ -233,6 +233,7 @@ For every run it checks that each `train.deps.<path>` tag equals the `md5` the l
 It needs the tracking credentials in `.env`, `models/` from `dvc pull`, and a clean tree, and runs from the repository root: `uv run python reports/analysis/run_provenance_check.py`.
 `run_provenance_check_results.txt` holds its output section by section: against the runs `main`'s models pointed at before the fix (2026-10-05), against the four runs of the `dvc repro` that fix committed, and against the runs of the pipeline re-runs committed since, the last of which is the ladder `main` points at.
 A third, appended on 2026-10-06, checks the runs of the next committed `dvc repro`, issue #64's, which pass the same way.
+The last section, appended on 2026-10-13, checks the four runs of the `dvc repro` that trains `lgbm-basic` on blanked copies of its listings (EDN-82), which pass the same way.
 
 ## Blanked-out optional fields in training (EDN-82, issue #116)
 

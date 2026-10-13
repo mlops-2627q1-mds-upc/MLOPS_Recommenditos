@@ -3,6 +3,7 @@
 \ednentry{
   id = {EDN-62},
   title = {\texorpdfstring{\texttt{lgbm-\allowbreak{}basic}}{lgbm-basic} is the candidate model},
+  note = {\textbf{Revised on 2026-10-13}: \texttt{lgbm-\allowbreak{}basic} is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.},
   date = {2026-09-30},
   milestone = {M3: Quality Assurance},
   topic = {Modelling Approach, Model Evaluation},
@@ -17,7 +18,7 @@ SC-04 is missed by every variant on cars over 20 years and is recorded as missed
 \item An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
 \end{itemize}
 \par
-\emph{Why:} With every optional field masked, which is a request carrying only what FR-01 requires, the error of \texttt{lgbm-\allowbreak{}extended} rises to 1.65 times its full-input MdAPE and that of \texttt{lgbm-\allowbreak{}basic} to 1.21 times; the bound is 1.5.
+\emph{Why:} With every optional field masked, which is a request carrying only what FR-01 requires, the error of \texttt{lgbm-\allowbreak{}extended} rises to 1.65 times its full-input MdAPE and that of \texttt{lgbm-\allowbreak{}basic} to 1.02 times (1.21 when this was decided); the bound is 1.5.
 On that request the ranking of the two reverses.
 The extended features also make the over-20 segment worse, so they are no remedy for SC-04.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
