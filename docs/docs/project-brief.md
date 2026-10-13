@@ -173,7 +173,7 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
 Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields_results.txt`): native missing-value handling is not enough for a request with few optional fields.
 Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training split: 324 of its 60,378 served rows have all six optional fields of the basic set empty.
 Trained on the listings plus two blanked copies of each, one with every optional field omitted and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 %, and a complete request is not measurably worse (7.02 % against 6.96 %).
-`lgbm-extended` with the same copies answers it at 7.14 % instead of 10.79 %, so what both models lost on that request came from how they were trained, not from the information they lack.
+`lgbm-extended` with the same copies answers it at 7.14 % instead of 10.79 %, so most of what both models lost on that request came from how they were trained, not from the information they lack.
 These are validation figures from one split and one fit per configuration.
 
 **[decided]**, [EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the pipeline trains `lgbm-basic` on those copies, adopted by @lukas2510, the repository owner, on 2026-10-13 on that measurement.
