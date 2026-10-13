@@ -21,7 +21,7 @@
   Go beyond reporting a number: compare models or configurations by energy versus accuracy.
 }
 
-We measure the energy of every training fit with CodeCarbon (NFR-10, EDN-69).
+We measure the energy of every training fit with CodeCarbon (NFR-10).
 The tracker wraps the fit call only.
 Its result goes to the MLflow run of that fit and to \texttt{reports/\allowbreak emissions/}, so the energy and the accuracy of a variant are always read together.
 The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from these files.
@@ -47,7 +47,7 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
     Hyperparameter search, 34 fits, on another laptop & 391\,s & 3.61\,Wh & 628\,mg \\
     \bottomrule
   \end{tabular}
-  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-78). The ladder is the run of 2026-10-12, made while other work loaded the laptop; fit time and energy vary between runs, and the identical trees took 0.157\,Wh on 2026-10-06.}
+  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-73). The ladder is the run of 2026-10-12, made while other work loaded the laptop; fit time and energy vary between runs, and the identical trees took 0.157\,Wh on 2026-10-06.}
   \label{tab:energy}
 \end{table}
 
@@ -67,12 +67,12 @@ The whole ladder takes 58 seconds of fitting and 0.216\,Wh, against NFR-10's bud
 By CodeCarbon's estimate the most expensive fit uses about 0.15\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
-Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-70).
+Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-73).
 The candidate runs 1.3 times the boosting rounds for 0.02 percentage points of test MdAPE, and the fit time grows linearly with the rounds.
 We accepted this so that the validation split, and not a fixed ceiling, decides the size of the model.
 
 \paragraph{Hyperparameter search.}
-The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-78).
+The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-73).
 That is about 17 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
@@ -101,7 +101,7 @@ The Pylint rules found five magic values in the command-line stubs of the templa
 We also found that \texttt{make lint} covered only \texttt{recommenditos/}, while CI linted \texttt{tests/} and \texttt{notebooks/} as well; all three now lint the same files.
 Each configured exception has its reason next to it, for example the magic-value rule in \texttt{tests/}, where an assertion compares against a literal.
 
-\paragraph{Notebooks (EDN-64, EDN-65).}
+\paragraph{Notebooks.}
 Our notebook is the exploratory analysis behind the dataset card.
 It recomputes the figures of the card from the source file and fails when one does not reproduce.
 
@@ -205,8 +205,8 @@ The validation is built to stop a problem before training:
 \begin{itemize}
   \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so nothing is trained on data that did not pass.
   \item \textbf{Reviewable result.} The stage writes \texttt{summary.json}, which Git tracks, so a pull request that changes the data shows what changed in the validation. It also writes the Data Docs.
-  \item \textbf{Tolerances.} A registration date after the snapshot date is tolerated in up to 1\,\% of the raw rows and forbidden in the cleaned data. A new scrape with many such rows fails the raw suite and is noticed, where preprocessing alone would remove them silently (EDN-22).
-  \item \textbf{Fill rates.} Both suites require the six columns that the published file fills in every row to stay filled in 99.9\,\% of the rows (EDN-77), so a column that turns empty in a new scrape fails the validation.
+  \item \textbf{Tolerances.} A registration date after the snapshot date is tolerated in up to 1\,\% of the raw rows and forbidden in the cleaned data. A new scrape with many such rows fails the raw suite and is noticed, where preprocessing alone would remove them silently.
+  \item \textbf{Fill rates.} Both suites require the six columns that the published file fills in every row to stay filled in 99.9\,\% of the rows (EDN-68), so a column that turns empty in a new scrape fails the validation.
 \end{itemize}
 
 We dropped one planned rule after measuring it: a rule that \texttt{is\_used} and \texttt{offer\_type} agree fails for 18,108 rows of the published file, although these rows are valid (EDN-23).

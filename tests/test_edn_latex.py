@@ -26,7 +26,9 @@ from tools.edn_latex import (
     Context,
     EdnError,
     check,
+    entry_words,
     main,
+    over_the_cap,
     parse_notebook,
     render_entry,
     render_inline,
@@ -312,7 +314,7 @@ def test_an_amendment_note_is_printed_before_the_fields():
 
 
 def test_a_field_the_template_does_not_define_is_kept_under_the_field_above():
-    """EDN-59 has one; dropping it would drop part of the decision."""
+    """An entry may carry one; dropping it would drop part of the decision."""
     text = notebook(entry_md()).replace(
         "- **Alternatives considered:**",
         "- **Scope, after review:** the empty list.\n- **Alternatives considered:**",
@@ -485,6 +487,77 @@ def test_a_reserved_id_is_skipped_until_its_entry_is_written(workspace):
 
 
 # --------------------------------------------------------------------------
+# The word limit of an entry
+# --------------------------------------------------------------------------
+
+
+def test_an_entry_over_the_word_limit_is_named_with_its_count(tmp_path):
+    """The notebook grew to 76 long entries once; the limit is what keeps it short."""
+    edn_md = tmp_path / "edn.md"
+    long_rationale = " ".join(["word"] * 300)
+    edn_md.write_text(
+        notebook(entry_md(1), entry_md(2, Rationale=long_rationale)), encoding="utf-8"
+    )
+
+    (problem,) = over_the_cap(edn_md)
+
+    assert problem.startswith("EDN-02 has 3")
+    assert problem.endswith("the limit is 300")
+
+
+def test_quoted_text_does_not_count_and_a_link_counts_by_the_words_of_its_text():
+    quote = " ".join(["quoted"] * 400)
+    plain = entry_md(Decision="Use the dataset.")
+    quoting = entry_md(Decision=f'Use the dataset. "{quote}" [the docs](https://example.org/a/b).')
+    (short,), (long,) = parse_notebook(notebook(plain)), parse_notebook(notebook(quoting))
+
+    assert entry_words(long) == entry_words(short) + 2
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Decision",
+        "Alternatives considered",
+        "Rationale",
+        "Assessment of the AI contribution",
+        "AI interaction evidence",
+        "Other evidence",
+    ],
+)
+def test_the_words_of_every_text_field_count(label):
+    """A field left out of the count would let an entry grow there unnoticed."""
+
+    def words_with(n: int) -> int:
+        value = " ".join(["word"] * n)
+        if label == "Alternatives considered":
+            value = f"\n  - {value}"
+        (entry,) = parse_notebook(notebook(entry_md(**{label: value})))
+        return entry_words(entry)
+
+    assert words_with(60) == words_with(10) + 50
+
+
+def test_the_title_and_the_note_count_and_the_other_fields_do_not():
+    (base,) = parse_notebook(notebook(entry_md()))
+    noted = entry_md().replace("\n\n", "\n\n> **Revised on 2026-10-12**: one two three.\n\n", 1)
+    (with_note,) = parse_notebook(notebook(noted))
+    (with_names,) = parse_notebook(notebook(entry_md(Participants="one two three four five")))
+
+    assert entry_words(with_note) == entry_words(base) + 6
+    assert entry_words(with_names) == entry_words(base)
+
+
+def test_the_check_fails_on_an_entry_over_the_limit(tmp_path, capsys):
+    edn_md, latex_dir = tmp_path / "edn.md", tmp_path / "edn"
+    edn_md.write_text(notebook(entry_md(Rationale=" ".join(["word"] * 300))), encoding="utf-8")
+    transfer(edn_md, latex_dir)
+
+    assert main(["--check", "--edn-md", str(edn_md), "--latex-dir", str(latex_dir)]) == 1
+    assert "EDN-01 has" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
 # The repository's own notebook
 # --------------------------------------------------------------------------
 
@@ -501,3 +574,8 @@ def test_the_committed_latex_edn_is_what_the_notebook_generates():
 
     assert numbers == sorted(numbers), "entries are kept oldest first"
     assert check(EDN_MD, LATEX_EDN_DIR) == [], "run `make edn` and commit what it writes"
+
+
+def test_no_entry_of_the_notebook_is_over_its_word_limit():
+    """reports/edn.md sets the limit and says how the words are counted."""
+    assert over_the_cap(EDN_MD) == []

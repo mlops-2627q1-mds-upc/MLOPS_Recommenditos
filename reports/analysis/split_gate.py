@@ -24,9 +24,9 @@ the pipeline does. That is the difference from re-deriving the formula here, whi
 gate and its justification come apart.
 
 Scope matches the evaluation protocol, problem specification sections 2 and 5: used cars
-only (EDN-04), listings registered after the age reference date dropped (EDN-22), the
+only (EDN-04), listings registered after the age reference date dropped, the
 training price range, deduplicated before any split. The raw dataset is not in the repo
-(NFR-08, EDN-07), see the README.
+(NFR-08, EDN-25), see the README.
 
 Run from the repository root, so that `recommenditos` is importable:
 

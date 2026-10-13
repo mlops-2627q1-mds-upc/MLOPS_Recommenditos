@@ -10,9 +10,9 @@ Two questions the `features` stage had to answer and could not answer from the s
    time, which is the follow-up issue #25 needs in order to add a range check.
 
 Scope matches the evaluation protocol: used cars only (EDN-04), listings registered after the age
-reference date dropped (EDN-22), the training price range, deduplicated before any split. The `ES`
+reference date dropped, the training price range, deduplicated before any split. The `ES`
 holdout and the split are reproduced here too, because the vocabulary is decided by the training
-rows alone. The raw dataset is not in the repo (NFR-08, EDN-07), see the README.
+rows alone. The raw dataset is not in the repo (NFR-08, EDN-25), see the README.
 """
 
 import hashlib

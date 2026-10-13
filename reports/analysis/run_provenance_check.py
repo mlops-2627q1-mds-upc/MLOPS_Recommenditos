@@ -1,4 +1,4 @@
-"""Do the runs behind the committed models identify the committed state? (EDN-74, issue #79)
+"""Do the runs behind the committed models identify the committed state? (issue #79)
 
 The population is the runs the committed pipeline points at: the run id each
 `models/<variant>/model.json` records, for the bundles the committed `dvc.lock`

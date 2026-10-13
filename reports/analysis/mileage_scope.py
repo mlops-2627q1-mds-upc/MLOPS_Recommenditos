@@ -3,7 +3,7 @@
 The interim suite's mileage rule fails on the real snapshot: three cleaned
 listings carry an odometer reading above `validate.mileage_max_km`, the bound
 FR-03 refuses at serving time. One way to make the rule hard is a preprocessing
-rule that drops them, as EDN-22 does for registration dates. This measures what
+rule that drops them, as preprocessing does for registration dates. This measures what
 that would cost, by running the real `split`, `features`, `train` and `evaluate`
 stages on the interim frame without those rows, in a temporary directory, and
 comparing the result with the committed `metrics.json`.

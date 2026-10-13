@@ -76,7 +76,7 @@ printed, and it is the number to read.
 
 A fit the ceiling ends fails condition 4, and its figures are reported as those of a model that
 was still improving. It is not refitted with more trees: 5,000 is a bound of the product, set by
-what one row's SHAP export may cost against NFR-02 (EDN-70), so a configuration that needs more
+what one row's SHAP export may cost against NFR-02 (EDN-73), so a configuration that needs more
 cannot be served as the pipeline stands, and raising the bound would be a decision of its own.
 
 Of those that qualify, the one with the lowest mean MdAPE over the seven request levels is the
@@ -91,7 +91,7 @@ the row is not an upper bound on serving both.
 Every fit is measured with CodeCarbon as `train` measures one and logged as its own run in the
 MLflow experiment `recommenditos-price-tuning`, tagged `sweep=116-blanked-fields` and
 `sweep_role=point`; one `sweep_role=summary` run carries the verdict, this script's output and
-CodeCarbon's rows. The sweep id is used once, as for a search (EDN-78).
+CodeCarbon's rows. The sweep id is used once, as for a search (EDN-73).
 
 Run from the repository root after `dvc pull`, from a clean commit so the runs are not `git_dirty`,
 with the output written outside the repository and copied in afterwards, and with nothing else
@@ -415,7 +415,7 @@ def _check_it_is_the_committed_model(model: Model, variant: Variant) -> None:
 
 
 def _run(name: str, *, smoke: bool):
-    """A run that must open, as a search's does (EDN-78); a smoke run logs nothing."""
+    """A run that must open, as a search's does (EDN-73); a smoke run logs nothing."""
     if smoke:
         return nullcontext(DisabledRun())
     return tune._tracked(tune.TUNING_EXPERIMENT, name)

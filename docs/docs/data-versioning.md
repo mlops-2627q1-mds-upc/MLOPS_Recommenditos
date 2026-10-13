@@ -58,14 +58,14 @@ There is no manual `dvc add` pointer left.
 | `reports/data-validation/results/`, `reports/data-validation/data-docs/` | `validate-data` | DVC cache, pushed; both carry the run's timestamp |
 | `reports/data-validation/summary.json`, `reports/metrics/`, `metrics.json` | `validate-data` and `evaluate` | `cache: false`, so Git, and they show up in a pull request's diff |
 
-What the committed `dvc.lock` names for `data/raw/listings.parquet` is the real snapshot, 215,309,993 bytes over 118,382 rows, cached and pushed like any other stage output (**[decided]**, EDN-34).
+What the committed `dvc.lock` names for `data/raw/listings.parquet` is the real snapshot, 215,309,993 bytes over 118,382 rows, cached and pushed like any other stage output (**[decided]**, EDN-20).
 It keeps the PII columns of the published file, because preprocessing needs `seller_company_name` and the location to build the split's group key before dropping them.
 So the remote holds that personal data in the Parquet, even though we no longer re-host the CSV.
-The alternatives were weighed in EDN-34: keeping the Parquet local with `push: false` would have moved the pipeline's first artefact from pulled to locally regenerated, and stripping the PII inside `download` would have made the raw layer stop being a faithful copy of the published file.
+The alternatives were weighed in EDN-20: keeping the Parquet local with `push: false` would have moved the pipeline's first artefact from pulled to locally regenerated, and stripping the PII inside `download` would have made the raw layer stop being a faithful copy of the published file.
 
 ## Raw data
 
-**[decided]**, [EDN-07](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), amended by EDN-25 and amended again by EDN-35 and EDN-36 for the `download` stage of issue #33.
+**[decided]**, [EDN-25](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), which also records the two earlier forms of this decision.
 The raw AutoScout24 file contains PII (street, zip, exact coordinates, seller company name for private sellers, see [Requirements](requirements.md) NFR-08), which preprocessing removes before anything else is tracked.
 
 Under `download.source: zenodo` the stage acquires it, so acquisition is part of the pipeline rather
@@ -82,9 +82,9 @@ than a manual step beside it:
 A clean clone fetches nothing all the same: `dvc pull` brings the derived Parquet down and leaves the stage up to date, so the CSV is only fetched by someone who reruns `download` itself.
 Setting the parameter to `synthetic` generates a stand-in instead, which is what lets the test suite and a clone without credentials run.
 
-The CSV is neither a `dep` nor an `out` of the stage (**[decided]**, EDN-35).
+The CSV is neither a `dep` nor an `out` of the stage (**[decided]**, EDN-25).
 DVC deletes a stage's outputs before running it, so a plain `out` would re-download 548 MB on every `dvc repro download`, and a `dep` would make every `dvc status` hash 548 MB before it can answer.
-A third shape does exist and EDN-35 weighs it: an `out` with `persist: true` and `cache: false` survives the run that produces it and never reaches the remote, which would make `dvc status` honest about the CSV, but it pays exactly the same 548 MB hash the `dep` pays.
+A third shape does exist, and the archived entry EDN-35 weighs it: an `out` with `persist: true` and `cache: false` survives the run that produces it and never reaches the remote, which would make `dvc status` honest about the CSV, but it pays exactly the same 548 MB hash the `dep` pays.
 `download.md5` does the job instead: the stage refuses to read bytes that hash to anything else, and because the MD5 is a *parameter*, re-pinning the file is a change DVC sees and reruns on.
 A local copy that no longer matches is reported as such rather than used, so a changed upstream file fails the stage instead of quietly retraining the model.
 
@@ -100,11 +100,11 @@ Two things to know when a fetch goes wrong:
   need different answers, and the error message names the choice rather than throwing data away on a
   guess.
 
-EDN-07 had proposed `dvc import-url` with `push: false`, to keep the raw PII off our own remote.
-EDN-25 replaced that with `dvc add` plus a push to our remote, because the course demo teaches `dvc add` and `dvc import-url` derives its change detection from an `ETag` or `Content-MD5` header that the Zenodo URL does not send.
+The first form of the decision was `dvc import-url` with `push: false`, to keep the raw PII off our own remote.
+The second replaced that with `dvc add` plus a push to our remote, because the course demo teaches `dvc add` and `dvc import-url` derives its change detection from an `ETag` or `Content-MD5` header that the Zenodo URL does not send.
 That second point still holds, and the stage measured it: Zenodo serves this file chunked and sends no `Content-Length` either.
-What EDN-36 changed is who acquires the file.
-The stage does, so the `dvc add` pointer is gone and the CSV is no longer tracked or pushed by us; the Parquet derived from it is, which is what EDN-34 weighed.
+What the current form changed is who acquires the file.
+The stage does, so the `dvc add` pointer is gone and the CSV is no longer tracked or pushed by us; the Parquet derived from it is, which is what EDN-20 weighed.
 The blob the old pointer referenced is left on the remote untouched, so checking out an earlier commit and running `dvc pull` still works.
 No `.dvc` file at the tip of `main` references it any more, though, so recovering that exact snapshot without Zenodo means reading the hash out of the Git history of the deleted pointer file, and it survives only as long as nobody runs the wrong `dvc gc` (see [Never run `dvc gc` without `--all-commits`](#never-run-dvc-gc-without-all-commits)).
 

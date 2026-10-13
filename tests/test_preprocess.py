@@ -243,7 +243,7 @@ def test_is_used_is_not_a_feature(stage):
 
 
 # --------------------------------------------------------------------------
-# Rule 4: registered by the reference date (EDN-22)
+# Rule 4: registered by the reference date
 # --------------------------------------------------------------------------
 
 
@@ -394,7 +394,7 @@ def test_deduplication_counts_only_the_duplicates_the_rules_above_it_left(
     # This is what the rule order buys, and the reason it is load-bearing: rule
     # 6 removes 4,506 rows of the real file rather than the 6,347 duplicates
     # the raw file holds, because the rules above it delete the rest first.
-    # EDN-22 measured the same effect from the other side, 27 post-snapshot
+    # The registration-date rule shows the same effect from the other side, 27 post-snapshot
     # listings before deduplication and 26 after.
     #
     # A duplicate pair that `rule` disqualifies must therefore cost `rule` two

@@ -82,11 +82,11 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   An API test covers this case.
 - **Optional, if time allows:** a synthetic drift scenario (e.g. shifted mileage or age) where we control exactly what changes, to show the detector reacts to a known cause.
   Nobody is waiting on this, so it carries no status marker.
-- Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded. NFR-11 nevertheless states a window of 1,000, because the control clause and the "at least three changed properties" clause do not hold at 100 ([EDN-26](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+- Measured on 2026-09-23 while checking [requirements](requirements.md) NFR-11 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), scripts in `reports/analysis/`): the `ES` replay is flagged within 100 requests in 200 of 200 trials, also when `country_code` is excluded. NFR-11 nevertheless states a window of 1,000, because the control clause and the "at least three changed properties" clause do not hold at 100 ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
   Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
   The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
   That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
-  Measured on 2026-10-12 ([EDN-79](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.3 % on average for cars older than 20 years against 16.77 % on the committed one.
+  Measured on 2026-10-12 ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.3 % on average for cars older than 20 years against 16.77 % on the committed one.
   The split strategy is therefore decided: the seller-grouped hash split stays as it is, and its figures are reported with their spread over other splits.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
@@ -107,7 +107,7 @@ The report describes this check as part of the data decisions.
 - **Listing price is not transaction price.** We predict asking prices.
 - **PII:** `vin`, `street`, `seller_company_name`, `zip`, exact coordinates, and probably contact details inside `description`.
   Drop or coarsen them during preprocessing.
-  The raw file itself contains this PII. **[decided]** The `download` stage fetches it from the pinned Zenodo DOI and keeps it as a gitignored local cache under `data/external/`, so we do not track or re-publish the CSV (EDN-35, EDN-36, [Data versioning](data-versioning.md)). **[decided]** The Parquet the stage derives from it keeps the same PII columns, because preprocessing needs them to build the split's group key, and it is pushed to our DagsHub remote, which is public (EDN-20), so we accept that those columns are re-published in that format; the identical data is already public on Zenodo (EDN-34). The PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08.
+  The raw file itself contains this PII. **[decided]** The `download` stage fetches it from the pinned Zenodo DOI and keeps it as a gitignored local cache under `data/external/`, so we do not track or re-publish the CSV (EDN-25, [Data versioning](data-versioning.md)). **[decided]** The Parquet the stage derives from it keeps the same PII columns, because preprocessing needs them to build the split's group key, and it is pushed to our DagsHub remote, which is public (EDN-20), so we accept that those columns are re-published in that format; the identical data is already public on Zenodo (EDN-20). The PII is removed in preprocessing rather than by withholding the file; see [Specification](specification.md) NFR-08.
 - **Leakage, never use as features:** `price_net` (derived from `price` and VAT), `price_vat_rate`; identifiers `id` and `vin` are not features either.
   `price_tax_deductible` is not known to a private user, so we exclude it; seller `ratings_*` only with justification.
 - **Price in the description:** about 7 % of all rows have the exact listing price in `description` (6.8 % matched as a whole number; a plain substring match gives 6.9 %, because it also counts a price that is only part of a longer number, see the [profiling notebook](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/notebooks/1.0-lh-dataset-card-profiling.ipynb)).
@@ -123,13 +123,13 @@ The report describes this check as part of the data decisions.
   There is no condition field.
 - **Condition flags are one-sided:** 14,744 rows in the raw data are flagged as neither used, new nor pre-registered, and 18,108 of the 113,708 rows scoped by `offer_type` and `vehicle_type` have `is_used = False` while `offer_type = U`.
   A `True` in these flags is an assertion by the seller; a `False` only means the assertion is absent, so it must never be read as a "no" (EDN-23).
-  This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around (EDN-24).
+  This also limits the scope filter of EDN-04: pre-registered listings that carry no flag cannot be removed, which is accepted and documented rather than worked around.
 - **Registration dates after the snapshot:** 164 listings are registered after 2025-11-08, the latest on 2026-11-01 and 137 of them in January 2026.
-  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them, and the Great Expectations suites bound the date at the reference date: hard on the cleaned frame, with `mostly=0.99` on the raw one (EDN-22, [Data validation](pipeline.md#data-validation)).
+  Age computed as snapshot date minus registration date is negative for these rows, so preprocessing drops them, and the Great Expectations suites bound the date at the reference date: hard on the cleaned frame, with `mostly=0.99` on the raw one ([Data validation](pipeline.md#data-validation)).
 - **Partly filled fields:** `nr_prev_owners` 55 %, `vin` 34 %, `price_net` 29 %, `production_year` 19 %, `electric_range_km` 11 %.
 - **Outliers:** prices down to 1 EUR and up to 13.5M EUR; mileage up to 2.57M km.
   The price range is a scope filter in preprocessing and a hard expectation on the cleaned frame.
-  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing (EDN-72).
+  The mileage range of FR-03 is a check on both frames that tolerates a share of 0.1 %, because three listings above 1,000,000 km survive preprocessing.
 
 ## 4. Modelling plan
 
@@ -148,12 +148,12 @@ Experiment ladder (each step is one or more MLflow runs in the same experiment):
 Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 
 **Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
-Measured on the real snapshot on 2026-10-05 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-67, with early stopping deciding the tree count, EDN-70): step 1 12.16 %, step 2 9.52 %, step 3 6.81 %, step 4 6.26 %.
+Measured on the real snapshot on 2026-10-05 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-05, with early stopping deciding the tree count, EDN-73): step 1 12.16 %, step 2 9.52 %, step 3 6.81 %, step 4 6.26 %.
 So the extended feature set is worth 0.55 pp on a fully described car - and 2.04 pp *worse* than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 The whole ladder fits in under a minute.
-Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-70), and `learning_rate` and `num_leaves` were searched and kept, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
+Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-73), and `learning_rate` and `num_leaves` were searched and kept, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
-Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-78).
+Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-73).
 The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so `params.yaml` and the committed metrics are unchanged.
 Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
@@ -168,16 +168,18 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
   Both are now required fields of `/predict` ([specification](specification.md) FR-01), which costs the user nothing: whoever owns the car knows the body type, and for UC1 the user is the seller.
 - `nr_doors` (98.8 %), `nr_seats` (97.0 %) and `cylinders_volume_cc` (91.1 %) are missing rarely, so the signal for their absence is thin but real.
 - `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.
-  Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data too.
+  Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data, but almost absent from it.
 
-Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields.py`): native missing-value handling is not enough for a request with few optional fields, and the three rarely-missing fields are not the reason.
-Each optional field is often empty on its own, but all of them are empty together in only 324 of the 60,378 training rows for the basic set and in 5 for the extended set, so a request carrying only the required fields lies outside what a model saw.
+Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields.py`): native missing-value handling is not enough for a request with few optional fields.
+Each optional field is often empty on its own, but a request carrying only the required fields is almost absent from the training rows.
 Trained on the listings plus two blanked copies of each, one with every optional field blanked and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 % and `lgbm-extended` at 7.14 % instead of 10.79 %, and neither loses measurably on a complete request (7.02 % against 6.96 %, and 6.29 % against 6.45 %).
-A model fitted on the ten required columns alone reaches 7.06 %, so what the committed models lose on that request is training, not information.
+A cross-check written after that run (`reports/analysis/blanked_fields_crosscheck.py`) counts 324 of the 60,378 training rows with all six optional fields of the basic set empty and 5 with all 23 of the extended set, and a model fitted on the ten required columns alone reaches 7.06 %.
+So most of what the committed models lose on that request comes from how they were trained, not from the information they lack.
 
 **[open]:** whether the pipeline adopts the blanked copies, and for which variant.
-Under the rule fixed before the measurement no blanked `lgbm-extended` replaces the candidate: the best one beats `lgbm-basic` at every level of sparsity, but is measurably worse on a request that gives exactly the basic set's six optional fields (7.12 % against 6.96 %).
-These are validation figures; the test split is read once, by `dvc repro`, for a configuration that is adopted.
+Under the rule fixed before the measurement no blanked `lgbm-extended` replaces the candidate: the best one beats `lgbm-basic` at every level of sparsity, but is worse on a request that gives exactly the basic set's six optional fields, 7.12 % against 6.96 %.
+That margin is thin: the per-point 95 % interval of the difference is +0.02 pp to +0.31 pp, and the simultaneous one includes zero.
+These are validation figures from one split and one fit per configuration; the test split is read once, by `dvc repro`, for a configuration that is adopted.
 Either way the outcome is bounded: SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
@@ -231,9 +233,9 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   Its license is Business Source License 1.1 (free for non-production use); mention this in the report.
 - **Pynblint 0.1.6** (last release August 2024) pins typer<0.13 and ipython<9, so it is never a project dependency.
   It pins typer but not click, and typer 0.12 crashes on click 8.2 and newer (released 2025-05-10) on every Python version, so a bare `uvx pynblint` does not run at all.
-  **[decided]**, [EDN-64](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): it runs from its own locked environment in `tools/pynblint-env/` (`pynblint==0.1.6`, `click<8.2`, a hash-verified `uv.lock` of its own) via `make notebook-lint`.
-  It exits 0 whatever it finds, so `tools/notebook_lint.py` reads its JSON report and is the gate; the rules it enforces are the table in [Notebooks](notebooks.md#pynblint-rules) (EDN-65).
-- **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-09](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
+  **[decided]**: it runs from its own locked environment in `tools/pynblint-env/` (`pynblint==0.1.6`, `click<8.2`, a hash-verified `uv.lock` of its own) via `make notebook-lint`.
+  It exits 0 whatever it finds, so `tools/notebook_lint.py` reads its JSON report and is the gate; the rules it enforces are the table in [Notebooks](notebooks.md#pynblint-rules).
+- **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
   It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
 - **Great Expectations 1.23.2** works on our pandas-3 frames for every expectation the suites use, each checked against a frame that satisfies it and one that breaks it ([EDN-68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/gx_probe.py`).
@@ -266,46 +268,8 @@ Deliveries (via Atenea), with the dates as the course changed them from the [lab
 
 ## 8. Decisions and the EDN
 
-Recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md):
-
-- EDN-01: dataset choice (AutoScout24).
-- EDN-02: model family (gradient boosting, LightGBM as main model).
-- EDN-03: new-market drift scenario (hold out AutoScout24 `ES`, drop DataMarket).
-- EDN-04: used cars only.
-- EDN-05: minimum listing support per make.
-- EDN-06: success criteria.
-- EDN-07: raw data hosting (import from Zenodo, never push to our own remote), amended by EDN-25.
-- EDN-08: model loading (bake into the API image via `dvc pull` at CI build time, not the MLflow registry at runtime).
-- EDN-09: bump to Python 3.12, to use real SHAP instead of a workaround.
-- EDN-10: availability target replaced by recovery time plus a presentation-window commitment.
-- EDN-11: `shap` kept out of the API image; serving uses the booster's native SHAP export instead.
-- EDN-12: retraining and promotion are human-triggered, not automated.
-- EDN-13: keep `/feedback`, but reachable only from inside the Compose network, so no TLS is needed.
-- EDN-14: NFR-11's drift control is an i.i.d. sample of held-out listings, not a seller-grouped one.
-- EDN-15: UC1 required fields, after measuring the fill rates, plus SC-06 for absent optional fields.
-- EDN-16: separate `/predict` and `/price-range`, one endpoint per use case.
-- EDN-17: deployment target is the FIB Virtech VM.
-- EDN-18: unseen countries and models are accepted with a warning.
-- EDN-19: the DagsHub repository the team uses as DVC remote and MLflow server.
-- EDN-20: the DagsHub remote stays public.
-- EDN-21: record both licence readings of the Zenodo record.
-- EDN-22: drop listings registered after the reference date.
-- EDN-23: read the condition flags as one-sided assertions.
-- EDN-24: keep the pre-registered exclusion despite the unreliable flag.
-- EDN-25: raw data acquisition (`dvc add` and push to our DagsHub remote), amended by EDN-36.
-- EDN-26: NFR-11's window is 1,000 requests, and `model` is excluded from the drift comparison.
-- EDN-27: the requirements and their specification are separate pages, sharing one set of `FR-xx`/`NFR-xx` IDs.
-- EDN-28: one module per DVC stage, deviating from the flat Cookiecutter layout.
-- EDN-29: the drift job runs at a significance level of 0.005, not 0.05.
-- EDN-30: pipeline configuration lives in `params.yaml`, not in `config.py`.
-- EDN-31: the processed-data contract is a hand-written `schema.py`, not Pandera.
-- EDN-32: split proportions 60/10/10/20 and the project seed.
-- EDN-33: a generated synthetic fixture, and a `download.source` parameter so the skeleton runs without the raw file.
-- EDN-34: the derived raw Parquet keeps its PII columns and is pushed like any other stage output.
-- EDN-35: the `download` stage owns `data/raw/`, and the published CSV is a local cache outside the DAG.
-- EDN-36: the `dvc add` pointer of EDN-25 is retired, so we no longer host a copy of the raw CSV.
-
-The list above stops at EDN-36 and is not continued here: every later entry is in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), which is the complete record.
+Every decision is recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), which is the only list of them; this page does not repeat it.
+The notebook's last section says what became of the IDs that were merged or retired.
 
 The first decision of M1, the project choice, is EDN-80: the used-car price component sounded the most feasible of four ideas (the others were a route-safety model, a recommender and a grocery idea) and was chosen without a detailed comparison.
 

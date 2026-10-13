@@ -1,4 +1,4 @@
-"""One-off: CodeCarbon's estimate of a fit against the RAPL energy counter (EDN-69).
+"""One-off: CodeCarbon's estimate of a fit against the RAPL energy counter (archived EDN-69).
 
 The pipeline reports CodeCarbon's `cpu_load` estimate, because RAPL - the energy
 counter in every Intel CPU since Sandy Bridge - is readable by root only since
@@ -21,7 +21,7 @@ It measures, around the same fit and in the same run:
   `params.yaml` gives the `train` stage;
 - what CodeCarbon itself reports once RAPL is readable (`cc_default`), which is
   what the pipeline would switch to on a machine that grants the access
-  permanently (EDN-69's rejected option B).
+  permanently (an alternative the archived EDN-69 rejected).
 
 The four ladder variants are fitted three times each, round robin, on the feature
 matrices in `data/processed/features`, with `train.num_threads` from params.yaml.
