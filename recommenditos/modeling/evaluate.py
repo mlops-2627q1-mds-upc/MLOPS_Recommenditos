@@ -326,7 +326,7 @@ def criterion_segments(params: dict) -> tuple[str, ...]:
             f"for being accurate where the target already gives the answer. They are reported "
             f"in {SEGMENTS_FILE} and may not gate."
         )
-    required = set(params["evaluate"]["required_input_fields"])
+    required = set(RequestContract.from_params(params).required_fields)
     optional = [name for name in segments if _input_field_behind(name, params) not in required]
     if optional:
         raise ValueError(
@@ -346,7 +346,7 @@ def _input_field_behind(segment: str, params: dict) -> str:
     `registration_date`; the mapping is read from params rather than repeated.
     """
     column = _BUCKETED_SEGMENTS[segment][0] if segment in _BUCKETED_SEGMENTS else segment
-    derived = params["evaluate"]["input_field_to_feature"]
+    derived = RequestContract.from_params(params).field_to_feature
     return next((field for field, feature in derived.items() if feature == column), column)
 
 

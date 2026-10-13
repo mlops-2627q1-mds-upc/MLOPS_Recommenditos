@@ -453,7 +453,7 @@ def test_predict_eur_does_not_raise_with_every_optional_field_absent(
     destroying the values in the rows beside it.
     """
     model = trained["models"][variant]
-    required = set(project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
+    required = set(project_params()["request"]["required_input_fields"]) | {"age_years"}
     masked = model.mask_absent(
         test_frames[model.feature_set],
         [name for name in model.features if name not in required],
@@ -1874,7 +1874,7 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
     JSON, which is why this builds a dict instead of calling `Model.mask_absent`
     on a frame: the values have to survive the trip through `pd.DataFrame`.
     """
-    required = set(project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
+    required = set(project_params()["request"]["required_input_fields"]) | {"age_years"}
     row = {}
     for name in model.features:
         column = schema.column(name)
@@ -2462,7 +2462,7 @@ def test_the_segments_of_the_real_params_are_all_required_input_fields(params):
 #: The optional fields of the basic set, which EDN-15 fixes at six: everything
 #: FR-01 does not require. `age_years` must not be among them - FR-01 requires
 #: `registration_date` and the model consumes the derived column - and that is
-#: the whole reason `evaluate.input_field_to_feature` exists.
+#: the whole reason `request.input_field_to_feature` exists.
 _BASIC_OPTIONAL_FIELDS = (
     "cylinders_volume_cc",
     "drive_train",
@@ -2516,10 +2516,10 @@ def test_a_required_field_the_model_has_no_column_for_is_refused(trained, params
             trained["models"]["b0"],
             {
                 **params,
-                "evaluate": {
-                    **params["evaluate"],
+                "request": {
+                    **params["request"],
                     "required_input_fields": [
-                        *params["evaluate"]["required_input_fields"],
+                        *params["request"]["required_input_fields"],
                         "sunroof",
                     ],
                 },
@@ -2536,8 +2536,8 @@ def test_a_derived_mapping_that_names_a_column_the_model_consumes_is_refused(tra
             trained["models"]["b0"],
             {
                 **params,
-                "evaluate": {
-                    **params["evaluate"],
+                "request": {
+                    **params["request"],
                     "input_field_to_feature": {"make": "age_years"},
                 },
             },
@@ -2554,10 +2554,10 @@ def test_a_column_claimed_by_two_input_fields_is_refused(trained, params):
             model,
             {
                 **params,
-                "evaluate": {
-                    **params["evaluate"],
+                "request": {
+                    **params["request"],
                     "input_field_to_feature": {
-                        **params["evaluate"]["input_field_to_feature"],
+                        **params["request"]["input_field_to_feature"],
                         "sunroof": equipment_column,
                     },
                 },

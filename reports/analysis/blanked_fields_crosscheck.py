@@ -34,8 +34,8 @@ logger.add(sys.stderr, level="WARNING")
 
 params = load_params()
 settings = params["train"]["variants"]["lgbm-basic"]["params"]
-derived = params["evaluate"]["input_field_to_feature"]
-required = [derived.get(field, field) for field in params["evaluate"]["required_input_fields"]]
+derived = params["request"]["input_field_to_feature"]
+required = [derived.get(field, field) for field in params["request"]["required_input_fields"]]
 
 # 1. Training rows in which every optional field is already what an omitted one would be.
 for variant in ("lgbm-basic", "lgbm-extended"):

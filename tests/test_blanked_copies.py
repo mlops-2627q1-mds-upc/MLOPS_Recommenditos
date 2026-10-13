@@ -8,19 +8,26 @@ the seam's row-wise `mask_absent`, the copies themselves, and the fit and the
 stage that use them.
 """
 
+import importlib.util
 import json
+import sys
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
 import pytest
 from tests.conftest import params_override, project_params, train_variants
 
-from recommenditos.modeling import train
+from recommenditos.config import PROJ_ROOT
+from recommenditos.modeling import evaluate, train
 from recommenditos.modeling.model import (
+    ESTIMATORS,
     MODEL_FILE,
+    Model,
     ModelError,
     RequestContract,
     fit_variant,
+    optional_seam_fields,
     with_blanked_copies,
 )
 from recommenditos.tracking import REQUIRED_ENV_VARS
@@ -101,6 +108,47 @@ def test_mask_absent_refuses_a_where_of_another_shape(trained: dict, test_frames
         model.mask_absent(frame, FOUR_KINDS, where=np.ones((3, 2), dtype=bool))
 
 
+def test_mask_absent_goes_by_position_whatever_index_the_frame_has(
+    trained: dict, test_frames: dict
+):
+    """A request frame need not be numbered from zero, and its labels need not be unique."""
+    model = trained["models"]["lgbm-extended"]
+    frame = _rows_with_all_four_given(model, test_frames[model.feature_set], 3)
+    frame.index = [10, 10, 7]
+    where = [[False] * 4, [True] * 4, [False] * 4]  # a plain list, the second row only
+
+    blanked = model.mask_absent(frame, FOUR_KINDS, where=where)
+
+    assert list(blanked.index) == [10, 10, 7]
+    assert blanked["weight_kg"].isna().tolist() == [False, True, False]
+    assert blanked["body_color"].isna().tolist() == [False, True, False]
+    assert blanked["has_full_service_history"].tolist() == [True, False, True]
+
+
+def test_a_field_named_twice_is_omitted_where_either_mention_says_so(
+    trained: dict, test_frames: dict
+):
+    model = trained["models"]["lgbm-extended"]
+    frame = _rows_with_all_four_given(model, test_frames[model.feature_set], 3)
+    where = pd.DataFrame([[True, False], [False, True], [False, False]])
+
+    blanked = model.mask_absent(frame, ["weight_kg", "weight_kg"], where=where)
+
+    assert blanked["weight_kg"].isna().tolist() == [True, True, False]
+
+
+def test_mask_absent_refuses_single_rows_of_a_frame_outside_the_contract(
+    trained: dict, test_frames: dict
+):
+    """A categorical over other levels cannot hold the contract's omitted value in some rows."""
+    model = trained["models"]["lgbm-extended"]
+    frame = _rows_with_all_four_given(model, test_frames[model.feature_set], 3)
+    frame["body_color"] = frame["body_color"].astype(str).astype("category")
+
+    with pytest.raises(ModelError, match="Conform the frame"):
+        model.mask_absent(frame, ["body_color"], where=np.ones((3, 1), dtype=bool))
+
+
 # --------------------------------------------------------------------------
 # The copies
 # --------------------------------------------------------------------------
@@ -165,6 +213,61 @@ def test_no_copies_leaves_the_frame_as_it_is(trained: dict, test_frames: dict):
     )
 
     pd.testing.assert_frame_equal(result, frame)
+
+
+def _measurement():
+    """`reports/analysis/blanked_fields.py`, the script that measured the copies (EDN-82)."""
+    name = "blanked_fields_measurement"
+    spec = importlib.util.spec_from_file_location(
+        name, PROJ_ROOT / "reports" / "analysis" / "blanked_fields.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        del sys.modules[name]
+    return module
+
+
+def test_the_copies_are_the_ones_the_measurement_fitted_on(trained: dict, test_frames: dict):
+    """What EDN-82 adopted is the configuration it measured, down to the draws.
+
+    The measurement built its training frame with its own code, and `params.yaml`
+    names its `all+random` configuration. So the pipeline's frame for those counts
+    and that seed has to be the measurement's, or the figures the decision rests
+    on are those of another model.
+    """
+    measured = _measurement()
+    model = trained["models"]["lgbm-basic"]
+    frame = test_frames["basic"].reset_index(drop=True)
+    seed = project_params()["seed"]
+    configuration = measured.Configuration(
+        "all+random", "lgbm-basic", all_copies=1, random_copies=1
+    )
+
+    result = with_blanked_copies(
+        model, frame, BASIC_OPTIONAL, copies={"all": 1, "random": 1}, seed=seed
+    )
+
+    pd.testing.assert_frame_equal(
+        result, measured.training_frame(configuration, frame, model, BASIC_OPTIONAL, seed)
+    )
+
+
+@pytest.mark.parametrize("variant", ["lgbm-basic", "lgbm-extended"])
+def test_a_copy_omits_exactly_the_fields_sc06_masks_all_at_once(
+    trained: dict, params: dict, variant: str
+):
+    """One meaning of "optional" for the fit and the gate, also where a field is many columns."""
+    model = trained["models"][variant]
+    fields = evaluate.input_field_columns(model, params)
+    scenarios = evaluate.sc06_scenarios(
+        fields, evaluate.optional_input_fields(fields, params), params
+    )
+
+    assert scenarios[-1].field == evaluate.ALL_OPTIONAL_FIELDS
+    assert optional_seam_fields(model, RequestContract.from_params(params)) == scenarios[-1].fields
 
 
 # --------------------------------------------------------------------------
@@ -234,6 +337,67 @@ def test_the_copies_reach_the_estimator(basic_data):
     }
 
 
+class _RecordingModel(Model):
+    """An estimator that keeps the frames it is fitted on, and prices by one field.
+
+    Registered under `ESTIMATORS` for one test, the way a new estimator joins
+    the ladder, so that what `fit_variant` hands an estimator can be read. It
+    answers 9 in log euros where `nr_seats` is omitted and 10 where it is
+    given, so its error on the listings and on their blanked copies differ.
+    """
+
+    estimator_name = "recording"
+    supports_blanked_copies = True
+    seen: ClassVar[dict] = {}
+
+    @classmethod
+    def fit(cls, metadata, data, *, seed, num_threads):
+        cls.seen = {"train": data.train, "validation": data.validation}
+        return cls(metadata, data.space)
+
+    def _predict_log_price(self, aligned):
+        return np.where(aligned["nr_seats"].isna(), 9.0, 10.0)
+
+
+def test_the_estimator_sees_the_copies_and_nothing_else_changes(basic_data, monkeypatch):
+    monkeypatch.setitem(ESTIMATORS, "recording", _RecordingModel)
+    settings = {
+        "estimator": "recording",
+        "feature_set": "basic",
+        "params": {},
+        "blanked_copies": {"all": 1},
+    }
+    listings = basic_data.train.reset_index(drop=True)
+    n_rows = len(listings)
+
+    model = fit_variant("recording", settings, basic_data, seed=1, num_threads=1)
+
+    seen = _RecordingModel.seen
+    # The listings first and as they are, then their copies.
+    assert len(seen["train"]) == 2 * n_rows
+    pd.testing.assert_frame_equal(seen["train"].iloc[:n_rows], listings)
+    assert seen["train"].iloc[n_rows:]["nr_seats"].isna().all()
+    # Early stopping watches the validation rows as they are: no copy of them.
+    pd.testing.assert_frame_equal(seen["validation"], basic_data.validation)
+    # The training error is the model's on the listings, not on the frame with
+    # their copies, where every copy would be priced at 9.
+    training = model.metadata["training"]
+    assert np.exp(9.0) > training["price_min_eur"]
+    assert np.exp(10.0) < training["price_max_eur"]
+    assert listings["nr_seats"].notna().mean() > 0.5, "or the two frames would score alike"
+    priced = np.where(listings["nr_seats"].isna(), 9.0, 10.0)
+    on_the_listings = float(np.mean(np.abs(priced - listings["log_price"].to_numpy())))
+    assert training["train_l1_log_price"] == pytest.approx(on_the_listings)
+
+
+def test_an_estimator_that_counts_rows_as_listings_takes_no_copies(basic_data):
+    """The Ridge folds a level by its training rows, so a copy would count as a listing."""
+    settings = {**train_variants()["b1"], "blanked_copies": {"all": 1}}
+
+    with pytest.raises(ModelError, match="does not take them"):
+        fit_variant("b1", settings, basic_data, seed=1, num_threads=1)
+
+
 def test_blanked_copies_are_refused_without_the_request_contract(matrices: dict, supported_makes):
     """Which fields are optional is FR-01's to say, so a fit that is not told cannot guess."""
     data = train.read_matrices(matrices["features"], "basic", supported_makes)
@@ -262,16 +426,18 @@ def test_the_train_stage_fits_the_copies_its_params_file_names(
     """`params.yaml` to bundle, through the real `main`: the stage hands the contract over."""
     for name in REQUIRED_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    variant = "lgbm-basic"
+    committed = params["train"]["variants"][variant]
     variants = {
         **params["train"]["variants"],
-        "b1": {**params["train"]["variants"]["b1"], "blanked_copies": {"all": 2, "random": 1}},
+        variant: {**committed, "blanked_copies": {"all": 2, "random": 1}},
     }
     params_path = params_override(tmp_path, params, train={"variants": variants})
 
     train.main(
-        "b1", matrices["features"], tmp_path / "models", params_path, tmp_path / "emissions"
+        variant, matrices["features"], tmp_path / "models", params_path, tmp_path / "emissions"
     )
 
-    record = json.loads((tmp_path / "models" / "b1" / MODEL_FILE).read_text(encoding="utf-8"))
+    record = json.loads((tmp_path / "models" / variant / MODEL_FILE).read_text(encoding="utf-8"))
     assert record["blanked_copies"] == {"all": 2, "random": 1, "fields": list(BASIC_OPTIONAL)}
     assert record["training"]["n_fit_rows"] == 4 * record["training"]["n_train_rows"]

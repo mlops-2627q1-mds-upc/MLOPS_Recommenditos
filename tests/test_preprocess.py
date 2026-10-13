@@ -110,7 +110,7 @@ def test_the_group_key_is_hashed_from_the_frame_that_still_has_the_seller_name(s
 def test_the_group_key_is_the_one_the_split_groups_by(stage, raw_frame, params, kept):
     # The key exists for the split, and for nothing else: no feature set names
     # `seller_group_id`, and the API could not compute it if it wanted to,
-    # because `zip` and `city` are not among `evaluate.required_input_fields`.
+    # because `zip` and `city` are not among `request.required_input_fields`.
     # So what has to hold is that the column the split reads is the function's
     # output, row for row and in order, rather than something the stage hashed
     # on its own.

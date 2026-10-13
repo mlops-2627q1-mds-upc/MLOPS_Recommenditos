@@ -243,3 +243,7 @@ It needs the tracking credentials in `.env`, the data and the models from `dvc p
 `blanked_fields_results.txt` is the output of the run recorded in EDN-82 (2026-10-13).
 `blanked_fields_crosscheck.py` was written after that run and is not part of its protocol: it counts the training rows that already look like a required-only request, and fits one model on the ten required columns alone, to reach the run's required-only figures by a route that shares no code with the blanking.
 Its three lines are appended to the results file under their own heading.
+
+Since the measurement was adopted, `lgbm-basic` adds these copies in the pipeline itself (`blanked_copies` in `params.yaml`), and a fit of it needs the request contract: `read_matrices(..., request=RequestContract.from_params(params))`.
+`blanked_fields.py` and the scripts here that refit `lgbm-basic` as committed without passing it (`tuning_sweep.py`, `early_stopping_ceiling.py`, `codecarbon_validity.py`, `rapl_validation.py`) therefore reproduce their results files at the commits they ran on, and stop with a `ModelError` that names the argument when run on a later one.
+`split_strategy.py` passes it, because the pipeline docs ask for that script to be re-run when the candidate changes.

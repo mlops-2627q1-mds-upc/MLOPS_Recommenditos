@@ -167,6 +167,7 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     point's values in it, so a search run and a pipeline run share their columns.
     """
     settings = params["train"]["variants"][variant]
+    request = RequestContract.from_params(params)
     return {
         "variant": variant,
         "estimator": settings["estimator"],
@@ -185,10 +186,10 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
         },
         # The request contract, under the keys `dvc.yaml` declares it by. It
         # decides which fields a blanked copy omits, so it can change the model.
-        "evaluate.required_input_fields": list(params["evaluate"]["required_input_fields"]),
+        "request.required_input_fields": list(request.required_fields),
         **{
-            f"evaluate.input_field_to_feature.{field}": feature
-            for field, feature in params["evaluate"]["input_field_to_feature"].items()
+            f"request.input_field_to_feature.{field}": feature
+            for field, feature in request.field_to_feature.items()
         },
         # The optional keys at the value the fit used, so a run whose params block
         # leaves `min_child_samples` out still records the 20 it was fitted with,
@@ -326,9 +327,11 @@ def main(
         _log_the_run(run, model, cost=cost, params=logged, directory=directory)
 
     training = model.metadata["training"]
+    copies = training["n_fit_rows"] - training["n_train_rows"]
     logger.success(
-        f"{variant}: fitted {settings['estimator']!r} on {training['n_train_rows']:,} rows in "
-        f"{cost.fit_seconds:.2f} s, validation L1(log price) "
+        f"{variant}: fitted {settings['estimator']!r} on {training['n_train_rows']:,} rows"
+        + (f" and {copies:,} blanked copies of them" if copies else "")
+        + f" in {cost.fit_seconds:.2f} s, validation L1(log price) "
         f"{training['validation_l1_log_price']:.4f}."
     )
     # The load, not the fitted object: what `evaluate` and the API will use is

@@ -157,9 +157,9 @@ _REAL_CARS = {
 
 def _required_features() -> set[str]:
     """The features a request always carries: FR-01's fields, as the matrix names them."""
-    evaluate = project_params()["evaluate"]
-    renamed = evaluate["input_field_to_feature"]
-    return {renamed.get(field, field) for field in evaluate["required_input_fields"]}
+    request = project_params()["request"]
+    renamed = request["input_field_to_feature"]
+    return {renamed.get(field, field) for field in request["required_input_fields"]}
 
 
 def _smallest_request(model: Model, row: pd.DataFrame) -> pd.DataFrame:

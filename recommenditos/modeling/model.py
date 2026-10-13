@@ -141,7 +141,7 @@ class RequestContract:
 
     @classmethod
     def from_params(cls, params: Mapping) -> "RequestContract":
-        block = params["evaluate"]
+        block = params["request"]
         return cls(
             required_fields=tuple(block["required_input_fields"]),
             field_to_feature=dict(block["input_field_to_feature"]),
@@ -221,6 +221,13 @@ class Model:
     #: keeps `params.yaml` and `dvc.lock` as they were before the knob became one.
     #: Read-only, because the class attribute is shared by every subclass.
     optional_hyperparameters: Mapping[str, object] = MappingProxyType({})
+
+    #: Whether a variant of this estimator may name `blanked_copies` (EDN-82).
+    #: Off unless an estimator says otherwise, because the copies are rows to an
+    #: estimator and not every one may count them as listings: the Ridge folds a
+    #: level by how many training rows carry it and B0's table reports the rows
+    #: behind a median, so both would count a listing once per copy.
+    supports_blanked_copies: bool = False
 
     def __init__(self, metadata: dict, space: FeatureSpace) -> None:
         self.metadata = metadata
@@ -331,18 +338,19 @@ class Model:
 
         **The boundary, which is deliberate.** `field` is a name in the feature
         space, not a name in a request. `columns_of("registration_date")` raises,
-        because the matrix carries the derived `age_years` and this seam knows
-        only the matrix. The request-field-to-feature rename is a product concept,
-        and it belongs to the stage that has a view on requests: issue #39 adds it
-        to params.yaml as `evaluate.input_field_to_feature`. A model reaching into
-        an `evaluate` parameter to learn it would be the layering inverted.
+        because the matrix carries the derived `age_years` and this method knows
+        only the matrix. Which request field a feature column belongs to is the
+        request contract's to say, and no method of this class reads it: a stage
+        that has a view on requests builds a `RequestContract` from `params.yaml`
+        and hands it to `input_field_columns` below, which applies the rename and
+        then calls this.
 
-        A caller that starts from a *request* field therefore composes the two:
-        apply the rename, then call this. `evaluate`'s masking sweep is the worked
-        example once #39 lands. The API meets exactly the same thing - a request
-        carries `registration_date` where the matrix carries `age_years` - so the
-        M4 ticket composes the rename with this method rather than growing a
-        second expansion of its own, which is the whole point of there being one
+        A caller that starts from a *request* field therefore goes through
+        `input_field_columns` rather than composing the two itself. `evaluate`'s
+        masking sweep and the blanked copies of a fit both do. The API meets
+        exactly the same thing - a request carries `registration_date` where the
+        matrix carries `age_years` - so it does too, rather than growing a second
+        expansion of its own, which is the whole point of there being one
         `columns_of`.
         """
         items = self.space.vocabulary.equipment.get(field)
@@ -389,44 +397,58 @@ class Model:
         back into `pd.NA` - so the field arrives as absent rather than empty, which
         is the one thing this method exists to decide, and nothing says a word.
 
-        `where` narrows it to single cells: a boolean array with one row per row
-        of `frame` and one column per field, in the order of `fields`, and a field
-        is omitted from a row only where it is true. Left out, every field is
-        omitted from every row. So a request that carries some optional fields
-        and not others is built by the same method that builds one carrying
-        none, and a cell is either the frame's own value or the omitted one.
+        `where` narrows it to single cells: something array-like of truth values
+        with one row per row of `frame`, by position, and one column per field,
+        in the order of `fields`. A field is omitted from a row only where it is
+        true, and a field named twice is omitted where either says so. Left out,
+        every field is omitted from every row. So a request that carries some
+        optional fields and not others is built by the same method that builds
+        one carrying none, and a cell is either the frame's own value or the
+        omitted one.
 
         `frame` is not mutated.
         """
         fields = tuple(fields)
-        if where is not None and where.shape != (len(frame), len(fields)):
+        masked = frame.copy()
+        if where is None:
+            for field in fields:
+                for name in self.columns_of(field):
+                    column = self.input_schema.column(name)
+                    if column.dtype == "bool":
+                        masked[name] = False
+                    elif column.dtype == "boolean":
+                        masked[name] = pd.array([False] * len(masked), dtype="boolean")
+                    elif column.levels is not None:
+                        masked[name] = pd.Categorical(
+                            [None] * len(masked), categories=column.levels
+                        )
+                    else:
+                        masked[name] = np.nan
+            return masked
+
+        cells = np.asarray(where, dtype=bool)
+        if cells.shape != (len(frame), len(fields)):
             raise ModelError(
-                f"`where` has the shape {where.shape} for {len(frame)} row(s) and "
+                f"`where` has the shape {cells.shape} for {len(frame)} row(s) and "
                 f"{len(fields)} field(s). It needs one row per row of the frame and one "
                 f"column per field, in the order of `fields`."
             )
-        masked = frame.copy()
+        # What every cell would be if omitted, from the branch above, so the two
+        # ways of calling this cannot come to mean two things by "omitted".
+        omitted = self.mask_absent(frame, fields)
         for position, field in enumerate(fields):
+            # By position, like `cells`, and carried on the frame's own index so
+            # that pandas does not align it by label.
+            keep = pd.Series(~cells[:, position], index=frame.index)
             for name in self.columns_of(field):
-                column = self.input_schema.column(name)
-                if column.dtype == "bool":
-                    masked[name] = False
-                elif column.dtype == "boolean":
-                    masked[name] = pd.array([False] * len(masked), dtype="boolean")
-                elif column.levels is not None:
-                    masked[name] = pd.Categorical([None] * len(masked), categories=column.levels)
-                else:
-                    masked[name] = np.nan
-                if where is not None:
-                    keep = pd.Series(~where[:, position].astype(bool), index=frame.index)
-                    masked[name] = frame[name].where(keep, masked[name])
-                    if masked[name].dtype != frame[name].dtype:
-                        raise ModelError(
-                            f"omitting {name!r} from some rows turned the column from "
-                            f"{frame[name].dtype} into {masked[name].dtype}, so the frame "
-                            f"left the contract. Conform the frame to {self.variant!r}'s "
-                            f"input schema before masking it."
-                        )
+                if omitted[name].dtype != frame[name].dtype:
+                    raise ModelError(
+                        f"column {name!r} of the frame is {frame[name].dtype} and the "
+                        f"contract's omitted value for it is {omitted[name].dtype}, so a "
+                        f"column omitted from some rows only would be neither. Conform the "
+                        f"frame to {self.variant!r}'s input schema before masking single rows."
+                    )
+                masked[name] = masked[name].where(keep, omitted[name])
         return masked
 
     # -- prediction ---------------------------------------------------------
@@ -969,6 +991,8 @@ class LightGBMModel(Model):
     #: `min_data_in_leaf: 20` either way - and `params.yaml` names it only once a
     #: search has adopted another value.
     optional_hyperparameters = MappingProxyType({"min_child_samples": 20})
+    #: The estimator the copies were measured on (EDN-82).
+    supports_blanked_copies = True
 
     def __init__(self, metadata: dict, space: FeatureSpace, booster: lightgbm.Booster | None):
         super().__init__(metadata, space)
@@ -1108,7 +1132,7 @@ def input_field_columns(model: Model, request: RequestContract) -> dict[str, tup
     conflicting = sorted(set(derived) & set(model.features))
     if conflicting:
         raise ValueError(
-            f"evaluate.input_field_to_feature maps {', '.join(conflicting)} to another column "
+            f"request.input_field_to_feature maps {', '.join(conflicting)} to another column "
             f"while {model.variant!r} also consumes a column of that name. One input field "
             f"would then claim two unrelated columns and masking it would mask both."
         )
@@ -1126,7 +1150,7 @@ def input_field_columns(model: Model, request: RequestContract) -> dict[str, tup
             raise ValueError(
                 f"column {column!r} is claimed by two input fields ({', '.join(sorted(claims))}), "
                 f"so masking either would mask a column the other owns. "
-                f"evaluate.input_field_to_feature names a column an equipment field produced."
+                f"request.input_field_to_feature names a column an equipment field produced."
             )
         field = claims.pop() if claims else column
         if field not in fields:
@@ -1138,7 +1162,7 @@ def input_field_columns(model: Model, request: RequestContract) -> dict[str, tup
             f"{model.variant!r} consumes no column for the required input field(s) "
             f"{', '.join(absent)}. FR-01 refuses a request that omits one, so the required "
             f"list and the trained model disagree about what a valuation needs; either the "
-            f"feature set or evaluate.required_input_fields is wrong."
+            f"feature set or request.required_input_fields is wrong."
         )
     # The seam expands a field into its columns; this function only renames the
     # one field whose column has a different name first. `columns_of` knows the
@@ -1346,7 +1370,7 @@ def fit_variant(
     }
     model = cls.fit(
         metadata,
-        _with_blanked_copies(data, metadata, copies, seed),
+        _with_blanked_copies(cls, data, metadata, copies=copies, seed=seed),
         seed=seed,
         num_threads=num_threads,
     )
@@ -1361,7 +1385,7 @@ def fit_variant(
 
 
 def _with_blanked_copies(
-    data: TrainingData, metadata: dict, copies: Mapping[str, int], seed: int
+    cls: type[Model], data: TrainingData, metadata: dict, *, copies: Mapping[str, int], seed: int
 ) -> TrainingData:
     """`data` with the copies the variant asks for appended to its training rows.
 
@@ -1373,6 +1397,15 @@ def _with_blanked_copies(
     if not any(copies.values()):
         return data
     variant = metadata["variant"]
+    if not cls.supports_blanked_copies:
+        supporting = sorted(
+            name for name, each in ESTIMATORS.items() if each.supports_blanked_copies
+        )
+        raise ModelError(
+            f"variant {variant!r} names blanked_copies, and its estimator "
+            f"{cls.estimator_name!r} does not take them: it would count every copy of a "
+            f"listing as a listing of its own. Estimators that do: {', '.join(supporting)}."
+        )
     if data.request is None:
         raise ModelError(
             f"variant {variant!r} adds blanked copies of its training rows, and which fields "

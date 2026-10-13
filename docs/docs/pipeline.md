@@ -329,7 +329,8 @@ Read the screening results in MLflow, not in `dvc exp show`: because `evaluate` 
 The decision step does not read the screening runs back, although their bundles are kept: the paired comparison needs every validation row's prediction from each point and from the reference, and a re-fit at a ceiling far past the curve gives every point its early-stopped model.
 
 A value that passes is adopted like any other parameter change: edit `params.yaml`, run `dvc repro` with `RECOMMENDITOS_REQUIRE_TRACKING=1`, commit the lock and the metrics, and record the choice in the EDN with the interval behind it.
-`reports/analysis/tuning_sweep.py`, EDN-73's original evidence, imports the same statistics from the module and still reproduces its results file.
+`reports/analysis/tuning_sweep.py`, EDN-73's original evidence, imports the same statistics from the module.
+It reproduces its results file at the commit it was run on: it fits `lgbm-basic` on its training rows alone, and since EDN-82 the variant adds blanked copies of them, which that script does not ask for.
 
 From a run to its inputs
 ------------------------
