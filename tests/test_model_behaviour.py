@@ -234,9 +234,10 @@ class TestMinimumFunctionality:
 
 #: A change too small to be worth money, as (column, amount, sources): a test
 #: drive, and a first registration one day earlier. The day is asked of the
-#: fixture only, because the real snapshot's registration dates are a month apart
-#: and no real prediction can move. Power is not among them: one kilowatt is the
-#: resolution engine variants differ by, and the models price it.
+#: fixture only: the real snapshot's registration dates are a month apart, so a
+#: day crosses no split of a tree there and the case could not fail. Power is not
+#: among them: one kilowatt is the resolution engine variants differ by, and the
+#: models price it.
 _NEGLIGIBLE_STEPS = {
     "10-km-more": ("mileage_km_raw", 10.0, SOURCES),
     "a-day-older": ("age_years", 1 / 365.25, ("fixture",)),
