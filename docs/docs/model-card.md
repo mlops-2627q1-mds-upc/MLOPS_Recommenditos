@@ -676,10 +676,15 @@ Explanations are part of the product, not an afterthought: every valuation ships
   `shap` pulls in `numba` and `llvmlite`, measured at 189 MB, merely to import, which a CPU-only serving image should not carry (EDN-11).
   A training-time test asserts the booster's export matches `shap.TreeExplainer` bit for bit.
 - **Globally:** `shap` is used offline, in training and notebooks, for summary plots and global feature importance.
-- **Behaviour under a changed input:** `tests/test_model.py` asserts the direction of the two inputs whose effect on a price has a known sign, on aggregate, because boosted trees are not monotone row by row: the change has to lower more predictions than it raises.
-  Measured on 2026-10-12 over the 8,859 validation rows, 20,000 km more lowers 92.5 % of the predictions of `lgbm-basic` and raises 7.0 %, and lowers 96.3 % and raises 3.3 % for `lgbm-extended`; a first registration one year earlier lowers 90.6 % and raises 9.3 %, and 92.7 % and 7.2 %.
-  The median of the per-row ratios of the changed to the unchanged prediction is 0.950 and 0.952 for the mileage step, and 0.945 and 0.953 for the year.
+- **Behaviour under a changed input:** `tests/test_model_behaviour.py` asserts the direction of the three inputs whose effect on a price has a known sign, on aggregate, because boosted trees are not monotone row by row: the change has to move more predictions its way than the other.
+  Measured on 2026-10-13 over the 8,859 validation rows, 20,000 km more lowers 92.5 % of the predictions of `lgbm-basic` and raises 7.0 %, and lowers 96.3 % and raises 3.3 % for `lgbm-extended`; a first registration one year earlier lowers 90.6 % and raises 9.3 %, and 92.7 % and 7.2 %; 20 kW more raises 79.7 % and lowers 18.6 %, and 77.3 % and 20.9 %.
+  The median of the per-row ratios of the changed to the unchanged prediction is 0.950 and 0.952 for the mileage step, 0.945 and 0.953 for the year, and 1.037 and 1.027 for the power step.
   The same tests hold every prediction bit-identical when a column that is not a feature changes (`vin`, `seller_group_id`, `price`, `log_price`).
+- **Behaviour under a negligible change:** a tree model is a step function, so a car standing on a split changes its price with one kilometre.
+  10 km more moves 2.8 % of the 8,859 validation predictions of `lgbm-basic` by more than 1 % and 1.6 % of those of `lgbm-extended`, the largest move being 15 % for both, and the test bounds that share at 5 %.
+  A first registration one day earlier moves no prediction of either, because the snapshot's registration dates are a month apart and a day crosses no split, so the test asks that of the fixture-trained models only.
+- **A car whose price is known:** requested with the required fields alone, a BMW 116, a BMW 320 and a Porsche 992 are priced at 0.81, 0.97 and 1.02 times the median price of the comparable training listings by `lgbm-basic`, and at 0.74, 0.94 and 1.10 times by `lgbm-extended`.
+  The test bounds the factor at 1.5 either way.
 
 ## Environmental Impact
 

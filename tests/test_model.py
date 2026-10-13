@@ -1,25 +1,19 @@
 """The four estimators, the bundle they write, and the seam that serves them.
 
-The fixtures below run `preprocess`, `split` and `features` on the synthetic
-fixture and then train all four variants once, into `tmp_path_factory`. Nothing
-here reaches `data/`, the DagsHub server or the network: a variant that could not
-be trained on a clean clone with no credentials would be a variant CI cannot
-check, so the whole module trains with the MLflow variables removed and the few
-tests that need a server point it at a SQLite database under `tmp_path`. The one
-exception reads and never writes: `test_the_real_model_lowers_more_predictions_than_it_raises_too`
-checks the bundle in `models/` where `dvc pull` has restored it, and is skipped
-everywhere else.
-
-The fixtures are session-scoped and the models are fitted once. Measured on this
-fixture at `num_threads: 1`: the four fits together cost well under a second, so
-a per-test refit would be affordable - but the trained models are also the thing
-under test, and one set of them shared by every assertion is what makes a
-failure about the model rather than about which copy of it ran.
+The fixtures in `tests/conftest.py` run `preprocess`, `split` and `features` on
+the synthetic fixture and then train all four variants once, into
+`tmp_path_factory`. Nothing here reaches `data/`, the DagsHub server or the
+network: a variant that could not be trained on a clean clone with no credentials
+would be a variant CI cannot check, so the whole module trains with the MLflow
+variables removed and the few tests that need a server point it at a SQLite
+database under `tmp_path`.
 
 The numbers this module asserts on are shapes and invariants, never results. The
 generator derives price from a formula, so the MdAPE of a variant here says
 nothing about the real snapshot; what it does say is that the estimator fits,
-persists, reloads and predicts the same thing twice.
+persists, reloads and predicts the same thing twice. What a trained model does
+with a car - a price it has to get right, a change that must not move it and a
+change that must move it one way - is `tests/test_model_behaviour.py`.
 
 Issue #39 owns everything below the `--- the SC gate (#39)` marker at the end and
 builds on these fixtures rather than refitting.
@@ -38,12 +32,11 @@ import mlflow
 import numpy as np
 import pandas as pd
 import pytest
-from tests.conftest import PII_COLUMNS, params_override
+from tests.conftest import PII_COLUMNS, VARIANTS, params_override, project_params, train_variants
 import yaml
 
-from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR, PROJ_ROOT
-from recommenditos.data import build_features, preprocess, split_data
-from recommenditos.data.build_features import FeatureSpace, Vocabulary, read_supported_makes
+from recommenditos.config import PARAMS_FILE, PROJ_ROOT
+from recommenditos.data.build_features import FeatureSpace, Vocabulary
 from recommenditos.modeling import train
 from recommenditos.modeling.energy import read_record
 from recommenditos.modeling.evaluate import (
@@ -93,7 +86,6 @@ from recommenditos.modeling.model import (
     fit_variant,
     load_model,
 )
-from recommenditos.pipeline import load_params
 from recommenditos.schema import (
     FEATURE_SPACE_FILE,
     TARGET_NAMES,
@@ -113,101 +105,6 @@ from recommenditos.tracking import (
 #: than left hanging, and the retry budget `recommenditos.tracking` pins bounds
 #: what a refusal costs.
 UNREACHABLE_TRACKING_URI = "http://127.0.0.1:1/"
-
-
-# --------------------------------------------------------------------------
-# The fixture pipeline, and the four trained variants
-# --------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def matrices(tmp_path_factory, _generated_frame: pd.DataFrame) -> dict:
-    """The feature matrices and the make list, built from the synthetic fixture.
-
-    `validate-data` is skipped: it asserts the data's own expectations and writes
-    a summary nothing here reads, and `tests/test_pipeline.py` already runs it in
-    the chain.
-    """
-    root = tmp_path_factory.mktemp("model")
-    raw = root / "raw" / "listings.parquet"
-    raw.parent.mkdir(parents=True)
-    _generated_frame.to_parquet(raw, index=False)
-
-    processed = root / "processed"
-    features = processed / "features"
-    preprocess.main(raw, root / "interim" / "listings.parquet", PARAMS_FILE)
-    split_data.main(root / "interim" / "listings.parquet", processed, PARAMS_FILE)
-    for feature_set in _feature_sets():
-        build_features.main(feature_set, processed, features, PARAMS_FILE)
-    return {"root": root, "processed": processed, "features": features}
-
-
-@pytest.fixture(scope="session")
-def supported_makes(matrices: dict) -> tuple[str, ...]:
-    return read_supported_makes(matrices["processed"])
-
-
-@pytest.fixture(scope="session")
-def trained(matrices: dict) -> dict:
-    """Every variant of the real params.yaml, trained once, with tracking off.
-
-    The environment is cleared inside the fixture rather than by an autouse
-    monkeypatch, because a session fixture outlives a function-scoped one and
-    would otherwise inherit whatever `.env` the developer's machine has.
-    """
-    models = matrices["root"] / "models"
-    with pytest.MonkeyPatch.context() as environment:
-        for name in REQUIRED_ENV_VARS:
-            environment.delenv(name, raising=False)
-        for variant in _variants():
-            train.main(
-                variant, matrices["features"], models, PARAMS_FILE, matrices["root"] / "emissions"
-            )
-    return {
-        "dir": models,
-        "emissions": matrices["root"] / "emissions",
-        "models": {name: load_model(models / name) for name in _variants()},
-    }
-
-
-@pytest.fixture(scope="session")
-def test_frames(matrices: dict) -> dict:
-    """The test matrix per feature set, as `features` wrote it.
-
-    Already the population `evaluate` reports on, because the stage restricts
-    every frame to the makes the API serves (EDN-05), so a test that
-    scores a model here scores it on the same rows the stage would.
-    """
-    return {
-        feature_set: pd.read_parquet(matrices["features"] / feature_set / "test.parquet")
-        for feature_set in _feature_sets()
-    }
-
-
-@pytest.fixture(scope="session")
-def spaces(matrices: dict) -> dict:
-    return {
-        feature_set: FeatureSpace.load(
-            matrices["features"] / feature_set, name=f"features-{feature_set}"
-        )
-        for feature_set in _feature_sets()
-    }
-
-
-def _project_params() -> dict:
-    return load_params(PARAMS_FILE)
-
-
-def _variants() -> dict:
-    return _project_params()["train"]["variants"]
-
-
-def _feature_sets() -> list[str]:
-    return list(_project_params()["features"]["sets"])
-
-
-#: Every variant, so a parametrised test says which one failed in its own name.
-VARIANTS = tuple(_variants())
 
 
 # --------------------------------------------------------------------------
@@ -554,7 +451,7 @@ def test_predict_eur_does_not_raise_with_every_optional_field_absent(
     destroying the values in the rows beside it.
     """
     model = trained["models"][variant]
-    required = set(_project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
+    required = set(project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
     masked = model.mask_absent(
         test_frames[model.feature_set],
         [name for name in model.features if name not in required],
@@ -755,105 +652,6 @@ def test_a_prediction_that_would_overflow_is_bounded_to_the_training_range(
 
 
 # --------------------------------------------------------------------------
-# Behaviour: what moves a prediction, and what must not
-# --------------------------------------------------------------------------
-
-#: The variants that take mileage and age as numbers. `b0` is left out: its lookup
-#: has no mileage, and its two-year age bands leave most cars where they were.
-_LEARNED_VARIANTS = tuple(
-    name for name, settings in _variants().items() if settings["estimator"] != "median_baseline"
-)
-
-#: A realistic change whose effect on a price has a known sign, as (column, amount):
-#: about a year and a half of driving, and a first registration one year earlier.
-_DEPRECIATING_STEPS = {
-    "20000-km-more": ("mileage_km_raw", 20_000.0),
-    "a-year-older": ("age_years", 1.0),
-}
-
-
-def _assert_the_step_lowers_more_predictions_than_it_raises(
-    model: Model, frame: pd.DataFrame, step: str
-) -> None:
-    """Applied to every row of `frame`, `step` lowers more predictions than it raises.
-
-    On aggregate, because boosted trees are not monotone and a per-row assertion
-    would fail on a model that is right. A row that does not move counts for
-    neither side: a step that crosses no split of a tree changes nothing, and how
-    many rows that is depends on the fixture's draw, so a statistic that counted
-    them as not falling, as a median of the ratios does, could fail on a model
-    with no defect. A model that ignores the column still fails, on 0 > 0.
-    """
-    column, amount = _DEPRECIATING_STEPS[step]
-    before = model.predict_eur(frame).to_numpy()
-    after = model.predict_eur(frame.assign(**{column: frame[column] + amount})).to_numpy()
-    fell, rose = np.mean(after < before), np.mean(after > before)
-
-    assert fell > rose, (
-        f"{model.variant}: {step} lowers {fell:.1%} of the {len(frame)} predictions "
-        f"and raises {rose:.1%}"
-    )
-
-
-@pytest.mark.parametrize("step", list(_DEPRECIATING_STEPS))
-@pytest.mark.parametrize("variant", _LEARNED_VARIANTS)
-def test_more_mileage_or_age_lowers_more_predictions_than_it_raises(
-    variant: str, step: str, trained: dict, test_frames: dict
-):
-    """The direction the generator's price formula has is the one the fit learned."""
-    model = trained["models"][variant]
-
-    _assert_the_step_lowers_more_predictions_than_it_raises(
-        model, test_frames[model.feature_set], step
-    )
-
-
-@pytest.mark.parametrize("step", list(_DEPRECIATING_STEPS))
-@pytest.mark.parametrize("variant", _LEARNED_VARIANTS)
-def test_the_real_model_lowers_more_predictions_than_it_raises_too(variant: str, step: str):
-    """The same direction on the bundle `dvc pull` restores, over the real validation rows.
-
-    The fixture's price is a formula, so the test above shows that an estimator can
-    learn the direction and this one that the model we release did. It is the one
-    test of this module that reads `models/` and `data/`, and it is skipped where
-    they are absent, which includes CI.
-    """
-    matrix = PROCESSED_DATA_DIR / "features" / _variants()[variant]["feature_set"]
-    if not (MODELS_DIR / variant / MODEL_FILE).exists() or not matrix.exists():
-        pytest.skip("needs the real bundle and matrices, which `dvc pull` restores")
-
-    _assert_the_step_lowers_more_predictions_than_it_raises(
-        load_model(MODELS_DIR / variant), pd.read_parquet(matrix / "validation.parquet"), step
-    )
-
-
-@pytest.mark.parametrize("field", ["vin", "seller_group_id", "price", "log_price"])
-@pytest.mark.parametrize("variant", VARIANTS)
-def test_a_column_that_is_not_a_feature_cannot_move_the_prediction(
-    variant: str, field: str, trained: dict, test_frames: dict
-):
-    """An identifier or the label in the caller's frame changes no answer.
-
-    `price` and `log_price` are in every matrix, so a model that read one would be
-    scored on its own target. `vin` and `seller_group_id` are in none: the test
-    adds them, as a caller's frame taken from the raw file or a split might.
-    """
-    model = trained["models"][variant]
-    frame = test_frames[model.feature_set]
-    assert field not in model.features
-    # Another value in every row: a label that is in the frame is doubled, an
-    # identifier that is not is added, unique per row.
-    values = (
-        frame[field] * 2 if field in frame else [f"{field}-{row}" for row in range(len(frame))]
-    )
-
-    np.testing.assert_array_equal(
-        model.predict_eur(frame.assign(**{field: values})).to_numpy(),
-        model.predict_eur(frame).to_numpy(),
-    )
-
-
-# --------------------------------------------------------------------------
 # B0, whose arithmetic can be checked by hand
 # --------------------------------------------------------------------------
 
@@ -974,9 +772,9 @@ def test_training_is_reproducible(
     which is the promise that survives a different toolchain; this is the one
     that holds inside one.
     """
-    settings = _variants()[variant]
+    settings = train_variants()[variant]
     data = train.read_matrices(matrices["features"], settings["feature_set"], supported_makes)
-    seed = _project_params()["seed"]
+    seed = project_params()["seed"]
 
     again = fit_variant(variant, settings, data, seed=seed, num_threads=1)
     frame = test_frames[settings["feature_set"]]
@@ -997,7 +795,7 @@ def test_the_payload_of_a_refit_is_byte_identical(
     MLflow run id, which are provenance and cannot be stable. The estimator's own
     payload is what has to be, and it is the whole of the fitted model.
     """
-    for variant, settings in _variants().items():
+    for variant, settings in train_variants().items():
         data = train.read_matrices(matrices["features"], settings["feature_set"], supported_makes)
         digests = []
         for attempt in ("first", "second"):
@@ -1074,7 +872,7 @@ def test_a_lightgbm_record_says_early_stopping_ended_the_fit(trained: dict):
     """
     for variant in ("lgbm-basic", "lgbm-extended"):
         training = trained["models"][variant].metadata["training"]
-        settings = _variants()[variant]["params"]
+        settings = train_variants()[variant]["params"]
         assert training["early_stopped"] is True, variant
         assert (
             training["boosting_rounds"]
@@ -1114,7 +912,7 @@ def test_early_stopped_is_decided_by_the_patience_not_by_the_best_round(
     share, early_stopped = _PAST_THE_BEST_ROUND[case]
     for name in REQUIRED_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
-    params = _project_params()
+    params = project_params()
     settings = params["train"]["variants"]["lgbm-basic"]
     best = trained["models"]["lgbm-basic"].metadata["training"]["best_iteration"]
     budget = best + int(share * settings["params"]["early_stopping_rounds"])
@@ -1383,7 +1181,7 @@ def test_a_numeric_feature_complete_in_training_still_gets_an_indicator(
 
     model = fit_variant(
         "b1",
-        _variants()["b1"],
+        train_variants()["b1"],
         TrainingData(data.space, complete, data.validation, supported_makes),
         seed=1,
         num_threads=1,
@@ -1705,7 +1503,7 @@ def test_one_variant_is_one_run_that_evaluate_appends_to(
         assert appended.data.metrics["mdape"] == 0.25
         # A criterion nothing could measure is not recorded as a number.
         assert "sc04_measured" not in appended.data.metrics
-        experiment = client.get_experiment_by_name(_project_params()["train"]["mlflow_experiment"])
+        experiment = client.get_experiment_by_name(project_params()["train"]["mlflow_experiment"])
         assert len(client.search_runs([experiment.experiment_id])) == 1
     finally:
         mlflow.set_tracking_uri(before)
@@ -1746,7 +1544,7 @@ def _declared_train_params(variant: str) -> dict:
     parameter that changes the model without the run saying so.
     """
     stage = yaml.safe_load((PROJ_ROOT / "dvc.yaml").read_text(encoding="utf-8"))["stages"]["train"]
-    params = _project_params()
+    params = project_params()
     leaves: dict = {}
 
     def flatten(key: str, value) -> None:
@@ -2057,7 +1855,7 @@ def _api_request(model: Model, schema: Schema, frame: pd.DataFrame) -> dict:
     JSON, which is why this builds a dict instead of calling `Model.mask_absent`
     on a frame: the values have to survive the trip through `pd.DataFrame`.
     """
-    required = set(_project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
+    required = set(project_params()["evaluate"]["required_input_fields"]) | {"age_years"}
     row = {}
     for name in model.features:
         column = schema.column(name)
@@ -2872,7 +2670,7 @@ def test_sc06_is_not_measured_when_the_feature_set_leaves_nothing_optional(train
     # A feature set of required fields only. No scenario is built, not even the
     # all-at-once one, which would otherwise be a call that masked nothing and
     # reported a ratio of 1.0 as if the criterion had been checked.
-    params = _project_params()
+    params = project_params()
     fields = input_field_columns(trained["models"]["b0"], params)
     assert sc06_scenarios(fields, (), params) == ()
 
