@@ -28,7 +28,7 @@ The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from 
 
 The figures are estimates.
 On our laptops a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
-We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants; the fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
+We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants, before \texttt{lgbm-basic} got its copies (EDN-82); the fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
 We therefore use the figures to compare variants and not as absolute values.
 The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
@@ -38,16 +38,16 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
     \toprule
     & Fit time & Energy & Emissions (CO$_2$eq) \\
     \midrule
-    \texttt{b0} & 0.26\,s & 0.0010\,Wh & 0.18\,mg \\
-    \texttt{b1} & 2.93\,s & 0.0133\,Wh & 2.32\,mg \\
-    \texttt{lgbm-basic} & 12.42\,s & 0.0494\,Wh & 8.60\,mg \\
-    \texttt{lgbm-extended} & 42.37\,s & 0.1526\,Wh & 26.56\,mg \\
+    \texttt{b0} & 0.09\,s & 0.0003\,Wh & 0.06\,mg \\
+    \texttt{b1} & 2.05\,s & 0.0086\,Wh & 1.49\,mg \\
+    \texttt{lgbm-basic} & 18.98\,s & 0.0683\,Wh & 11.88\,mg \\
+    \texttt{lgbm-extended} & 30.53\,s & 0.1137\,Wh & 19.80\,mg \\
     \midrule
-    Whole ladder & 58.0\,s & 0.216\,Wh & 37.7\,mg \\
+    Whole ladder & 51.6\,s & 0.191\,Wh & 33.2\,mg \\
     Hyperparameter search, 34 fits, on another laptop & 391\,s & 3.61\,Wh & 628\,mg \\
     \bottomrule
   \end{tabular}
-  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-73). The ladder is the run of 2026-10-12, made while other work loaded the laptop; fit time and energy vary between runs, and the identical trees took 0.157\,Wh on 2026-10-06.}
+  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-73). The ladder is the run of 2026-10-13, one measurement per fit on a shared laptop, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82).}
   \label{tab:energy}
 \end{table}
 
@@ -59,21 +59,21 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 \end{figure}
 
 \paragraph{Feature sets.}
-\texttt{lgbm-extended} needs 3.1 times the energy of \texttt{lgbm-basic} for 0.55 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given (\cref{fig:energy}).
+\texttt{lgbm-extended} needs 1.7 times the energy of \texttt{lgbm-basic} for 0.48 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given (\cref{fig:energy}).
 The extended features therefore do not earn their energy, which together with SC-06 is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
-The whole ladder takes 58 seconds of fitting and 0.216\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
-By CodeCarbon's estimate the most expensive fit uses about 0.15\,Wh, so the energy of training does not limit our choices.
+The whole ladder takes 52 seconds of fitting and 0.191\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
+By CodeCarbon's estimate the most expensive fit uses about 0.11\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-73).
-The candidate runs 1.3 times the boosting rounds for 0.02 percentage points of test MdAPE, and the fit time grows linearly with the rounds.
+When we measured this, the candidate ran 1.3 times the boosting rounds for 0.02 percentage points of test MdAPE, and the fit time grows linearly with the rounds.
 We accepted this so that the validation split, and not a fixed ceiling, decides the size of the model.
 
 \paragraph{Hyperparameter search.}
 The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-73).
-That is about 17 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
+That is about 19 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
 
@@ -161,9 +161,9 @@ Behavioural tests check the trained models, with one test class for each of the 
     \midrule
     Minimum functionality & A car with a known price is priced within a factor of 1.5 of it. & Three common cars, requested with the required fields only, are within a factor of 1.35 of the median price of comparable listings. \\
     \addlinespace[2pt]
-    Invariance & A column that is not a feature leaves every prediction unchanged; 10\,km more moves at most 5\,\% of them by more than 1\,\%. & 10\,km more moves 2.8\,\% of the predictions of \texttt{lgbm-basic} by more than 1\,\%. \\
+    Invariance & A column that is not a feature leaves every prediction unchanged; 10\,km more moves at most 5\,\% of them by more than 1\,\%. & 10\,km more moves 3.4\,\% of the predictions of \texttt{lgbm-basic} by more than 1\,\%. \\
     \addlinespace[2pt]
-    Directional expectation & 20,000\,km more or one more year of age lowers more predictions than it raises; 20\,kW more raises more than it lowers. & 20,000\,km more lowers 92.5\,\% of the predictions of \texttt{lgbm-basic} and raises 7.0\,\%. \\
+    Directional expectation & 20,000\,km more or one more year of age lowers more predictions than it raises; 20\,kW more raises more than it lowers. & 20,000\,km more lowers 92.1\,\% of the predictions of \texttt{lgbm-basic} and raises 7.4\,\%. \\
     \bottomrule
   \end{tabularx}
   \caption{The behavioural tests of the trained models, by type.}

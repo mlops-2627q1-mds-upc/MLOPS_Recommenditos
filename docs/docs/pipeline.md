@@ -91,6 +91,12 @@ Five of those leaves are not measurements but provenance - `data_source` and eac
 Two stages iterate a mapping in `params.yaml` with `foreach`, so they are named after the item rather than its position: `features@basic`, `train@lgbm-extended`.
 Each declares only its own slice under `params:`, so changing one variant's hyperparameters retrains that variant and no other.
 
+`train` also declares the `request` block, which lists the fields FR-01 requires of a request, so that every other input field of a feature set is optional.
+A variant that names `blanked_copies` is fitted on its training rows plus copies of them with optional fields set to what an omitted field is, and the block says which fields those are.
+Today that is `lgbm-basic`, with one copy of every row that omits all six optional fields and one that omits a random subset, because a request carrying only the required fields was almost absent from its training rows ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+A stage's `params` cannot be conditional, so a change to the block retrains every variant, and those without copies refit to the same trees.
+`evaluate` reads the same block for the fields SC-06 masks, so the two stages cannot come to disagree about which fields are optional.
+
 `train` measures the energy of its fit with CodeCarbon and nothing else of the stage (issue #38).
 CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached so that a retrain's energy is in the pull request diff, and into the MLflow run beside the accuracy metrics `evaluate` appends.
 CodeCarbon appends to that file, and DVC deletes a stage's outputs before running it, so after `dvc repro` it holds exactly the one row of the fit that produced the model; a run outside DVC appends a row, and the model's `model.json` names its own by CodeCarbon's run id.
@@ -192,7 +198,7 @@ Three rules follow from it:
   Changing it reshuffles the sellers, so it is a new split, and every figure and any FR-15 comparison starts over.
   No seed is chosen for a better mix or a better number.
 - **A figure of the committed split is reported with its spread.**
-  The candidate's test MdAPE of 6.81 % comes with a standard deviation of 0.27 pp over the 20 other splits, and the 16.77 % of cars older than 20 years with their mean of 18.3 %.
+  The candidate's test MdAPE of 6.73 % comes with a standard deviation of 0.26 pp over the 20 other splits, and the 16.80 % of cars older than 20 years with their mean of 18.2 %.
 - **The script is re-run when what it measured changes**: the snapshot, the scope, the split ratios, or the candidate and its hyperparameters, because the spread is that model's on that pool.
 
 Data validation
@@ -240,7 +246,7 @@ Great Expectations would take that to 14 s and 4.4 GB by hashing the whole frame
 Parameters
 ----------
 
-Everything configurable lives in `params.yaml`: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the model variants and the thresholds behind SC-01 to SC-06.
+Everything configurable lives in `params.yaml`: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the request contract of FR-01, the model variants and the thresholds behind SC-01 to SC-06.
 Paths do not: they stay in `recommenditos/config.py`, derived from the repository root, so nothing in the project depends on a machine-specific absolute path.
 
 This is a deliberate improvement on the demo, which keeps the same settings as Python constants in `config.py`.
@@ -309,7 +315,8 @@ uv run python -m recommenditos.modeling.tune lgbm-extended \
 A sweep id is used once: a second run under it is refused when the MLflow experiment already holds runs tagged with it, which is also what an interrupted sweep leaves behind; rerun it under a fresh id.
 The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
 Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files.
-On the real snapshot `lgbm-basic`'s first grid repeats EDN-73's twelve fits, and it did when the search ran on 2026-10-06: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
+When the search ran on 2026-10-06, `lgbm-basic`'s first grid repeated EDN-73's twelve fits on the real snapshot: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
+A sweep of `lgbm-basic` run today fits it as the `train` stage does, with the blanked copies of EDN-82, so it would not repeat them.
 All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-73).
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:

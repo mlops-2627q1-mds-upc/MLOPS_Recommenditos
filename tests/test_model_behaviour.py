@@ -248,7 +248,7 @@ _NEGLIGIBLE_STEPS = {
 #: is a step function: a car standing on a split crosses it with one kilometre,
 #: so some predictions move whatever the fit. One percent is a seventh of the
 #: main model's median error. Measured on 2026-10-13 over the 8,859 real
-#: validation rows, ten kilometres move 2.8 % of the predictions of `lgbm-basic`
+#: validation rows, ten kilometres move 3.4 % of the predictions of `lgbm-basic`
 #: by more than that and 1.6 % of `lgbm-extended`'s.
 _UNMOVED_WITHIN = 0.01
 _MOVED_SHARE = 0.05

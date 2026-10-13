@@ -623,7 +623,7 @@ How to add an entry:
 
 ### EDN-32: The split is 60/10/10/20 by seller, with the snapshot date as seed
 
-> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept.
+> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept; spread re-measured 2026-10-13 (EDN-82).
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
@@ -637,8 +637,8 @@ How to add an entry:
   - A stratified-group split on `make`: better make balance, but about half of the existing rows change set when the `ES` listings join, which confounds FR-15's retrain comparison.
 - **Rationale:** SC-04 checks a segment only from 500 test rows, so the test share decides how many makes the quality gate covers.
   The seed is the snapshot date, so it is obviously not tuned.
-  Over 20 other splits the candidate's test MdAPE is 6.73 % on average, with a standard deviation of 0.27 pp, and SC-01 and SC-02 hold on all 20.
-  Cars older than 20 years miss SC-04 on all 20 as well, at 18.3 % on average, so that miss is no artefact of the draw.
+  Over 20 other splits the candidate's test MdAPE is 6.72 % on average, with a standard deviation of 0.26 pp, and SC-01 and SC-02 hold on all 20.
+  Cars older than 20 years miss SC-04 on all 20 as well, at 18.2 % on average, so that miss is no artefact of the draw.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found a coupling the ticket did not mention: the published per-make analysis assumed a 20 % test share while the split was still unpinned.

@@ -86,7 +86,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
   The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
   That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
-  Measured on 2026-10-12 ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.3 % on average for cars older than 20 years against 16.77 % on the committed one.
+  Measured on 2026-10-12, and again on 2026-10-13 for the candidate as EDN-82 trains it ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.2 % on average for cars older than 20 years against 16.80 % on the committed one.
   The split strategy is therefore decided: the seller-grouped hash split stays as it is, and its figures are reported with their spread over other splits.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
@@ -148,13 +148,13 @@ Experiment ladder (each step is one or more MLflow runs in the same experiment):
 Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 
 **Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
-Measured on the real snapshot on 2026-10-05 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-05, with early stopping deciding the tree count, EDN-73): step 1 12.16 %, step 2 9.52 %, step 3 6.81 %, step 4 6.26 %.
-So the extended feature set is worth 0.55 pp on a fully described car - and 2.04 pp *worse* than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 8.26 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+Measured on the real snapshot on 2026-10-13 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-05, with early stopping deciding the tree count, EDN-73, and step 3 on blanked copies of its training rows, EDN-82): step 1 12.16 %, step 2 9.52 %, step 3 6.73 %, step 4 6.26 %.
+So the extended feature set is worth 0.48 pp on a fully described car - and 3.44 pp *worse* than the basic set on a request carrying only the ten fields FR-01 requires (10.30 % against 6.86 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 The whole ladder fits in under a minute.
 Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-73), and `learning_rate` and `num_leaves` were searched and kept, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
 Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-73).
-The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so `params.yaml` and the committed metrics are unchanged.
+The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so the search changed neither `params.yaml` nor the committed metrics.
 Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
@@ -170,17 +170,14 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
 - `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.
   Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data, but almost absent from it.
 
-Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields.py`): native missing-value handling is not enough for a request with few optional fields.
-Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training rows.
-Trained on the listings plus two blanked copies of each, one with every optional field blanked and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 % and `lgbm-extended` at 7.14 % instead of 10.79 %, and neither loses measurably on a complete request (7.02 % against 6.96 %, and 6.29 % against 6.45 %).
-A cross-check written after that run (`reports/analysis/blanked_fields_crosscheck.py`) counts 324 of the 60,378 training rows with all six optional fields of the basic set empty and 5 with all 23 of the extended set, and a model fitted on the ten required columns alone reaches 7.06 %.
-So most of what the committed models lose on that request comes from how they were trained, not from the information they lack.
+Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields_results.txt`): native missing-value handling is not enough for a request with few optional fields.
+Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training split: 324 of its 60,378 served rows have all six optional fields of the basic set empty.
+Trained on the listings plus two blanked copies of each, one with every optional field omitted and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 %, and a complete request is not measurably worse (7.02 % against 6.96 %).
 
-**[open]:** whether the pipeline adopts the blanked copies, and for which variant.
-Under the rule fixed before the measurement no blanked `lgbm-extended` replaces the candidate: the best one beats `lgbm-basic` at every level of sparsity, but is worse on a request that gives exactly the basic set's six optional fields, 7.12 % against 6.96 %.
-That margin is thin: the per-point 95 % interval of the difference is +0.02 pp to +0.31 pp, and the simultaneous one includes zero.
-These are validation figures from one split and one fit per configuration; the test split is read once, by `dvc repro`, for a configuration that is adopted.
-Either way the outcome is bounded: SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
+**[decided]**, [EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the pipeline trains `lgbm-basic` on those copies, adopted by @lukas2510, the repository owner, on 2026-10-13 on that measurement.
+`lgbm-extended` is trained without them and does not become the candidate: with them it was worse than `lgbm-basic` on a request giving the basic set's six optional fields and no others (7.12 % against 6.96 %, a margin whose simultaneous 95 % interval includes zero), which the rule fixed before the measurement excludes.
+On the test split, read once for the adopted configuration, `lgbm-basic` answers the required-only request at 6.86 % instead of 8.26 % and SC-06 is at 1.02x instead of 1.21x.
+SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
 The exact window is defined in the [specification](specification.md) FR-09.
@@ -276,7 +273,6 @@ The first decision of M1, the project choice, is EDN-80: the used-car price comp
 **[open]**, to decide with the team:
 
 - Deduplication key.
-- Whether the pipeline trains the point model with blanked-out optional fields, and for which variant: measured in EDN-82, not adopted yet (section 4); the field list itself is settled in EDN-15.
 
 ## 9. Reference links
 
