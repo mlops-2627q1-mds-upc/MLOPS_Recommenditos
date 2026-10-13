@@ -171,7 +171,7 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
   Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data, but almost absent from it.
 
 Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields.py`): native missing-value handling is not enough for a request with few optional fields.
-Each optional field is often empty on its own, but a request carrying only the required fields is almost absent from the training rows.
+Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training rows.
 Trained on the listings plus two blanked copies of each, one with every optional field blanked and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 % and `lgbm-extended` at 7.14 % instead of 10.79 %, and neither loses measurably on a complete request (7.02 % against 6.96 %, and 6.29 % against 6.45 %).
 A cross-check written after that run (`reports/analysis/blanked_fields_crosscheck.py`) counts 324 of the 60,378 training rows with all six optional fields of the basic set empty and 5 with all 23 of the extended set, and a model fitted on the ten required columns alone reaches 7.06 %.
 So most of what the committed models lose on that request comes from how they were trained, not from the information they lack.

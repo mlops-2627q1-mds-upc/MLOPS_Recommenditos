@@ -1008,7 +1008,7 @@ How to add an entry:
   The same copies take `lgbm-basic` itself from 8.57 % to 7.19 % on the required-only request.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Used as input for further analysis
-- **Assessment of the AI contribution:** AI corrected the issue's premise: the fields are often empty singly, almost never together.
+- **Assessment of the AI contribution:** AI corrected the issue's premise: several fields are often empty singly, but almost never all together.
   It proposed configurations and rule and wrote the script.
   An independent agent's review before the fits extended the rule to every incomplete request, the condition that then failed.
   No person reviewed the protocol.
