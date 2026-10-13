@@ -31,7 +31,7 @@ N_TRIALS = 100
 N_SPLITS = 3
 CONTROL_FRACTION = 0.2
 ALPHAS = [0.05, 0.01, 0.005, 0.001]
-# `model` is excluded for the reason measured in EDN-26: 349 levels against these window sizes
+# `model` is excluded for the reason measured in EDN-14: 349 levels against these window sizes
 # leaves well under one expected observation per chi-square cell.
 DRIFT_FEATURES = [f for f in FEATURES if f != "model"]
 

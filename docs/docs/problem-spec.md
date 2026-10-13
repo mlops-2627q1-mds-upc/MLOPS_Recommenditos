@@ -23,11 +23,11 @@ It does not forecast future prices.
 ### In scope
 
 - **Used passenger cars only:** `offer_type = U`, not pre-registered, `vehicle_type = Car` ([EDN-04](#decision-records)).
-  The pre-registered filter can only read `is_preregistered`, whose `False` also covers "not stated", so a residual number of unmarked pre-registered listings stays in the training data ([EDN-24](#decision-records)).
+  The pre-registered filter can only read `is_preregistered`, whose `False` also covers "not stated", so a residual number of unmarked pre-registered listings stays in the training data ([EDN-04](#decision-records)).
 - **Supported makes:** makes with at least **300 listings** in the cleaned used-car data, counted after removing the `ES` holdout and before the split ([EDN-05](#decision-records)).
   The pipeline computes this list; it is not hard-coded.
   With the current data these are 11 makes covering 98.6 % of the used listings: BMW, Porsche, Mercedes-Benz, Audi, Alfa Romeo, Suzuki, Volvo, Honda, Hyundai, Aston Martin and Volkswagen.
-  The model is fitted and evaluated on these makes only, and every feature matrix - the `ES` holdout's included - holds no other, because the `features` stage restricts each frame before it decides any level or column ([EDN-48, EDN-67](#decision-records)).
+  The model is fitted and evaluated on these makes only, and every feature matrix - the `ES` holdout's included - holds no other, because the `features` stage restricts each frame before it decides any level or column ([EDN-05](#decision-records)).
   The split itself stays lossless, so the listings of the other makes are still in its frames.
 - **Markets:** the model is trained on 7 countries (DE, IT, NL, BE, AT, FR, LU), with the country as a feature.
   All `ES` listings are held out as the new-market drift scenario ([EDN-03](#decision-records), project brief section 3.2); they join the training data only after the drift is confirmed and the model is retrained.
@@ -36,7 +36,7 @@ It does not forecast future prices.
   That is the scenario rather than a bug - the model genuinely has never seen that market - and it is the treatment [EDN-18](#decision-records) requires of an unseen value, which is why the `features` stage logs a warning naming any column a split leaves entirely empty instead of dropping or renaming it.
 - **Price range used for training:** 500 EUR to 2M EUR; listings outside it are treated as data errors or collector outliers.
 - **Registration date up to the reference date:** 164 listings in the raw file are registered after the 2025-11-08 snapshot, which would give them a negative age.
-  114 of them are new cars and fall outside the used-car scope anyway; the 26 that survive the scope filters are treated as data errors and dropped ([EDN-22](#decision-records)).
+  114 of them are new cars and fall outside the used-car scope anyway; the 27 that survive the scope filters are treated as data errors and dropped.
 
 ### Out of scope
 
@@ -190,7 +190,7 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
   The reference run named this as the known risk of the basic feature set, with the extended features or a scope change for classic cars as the possible remedies.
   The pipeline has since measured the segment at 16.77 % for the candidate model over 784 test rows (18.3 % on average over 20 other splits, see the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)), and it has ruled the extended features out as the remedy: they make this segment 1.7 pp worse (18.45 %) while improving the pooled figure.
   The miss is accepted: SC-04 is recorded as missed, the 15 % threshold and the scope stay as they are, and the release gate stays closed on it ([EDN-62](#decision-records)).
-  The hyperparameter search kept the committed values, which leaves the figure unchanged ([EDN-78](#decision-records)), and the segment is over the bound on 20 of 20 other splits ([EDN-79](#decision-records)).
+  The hyperparameter search kept the committed values, which leaves the figure unchanged ([EDN-73](#decision-records)), and the segment is over the bound on 20 of 20 other splits ([EDN-32](#decision-records)).
   The [model card](model-card.md#bias-risks-and-limitations) states the limitation in full.
 - SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
   The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,889 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
@@ -199,19 +199,13 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 
 The choices behind this page are recorded in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md):
 
-- EDN-03: hold out AutoScout24 `ES` as the new-market drift scenario.
-- EDN-04: used cars only.
-- EDN-05: minimum listing support per make.
-- EDN-06: success criteria.
-- EDN-15: UC1 required fields and SC-06, the criterion for absent optional fields.
-- EDN-22: drop listings registered after the reference date.
-- EDN-23: read the condition flags as one-sided assertions.
-- EDN-24: keep the pre-registered exclusion despite the unreliable flag.
-- EDN-48: `split` records the supported-make list and stays a lossless partition; the stages that build model input apply it.
-- EDN-58: an unmeasured criterion blocks the gate rather than passing it.
-- EDN-59: SC-06 masks input fields rather than feature columns.
-- EDN-60: which segments SC-04 may gate on is enforced in code.
-- EDN-62: `lgbm-basic` is the candidate, and SC-04's miss on cars over 20 years is accepted.
-- EDN-67: the `features` stage applies the supported-make list to every frame, the `ES` holdout included, before the vocabulary is built.
-- EDN-78: the hyperparameter search keeps the committed LightGBM values.
-- EDN-79: the seller-grouped hash split stays, and its figures are reported with their spread over other splits.
+- EDN-03: the Spanish listings are held out as the new-market scenario.
+- EDN-04: the model covers used passenger cars only.
+- EDN-05: a make is supported from 300 listings.
+- EDN-06: a model is deployable only when it meets the success criteria.
+- EDN-15: `/predict` requires ten fields, with missing inputs bounded by SC-06.
+- EDN-23: condition flags are read as one-sided assertions.
+- EDN-32: the split is 60/10/10/20 by seller, with the snapshot date as seed.
+- EDN-58: an unmeasured success criterion blocks the release gate.
+- EDN-62: `lgbm-basic` is the candidate model.
+- EDN-73: hyperparameters change only under a written tuning protocol.

@@ -14,7 +14,7 @@ seed: 20251108
 
 # The snapshot date of the raw file. Age is this date minus `registration_date`
 # in training, and the request date in serving (problem-spec section 4).
-# Listings registered after it are dropped (EDN-22).
+# Listings registered after it are dropped.
 reference_date: "2025-11-08"
 
 download:
@@ -43,7 +43,7 @@ download:
 
 preprocess:
   # Scope: used passenger cars only (EDN-04). `is_preregistered` rows are
-  # excluded even though the flag is unreliable (EDN-24).
+  # excluded even though the flag is unreliable (EDN-04).
   offer_type: U
   vehicle_type: Car
   # Training price range in EUR. Below 500 the listings are placeholders and
@@ -165,7 +165,7 @@ features:
     - equipment_extra
     - equipment_safety
   # An equipment item becomes its own column only above this share of the
-  # training rows of the supported makes (EDN-67), so the matrix does not grow a
+  # training rows of the supported makes (EDN-05), so the matrix does not grow a
   # tail of near-constant columns. It keeps 133 of the 146 items those rows hold,
   # the same 133 as over every training row (2026-10-05).
   equipment_min_frequency: 0.01
@@ -183,7 +183,7 @@ features:
   #
   # Both values are coarse on purpose and the ladder is meant to sweep them: the
   # leading token names the body style for some makes and the engine letter for
-  # others, which merges heavily (EDN-41). The counts above are measured by
+  # others, which merges heavily. The counts above are measured by
   # reports/analysis/served_vocabulary.py; the merging and the rejected finer
   # alternatives are in the model card and in
   # reports/analysis/extended_features.py (2026-09-30).
@@ -238,7 +238,7 @@ train:
   # can honour: LightGBM silently uses what is available, so a 2-core runner asked
   # for 4 writes a different file than an 8-core laptop.
   #
-  # What that costs, and against what (EDN-53). Against a *pinned* 2 or 4 it is a
+  # What that costs, and against what. Against a *pinned* 2 or 4 it is a
   # real trade: measured on the real snapshot, `lgbm-extended` fits in a median
   # 18.3 s at 1 thread against 12.2 s at 4. Against the default this replaces -
   # every core, 8 on the machine measured - it is a gain: 18.3 s against 29.2 s,
@@ -248,7 +248,7 @@ train:
   # (0.33 s at 1 thread, 28.6 s at 8), because OpenMP's overhead dominates
   # whenever there is little work per thread.
   num_threads: 1
-  # How CodeCarbon measures the fit (NFR-10, issue #38, EDN-69). Only the fit is
+  # How CodeCarbon measures the fit (NFR-10, issue #38). Only the fit is
   # measured, and `recommenditos/modeling/energy.py` says what the figure is: on a
   # machine where RAPL is root-only, which is every Linux machine we train on, it
   # is CodeCarbon's estimate from the CPU's TDP and the process's CPU time plus a
@@ -286,7 +286,7 @@ train:
         alpha: 1.0
         # Levels below this many training rows share one "rare level" column
         # instead of getting a coefficient each, and an unseen level at serving
-        # time is encoded as that column where there is one (EDN-18, EDN-50). An
+        # time is encoded as that column where there is one (EDN-18). An
         # absolute row count rather than a share, so that what it means does not
         # change as the training set grows. Only the `ridge` variant has this: the
         # tree models handle a rare level natively (EDN-02).
@@ -300,7 +300,7 @@ train:
         # values seen exactly once. It is not a boundary: an infrequent group
         # already exists at 2, and at 5 only `model` and `fuel_category` have one
         # at all, so the other six categoricals encode an unseen value as all
-        # zeros (EDN-50 has the per-column measurement).
+        # zeros (the archived EDN-50 has the per-column measurement).
         min_category_rows: 5
     # Ladder step 3: the main model.
     lgbm-basic:
@@ -309,21 +309,21 @@ train:
       params:
         # Searched and kept, on evidence rather than by omission: a 12-point grid
         # of these two around their values is flat on the validation split, and no
-        # point of it is distinguishable from them (EDN-73,
+        # point of it is measurably better than them (EDN-73,
         # reports/analysis/tuning_sweep_results.txt). Issue #88's search repeated
         # that grid exactly and then swept `min_child_samples`, with the same
-        # verdict (EDN-78; MLflow sweeps 88-lgbm-basic-lr-leaves and
+        # verdict (EDN-73; MLflow sweeps 88-lgbm-basic-lr-leaves and
         # 88-lgbm-basic-min-child-samples). A new value goes through the
         # protocol in docs/docs/pipeline.md, "Tuning a hyperparameter", whose
-        # decision step is `python -m recommenditos.modeling.tune` (EDN-78).
+        # decision step is `python -m recommenditos.modeling.tune` (EDN-73).
         learning_rate: 0.05
         num_leaves: 63
         # `min_child_samples` is not named here on purpose: it is an optional key at
         # LightGBM's default of 20, which is what this variant fits with, and it is
-        # written here only if a search adopts another value (EDN-78); issue #88's
+        # written here only if a search adopts another value (EDN-73); issue #88's
         # search over 5, 10, 20, 50 and 100 kept 20.
         # A ceiling for early stopping, not a tree count: early stopping on the
-        # validation split decides how many trees the model keeps (EDN-70). At
+        # validation split decides how many trees the model keeps (EDN-73). At
         # 1,000 the ceiling decided instead, for both LightGBM variants. With no
         # ceiling in reach, early stopping chooses round 1,243 here and 1,647 for
         # `lgbm-extended` (reports/analysis/early_stopping_ceiling_results.txt,
@@ -350,9 +350,9 @@ train:
       estimator: lightgbm
       feature_set: extended
       params:
-        # As `lgbm-basic`, including the optional `min_child_samples`. EDN-73
-        # swept only `lgbm-basic`; issue #88's search swept this variant on its
-        # own feature set too and kept all three values (EDN-78; MLflow sweeps
+        # As `lgbm-basic`, including the optional `min_child_samples`. The first
+        # grid swept only `lgbm-basic`; issue #88's search swept this variant on its
+        # own feature set too and kept all three values (EDN-73; MLflow sweeps
         # 88-lgbm-extended-lr-leaves and 88-lgbm-extended-min-child-samples).
         learning_rate: 0.05
         num_leaves: 63

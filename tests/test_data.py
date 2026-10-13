@@ -39,12 +39,12 @@ def test_a_different_seed_gives_a_different_fixture():
 @pytest.mark.parametrize(
     ("description", "predicate"),
     [
-        # EDN-22: age would be negative for these.
+        # Age would be negative for these.
         (
             "registered after the snapshot",
             lambda f: pd.to_datetime(f.registration_date) > SNAPSHOT_DATE,
         ),
-        # EDN-22 again, from the other side: the bound is inclusive, and no body
+        # The same rule from the other side: the bound is inclusive, and no body
         # row can show it because they are all registered on the first of a month.
         (
             "registered on the snapshot",
@@ -180,7 +180,7 @@ def test_the_equipment_lists_are_repr_strings_and_never_null(raw_frame):
 def test_the_group_key_is_stable_and_carries_no_plaintext_seller_name(raw_frame):
     # Stable, so two runs group the same way (NFR-06), and no value is a name.
     # Not that a name cannot be recovered from a value: the hash is unsalted, so
-    # the published source file inverts it, which EDN-37 accepts and discloses
+    # the published source file inverts it, which EDN-20 accepts and discloses
     # rather than the code pretending otherwise.
     hashed = hash_seller_group(raw_frame)
 

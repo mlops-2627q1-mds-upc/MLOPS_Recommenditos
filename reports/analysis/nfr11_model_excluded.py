@@ -67,7 +67,7 @@ def main():
     es_api = es[es["make"].isin(supported)]
     rest_api = rest[rest["make"].isin(supported)]
 
-    # i.i.d. holdout, as EDN-14 option D defines the control
+    # i.i.d. holdout, as EDN-14 defines the control
     rng = np.random.default_rng(SEED)
     perm = rng.permutation(len(rest_api))
     n_control = int(CONTROL_FRACTION * len(rest_api))

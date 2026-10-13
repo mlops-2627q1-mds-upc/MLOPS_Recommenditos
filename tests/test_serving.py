@@ -120,7 +120,7 @@ def served(tmp_path_factory) -> dict:
     `preprocess`, `split` and `features` run as the pipeline runs them; the fit
     goes through `fit_variant` and `Model.save` rather than `train.main`, because
     `train` opens an MLflow run and MLflow is a pipeline package. The rows are
-    restricted to the supported makes the way `train` restricts them (EDN-48),
+    restricted to the supported makes the way `train` restricts them (EDN-05),
     so the bundles carry the same scope as a real one.
     """
     params = load_params(PARAMS_FILE)

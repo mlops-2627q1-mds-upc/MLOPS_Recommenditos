@@ -1,4 +1,4 @@
-"""How comparable the four sets are, and how much a reported number depends on the split (EDN-79).
+"""How comparable the four sets are, and how much a reported number depends on the split (EDN-32).
 
 The evidence behind issue #89, which asks whether the seller-grouped hash split should stay as it
 is. It measures; it does not choose. In particular **no seed is selected from anything below**: the

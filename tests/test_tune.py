@@ -1,4 +1,4 @@
-"""The hyperparameter search of issue #88 (EDN-78), and the optional `min_child_samples`.
+"""The hyperparameter search of issue #88 (EDN-73), and the optional `min_child_samples`.
 
 Two halves. The statistics - the paired bootstrap by seller group and the
 max-statistic simultaneous intervals - are checked on per-row errors built by
@@ -283,9 +283,9 @@ def test_the_reference_is_fitted_even_when_the_grid_leaves_it_out(processed: Pat
 def test_the_summary_run_carries_the_record_the_table_and_one_energy_row_per_fit(
     processed: Path, tmp_path: Path, store: str
 ):
-    """MLflow is a sweep's only store (EDN-78), so everything it found is an artifact there.
+    """MLflow is a sweep's only store (EDN-73), so everything it found is an artifact there.
 
-    The second grid of EDN-78 is the case run here: `min_child_samples` swept with
+    The second grid of issue #88's search is the case run here: `min_child_samples` swept with
     `learning_rate` fixed, so the reference is the fixed value at LightGBM's
     default of 20, a key `params.yaml` does not even name. Nothing is written
     into the repository's `reports/`, which the variants' energy CSVs share.

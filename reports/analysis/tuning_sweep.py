@@ -37,8 +37,8 @@ can make a later test number optimistic.
 
 Since issue #88 the seller-group join, the paired bootstrap and the max-statistic intervals live in
 `recommenditos/modeling/tune.py`, which runs the protocol's decision step for any grid and records
-every fit (EDN-78), and this script imports them. The computation is unchanged - the same draws
-from the same seed, the same arithmetic - so the results file below still reproduces (EDN-29).
+every fit (EDN-73), and this script imports them. The computation is unchanged - the same draws
+from the same seed, the same arithmetic - so the results file below still reproduces (EDN-14).
 
 Run from the repository root after `dvc pull`, with tracking off:
 

@@ -40,13 +40,13 @@ What a run does, in order:
 How the Markdown fields map onto the course's, since the two are not the same:
 
 * The course has no slot for alternatives, so, as reports/latex/README.md says,
-  they go into the rationale: first the alternatives with their pros and cons,
+  they go into the rationale: first the alternatives with the reason each lost,
   because the rationale argues in terms of them, then the rationale itself.
 * A block quote above an entry's fields is how the notebook records that a later
   entry amended this one or that its evidence was corrected. It becomes the
   entry's `note`, which edn.tex prints first, so a reader of the PDF sees that an
   entry was revised before reading what it decided.
-* A field the template does not define (EDN-59 has one) is appended to the field
+* A field the template does not define (an entry may have one) is appended to the field
   above it under its own label, so nothing in the source is dropped.
 * A field that holds only "-" is the template's "does not apply" and is left out.
 * `In LaTeX` is bookkeeping and is not rendered.
@@ -108,6 +108,12 @@ IN_LATEX_LABEL = "In LaTeX"
 #: The fields edn.tex refuses to build without, checked here as well so that the
 #: error names the entry in reports/edn.md rather than in a TeX log.
 REQUIRED_FIELDS = ("milestone", "participants", "decision", "rationale", "ai")
+
+#: The one hard limit reports/edn.md sets on an entry, in words, and the fields
+#: it counts besides the title and the note. The dates, names and labels of the
+#: other fields are not prose and do not count.
+WORD_CAP = 300
+COUNTED_FIELDS = ("decision", "alternatives", "rationale", "assessment", "aievidence", "evidence")
 
 #: The order of the keys in a generated file, which is the order edn.tex prints.
 OUTPUT_KEYS = (
@@ -945,6 +951,33 @@ def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> Transfer
     )
 
 
+def entry_words(entry: Entry) -> int:
+    """The words of an entry, counted as reports/edn.md says it counts them.
+
+    The title, the note and the text fields count. A word is what white space
+    separates, so a link counts by the words of its text: its target has no
+    space and adds none. Text in double quotes does not count, so that a rule
+    or a prompt quoted word for word does not push an entry over the cap.
+    """
+    lines = [entry.title, *entry.note]
+    for key in COUNTED_FIELDS:
+        lines += entry.fields.get(key, [])
+    for _label, markdown, _above in entry.extra_fields:
+        lines += markdown
+    text = re.sub(r'"[^"\n]*"', " ", "\n".join(lines))
+    return sum(1 for token in text.split() if re.search(r"[^\W_]", token))
+
+
+def over_the_cap(edn_md: Path = EDN_MD) -> list[str]:
+    """One line per entry longer than `WORD_CAP`; empty when every entry fits."""
+    entries = parse_notebook(edn_md.read_text(encoding="utf-8"))
+    return [
+        f"{entry.id} has {entry_words(entry)} words, and the limit is {WORD_CAP}"
+        for entry in entries
+        if not entry.is_reservation and entry_words(entry) > WORD_CAP
+    ]
+
+
 def check(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> list[str]:
     """What a transfer would change, as one line per file; empty when in sync."""
     target = plan(edn_md.read_text(encoding="utf-8"))
@@ -969,10 +1002,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.check:
             stale = check(args.edn_md, args.latex_dir)
+            too_long = over_the_cap(args.edn_md)
             if stale:
                 print("The LaTeX EDN is behind reports/edn.md; run `make edn` and commit:")
                 for line in stale:
                     print(f"  {line}")
+            if too_long:
+                print("reports/edn.md has an entry over its word limit; shorten it:")
+                for line in too_long:
+                    print(f"  {line}")
+            if stale or too_long:
                 return 1
             print("The LaTeX EDN is in sync with reports/edn.md.")
             return 0

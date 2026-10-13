@@ -1,4 +1,4 @@
-"""Where early stopping lands when `n_estimators` does not bind it (EDN-70, issue #64).
+"""Where early stopping lands when `n_estimators` does not bind it (EDN-73, issue #64).
 
 At `n_estimators: 1000` both LightGBM variants ran out of budget before early stopping fired, so
 the budget, not the validation curve, decided how many trees they kept. This script fits each
@@ -24,7 +24,7 @@ off, because nothing here belongs in the ladder's MLflow experiment:
 
 The fits run at `train.num_threads`, as the stage does, so the seconds are comparable with the
 stage's `fit_seconds`; like every fit time in this project they move with whatever else holds a
-core (EDN-53), and the ratios within one run are the measurement.
+core, and the ratios within one run are the measurement.
 """
 
 from pathlib import Path

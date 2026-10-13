@@ -5,8 +5,8 @@ that the model would never see them missing, and would therefore have no learned
 a request that omits them?
 
 Scope matches the evaluation protocol: used cars only (EDN-04), listings registered after the age
-reference date dropped (EDN-22), the training price range, deduplicated before any split, `ES` held
-out (EDN-03), and only makes with at least 300 listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-07), see the README.
+reference date dropped, the training price range, deduplicated before any split, `ES` held
+out (EDN-03), and only makes with at least 300 listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-25), see the README.
 """
 
 import sys
@@ -48,7 +48,7 @@ def load(path):
         & (~df["is_preregistered"].astype("boolean").fillna(False))
         & (df["vehicle_type"] == "Car")
     ]
-    # EDN-22: a registration date after the reference date makes age negative
+    # A registration date after the reference date makes age negative
     reg = pd.to_datetime(df["registration_date"], errors="coerce")
     post_snapshot = int((reg > SNAPSHOT).sum())
     df = df[~(reg > SNAPSHOT)]
@@ -75,7 +75,7 @@ def filled_pct(col):
 def main():
     df, raw_rows, post_snapshot = load(CSV)
     print(f"raw rows: {raw_rows:,}")
-    print(f"dropped, registered after the reference date (EDN-22): {post_snapshot:,}")
+    print(f"dropped, registered after the reference date: {post_snapshot:,}")
     print(f"scoped and deduplicated: {len(df):,}")
 
     train = df[df["country_code"] != "ES"]

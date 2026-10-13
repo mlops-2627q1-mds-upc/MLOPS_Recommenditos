@@ -4,9 +4,9 @@ Question: EDN-05 admits a make into scope at 300 listings, but SC-04 only checks
 it holds 500 test rows. Which supported makes are therefore never checked by the quality gate?
 
 Scope matches the evaluation protocol, problem specification sections 2 and 5: used cars only
-(EDN-04), listings registered after the age reference date dropped (EDN-22), the training price
+(EDN-04), listings registered after the age reference date dropped, the training price
 range, deduplicated before any split, `ES` held out (EDN-03), and only makes with at least 300
-listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-07), see the README.
+listings (EDN-05). The raw dataset is not in the repo (NFR-08, EDN-25), see the README.
 """
 
 import sys
@@ -43,7 +43,7 @@ def load(path):
         & (~df["is_preregistered"].astype("boolean").fillna(False))
         & (df["vehicle_type"] == "Car")
     ]
-    # EDN-22: a registration date after the reference date makes age negative
+    # A registration date after the reference date makes age negative
     reg = pd.to_datetime(df["registration_date"], errors="coerce")
     df = df[~(reg > SNAPSHOT)]
     df = df[(df["price"] >= PRICE_MIN) & (df["price"] <= PRICE_MAX)]

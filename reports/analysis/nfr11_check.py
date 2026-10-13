@@ -85,7 +85,7 @@ def load():
         & (~df["is_preregistered"].astype("boolean").fillna(False))
         & (df["vehicle_type"] == "Car")
     ]
-    # EDN-22: a registration date after the reference date makes age negative
+    # A registration date after the reference date makes age negative
     reg_scope = pd.to_datetime(df["registration_date"], errors="coerce")
     post_snapshot = int((reg_scope > SNAPSHOT).sum())
     df = df[~(reg_scope > SNAPSHOT)]

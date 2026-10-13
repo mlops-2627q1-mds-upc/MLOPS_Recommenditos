@@ -245,7 +245,7 @@ def test_the_model_artefact_never_lists_the_target_among_its_features(pipeline, 
 
 
 def test_the_reported_population_is_the_served_population(pipeline, params):
-    # EDN-48: the model is fitted on the makes the API answers, so the metrics
+    # EDN-05: the model is fitted on the makes the API answers, so the metrics
     # have to be computed over those rows and no others. Otherwise the numbers
     # describe a population the product does not serve and cannot be compared
     # with the reference values of problem-spec section 8, which are all
@@ -253,7 +253,7 @@ def test_the_reported_population_is_the_served_population(pipeline, params):
     # a property of the stages agreeing, not of one model.
     #
     # Counted on the test frame `split` wrote, which still holds every make,
-    # rather than on the matrix: `features` restricts the matrix (EDN-67), so the
+    # rather than on the matrix: `features` restricts the matrix (EDN-05), so the
     # matrix alone cannot show that anything was removed.
     supported = {
         entry["make"]
