@@ -438,7 +438,7 @@ Two things about it are worth knowing before the filter is believed, both checke
 - **The commit is the one the pipeline ran from, not the one that holds its lock.**
   `dvc repro` runs at a commit and its `dvc.lock` and metrics are committed after it, so the runs carry the commit they were made from, which is an earlier commit of the same branch than the one that records them: `30c1e6c` for this ladder, the commit before `64bca73`, which holds its lock.
   `tags.git_dirty` is `false` for all four: what DVC writes while it runs does not count as a change.
-  That commit is on the branch `feature/train-with-blanked-copies` and not on `main`, so after the squash merge it is reached through that branch's pull request (`git fetch origin pull/<n>/head`).
+  That commit is on the branch `feature/train-with-blanked-copies` and not on `main`, so after the squash merge it is reached through that branch's pull request (`git fetch origin pull/121/head`).
 - **The input tags are what ties a run to the committed lock.**
   For each of the four runs, every `train.deps.<path>` equals the hash the committed `dvc.lock` records for that dependency of `train@<variant>`, and every `evaluate.deps.<path>` the one under `evaluate`; `reports/analysis/run_provenance_check.py` checks that against the server, and its output is committed beside it.
   Runs from before 2026-10-05 carry a `dvc_lock_md5` tag instead, which never equals the lock that records them, and three of the four runs of the last ladder made before that date were tagged dirty only because DVC had rewritten `dvc.lock` under them.

@@ -158,7 +158,7 @@ b1: OK
 lgbm-basic: OK
 lgbm-extended: OK
 
-# Issue #116: the four runs of the dvc repro that trains lgbm-basic on blanked copies of its listings (EDN-82), made from the clean commit 30c1e6c
+# Issue #116 (PR #121): the four runs of the dvc repro that trains lgbm-basic on blanked copies of its listings (EDN-82), made from the clean commit 30c1e6c
 # with RECOMMENDITOS_REQUIRE_TRACKING=1; run 2026-10-13 on the commit that holds that run's dvc.lock (64bca73); exit status 0.
 
 HEAD 64bca732298aa166f544f34ccdca4afa7fbcd057, tree clean, MD5 of its dvc.lock 49b13a57de37be0528981b5ab5bc65f9

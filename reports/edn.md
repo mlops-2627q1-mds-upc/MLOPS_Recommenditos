@@ -1014,7 +1014,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, measured and recommended this option, which @lukas2510 took.
   Independent agents reviewed the protocol before the fits, adding the condition that excluded `lgbm-extended`, and the code before the pipeline run; no person did.
 - **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: measurement, three options, recommendation.
-- **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
+- **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), [PR #121](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/121), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
