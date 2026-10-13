@@ -35,8 +35,11 @@ import json
 from pathlib import Path
 
 from loguru import logger
+from matplotlib.axes import Axes
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
+from matplotlib.transforms import Bbox
 import typer
 
 from recommenditos import plots
@@ -79,6 +82,13 @@ _PERCENT = 100.0
 #: The figure's size in inches, which is the size the report prints it at: two
 #: thirds of the text width.
 _FIGURE_SIZE_IN = (4.2, 3.0)
+
+#: Closer than this, in percentage points, the dot sits inside the ring and the
+#: line between the two is hidden, so the pair's label says how far apart they are.
+_HIDDEN_BELOW_PP = 0.3
+#: How far a mark reaches from its centre, in points, for a label to stay clear of.
+_MARK_REACH_PT = 3.6
+_POINTS_PER_INCH = 72.0
 
 app = typer.Typer()
 
@@ -150,6 +160,63 @@ def write_table(path: Path, rows: list[dict]) -> None:
     logger.info(f"Wrote {len(rows)} row(s) to {path}.")
 
 
+def pair_label(variant: str, low: float, high: float | None) -> str:
+    """What a pair of points is called: its variant, and what its marks cannot show.
+
+    B0 reads three columns, all required, so its two points are one: the same
+    predictions and so exactly the same MdAPE. A variant trained to do without
+    its optional fields has two points so close that the dot sits inside the
+    ring. In both cases the pair has no visible line, and the label says why
+    rather than leaving a reader to look for a missing mark.
+    """
+    if high is None:
+        return variant
+    if high == low:
+        return f"{variant} (both)"
+    if abs(high - low) < _HIDDEN_BELOW_PP:
+        return f"{variant} ({abs(high - low):.2f} points apart)"
+    return variant
+
+
+def _label_pairs(axis: Axes, pairs: list[tuple[str, float, float, float | None]]) -> None:
+    """Name each pair over its upper mark, where the name crosses no mark and no line.
+
+    Centred over the mark first. Two variants of similar training cost stand
+    side by side, and a centred name would then run into the neighbour's line,
+    so the name is next tried ending at its mark and then starting at it. With
+    no free place it is centred, as a name on a line is still better than none.
+    The layout has to be final when this runs, because it measures the text.
+    """
+    renderer = axis.figure.canvas.get_renderer()
+    reach = _MARK_REACH_PT * axis.figure.dpi / _POINTS_PER_INCH
+    taken = []
+    for _, x, low, high in pairs:
+        ends = [axis.transData.transform((x, y)) for y in (low, high) if y is not None]
+        taken += [
+            Bbox.from_extents(cx - reach, cy - reach, cx + reach, cy + reach) for cx, cy in ends
+        ]
+        if len(ends) > 1:
+            taken.append(Bbox.from_extents(ends[0][0] - 1, ends[0][1], ends[0][0] + 1, ends[1][1]))
+    for text, x, low, high in pairs:
+        places = (("center", 0), ("right", 4), ("left", -4), ("center", 0))
+        for attempt, (alignment, shift_pt) in enumerate(places):
+            label = axis.annotate(
+                text,
+                (x, max(low, high or low)),
+                xytext=(shift_pt, 7),
+                textcoords="offset points",
+                ha=alignment,
+                fontsize=plots.LABEL_PT,
+                color=plots.INK,
+            )
+            box = label.get_window_extent(renderer)
+            last = attempt == len(places) - 1
+            if last or not any(box.overlaps(other) for other in taken):
+                taken.append(box)
+                break
+            label.remove()
+
+
 def figure_of(rows: list[dict]) -> Figure:
     """Energy on a log axis against MdAPE, two points per variant.
 
@@ -159,7 +226,8 @@ def figure_of(rows: list[dict]) -> Figure:
     the fields FR-01 requires. The second is what decided the candidate (EDN-62),
     and it is the one an efficiency question has to see, because training energy
     spent on optional columns is spent whether or not a caller sends them. Two
-    series, so a legend, above the axes; each pair is labelled with its variant once.
+    series, so a legend, above the axes; each pair is labelled with its variant
+    once (`pair_label`, `_label_pairs`).
 
     The two series differ in shape as well as in colour, a filled dot and an open
     ring, because the two colours print as the same grey. The ring is the larger
@@ -171,6 +239,9 @@ def figure_of(rows: list[dict]) -> Figure:
     title and is drawn at the size it is printed at.
     """
     figure = plots.new_figure(*_FIGURE_SIZE_IN)
+    # The names of the pairs are placed by their measured size, which needs a
+    # canvas that can render.
+    FigureCanvasAgg(figure)
     axis = figure.subplots()
     energy = [row["energy_wh"] for row in rows]
     full = [row["mdape"] * _PERCENT for row in rows]
@@ -204,20 +275,6 @@ def figure_of(rows: list[dict]) -> Figure:
         zorder=4,
         label="every field given",
     )
-    for row, x, low, high in zip(rows, energy, full, required, strict=True):
-        # B0 reads three columns, all required, so its two points are one: the same
-        # predictions and so exactly the same MdAPE. The label says so rather than
-        # leaving a reader to wonder why the pair has no line.
-        same = high == low
-        axis.annotate(
-            f"{row['variant']} (both)" if same else row["variant"],
-            (x, max(low, high or low)),
-            xytext=(0, 7),
-            textcoords="offset points",
-            ha="center",
-            fontsize=plots.LABEL_PT,
-            color=plots.INK,
-        )
     axis.set_xscale("log")
     axis.xaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:g}"))
     methods = sorted({str(row["cpu_power_method"]) for row in rows})
@@ -249,6 +306,13 @@ def figure_of(rows: list[dict]) -> Figure:
     plots.style_axes(axis)
     axis.margins(x=0.2, y=0.18)
     figure.tight_layout()
+    _label_pairs(
+        axis,
+        [
+            (pair_label(row["variant"], low, high), x, low, high)
+            for row, x, low, high in zip(rows, energy, full, required, strict=True)
+        ],
+    )
     return figure
 
 

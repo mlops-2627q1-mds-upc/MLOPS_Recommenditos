@@ -332,6 +332,40 @@ def test_a_label_too_long_for_one_line_keeps_its_value_on_a_second_line():
     assert box.x1 < bound_px(figure)
 
 
+def test_a_label_with_no_room_beside_its_dot_goes_under_it_with_its_value():
+    # Close to the line, with a neighbour on its left: no room beside the dot
+    # even on two lines. Under it is free, and the value stays.
+    levels = [
+        Level("age_bucket", "0-1", 4037, 5.0),
+        Level("age_bucket", "6-10", 3996, 13.3),
+        Level("age_bucket", "10-20", 2910, 14.0),
+        Level("make", "BMW", 7219, 6.0),
+    ]
+    figure = figure_of(levels, BOUND)
+    _, dot_y = figure.axes[0].transData.transform((14.0, 0))
+
+    box = label_boxes(figure)["10-20 years 14.0 %"]
+
+    assert box.y1 < dot_y, "the label is not under its dot"
+    assert box.x1 < bound_px(figure)
+
+
+def test_no_label_is_put_on_the_label_of_the_bound():
+    # A level just under the bound whose dot was moved to the upper lane of the
+    # top row: over it is the last place left, and that is where the bound's
+    # own label stands. It stays unlabelled rather than being written across it.
+    levels = [
+        Level("age_bucket", "6-10", 3996, 14.2),
+        Level("age_bucket", "10-20", 2910, 14.9),
+        Level("age_bucket", "over 20", 784, 15.1),
+        Level("make", "BMW", 7219, 6.0),
+    ]
+    boxes = label_boxes(figure_of(levels, BOUND))
+    bound_label = boxes.pop("SC-04 bound 15 %")
+
+    assert not [text for text, box in boxes.items() if box.overlaps(bound_label)]
+
+
 def test_a_label_with_no_free_place_for_its_value_keeps_its_name():
     # Too close to the line for its value, even on a second line, a neighbour
     # on its left, one in the lane over it, and no row under it: the name alone
@@ -660,3 +694,34 @@ def test_the_two_conditions_of_the_energy_figure_can_be_told_apart_without_colou
     assert filled.get_zorder() > ring.get_zorder()
     assert [float(y) for _, y in ring.get_offsets()] == pytest.approx([12.0, 8.3])
     assert [float(y) for _, y in filled.get_offsets()] == pytest.approx([12.0, 6.8])
+
+
+def test_a_pair_whose_marks_hide_their_distance_is_labelled_with_it():
+    # A dot inside its ring looks the same for "exactly equal" and for "almost
+    # equal", and neither shows a line. The label tells the two apart.
+    assert compare_energy.pair_label("b0", 12.16, 12.16) == "b0 (both)"
+    assert compare_energy.pair_label("lgbm-basic", 6.73, 6.86) == "lgbm-basic (0.13 points apart)"
+    assert compare_energy.pair_label("lgbm-extended", 6.26, 10.30) == "lgbm-extended"
+    assert compare_energy.pair_label("no-optional-field", 9.0, None) == "no-optional-field"
+
+
+def test_the_name_of_a_pair_does_not_run_into_its_neighbours_line():
+    # Two variants of similar training cost stand side by side, as the two
+    # LightGBM variants of the committed run do: centred over its mark, the name
+    # of the lower one would be struck through by the line of the other.
+    rows = [
+        energy_row("b0", 0.0003, 0.1216, 0.1216),
+        energy_row("lgbm-basic", 0.068, 0.0673, 0.0686),
+        energy_row("lgbm-extended", 0.114, 0.0626, 0.1030),
+    ]
+    figure = compare_energy.figure_of(rows)
+    axis = figure.axes[0]
+    renderer = figure.canvas.get_renderer()
+    names = {text.get_text(): text.get_window_extent(renderer) for text in axis.texts}
+    line_x, low_y = axis.transData.transform((0.114, 6.26))
+    _, high_y = axis.transData.transform((0.114, 10.30))
+
+    box = names["lgbm-basic (0.13 points apart)"]
+
+    assert low_y < box.y0 < high_y, "the name is not beside the neighbour's line"
+    assert box.x1 < line_x, "the name reaches the neighbour's line"

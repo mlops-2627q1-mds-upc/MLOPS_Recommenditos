@@ -931,8 +931,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/compare_energy.py
       hash: md5
-      md5: 870260cb355346f654d71959fcf71712
-      size: 11545
+      md5: 5af8d536a571ef83d01a869503b6c36b
+      size: 14319
     - path: recommenditos/modeling/energy.py
       hash: md5
       md5: 4181349a90c714fa292280207dcb90ee
@@ -1015,8 +1015,8 @@ stages:
       size: 1196
     - path: reports/figures/energy-vs-error.pdf
       hash: md5
-      md5: 95b13a8c9eac9fd724d0e4ac3c91ee37
-      size: 19276
+      md5: 7464de8df779891bd78ef70397d98551
+      size: 19321
   profile-data:
     cmd: python3 -m recommenditos.data.profile_data
     deps:
