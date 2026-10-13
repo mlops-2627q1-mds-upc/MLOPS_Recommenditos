@@ -124,7 +124,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-In CI it has 830 tests, of which 800 pass and 30 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+In CI it has 826 tests, of which 800 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
@@ -170,7 +170,7 @@ Behavioural tests check the trained models, with one test class for each of the 
   \label{tab:behavioural-tests}
 \end{table}
 
-Of the 68 cases, 42 run in CI on models trained from the synthetic data; the other 26 need the real models and their 8,859 validation rows and are skipped in CI.
+Of the 64 cases, 42 run in CI on models trained from the synthetic data; the other 22 need the real models and their 8,859 validation rows and are skipped in CI.
 
 \paragraph{Traceability.}
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).

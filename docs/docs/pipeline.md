@@ -57,7 +57,7 @@ The model tests check behaviour as well as the contract and the gate.
 | Type | What has to hold | Variants |
 |------|------------------|----------|
 | Minimum functionality (MFT) | A car whose price is known is priced within a factor of 1.5 of it. On the fixture that is three cars at the quartiles of its rows against the generator's formula, and on the real bundle a BMW 116, a BMW 320 and a Porsche 992, requested with the required fields alone, against the median price of comparable training listings. | `b1`, `lgbm-basic`, `lgbm-extended` |
-| Invariance (INV) | A column that is not a feature (`vin`, `seller_group_id`, the label itself) leaves every prediction bit-identical. 10 km more, or a first registration one day earlier, moves at most 5 % of the predictions by more than 1 %. | all four |
+| Invariance (INV) | A column that is not a feature (`vin`, `seller_group_id`, the label itself) leaves every prediction bit-identical. 10 km more moves at most 5 % of the predictions by more than 1 %, and so does a first registration one day earlier on the fixture, the only place it can move one: the real registration dates are a month apart. | all four |
 | Directional expectation (DIR) | 20,000 km more or a year of age lowers more predictions than it raises, and 20 kW more raises more than it lowers. | `b1`, `lgbm-basic`, `lgbm-extended` |
 
 The two bounds on a share are counted over all rows, because a boosted tree is a step function and not monotone row by row, and a row that does not move counts for neither side of a direction.

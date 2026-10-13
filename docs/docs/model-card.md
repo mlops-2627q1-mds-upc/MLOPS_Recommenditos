@@ -681,7 +681,7 @@ Explanations are part of the product, not an afterthought: every valuation ships
   The same tests hold every prediction bit-identical when a column that is not a feature changes (`vin`, `seller_group_id`, `price`, `log_price`).
 - **Behaviour under a negligible change:** a tree model is a step function, so a car standing on a split changes its price with one kilometre.
   10 km more moves 2.8 % of the 8,859 validation predictions of `lgbm-basic` by more than 1 % and 1.6 % of those of `lgbm-extended`, the largest move being 15 % for both, and the test bounds that share at 5 %.
-  A first registration one day earlier moves none, because the snapshot's registration dates are a month apart.
+  A first registration one day earlier moves none, because the snapshot's registration dates are a month apart, so the test asks that of the fixture-trained models only.
 - **A car whose price is known:** requested with the required fields alone, a BMW 116, a BMW 320 and a Porsche 992 are priced at 0.81, 0.97 and 1.02 times the median price of the comparable training listings by `lgbm-basic`, and at 0.74, 0.94 and 1.10 times by `lgbm-extended`.
   The test bounds the factor at 1.5 either way.
 

@@ -23,11 +23,8 @@ from recommenditos.config import METRICS_FILE, MODELS_DIR, PARAMS_FILE, PROJ_ROO
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
-from recommenditos.modeling import train
 from recommenditos.modeling.energy import EMISSIONS_DIR
-from recommenditos.modeling.model import load_model
 from recommenditos.pipeline import load_params
-from recommenditos.tracking import REQUIRED_ENV_VARS
 
 # MLflow's usage telemetry off for the whole suite. MLflow decides at import time
 # whether it runs under a test, from PYTEST_CURRENT_TEST, and imports during
@@ -274,6 +271,13 @@ def trained(matrices: dict) -> dict:
     monkeypatch, because a session fixture outlives a function-scoped one and
     would otherwise inherit whatever `.env` the developer's machine has.
     """
+    # Imported here and not at the top: these three pull in MLflow, LightGBM and
+    # scikit-learn, and every run would pay for that, also one of a single test
+    # file that trains nothing.
+    from recommenditos.modeling import train  # noqa: PLC0415
+    from recommenditos.modeling.model import load_model  # noqa: PLC0415
+    from recommenditos.tracking import REQUIRED_ENV_VARS  # noqa: PLC0415
+
     models = matrices["root"] / "models"
     with pytest.MonkeyPatch.context() as environment:
         for name in REQUIRED_ENV_VARS:

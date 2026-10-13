@@ -191,9 +191,9 @@ class TestMinimumFunctionality:
         """The generator's own formula is the known price, so nothing here is fitted.
 
         One car, of the make and model the frame holds most of, because a model
-        fitted on a few hundred rows answers a rare make by the draw: with every
-        row of the frame as the car, one of eight other generator seeds puts 7 %
-        of the rows beyond the factor with no defect in the model.
+        fitted on a few hundred rows answers a rare make by the draw: asked of
+        every row of the frame instead, this test fails under another generator
+        seed with no defect in the model.
         """
         model, frame = subject("fixture", variant)
         numbers = _FIXTURE_CARS[car]
@@ -217,6 +217,11 @@ class TestMinimumFunctionality:
         model, frame = subject("released", variant)
         given, known = _REAL_CARS[car]
         assert set(given) == _required_features()
+        # A level the model does not know is encoded as missing (EDN-18), so a
+        # misspelt one would price another car and say nothing.
+        for name, value in given.items():
+            levels = model.input_schema.column(name).levels
+            assert levels is None or value in levels, f"{name}: {value!r} is not a level"
 
         predicted = model.predict_eur(_smallest_request(model, frame.head(1).assign(**given)))
 
@@ -227,12 +232,14 @@ class TestMinimumFunctionality:
 # Invariance (INV): a change that must not matter
 # --------------------------------------------------------------------------
 
-#: A change too small to be worth money, as (column, amount): a test drive, and a
-#: first registration one day earlier. Power is not among them: one kilowatt is
-#: the resolution engine variants differ by, and the models price it.
+#: A change too small to be worth money, as (column, amount, sources): a test
+#: drive, and a first registration one day earlier. The day is asked of the
+#: fixture only, because the real snapshot's registration dates are a month apart
+#: and no real prediction can move. Power is not among them: one kilowatt is the
+#: resolution engine variants differ by, and the models price it.
 _NEGLIGIBLE_STEPS = {
-    "10-km-more": ("mileage_km_raw", 10.0),
-    "a-day-older": ("age_years", 1 / 365.25),
+    "10-km-more": ("mileage_km_raw", 10.0, SOURCES),
+    "a-day-older": ("age_years", 1 / 365.25, ("fixture",)),
 }
 
 #: A prediction within this share of where it was counts as not moved, and at most
@@ -241,8 +248,7 @@ _NEGLIGIBLE_STEPS = {
 #: so some predictions move whatever the fit. One percent is a seventh of the
 #: main model's median error. Measured on 2026-10-13 over the 8,859 real
 #: validation rows, ten kilometres move 2.8 % of the predictions of `lgbm-basic`
-#: by more than that and 1.6 % of `lgbm-extended`'s. A day moves none of them,
-#: because the snapshot's registration dates are a month apart.
+#: by more than that and 1.6 % of `lgbm-extended`'s.
 _UNMOVED_WITHIN = 0.01
 _MOVED_SHARE = 0.05
 
@@ -276,15 +282,17 @@ class TestInvariance:
             model.predict_eur(frame).to_numpy(),
         )
 
-    @pytest.mark.parametrize("step", list(_NEGLIGIBLE_STEPS))
     @pytest.mark.parametrize("variant", VARIANTS)
-    @pytest.mark.parametrize("source", SOURCES)
+    @pytest.mark.parametrize(
+        ("source", "step"),
+        [(source, step) for step, case in _NEGLIGIBLE_STEPS.items() for source in case[2]],
+    )
     def test_a_negligible_change_leaves_nearly_every_prediction_where_it_was(
-        self, source: str, variant: str, step: str, subject
+        self, source: str, step: str, variant: str, subject
     ):
         """Applied to every row, `step` moves at most 5 % of the predictions by over 1 %."""
         model, frame = subject(source, variant)
-        column, amount = _NEGLIGIBLE_STEPS[step]
+        column, amount, _ = _NEGLIGIBLE_STEPS[step]
 
         before = model.predict_eur(frame).to_numpy()
         after = model.predict_eur(frame.assign(**{column: frame[column] + amount})).to_numpy()
