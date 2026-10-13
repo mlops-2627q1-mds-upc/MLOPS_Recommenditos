@@ -95,6 +95,13 @@ class ModelError(ValueError):
     """A model bundle, or a frame handed to one, cannot be used as asked."""
 
 
+def _dtype_name(dtype) -> str:
+    """A dtype as an error message has to name it: two categoricals differ by their levels."""
+    if isinstance(dtype, pd.CategoricalDtype):
+        return f"a categorical over {len(dtype.categories)} level(s)"
+    return str(dtype)
+
+
 def _versions(*libraries: str) -> dict[str, str]:
     """The versions of the libraries whose output ends up in the bundle.
 
@@ -443,10 +450,11 @@ class Model:
             for name in self.columns_of(field):
                 if omitted[name].dtype != frame[name].dtype:
                     raise ModelError(
-                        f"column {name!r} of the frame is {frame[name].dtype} and the "
-                        f"contract's omitted value for it is {omitted[name].dtype}, so a "
-                        f"column omitted from some rows only would be neither. Conform the "
-                        f"frame to {self.variant!r}'s input schema before masking single rows."
+                        f"column {name!r} of the frame is {_dtype_name(frame[name].dtype)} and "
+                        f"the contract's omitted value for it is "
+                        f"{_dtype_name(omitted[name].dtype)}, so a column omitted from some "
+                        f"rows only would be neither. Conform the frame to {self.variant!r}'s "
+                        f"input schema before masking single rows."
                     )
                 masked[name] = masked[name].where(keep, omitted[name])
         return masked
