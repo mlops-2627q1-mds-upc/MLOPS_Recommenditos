@@ -25,8 +25,8 @@
     },
     "lgbm-basic": {
       "estimator": "lightgbm",
-      "mdape": 0.06807619451970763,
-      "within_20pct": 0.898093058733791,
+      "mdape": 0.06733805931326535,
+      "within_20pct": 0.8999237223493516,
       "gate_passed": false,
       "gate_blocked_by": "sc04 failed; sc05 unmeasured"
     },
