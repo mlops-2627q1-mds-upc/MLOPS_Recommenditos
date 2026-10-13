@@ -232,3 +232,11 @@ For every run it checks that each `train.deps.<path>` tag equals the `md5` the l
 It needs the tracking credentials in `.env`, `models/` from `dvc pull`, and a clean tree, and runs from the repository root: `uv run python reports/analysis/run_provenance_check.py`.
 `run_provenance_check_results.txt` holds its output section by section: against the runs `main`'s models pointed at before the fix (2026-10-05), against the four runs of the `dvc repro` that fix committed, and against the runs of the pipeline re-runs committed since, the last of which is the ladder `main` points at.
 A third, appended on 2026-10-06, checks the runs of the next committed `dvc repro`, issue #64's, which pass the same way.
+
+## Blanked-out optional fields in training (EDN-82, issue #116)
+
+`blanked_fields.py` measures whether training `lgbm-extended` on copies of the listings with optional fields blanked out removes its collapse on sparse requests, and what that costs on a complete request.
+Its docstring is the protocol: the seven configurations, the request levels, the comparison against `lgbm-basic` and the rule a configuration has to meet were all fixed in the commit that added the script, before any fit.
+It imports the `train` stage's fit, the seam's `mask_absent`, `evaluate`'s metrics and SC-06 sweep and the search's bootstrap, reads the `train` and `validation` matrices only, and logs every fit to the MLflow experiment `recommenditos-price-tuning` as sweep `116-blanked-fields`.
+It needs the tracking credentials in `.env`, the data and the models from `dvc pull`, and a clean tree, and runs from the repository root with its output written outside the repository first, as the docstring shows.
+`blanked_fields_results.txt` is the output of the run recorded in EDN-82.

@@ -2813,6 +2813,33 @@ How to add an entry:
 - **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95); `gh pr list --state merged --json number,author,mergedBy,reviews` and the branch protection of `main`, both read on 2026-10-12.
 - **In LaTeX:** yes
 
+### EDN-82: Blanked-out optional fields in training are measured under a rule fixed before the first fit
+
+- **Date:** 2026-10-13
+- **Milestone:** M3: Quality Assurance
+- **Activity / Topic:** Modelling Approach, Model Evaluation
+- **Participants:** @kadameit proposed it ([issue #116](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/116)); @lukas2510 decided to measure it and left the protocol to the AI
+- **Decision:** We measure whether training `lgbm-extended` on copies of the listings with optional fields blanked out removes its collapse on sparse requests, which is why `lgbm-basic` is the candidate ([EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around)).
+  The configurations, the scenarios and the rule a configuration has to meet were committed before the first fit, and the test split is not read.
+- **Alternatives considered:**
+  - **Option A (measured): train with blanked-out fields.**
+    One model for every request, and the UC2 interval models need the same masking; it multiplies the training rows and may cost accuracy on complete requests.
+  - **Option B: serve both models, routed by how full a request is.**
+    Never worse than either model, but two models in the image and a threshold to explain.
+  - **Option C: keep `lgbm-basic` without measuring.**
+    No work, but the project brief's open question on masking stays open.
+- **Rationale:** Single optional fields are empty in 1 % to 95 % of the 60,378 training rows, but all 23 are empty together in only 5, so a request with only the required fields lies outside what the model saw, and blanked copies put it inside.
+  A configuration qualifies only if it passes SC-06, is not measurably worse than `lgbm-basic` on the required-only request and is measurably better on the complete one, on the validation split, by the paired bootstrap of [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
+  The result and what follows from it are added here once measured.
+- **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI checked the issue's premise on the training rows and corrected it: the fields are often empty one at a time and almost never together.
+  It proposed the configurations and the rule and wrote the script.
+  An independent agent reviewed both before the fits; no person did.
+- **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: "validate that this is a good idea and how we best test it, then test it".
+- **Other evidence:** [`reports/analysis/blanked_fields.py`](analysis/blanked_fields.py); MLflow experiment `recommenditos-price-tuning`, sweep `116-blanked-fields`; [project brief](../docs/docs/project-brief.md), section 4.
+- **In LaTeX:** yes
+
 ## Template
 
 ```markdown
