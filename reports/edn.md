@@ -968,10 +968,10 @@ How to add an entry:
 
 ### EDN-81: Coding agents work under a written team rule
 
-- **Date:** 2026-09-29 (rule written down); review rule reworded on 2026-10-12, as a proposal
+- **Date:** 2026-09-29 (rule written down); review rule reworded on 2026-10-12 and confirmed on 2026-10-13
 - **Milestone:** Other (team process)
 - **Activity / Topic:** Use of AI Coding Agents, Code Review
-- **Participants:** @lukas2510 wrote the rule down and proposed the rewording, to be confirmed by the team at the laboratory session on 2026-10-13; no discussion of the rule by the other four members is on record
+- **Participants:** @lukas2510 wrote the rule down and proposed the rewording; the full team confirmed it at the laboratory session of 2026-10-13; no earlier discussion of the rule by the other four members is on record
 - **Decision:** Agents write and review most changes, people decide and are accountable, and no person signs off each pull request.
   The rule is one of four in the [working agreements](../docs/docs/scrum/working-agreements.md), and its review clause, reworded on 2026-10-12, reads: "Agent-written code goes through the same pull request as anything else. An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge. A person decides the questions that belong in the EDN and is accountable for the change."
 - **Alternatives considered:**

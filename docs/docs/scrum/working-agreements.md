@@ -35,10 +35,10 @@ We use AI coding agents on this project, and the course grades how we do it.
 - An agent works against a ticket that has a **local oracle**: tests or `dvc repro` that tell it
   whether it is done. A ticket without one is done by a person. Writing the oracle into the ticket
   is part of writing the ticket.
-- **[proposed]** Agent-written code goes through the same pull request as anything else.
+- **[decided]** Agent-written code goes through the same pull request as anything else.
   An independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge.
   A person decides the questions that belong in the EDN and is accountable for the change.
-  This wording was proposed by @lukas2510 on 2026-10-12 and is to be confirmed by the team at the lab on 2026-10-13.
+  This wording was proposed by @lukas2510 on 2026-10-12 and confirmed by the team at the lab on 2026-10-13.
 - The author of the pull request is responsible for its content, whoever or whatever typed it.
 - When an agent's claim decides something, it is checked before it is written down. Agents have
   reported numbers on this project that turned out to be wrong, and a wrong number in a
