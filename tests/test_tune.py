@@ -30,7 +30,13 @@ from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import read_supported_makes
 from recommenditos.modeling import tune
 from recommenditos.modeling.energy import read_record
-from recommenditos.modeling.model import ESTIMATORS, LightGBMModel, ModelError, fit_variant
+from recommenditos.modeling.model import (
+    ESTIMATORS,
+    LightGBMModel,
+    ModelError,
+    RequestContract,
+    fit_variant,
+)
 from recommenditos.modeling.train import read_matrices
 from recommenditos.modeling.tune import (
     ARTIFACT_PATH,
@@ -560,7 +566,12 @@ def test_the_command_line_reports_a_refused_sweep_and_exits_1():
 
 @pytest.fixture(scope="session")
 def basic_data(processed: Path):
-    return read_matrices(processed / "features", "basic", read_supported_makes(processed))
+    return read_matrices(
+        processed / "features",
+        "basic",
+        read_supported_makes(processed),
+        request=RequestContract.from_params(load_params(PARAMS_FILE)),
+    )
 
 
 def _lightgbm(**params) -> dict:

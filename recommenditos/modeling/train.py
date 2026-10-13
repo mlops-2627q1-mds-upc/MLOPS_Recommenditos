@@ -62,7 +62,9 @@ from recommenditos.modeling.energy import (
 from recommenditos.modeling.model import (
     ESTIMATORS,
     Model,
+    RequestContract,
     TrainingData,
+    blanked_copy_counts,
     fit_variant,
     load_model,
 )
@@ -84,9 +86,17 @@ app = typer.Typer()
 
 
 def read_matrices(
-    input_dir: Path, feature_set: str, supported_makes: tuple[str, ...]
+    input_dir: Path,
+    feature_set: str,
+    supported_makes: tuple[str, ...],
+    *,
+    request: RequestContract | None = None,
 ) -> TrainingData:
     """The two matrices a fit may read, checked to hold only the supported makes.
+
+    `request` travels with them, untouched: it is what tells a variant that adds
+    blanked copies of its training rows which fields a copy may omit (EDN-82),
+    and a caller that fits no such variant may leave it out.
 
     The contract comes from the artefact beside the matrices rather than from
     `features.sets`: the equipment multi-hot columns and every category's levels
@@ -120,6 +130,7 @@ def read_matrices(
         train=frames[TRAIN_SPLIT],
         validation=frames[VALIDATION_SPLIT],
         supported_makes=supported_makes,
+        request=request,
     )
 
 
@@ -134,6 +145,10 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     the Ridge's `alpha` never share one. The exception is `train.mlflow_experiment`,
     which is recorded as what it is, the experiment the run belongs to, rather
     than repeated as a parameter of every run in it.
+
+    `n_train_rows` is the listings the variant was fitted on. A variant that adds
+    blanked copies of them (EDN-82) logs how many under `blanked_copies.*`, and
+    the rows its estimator saw are `n_fit_rows` in `model.json`.
 
     `num_threads` is logged although the trees do not depend on it, because
     LightGBM writes it into `booster.txt` (EDN-53), so it changes the artefact
@@ -162,6 +177,19 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
         "n_train_rows": len(data.train),
         "n_validation_rows": len(data.validation),
         "n_supported_makes": len(data.supported_makes),
+        # The copies of its training rows the fit added (EDN-82), at zero for a
+        # variant that names none, so every run of the ladder says which it is.
+        **{
+            f"blanked_copies.{kind}": count
+            for kind, count in blanked_copy_counts(variant, settings).items()
+        },
+        # The request contract, under the keys `dvc.yaml` declares it by. It
+        # decides which fields a blanked copy omits, so it can change the model.
+        "evaluate.required_input_fields": list(params["evaluate"]["required_input_fields"]),
+        **{
+            f"evaluate.input_field_to_feature.{field}": feature
+            for field, feature in params["evaluate"]["input_field_to_feature"].items()
+        },
         # The optional keys at the value the fit used, so a run whose params block
         # leaves `min_child_samples` out still records the 20 it was fitted with,
         # and a pipeline run lines up column for column with a search run (EDN-78).
@@ -250,7 +278,15 @@ def main(
     # so that a test - and a `dvc repro` of a stage whose paths were redirected -
     # cannot read the make list of one run against the matrices of another.
     supported_makes = read_supported_makes(input_dir.parent)
-    data = read_matrices(input_dir, settings["feature_set"], supported_makes)
+    # The contract goes with the matrices whether or not this variant adds blanked
+    # copies of its training rows (EDN-82): which fields a copy may omit is FR-01's
+    # to say, and a fit that needs to know and was not told refuses to guess.
+    data = read_matrices(
+        input_dir,
+        settings["feature_set"],
+        supported_makes,
+        request=RequestContract.from_params(params),
+    )
 
     with optional_run(params["train"]["mlflow_experiment"], variant) as run:
         # The measured section: the fit, and nothing else. `fit_variant` is the

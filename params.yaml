@@ -306,6 +306,23 @@ train:
     lgbm-basic:
       estimator: lightgbm
       feature_set: basic
+      # Copies of every training row the fit adds, with optional input fields set
+      # to what an omitted field is (EDN-82): one with all of them omitted, which
+      # is the request that carries only what FR-01 requires, and one with a
+      # random subset omitted. Almost no listing leaves every optional field empty
+      # at once, 324 of the 60,378 training rows, so without the copies that
+      # request lies outside what the model saw. Measured on the validation split,
+      # they take its MdAPE there from 8.57 % to 7.19 % and cost nothing
+      # measurable on a complete request, and more copies gained nothing
+      # (reports/analysis/blanked_fields_results.txt). A key left out is no copy
+      # of that kind, and a variant that names no block is fitted on its rows alone.
+      #
+      # `lgbm-extended` names none. With the same copies it is better than this
+      # variant on most requests, but not on one that gives exactly this variant's
+      # six optional fields, which the rule fixed before the measurement excludes.
+      blanked_copies:
+        all: 1
+        random: 1
       params:
         # Searched and kept, on evidence rather than by omission: a 12-point grid
         # of these two around their values is flat on the validation split, and no

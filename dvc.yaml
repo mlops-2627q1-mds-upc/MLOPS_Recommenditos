@@ -265,6 +265,14 @@ stages:
         - train.num_threads
         - train.energy
         - train.variants.${key}
+        # The request contract, which this stage reads beside `evaluate`: it says
+        # which input fields are optional, and those are what a variant that
+        # names `blanked_copies` omits in the copies of its training rows
+        # (EDN-82). A stage's params cannot be conditional, so a change to either
+        # key retrains every variant, also the ones that add no copy and refit to
+        # the same trees.
+        - evaluate.required_input_fields
+        - evaluate.input_field_to_feature
       outs:
         - models/${key}
         - reports/emissions/${key}.csv:

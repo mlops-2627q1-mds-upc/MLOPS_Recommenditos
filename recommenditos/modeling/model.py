@@ -34,8 +34,8 @@ that raised would then make the criterion read as measurable. The absence is
 pinned by a test now, before the check that will depend on it exists.
 """
 
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from importlib.metadata import version as distribution_version
 import json
@@ -119,6 +119,36 @@ def _versions(*libraries: str) -> dict[str, str]:
 
 
 @dataclass(frozen=True)
+class RequestContract:
+    """What FR-01 says a request carries, in the two facts a model's fields are read by.
+
+    `required_fields` are the input fields `/predict` refuses a request without
+    (EDN-15), and `field_to_feature` names the matrix column of an input field
+    that reaches the model under another name: a request carries
+    `registration_date` and the matrix the derived `age_years`. Every other field
+    of a feature set is optional, which is what SC-06 masks and what a fit blanks
+    in the copies it adds (EDN-82).
+
+    The seam itself knows only the matrix and never reads this from
+    `params.yaml`: a stage that has a view on requests builds the contract and
+    hands it over, to `evaluate`'s masking sweep or to a fit through
+    `TrainingData`. `from_params` is the one place that says where `params.yaml`
+    keeps the two facts, so that the stages cannot come to read them from two.
+    """
+
+    required_fields: tuple[str, ...]
+    field_to_feature: Mapping[str, str]
+
+    @classmethod
+    def from_params(cls, params: Mapping) -> "RequestContract":
+        block = params["evaluate"]
+        return cls(
+            required_fields=tuple(block["required_input_fields"]),
+            field_to_feature=dict(block["input_field_to_feature"]),
+        )
+
+
+@dataclass(frozen=True)
 class TrainingData:
     """The frames a fit sees, the contract they were written against, and the scope.
 
@@ -130,12 +160,18 @@ class TrainingData:
     serves and `train` checks that it did (EDN-48, EDN-67), and the list has to
     reach the model bundle so that the API answers FR-04's scope check from the
     model it is serving.
+
+    `request` is what tells a fit which of its fields a request may leave out.
+    Only a variant that adds blanked copies of its training rows reads it
+    (EDN-82), so it may be absent for any other, and `fit_variant` refuses a
+    variant that needs it and was not given it.
     """
 
     space: FeatureSpace
     train: pd.DataFrame
     validation: pd.DataFrame
     supported_makes: tuple[str, ...]
+    request: RequestContract | None = None
 
 
 # --------------------------------------------------------------------------
@@ -322,11 +358,14 @@ class Model:
             )
         return columns
 
-    def mask_absent(self, frame: pd.DataFrame, fields: Iterable[str]) -> pd.DataFrame:
+    def mask_absent(
+        self, frame: pd.DataFrame, fields: Iterable[str], *, where: np.ndarray | None = None
+    ) -> pd.DataFrame:
         """`frame` with every column of `fields` set to what an omitted field is.
 
         The single implementation of "the caller did not send this", for SC-06's
-        masking sweep, the API's partial-request path and the tests alike. It is
+        masking sweep, the API's partial-request path, the blanked copies a fit
+        adds to its training rows (EDN-82) and the tests alike. It is
         shared because no one value is right for all four dtypes:
 
         - a `bool` assertion flag becomes `False`. A tick is evidence and an empty
@@ -350,10 +389,24 @@ class Model:
         back into `pd.NA` - so the field arrives as absent rather than empty, which
         is the one thing this method exists to decide, and nothing says a word.
 
+        `where` narrows it to single cells: a boolean array with one row per row
+        of `frame` and one column per field, in the order of `fields`, and a field
+        is omitted from a row only where it is true. Left out, every field is
+        omitted from every row. So a request that carries some optional fields
+        and not others is built by the same method that builds one carrying
+        none, and a cell is either the frame's own value or the omitted one.
+
         `frame` is not mutated.
         """
+        fields = tuple(fields)
+        if where is not None and where.shape != (len(frame), len(fields)):
+            raise ModelError(
+                f"`where` has the shape {where.shape} for {len(frame)} row(s) and "
+                f"{len(fields)} field(s). It needs one row per row of the frame and one "
+                f"column per field, in the order of `fields`."
+            )
         masked = frame.copy()
-        for field in fields:
+        for position, field in enumerate(fields):
             for name in self.columns_of(field):
                 column = self.input_schema.column(name)
                 if column.dtype == "bool":
@@ -364,6 +417,16 @@ class Model:
                     masked[name] = pd.Categorical([None] * len(masked), categories=column.levels)
                 else:
                     masked[name] = np.nan
+                if where is not None:
+                    keep = pd.Series(~where[:, position].astype(bool), index=frame.index)
+                    masked[name] = frame[name].where(keep, masked[name])
+                    if masked[name].dtype != frame[name].dtype:
+                        raise ModelError(
+                            f"omitting {name!r} from some rows turned the column from "
+                            f"{frame[name].dtype} into {masked[name].dtype}, so the frame "
+                            f"left the contract. Conform the frame to {self.variant!r}'s "
+                            f"input schema before masking it."
+                        )
         return masked
 
     # -- prediction ---------------------------------------------------------
@@ -1017,6 +1080,199 @@ class LightGBMModel(Model):
 
 
 # --------------------------------------------------------------------------
+# What an input field is, for a model and a request contract
+#
+# Here rather than in `evaluate.py` because two stages ask: `evaluate` masks the
+# optional fields for SC-06, and a fit blanks them in the copies it adds
+# (EDN-82). One derivation, so the two cannot disagree about what is optional.
+# --------------------------------------------------------------------------
+
+
+def input_field_columns(model: Model, request: RequestContract) -> dict[str, tuple[str, ...]]:
+    """Every API input field of this model's feature set, and the columns it produced.
+
+    SC-06 masks *input fields*, not feature columns, because FR-01 is a statement
+    about a request: one equipment field becomes many multi-hot columns, so a
+    column-wise sweep would mask a single equipment item, which is not a request
+    the API can make; and `registration_date` becomes the derived `age_years`, so
+    a naive set difference against the required fields would make the most
+    important feature in the model look optional.
+
+    This function answers only *which fields exist*. What each one expands to is
+    `Model.columns_of`, so there is one derivation of "which columns did masking
+    this field mask" rather than two that can disagree. Which columns an equipment
+    field produced is what the training rows decided, so neither half can come
+    from params.yaml.
+    """
+    derived = dict(request.field_to_feature)
+    conflicting = sorted(set(derived) & set(model.features))
+    if conflicting:
+        raise ValueError(
+            f"evaluate.input_field_to_feature maps {', '.join(conflicting)} to another column "
+            f"while {model.variant!r} also consumes a column of that name. One input field "
+            f"would then claim two unrelated columns and masking it would mask both."
+        )
+    source_of = {
+        equipment_feature_name(source, item): source
+        for source, items in model.space.vocabulary.equipment.items()
+        for item in items
+    }
+    field_of_derived = {feature: field for field, feature in derived.items()}
+
+    fields: list[str] = []
+    for column in model.features:
+        claims = {source_of.get(column), field_of_derived.get(column)} - {None}
+        if len(claims) > 1:
+            raise ValueError(
+                f"column {column!r} is claimed by two input fields ({', '.join(sorted(claims))}), "
+                f"so masking either would mask a column the other owns. "
+                f"evaluate.input_field_to_feature names a column an equipment field produced."
+            )
+        field = claims.pop() if claims else column
+        if field not in fields:
+            fields.append(field)
+
+    absent = [field for field in request.required_fields if field not in fields]
+    if absent:
+        raise ValueError(
+            f"{model.variant!r} consumes no column for the required input field(s) "
+            f"{', '.join(absent)}. FR-01 refuses a request that omits one, so the required "
+            f"list and the trained model disagree about what a valuation needs; either the "
+            f"feature set or evaluate.required_input_fields is wrong."
+        )
+    # The seam expands a field into its columns; this function only renames the
+    # one field whose column has a different name first. `columns_of` knows the
+    # equipment vocabulary and nothing about the rename, so asking it for
+    # `registration_date` raises - the model consumes `age_years`. The rename is
+    # the contract's business and the expansion is the model's, and keeping them
+    # in that order is what stops this from becoming a second expansion.
+    return {field: model.columns_of(derived.get(field, field)) for field in fields}
+
+
+def optional_input_fields(
+    fields: Mapping[str, tuple[str, ...]], request: RequestContract
+) -> tuple[str, ...]:
+    """The input fields FR-01 leaves optional, which is what SC-06 masks (EDN-15)."""
+    return tuple(sorted(set(fields) - set(request.required_fields)))
+
+
+def seam_names(fields: Mapping[str, tuple[str, ...]], request: RequestContract) -> dict[str, str]:
+    """Each request field under the name `Model.columns_of` knows it by.
+
+    The same rename `input_field_columns` applies, in the same direction and from
+    the same contract: the seam knows the equipment vocabulary and not the
+    request, so it cannot answer for `registration_date`.
+    """
+    return {field: request.field_to_feature.get(field, field) for field in fields}
+
+
+def optional_seam_fields(model: Model, request: RequestContract) -> tuple[str, ...]:
+    """Every optional input field of `model`, as `Model.mask_absent` takes them.
+
+    Omitting all of them is the request that carries only what FR-01 requires:
+    SC-06's all-at-once scenario, and the `all` copy of a training row.
+    """
+    fields = input_field_columns(model, request)
+    seam = seam_names(fields, request)
+    return tuple(seam[field] for field in optional_input_fields(fields, request))
+
+
+# --------------------------------------------------------------------------
+# Blanked copies of the training rows (EDN-82)
+# --------------------------------------------------------------------------
+
+#: The keys of a variant's `blanked_copies` block: how many copies of every
+#: training row the fit adds with all optional fields omitted, and how many
+#: with a random subset omitted. A key left out is no copy of that kind.
+BLANKED_COPY_KINDS: tuple[str, ...] = ("all", "random")
+
+#: The stream the random copies are drawn from, beside the project seed, so that
+#: they do not share draws with anything else the seed feeds. It is the number
+#: of the issue that measured the copies, and it is what makes the copies of a
+#: pipeline fit the ones that measurement fitted on.
+_BLANKING_STREAM = 116
+
+
+def with_blanked_copies(
+    seam: Model,
+    frame: pd.DataFrame,
+    fields: Sequence[str],
+    *,
+    copies: Mapping[str, int],
+    seed: int,
+) -> pd.DataFrame:
+    """`frame`, followed by copies of its rows with some of `fields` omitted.
+
+    `copies` is the number of copies per kind, as `blanked_copy_counts` reads a
+    variant's block: `all` and `random`, and a kind left out is none.
+
+    Why a fit wants them: every optional field is sometimes empty in the
+    listings, but almost no listing leaves all of them empty at once, so a
+    request carrying only the fields FR-01 requires lies outside what the model
+    saw, and its error there is the model's own doing rather than the price of
+    the missing information (EDN-82). A copy shows the model that request.
+
+    An `all` copy omits every field, which is exactly that request. A `random`
+    copy omits a random subset: its size is drawn uniformly from one to all of
+    the fields and the fields at random, so every level of sparsity is covered
+    equally. Each copy keeps every other column of its row, the target included.
+
+    "Omitted" is `Model.mask_absent`'s meaning of it, cell by cell, so a copy
+    is a row the API could be sent. The rows of `frame` come first and are not
+    changed; the index of the result is a fresh range.
+    """
+    rng = np.random.default_rng([seed, _BLANKING_STREAM])
+    fields = tuple(fields)
+    n_rows, n_fields = len(frame), len(fields)
+    frames = [frame]
+    for _ in range(copies.get("all", 0)):
+        frames.append(seam.mask_absent(frame, fields))
+    for _ in range(copies.get("random", 0)):
+        sizes = rng.integers(1, n_fields + 1, size=n_rows)
+        # The rank of a row's uniform draws is a random order of its fields, so
+        # "rank below the size" picks exactly `size` of them.
+        rank = rng.random((n_rows, n_fields)).argsort(axis=1).argsort(axis=1)
+        frames.append(seam.mask_absent(frame, fields, where=rank < sizes[:, None]))
+    if len(frames) == 1:
+        return frame
+    return pd.concat(frames, ignore_index=True)
+
+
+def blanked_copy_counts(variant: str, settings: Mapping) -> dict[str, int]:
+    """The `blanked_copies` block of a variant as a count per kind, zero where unnamed.
+
+    A variant that does not name the block adds no copy, so its fit is the one
+    it was before the block existed. A key the fit does not know, and a count
+    that is not a whole number of copies, are refused rather than read as zero:
+    a copy somebody asked for and nobody added would otherwise be found in a
+    metric, if at all.
+    """
+    block = settings.get("blanked_copies", {})
+    counts = dict.fromkeys(BLANKED_COPY_KINDS, 0)
+    problems = []
+    if not isinstance(block, Mapping):
+        problems.append(f"is {block!r}, not a mapping")
+    else:
+        unknown = sorted(set(block) - set(BLANKED_COPY_KINDS), key=str)
+        if unknown:
+            problems.append(f"sets {', '.join(map(str, unknown))}, which no fit reads")
+        for kind in BLANKED_COPY_KINDS:
+            count = block.get(kind, 0)
+            # `bool` is an `int` in Python, and `all: true` is not a count.
+            if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                problems.append(f"sets {kind} to {count!r}, which is not a whole number of copies")
+            else:
+                counts[kind] = count
+    if problems:
+        raise ModelError(
+            f"the blanked_copies block of variant {variant!r} {' and '.join(problems)}. It "
+            f"reads exactly: {', '.join(BLANKED_COPY_KINDS)}, each the number of copies of "
+            f"every training row the fit adds (0 or more)."
+        )
+    return counts
+
+
+# --------------------------------------------------------------------------
 # Fitting and loading a variant
 # --------------------------------------------------------------------------
 
@@ -1043,6 +1299,7 @@ def fit_variant(
         )
     cls = ESTIMATORS[estimator]
     schema = data.space.schema
+    copies = blanked_copy_counts(variant, settings)
     metadata = {
         "variant": variant,
         "estimator": estimator,
@@ -1053,10 +1310,17 @@ def fit_variant(
         "features": list(schema.feature_names),
         "targets": list(schema.target_names),
         "params": dict(settings["params"]),
+        # The copies of its training rows the fit added, and the fields it
+        # omitted in them: none and no field for a variant that names no
+        # `blanked_copies` (EDN-82). Filled below, once the fields are known.
+        "blanked_copies": {**copies, "fields": []},
         "seed": seed,
         "num_threads": num_threads,
         "training": {
+            # The listings the variant was fitted on, and the rows its estimator
+            # saw, which are the same number unless the fit added copies.
             "n_train_rows": len(data.train),
+            "n_fit_rows": len(data.train),
             "n_validation_rows": len(data.validation),
             # The bound `predict_eur` applies, in the unit a reader thinks in.
             "price_min_eur": float(data.train["price"].min()),
@@ -1080,14 +1344,55 @@ def fit_variant(
         "versions": _versions(*cls.libraries),
         "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    model = cls.fit(metadata, data, seed=seed, num_threads=num_threads)
+    model = cls.fit(
+        metadata,
+        _with_blanked_copies(data, metadata, copies, seed),
+        seed=seed,
+        num_threads=num_threads,
+    )
     # Measured on the model as it will be served, bound included, rather than
     # read out of the estimator's own fitting log. Only LightGBM keeps such a
     # log, so recomputing is what makes the number mean the same thing for all
-    # four variants.
+    # four variants. On the listings as they are, also for a fit that added
+    # copies of them, so the number stays comparable between the two.
     metadata["training"]["train_l1_log_price"] = _l1_log_price(model, data.train)
     metadata["training"]["validation_l1_log_price"] = _l1_log_price(model, data.validation)
     return model
+
+
+def _with_blanked_copies(
+    data: TrainingData, metadata: dict, copies: Mapping[str, int], seed: int
+) -> TrainingData:
+    """`data` with the copies the variant asks for appended to its training rows.
+
+    The validation rows are never copied: early stopping watches them as they
+    are, and a copy of a training row is a training row, so no seller crosses
+    the split (EDN-14). The fields a copy omits and the rows the estimator
+    sees are written into `metadata`, which is the bundle's record.
+    """
+    if not any(copies.values()):
+        return data
+    variant = metadata["variant"]
+    if data.request is None:
+        raise ModelError(
+            f"variant {variant!r} adds blanked copies of its training rows, and which fields "
+            f"a copy may omit is the request contract's to say. The fit was not given one: "
+            f"pass `request=RequestContract.from_params(params)` to `train.read_matrices`, "
+            f"or set `TrainingData.request`."
+        )
+    # A handle on the seam before any estimator exists: `mask_absent` and
+    # `columns_of` read the feature space alone.
+    seam = Model(metadata, data.space)
+    fields = optional_seam_fields(seam, data.request)
+    if not fields:
+        raise ModelError(
+            f"variant {variant!r} adds blanked copies of its training rows, and its feature "
+            f"set {metadata['feature_set']!r} has no optional input field to omit in them."
+        )
+    train = with_blanked_copies(seam, data.train, fields, copies=copies, seed=seed)
+    metadata["blanked_copies"]["fields"] = list(fields)
+    metadata["training"]["n_fit_rows"] = len(train)
+    return replace(data, train=train)
 
 
 def _l1_log_price(model: Model, frame: pd.DataFrame) -> float:

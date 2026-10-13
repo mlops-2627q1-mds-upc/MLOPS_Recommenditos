@@ -75,12 +75,9 @@ from recommenditos.config import (
     PROCESSED_DATA_DIR,
     REPORTS_DIR,
 )
-from recommenditos.data.build_features import (
-    FeatureSpace,
-    check_served_makes_only,
-    equipment_feature_name,
-)
-from recommenditos.modeling.model import Model, load_model
+from recommenditos.data.build_features import FeatureSpace, check_served_makes_only
+from recommenditos.modeling import model as model_seam
+from recommenditos.modeling.model import Model, RequestContract, load_model
 from recommenditos.pipeline import load_params, read_frame, write_json
 from recommenditos.tracking import resume_run
 
@@ -420,70 +417,16 @@ def _sc04_eligibility(segment: str, level: str, n: int, *, min_rows: int) -> dic
 def input_field_columns(model: Model, params: dict) -> "dict[str, tuple[str, ...]]":
     """Every API input field of this model's feature set, and the columns it produced.
 
-    SC-06 masks *input fields*, not feature columns, because FR-01 is a statement
-    about a request: one equipment field becomes many multi-hot columns, so a
-    column-wise sweep would mask a single equipment item, which is not a request
-    the API can make; and `registration_date` becomes the derived `age_years`, so
-    a naive set difference against `required_input_fields` would make the most
-    important feature in the model look optional.
-
-    This function answers only *which fields exist*. What each one expands to is
-    `Model.columns_of`, so there is one derivation of "which columns did masking
-    this field mask" rather than two that can disagree. Which columns an equipment
-    field produced is what the training rows decided, so neither half can come
-    from params.yaml.
+    The derivation is `model.input_field_columns`, shared with the fit that
+    blanks the optional fields in the copies it adds (EDN-82); this is the same
+    answer for the contract `params.yaml` holds.
     """
-    derived = dict(params["evaluate"]["input_field_to_feature"])
-    conflicting = sorted(set(derived) & set(model.features))
-    if conflicting:
-        raise ValueError(
-            f"evaluate.input_field_to_feature maps {', '.join(conflicting)} to another column "
-            f"while {model.variant!r} also consumes a column of that name. One input field "
-            f"would then claim two unrelated columns and masking it would mask both."
-        )
-    source_of = {
-        equipment_feature_name(source, item): source
-        for source, items in model.space.vocabulary.equipment.items()
-        for item in items
-    }
-    field_of_derived = {feature: field for field, feature in derived.items()}
-
-    fields: list[str] = []
-    for column in model.features:
-        claims = {source_of.get(column), field_of_derived.get(column)} - {None}
-        if len(claims) > 1:
-            raise ValueError(
-                f"column {column!r} is claimed by two input fields ({', '.join(sorted(claims))}), "
-                f"so masking either would mask a column the other owns. "
-                f"evaluate.input_field_to_feature names a column an equipment field produced."
-            )
-        field = claims.pop() if claims else column
-        if field not in fields:
-            fields.append(field)
-
-    absent = [
-        field for field in params["evaluate"]["required_input_fields"] if field not in fields
-    ]
-    if absent:
-        raise ValueError(
-            f"{model.variant!r} consumes no column for the required input field(s) "
-            f"{', '.join(absent)}. FR-01 refuses a request that omits one, so the required "
-            f"list and the trained model disagree about what a valuation needs; either the "
-            f"feature set or evaluate.required_input_fields is wrong."
-        )
-    # The seam expands a field into its columns; this function only renames the
-    # one field whose column has a different name first. `columns_of` knows the
-    # equipment vocabulary and nothing about `input_field_to_feature`, so asking
-    # it for `registration_date` raises - the model consumes `age_years`. The
-    # rename is params' business and the expansion is the model's, and keeping
-    # them in that order is what stops this from becoming a second expansion.
-    return {field: model.columns_of(derived.get(field, field)) for field in fields}
+    return model_seam.input_field_columns(model, RequestContract.from_params(params))
 
 
 def optional_input_fields(fields: "dict[str, tuple[str, ...]]", params: dict) -> tuple[str, ...]:
     """The input fields FR-01 leaves optional, which is what SC-06 masks (EDN-15)."""
-    required = set(params["evaluate"]["required_input_fields"])
-    return tuple(sorted(set(fields) - required))
+    return model_seam.optional_input_fields(fields, RequestContract.from_params(params))
 
 
 # --------------------------------------------------------------------------
@@ -533,14 +476,8 @@ def sc06_scenarios(
 
 
 def _seam_names(fields: "dict[str, tuple[str, ...]]", params: dict) -> "dict[str, str]":
-    """Each request field under the name `Model.columns_of` knows it by.
-
-    The same rename `input_field_columns` applies, in the same direction and from
-    the same params key: the seam knows the equipment vocabulary and not the
-    request, so it cannot answer for `registration_date`.
-    """
-    derived = params["evaluate"]["input_field_to_feature"]
-    return {field: derived.get(field, field) for field in fields}
+    """Each request field under the name `Model.columns_of` knows it by."""
+    return model_seam.seam_names(fields, RequestContract.from_params(params))
 
 
 def sc05_scenarios(

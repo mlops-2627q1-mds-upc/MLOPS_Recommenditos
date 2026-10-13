@@ -106,7 +106,13 @@ from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR
 from recommenditos.data.build_features import read_supported_makes
 from recommenditos.modeling.energy import EnergySettings, FitMeasurement, measure
 from recommenditos.modeling.evaluate import point_metrics, relative_error
-from recommenditos.modeling.model import ESTIMATORS, Model, TrainingData, fit_variant
+from recommenditos.modeling.model import (
+    ESTIMATORS,
+    Model,
+    RequestContract,
+    TrainingData,
+    fit_variant,
+)
 from recommenditos.modeling.train import (
     VALIDATION_SPLIT,
     log_fit,
@@ -567,7 +573,14 @@ def _prepare(sweep: Sweep, paths: SearchPaths, protocol: Protocol) -> _Context:
     points = sorted({*grid_points(sweep.grid), reference}, key=_sort_key)
 
     supported = read_supported_makes(paths.input_dir.parent)
-    data = read_matrices(paths.input_dir, settings["feature_set"], supported)
+    # With the request contract, as `train` reads them: a variant that adds blanked
+    # copies of its training rows (EDN-82) is then swept as the stage fits it.
+    data = read_matrices(
+        paths.input_dir,
+        settings["feature_set"],
+        supported,
+        request=RequestContract.from_params(params),
+    )
     groups = validation_seller_groups(paths.input_dir.parent, data, supported)
     tags = {"sweep": sweep.name}
     if paths.input_dir.resolve() == (PROCESSED_DATA_DIR / "features").resolve():

@@ -75,6 +75,7 @@ from recommenditos.modeling.evaluate import (
 )
 from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
+    BLANKED_COPY_KINDS,
     ESTIMATORS,
     MISSING_LEVEL,
     MODEL_FILE,
@@ -82,6 +83,7 @@ from recommenditos.modeling.model import (
     MedianBaselineModel,
     Model,
     ModelError,
+    RequestContract,
     TrainingData,
     fit_variant,
     load_model,
@@ -773,7 +775,12 @@ def test_training_is_reproducible(
     that holds inside one.
     """
     settings = train_variants()[variant]
-    data = train.read_matrices(matrices["features"], settings["feature_set"], supported_makes)
+    data = train.read_matrices(
+        matrices["features"],
+        settings["feature_set"],
+        supported_makes,
+        request=RequestContract.from_params(project_params()),
+    )
     seed = project_params()["seed"]
 
     again = fit_variant(variant, settings, data, seed=seed, num_threads=1)
@@ -796,7 +803,12 @@ def test_the_payload_of_a_refit_is_byte_identical(
     payload is what has to be, and it is the whole of the fitted model.
     """
     for variant, settings in train_variants().items():
-        data = train.read_matrices(matrices["features"], settings["feature_set"], supported_makes)
+        data = train.read_matrices(
+            matrices["features"],
+            settings["feature_set"],
+            supported_makes,
+            request=RequestContract.from_params(project_params()),
+        )
         digests = []
         for attempt in ("first", "second"):
             model = fit_variant(variant, settings, data, seed=17, num_threads=1)
@@ -1623,6 +1635,13 @@ def test_a_run_records_every_parameter_its_stage_declares(
         f"{estimator}.{key}": str(value)
         for key, value in ESTIMATORS[estimator].optional_hyperparameters.items()
         if f"{estimator}.{key}" not in expected
+    }
+    # The same for the copies of its training rows a variant adds (EDN-82): one
+    # that names none logs zero of each kind, so every run says which it is.
+    optional |= {
+        f"blanked_copies.{kind}": "0"
+        for kind in BLANKED_COPY_KINDS
+        if f"blanked_copies.{kind}" not in expected
     }
     logged = dict(run.data.params)
     assert {name: logged.get(name) for name in optional} == optional
