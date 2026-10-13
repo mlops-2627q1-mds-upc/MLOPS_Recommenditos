@@ -20,6 +20,8 @@ from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_id
 import yaml
 
 from recommenditos.config import METRICS_FILE, MODELS_DIR, PARAMS_FILE, PROJ_ROOT, REPORTS_DIR
+from recommenditos.data import build_features, preprocess, split_data
+from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.energy import EMISSIONS_DIR
 from recommenditos.pipeline import load_params
@@ -209,6 +211,110 @@ def params_override(tmp_path: Path, params: dict, **blocks) -> Path:
     path = tmp_path / "params.yaml"
     path.write_text(yaml.safe_dump(changed), encoding="utf-8")
     return path
+
+
+def project_params() -> dict:
+    return load_params(PARAMS_FILE)
+
+
+def train_variants() -> dict:
+    return project_params()["train"]["variants"]
+
+
+def feature_sets() -> list[str]:
+    return list(project_params()["features"]["sets"])
+
+
+#: Every variant, so a parametrised test says which one failed in its own name.
+VARIANTS = tuple(train_variants())
+
+
+# The fixture pipeline and the four trained variants. Session-scoped and shared
+# by `tests/test_model.py` and `tests/test_model_behaviour.py`: the models are
+# fitted once, and one set of them behind every assertion is what makes a failure
+# about the model rather than about which copy of it ran. Measured on this
+# fixture at `num_threads: 1`, the four fits together cost well under a second.
+
+
+@pytest.fixture(scope="session")
+def matrices(tmp_path_factory, _generated_frame: pd.DataFrame) -> dict:
+    """The feature matrices and the make list, built from the synthetic fixture.
+
+    `validate-data` is skipped: it asserts the data's own expectations and writes
+    a summary nothing here reads, and `tests/test_pipeline.py` already runs it in
+    the chain.
+    """
+    root = tmp_path_factory.mktemp("model")
+    raw = root / "raw" / "listings.parquet"
+    raw.parent.mkdir(parents=True)
+    _generated_frame.to_parquet(raw, index=False)
+
+    processed = root / "processed"
+    features = processed / "features"
+    preprocess.main(raw, root / "interim" / "listings.parquet", PARAMS_FILE)
+    split_data.main(root / "interim" / "listings.parquet", processed, PARAMS_FILE)
+    for feature_set in feature_sets():
+        build_features.main(feature_set, processed, features, PARAMS_FILE)
+    return {"root": root, "processed": processed, "features": features}
+
+
+@pytest.fixture(scope="session")
+def supported_makes(matrices: dict) -> tuple[str, ...]:
+    return read_supported_makes(matrices["processed"])
+
+
+@pytest.fixture(scope="session")
+def trained(matrices: dict) -> dict:
+    """Every variant of the real params.yaml, trained once, with tracking off.
+
+    The environment is cleared inside the fixture rather than by an autouse
+    monkeypatch, because a session fixture outlives a function-scoped one and
+    would otherwise inherit whatever `.env` the developer's machine has.
+    """
+    # Imported here and not at the top: these three pull in MLflow, LightGBM and
+    # scikit-learn, and every run would pay for that, also one of a single test
+    # file that trains nothing.
+    from recommenditos.modeling import train  # noqa: PLC0415
+    from recommenditos.modeling.model import load_model  # noqa: PLC0415
+    from recommenditos.tracking import REQUIRED_ENV_VARS  # noqa: PLC0415
+
+    models = matrices["root"] / "models"
+    with pytest.MonkeyPatch.context() as environment:
+        for name in REQUIRED_ENV_VARS:
+            environment.delenv(name, raising=False)
+        for variant in train_variants():
+            train.main(
+                variant, matrices["features"], models, PARAMS_FILE, matrices["root"] / "emissions"
+            )
+    return {
+        "dir": models,
+        "emissions": matrices["root"] / "emissions",
+        "models": {name: load_model(models / name) for name in train_variants()},
+    }
+
+
+@pytest.fixture(scope="session")
+def test_frames(matrices: dict) -> dict:
+    """The test matrix per feature set, as `features` wrote it.
+
+    Already the population `evaluate` reports on, because the stage restricts
+    every frame to the makes the API serves (EDN-05), so a test that
+    scores a model here scores it on the same rows the stage would.
+    """
+    return {
+        feature_set: pd.read_parquet(matrices["features"] / feature_set / "test.parquet")
+        for feature_set in feature_sets()
+    }
+
+
+@pytest.fixture(scope="session")
+def spaces(matrices: dict) -> dict:
+    return {
+        feature_set: FeatureSpace.load(
+            matrices["features"] / feature_set, name=f"features-{feature_set}"
+        )
+        for feature_set in feature_sets()
+    }
 
 
 #: The stage command of the pipeline `dvc_pipeline` builds. It first writes down
