@@ -239,4 +239,6 @@ A third, appended on 2026-10-06, checks the runs of the next committed `dvc repr
 Its docstring is the protocol: the seven configurations, the request levels, the comparison against `lgbm-basic` and the rule a configuration has to meet were all fixed in the commit that added the script, before any fit.
 It imports the `train` stage's fit, the seam's `mask_absent`, `evaluate`'s metrics and SC-06 sweep and the search's bootstrap, reads the `train` and `validation` matrices only, and logs every fit to the MLflow experiment `recommenditos-price-tuning` as sweep `116-blanked-fields`.
 It needs the tracking credentials in `.env`, the data and the models from `dvc pull`, and a clean tree, and runs from the repository root with its output written outside the repository first, as the docstring shows.
-`blanked_fields_results.txt` is the output of the run recorded in EDN-82.
+`blanked_fields_results.txt` is the output of the run recorded in EDN-82 (2026-10-13).
+`blanked_fields_crosscheck.py` was written after that run and is not part of its protocol: it counts the training rows that already look like a required-only request, and fits one model on the ten required columns alone, to reach the run's required-only figures by a route that shares no code with the blanking.
+Its three lines are appended to the results file under their own heading.

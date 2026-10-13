@@ -1,0 +1,159 @@
+# reports/analysis/blanked_fields.py on the real snapshot
+issue #116, EDN-82; MLflow experiment recommenditos-price-tuning, sweep 116-blanked-fields; seed 20251108
+train 60,378 rows, validation 8,859 rows in 2,784 seller groups; the test and calibration splits are not read
+optional fields: 23 for lgbm-extended, 6 for lgbm-basic
+
+==============================================================================================================
+1. What was fitted
+==============================================================================================================
+configuration          train rows  best round  early stopped   fit s  fit CPU s  energy Wh
+basic                      60,378       1,243            yes    14.4       28.8     0.0558
+extended                   60,378       1,647            yes    34.8       57.0     0.1246
+extended+all              120,756       1,789            yes    43.1       80.0     0.1597
+extended+random           120,756       1,605            yes    51.3       95.8     0.1939
+extended+all+random       181,134       1,861            yes    83.8      178.1     0.3245
+extended+all+3random      301,890       1,168            yes    89.3      168.7     0.3351
+basic+all+random          181,134       1,394            yes    32.7       80.5     0.1322
+The two committed variants are refitted unchanged. Their validation predictions equal the committed bundles'.
+
+==============================================================================================================
+2. Validation MdAPE by how many of the 23 optional fields a request gives
+==============================================================================================================
+configuration                 0        2        5       10       15       20       23     mean   basic's 6
+                       required                                              complete
+basic                    8.57 %   8.38 %   8.11 %   7.74 %   7.39 %   7.10 %   6.96 %   7.75 %      6.96 %
+extended                10.79 %   9.87 %   9.07 %   8.19 %   7.44 %   6.84 %   6.45 %   8.38 %      8.87 %
+extended+all             7.24 %   7.22 %   7.17 %   6.92 %   6.74 %   6.54 %   6.34 %   6.88 %      7.26 %
+extended+random          7.32 %   7.28 %   7.19 %   6.86 %   6.61 %   6.56 %   6.34 %   6.88 %      7.28 %
+extended+all+random      7.14 %   7.02 %   7.02 %   6.77 %   6.57 %   6.45 %   6.29 %   6.75 %      7.12 %
+extended+all+3random     7.37 %   7.21 %   7.08 %   6.77 %   6.56 %   6.50 %   6.38 %   6.84 %      7.25 %
+basic+all+random         7.19 %   7.15 %   7.14 %   7.12 %   7.05 %   7.00 %   7.02 %   7.10 %      7.02 %
+best committed           8.57 %   8.38 %   8.11 %   7.74 %   7.39 %   6.84 %   6.45 %   7.64 %      6.96 %
+'mean' is over the seven levels. "basic's 6" gives exactly the basic set's optional fields. 'best committed' is the better of
+basic and extended per column: serving both, routed on how many fields a request gives. Routing on which fields are given could do better.
+
+==============================================================================================================
+3. The same in validation L1 of the log price (reported, decides nothing)
+==============================================================================================================
+configuration                 0        2        5       10       15       20       23            basic's 6
+basic                    0.1202   0.1174   0.1147   0.1096   0.1053   0.1022   0.1003               0.1003
+extended                 0.1470   0.1379   0.1285   0.1165   0.1079   0.1006   0.0966               0.1234
+extended+all             0.1023   0.1025   0.1023   0.1007   0.0988   0.0960   0.0942               0.1027
+extended+random          0.1049   0.1042   0.1036   0.1012   0.0986   0.0965   0.0952               0.1040
+extended+all+random      0.1020   0.1015   0.1009   0.0989   0.0972   0.0954   0.0943               0.1017
+extended+all+3random     0.1035   0.1025   0.1014   0.0993   0.0979   0.0962   0.0951               0.1030
+basic+all+random         0.1019   0.1019   0.1016   0.1014   0.1009   0.1007   0.1004               0.1004
+
+==============================================================================================================
+4. SC-06 on the validation split (bound 1.5x)
+==============================================================================================================
+configuration           complete                worst single field         required only  passes
+basic                     6.96 %        cylinders_volume_cc 1.055x         8.57 % 1.232x     yes
+extended                  6.45 %          equipment_comfort 1.121x        10.79 % 1.673x      NO
+extended+all              6.34 %          equipment_comfort 1.078x         7.24 % 1.141x     yes
+extended+random           6.34 %          equipment_comfort 1.079x         7.32 % 1.155x     yes
+extended+all+random       6.29 %          equipment_comfort 1.079x         7.14 % 1.136x     yes
+extended+all+3random      6.38 %          equipment_comfort 1.070x         7.37 % 1.156x     yes
+basic+all+random          7.02 %                drive_train 1.014x         7.19 % 1.024x     yes
+
+==============================================================================================================
+5. MdAPE difference to basic, the candidate, in percentage points (paired bootstrap by seller group, 2,000 draws, 95 %)
+==============================================================================================================
+Negative is better than basic. Condition 2 reads the per-point interval of every request but the complete one, condition 3 the
+simultaneous interval of the complete one. The upper end is how much worse a configuration may still be.
+request gives 0 of the optional fields (required only):
+  configuration          difference           per-point        simultaneous
+  extended                    +2.23      [+1.88, +2.54]      [+1.81, +2.65]
+  extended+all                -1.33      [-1.67, -1.06]      [-1.71, -0.94]
+  extended+random             -1.25      [-1.58, -0.95]      [-1.64, -0.85]
+  extended+all+random         -1.42      [-1.78, -1.14]      [-1.82, -1.03]
+  extended+all+3random        -1.19      [-1.57, -0.91]      [-1.59, -0.79]
+  basic+all+random            -1.38      [-1.75, -1.10]      [-1.78, -0.98]
+request gives 2 of the optional fields:
+  configuration          difference           per-point        simultaneous
+  extended                    +1.49      [+1.23, +1.76]      [+1.16, +1.83]
+  extended+all                -1.16      [-1.43, -0.90]      [-1.48, -0.84]
+  extended+random             -1.09      [-1.36, -0.84]      [-1.42, -0.77]
+  extended+all+random         -1.36      [-1.61, -1.09]      [-1.68, -1.04]
+  extended+all+3random        -1.16      [-1.42, -0.89]      [-1.49, -0.84]
+  basic+all+random            -1.22      [-1.50, -0.95]      [-1.56, -0.89]
+request gives 5 of the optional fields:
+  configuration          difference           per-point        simultaneous
+  extended                    +0.96      [+0.71, +1.21]      [+0.65, +1.27]
+  extended+all                -0.94      [-1.20, -0.68]      [-1.27, -0.61]
+  extended+random             -0.92      [-1.15, -0.66]      [-1.23, -0.61]
+  extended+all+random         -1.10      [-1.32, -0.84]      [-1.40, -0.79]
+  extended+all+3random        -1.03      [-1.27, -0.78]      [-1.33, -0.72]
+  basic+all+random            -0.98      [-1.22, -0.72]      [-1.29, -0.66]
+request gives 10 of the optional fields:
+  configuration          difference           per-point        simultaneous
+  extended                    +0.44      [+0.25, +0.71]      [+0.15, +0.74]
+  extended+all                -0.83      [-0.99, -0.61]      [-1.08, -0.57]
+  extended+random             -0.88      [-1.07, -0.67]      [-1.15, -0.61]
+  extended+all+random         -0.97      [-1.16, -0.78]      [-1.22, -0.72]
+  extended+all+3random        -0.97      [-1.14, -0.77]      [-1.23, -0.72]
+  basic+all+random            -0.63      [-0.78, -0.45]      [-0.84, -0.41]
+request gives 15 of the optional fields:
+  configuration          difference           per-point        simultaneous
+  extended                    +0.06      [-0.13, +0.26]      [-0.20, +0.31]
+  extended+all                -0.65      [-0.84, -0.46]      [-0.90, -0.40]
+  extended+random             -0.78      [-0.96, -0.59]      [-1.03, -0.54]
+  extended+all+random         -0.81      [-0.98, -0.59]      [-1.08, -0.55]
+  extended+all+3random        -0.83      [-1.01, -0.63]      [-1.08, -0.57]
+  basic+all+random            -0.34      [-0.49, -0.17]      [-0.55, -0.13]
+request gives 20 of the optional fields:
+  configuration          difference           per-point        simultaneous
+  extended                    -0.26      [-0.45, -0.02]      [-0.54, +0.02]
+  extended+all                -0.56      [-0.76, -0.36]      [-0.81, -0.31]
+  extended+random             -0.55      [-0.78, -0.34]      [-0.83, -0.26]
+  extended+all+random         -0.65      [-0.84, -0.44]      [-0.91, -0.39]
+  extended+all+3random        -0.61      [-0.81, -0.43]      [-0.86, -0.36]
+  basic+all+random            -0.10      [-0.25, +0.04]      [-0.29, +0.09]
+request gives basic's 6 of the optional fields:
+  configuration          difference           per-point        simultaneous
+  extended                    +1.91      [+1.68, +2.14]      [+1.60, +2.23]
+  extended+all                +0.31      [+0.14, +0.48]      [+0.07, +0.54]
+  extended+random             +0.33      [+0.17, +0.49]      [+0.11, +0.54]
+  extended+all+random         +0.16      [+0.02, +0.31]      [-0.04, +0.36]
+  extended+all+3random        +0.29      [+0.14, +0.45]      [+0.09, +0.50]
+  basic+all+random            +0.07      [-0.08, +0.20]      [-0.13, +0.26]
+request gives 23 of the optional fields (complete):
+  configuration          difference           per-point        simultaneous
+  extended                    -0.50      [-0.72, -0.29]      [-0.78, -0.22]
+  extended+all                -0.61      [-0.80, -0.42]      [-0.86, -0.36]
+  extended+random             -0.62      [-0.83, -0.37]      [-0.92, -0.31]
+  extended+all+random         -0.66      [-0.88, -0.46]      [-0.94, -0.39]
+  extended+all+3random        -0.58      [-0.79, -0.37]      [-0.84, -0.31]
+  basic+all+random            +0.07      [-0.08, +0.20]      [-0.12, +0.25]
+
+==============================================================================================================
+6. What blanking costs on a complete request, against extended as committed
+==============================================================================================================
+configuration             MdAPE  difference pp  L1 log price  difference
+extended                 6.45 %          +0.00        0.0966     +0.0000
+extended+all             6.34 %          -0.11        0.0942     -0.0024
+extended+random          6.34 %          -0.11        0.0952     -0.0015
+extended+all+random      6.29 %          -0.16        0.0943     -0.0024
+extended+all+3random     6.38 %          -0.08        0.0951     -0.0015
+
+==============================================================================================================
+7. The rule fixed before the fits
+==============================================================================================================
+configuration                           1 SC-06  2 incomplete: not worse       3 complete: better   4 early stop, < 15 min  qualifies
+extended+all                                yes                       NO                      yes                      yes         NO
+extended+random                             yes                       NO                      yes                      yes         NO
+extended+all+random                         yes                       NO                      yes                      yes         NO
+extended+all+3random                        yes                       NO                      yes                      yes         NO
+No blanked configuration qualifies.
+
+totals: 7 fits, 349.3 s of fitting, 1.3258 Wh, 230.76 mg CO2eq
+
+==============================================================================================================
+Appended after the run, not part of its protocol: reports/analysis/blanked_fields_crosscheck.py (2026-10-13)
+==============================================================================================================
+lgbm-basic: 324 of 60,378 training rows have all 6 optional fields as an omitted one
+lgbm-extended: 5 of 60,378 training rows have all 23 optional fields as an omitted one
+required-only specialist: 10 columns, 60,378 train rows, best round 1,595, validation MdAPE 7.06 %, L1 of the log price 0.1013
+The first two lines are the premise: a required-only request is almost absent from the training rows.
+The third is the required-only column of table 2 reached by another route: a LightGBM fitted on the ten
+required columns alone, sharing no code with the blanking. Not an MLflow run.

@@ -170,8 +170,14 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
 - `nr_prev_owners` (61.0 %), `gears` (62.5 %) and `drive_train` (76.4 %) carry enough natural missingness that native handling learns it.
   Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data too.
 
-**[open]:** whether the three rarely-missing fields need the same random masking as the UC2 interval models, or whether native missing-value handling is enough.
-This is a modelling decision, not an API one, and it is taken in M2/M3 once the pipeline exists and the effect can be measured.
+Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields.py`): native missing-value handling is not enough for a request with few optional fields, and the three rarely-missing fields are not the reason.
+Each optional field is often empty on its own, but all of them are empty together in only 324 of the 60,378 training rows for the basic set and in 5 for the extended set, so a request carrying only the required fields lies outside what a model saw.
+Trained on the listings plus two blanked copies of each, one with every optional field blanked and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 % and `lgbm-extended` at 7.14 % instead of 10.79 %, and neither loses measurably on a complete request (7.02 % against 6.96 %, and 6.29 % against 6.45 %).
+A model fitted on the ten required columns alone reaches 7.06 %, so what the committed models lose on that request is training, not information.
+
+**[open]:** whether the pipeline adopts the blanked copies, and for which variant.
+Under the rule fixed before the measurement no blanked `lgbm-extended` replaces the candidate: the best one beats `lgbm-basic` at every level of sparsity, but is measurably worse on a request that gives exactly the basic set's six optional fields (7.12 % against 6.96 %).
+These are validation figures; the test split is read once, by `dvc repro`, for a configuration that is adopted.
 Either way the outcome is bounded: SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
@@ -306,7 +312,7 @@ The first decision of M1, the project choice, is EDN-80: the used-car price comp
 **[open]**, to decide with the team:
 
 - Deduplication key.
-- Whether the point model needs random masking for the optional fields that are rarely missing in training, or whether native missing-value handling is enough (section 4); the field list itself is settled in EDN-15.
+- Whether the pipeline trains the point model with blanked-out optional fields, and for which variant: measured in EDN-82, not adopted yet (section 4); the field list itself is settled in EDN-15.
 
 ## 9. Reference links
 

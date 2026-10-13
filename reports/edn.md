@@ -2819,25 +2819,28 @@ How to add an entry:
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
 - **Participants:** @kadameit proposed it ([issue #116](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/116)); @lukas2510 decided to measure it and left the protocol to the AI
-- **Decision:** We measure whether training `lgbm-extended` on copies of the listings with optional fields blanked out removes its collapse on sparse requests, which is why `lgbm-basic` is the candidate ([EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around)).
-  The configurations, the scenarios and the rule a configuration has to meet were committed before the first fit, and the test split is not read.
+- **Decision:** We measured whether training `lgbm-extended` on copies of the listings with optional fields blanked out removes its collapse on sparse requests, the reason `lgbm-basic` is the candidate ([EDN-62](#edn-62-lgbm-basic-is-the-candidate-and-sc-04s-miss-on-cars-over-20-years-is-accepted-rather-than-worked-around)).
+  Configurations, scenarios and rule were committed before the first fit; the test split was not read.
+  Under the rule no configuration replaces the candidate; whether the pipeline adopts blanking is decided separately.
 - **Alternatives considered:**
   - **Option A (measured): train with blanked-out fields.**
-    One model for every request, and the UC2 interval models need the same masking; it multiplies the training rows and may cost accuracy on complete requests.
+    One model for every request, but more training rows.
   - **Option B: serve both models, routed by how full a request is.**
-    Never worse than either model, but two models in the image and a threshold to explain.
+    Two models and a threshold, and still 8.57 % on a required-only request.
   - **Option C: keep `lgbm-basic` without measuring.**
-    No work, but the project brief's open question on masking stays open.
-- **Rationale:** Single optional fields are empty in 1 % to 95 % of the 60,378 training rows, but all 23 are empty together in only 5, so a request with only the required fields lies outside what the model saw, and blanked copies put it inside.
-  A configuration qualifies only if it passes SC-06, is not measurably worse than `lgbm-basic` on any incomplete request and is measurably better on the complete one, on the validation split, by the paired bootstrap of [EDN-73](#edn-73-learning_rate-and-num_leaves-are-not-tuned-and-any-later-tuning-follows-a-written-protocol).
-  The result and what follows from it are added here once measured.
+    The project brief's open masking question stays open.
+- **Rationale:** All 23 optional fields are empty together in 5 of 60,378 training rows, so a required-only request lies outside what the model saw.
+  With one fully and one randomly blanked copy of every row, `lgbm-extended` answers it at 7.14 % validation MdAPE instead of 10.79 %, passes SC-06 at 1.14x and answers a complete request at 6.29 % instead of 6.45 %.
+  It beats `lgbm-basic` at every level of sparsity, but is measurably worse on a request giving exactly the basic set's six fields, 7.12 % against 6.96 %, which the rule excludes.
+  The same copies take `lgbm-basic` itself from 8.57 % to 7.19 % on the required-only request.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI checked the issue's premise on the training rows and corrected it: the fields are often empty one at a time and almost never together.
-  It proposed the configurations and the rule and wrote the script.
-  An independent agent reviewed both before the fits and found that the rule read only the required-only and the complete request, so it was extended to every incomplete request; no person reviewed the protocol.
+- **Response to AI:** Used as input for further analysis
+- **Assessment of the AI contribution:** AI corrected the issue's premise: the fields are often empty singly, almost never together.
+  It proposed configurations and rule and wrote the script.
+  An independent agent's review before the fits extended the rule to every incomplete request, the condition that then failed.
+  No person reviewed the protocol.
 - **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: "validate that this is a good idea and how we best test it, then test it".
-- **Other evidence:** [`reports/analysis/blanked_fields.py`](analysis/blanked_fields.py); MLflow experiment `recommenditos-price-tuning`, sweep `116-blanked-fields`; [project brief](../docs/docs/project-brief.md), section 4.
+- **Other evidence:** [`blanked_fields.py`](analysis/blanked_fields.py) and [its results](analysis/blanked_fields_results.txt); MLflow experiment `recommenditos-price-tuning`, sweep `116-blanked-fields`; [project brief](../docs/docs/project-brief.md).
 - **In LaTeX:** yes
 
 ## Template
