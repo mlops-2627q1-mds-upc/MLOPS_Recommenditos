@@ -1,5 +1,5 @@
-% Milestone 1: problem selection, requirements engineering, the two cards,
-% coordination and the cloud provider.
+% Milestone 1: problem selection, requirements engineering, the two cards and
+% coordination. The cloud provider is chosen in Milestone 4 (sections/2-4-api.tex).
 \subsection{Milestone 1: Inception}
 \label{sec:m1}
 
@@ -169,26 +169,3 @@ In the rule's words, an independent agent with a fresh context reviews every sub
 A person decides the questions that belong in the EDN and is accountable for the change.
 The team confirmed this wording at the laboratory session of 13 October 2026.
 A second person reviewed 2 of the 56 pull requests merged by 11 October 2026.
-
-\subsubsection{Selection of the cloud provider}
-\label{sec:m1-cloud}
-\guidance{
-  \textbf{Template:} Justification of the selection (to be used in Milestone~4).\\
-  The demo repo compares free tiers of AWS, Azure, GCP, Okteto and the FIB Virtech VM (free for the semester, 4\,GB RAM, 20\,GB storage); see references/course-demos.md.
-  Tie the choice to our requirements (model size, memory, cost, how long it has to run).
-}
-
-We deploy on the FIB Virtech virtual machine that the course provides (EDN-17).
-The course lists four free alternatives: AWS, Azure, GCP and Okteto.
-
-Memory decided the choice, together with the fact that the course provides the machine.
-Our stack is an API container, Prometheus, Grafana and a scheduled drift job, which does not fit into the 1\,GB and 0.6\,GB of the AWS and GCP free tiers.
-Okteto offers 3\,GB and Azure between 1 and 4\,GB, depending on the instance, so neither has more memory than the 4\,GB of the FIB machine.
-The FIB machine also has 20\,GB of disk and is free for the semester the project runs.
-Because the course provides it, nobody needs a personal cloud account with payment details (EDN-17).
-
-NFR-04 gives the machine a budget: the API container stays below 1\,GB of memory, the drift job runs in its own container, and the metrics and logs are capped so that the disk cannot fill up.
-NFR-12 keeps the choice reversible: the system starts on a fresh machine with one command and needs no paid service, so nothing in the serving path depends on this provider.
-
-The machine is a single host without redundancy, which is why NFR-05 asks for fast recovery and not for an uptime percentage.
-Nobody on the team has access to it yet; if this is still the case at the first Milestone~4 laboratory session, we raise it with the lecturers.
