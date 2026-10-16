@@ -44,7 +44,6 @@ The whole list was run once as a dry run on `804ea06` (2026-10-12), so every com
 The cut:
 
 - [ ] The delivery commit is chosen: after the last merge that changes the report, and before the freeze window of [CONTRIBUTING.md](../../CONTRIBUTING.md#freeze-window-before-a-presentation), which starts 48 hours before the presentation.
-- [ ] Every DRAFT marker is gone because the section's owner signed the section off, not because the marker was deleted.
 - [ ] The commit is tagged once every line below holds, and the tag is pushed.
 
 Several figures in the report describe the commit it is built from, and go stale as `main` moves.
@@ -77,7 +76,7 @@ The PDF and the hand-in:
 
 - [ ] The page count against the limit, and no placeholder left: `make report-submit DELIVERABLE=initial` (or `final`), which prints both and the space left on the last page.
 - [ ] The size against Atenea's 20 MB: `ls -l reports/latex/build/MLOps_Recommenditos_*_report.pdf`. The same build writes `MLOps_Recommenditos_EDN.pdf`.
-- [ ] Once the DRAFT boxes are gone, every page break: no heading orphaned at the bottom of a page (such as 2.3 with no text under it) and no figure or table pushed away from its text.
+- [ ] Every page break: no heading orphaned at the bottom of a page (such as 2.3 with no text under it) and no figure or table pushed away from its text.
 - [ ] Every link of the cover and the text opens in a browser that is not logged in, the repository above all, which the lecturer has to be able to open: `pdfinfo -url <pdf>` lists them.
 - [ ] Who submits is named in the delivery's issue, and the PDF uploaded to Atenea is the one built from the tagged commit.
 
