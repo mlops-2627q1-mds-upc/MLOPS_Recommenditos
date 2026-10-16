@@ -59,7 +59,7 @@ A design change no longer changes a requirement.
 We checked targets against the data before we committed to them.
 FR-01 makes body type and seller type required fields, because they are filled in 100\,\% and 99.986\,\% of the training rows, so the model cannot learn what a missing value means (EDN-15).
 NFR-05 first promised an uptime percentage, which a single unattended machine cannot guarantee; it now requires recovery within 30 seconds and no downtime during the graded presentation (EDN-10).
-A target that we cannot measure yet is marked \textbf{[proposed]} in the document.
+A target the team has not confirmed yet is marked \textbf{[proposed]} in the document.
 
 \subsubsection{Dataset card}
 \label{sec:m1-dataset-card}
@@ -93,7 +93,7 @@ The target is an asking price, not a sale price.
 The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-32).
 The raw file contains seven columns with personal data of sellers: they never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20).
 
-After the scope, price, date and deduplication rules, 105,405 of the 118,382 listings remain.
+After the scope, date, price and deduplication rules, 105,405 of the 118,382 listings remain.
 The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
 We reviewed this split strategy after training and kept it.
 \Cref{tab:split} shows the result.
