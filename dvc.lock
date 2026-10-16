@@ -931,8 +931,8 @@ stages:
       size: 38657
     - path: recommenditos/modeling/compare_energy.py
       hash: md5
-      md5: 3074d3ae38184e1bdb22d70f28d4af59
-      size: 12066
+      md5: 5af8d536a571ef83d01a869503b6c36b
+      size: 14319
     - path: recommenditos/modeling/energy.py
       hash: md5
       md5: 4181349a90c714fa292280207dcb90ee
@@ -949,6 +949,10 @@ stages:
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
       size: 2346
+    - path: recommenditos/plots.py
+      hash: md5
+      md5: 3c30e4f1aa580b1ee938633f2a4a7295
+      size: 4052
     - path: recommenditos/provenance.py
       hash: md5
       md5: e5354e5943df6de94f1c80b7b7870a5e
@@ -1009,7 +1013,83 @@ stages:
       hash: md5
       md5: c21c58ea05d7adad5f048aacf6125a7f
       size: 1196
-    - path: reports/figures/energy-vs-error.png
+    - path: reports/figures/energy-vs-error.pdf
       hash: md5
-      md5: a80774b45a636a8d8d185d9f30b27ed5
-      size: 78275
+      md5: 7464de8df779891bd78ef70397d98551
+      size: 19321
+  profile-data:
+    cmd: python3 -m recommenditos.data.profile_data
+    deps:
+    - path: data/raw/listings.parquet
+      hash: md5
+      md5: 8c1bca23e7af398faaf3cdb2015429ca
+      size: 215309993
+    - path: recommenditos/config.py
+      hash: md5
+      md5: 2930e86c1b0156d9626ffb64ff0ee247
+      size: 1535
+    - path: recommenditos/data/profile_data.py
+      hash: md5
+      md5: f72f4c9715d6c34dde111499f30121d7
+      size: 8960
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 1aeecabea6313a59af39005ae2827d8a
+      size: 2346
+    - path: recommenditos/plots.py
+      hash: md5
+      md5: 3c30e4f1aa580b1ee938633f2a4a7295
+      size: 4052
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 5b8f954fbceec667a166faf823b59ebe
+      size: 36707
+    params:
+      params.yaml:
+        split.holdout_country: ES
+    outs:
+    - path: reports/figures/data-composition.csv
+      hash: md5
+      md5: 91efbb79c1cf8850b46b1c5d853ef368
+      size: 1401
+    - path: reports/figures/data-composition.pdf
+      hash: md5
+      md5: db95ee6a71b8388286ccaeb519cc5ba4
+      size: 15672
+  compare-segments:
+    cmd: python3 -m recommenditos.modeling.compare_segments
+    deps:
+    - path: recommenditos/config.py
+      hash: md5
+      md5: 2930e86c1b0156d9626ffb64ff0ee247
+      size: 1535
+    - path: recommenditos/modeling/compare_segments.py
+      hash: md5
+      md5: 6b988f9a8d5b989aba4f4fe6305b8a76
+      size: 16894
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 1aeecabea6313a59af39005ae2827d8a
+      size: 2346
+    - path: recommenditos/plots.py
+      hash: md5
+      md5: 3c30e4f1aa580b1ee938633f2a4a7295
+      size: 4052
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 5b8f954fbceec667a166faf823b59ebe
+      size: 36707
+    - path: reports/metrics
+      hash: md5
+      md5: b133931e9e64dd2369044d1ae20c8d67.dir
+      size: 110693
+      nfiles: 6
+    params:
+      params.yaml:
+        evaluate.success_criteria.sc04_segment_mdape_max: 0.15
+        report.candidate_variant: lgbm-basic
+    outs:
+    - path: reports/figures/error-by-segment.pdf
+      hash: md5
+      md5: 717b720e30bc208e77eb4277b1fc92e4
+      size: 14935

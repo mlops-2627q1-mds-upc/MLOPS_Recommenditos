@@ -612,6 +612,8 @@ For the candidate `lgbm-basic`, with `lgbm-extended`'s spread beside it because 
 | `fuel_category` | 5 | Electric/Diesel 5.66 % | Diesel 6.87 % (6,348 rows) | 1.2 pp | 1.3 pp |
 | `age_bucket` | 6 | 0-1 years 5.48 % | over 20 years 16.80 % (784 rows) | 11.3 pp | 13.6 pp |
 
+`reports/figures/error-by-segment.pdf` draws the candidate's 26 qualifying levels against the bound, built by the `compare-segments` stage from the same record.
+
 Read as a fairness check: the market segments are close to parity, and the one disparity that matters is **age**, not country or seller type.
 A private seller is served about 2.5 pp worse than a dealer and a French listing 1.8 pp worse than a German one, both inside SC-04's bound; the owner of a car over 20 years old is served 11.3 pp worse than the owner of a new one and outside it.
 The extended features widen four of the five spreads, `age_bucket`'s most, by 2.3 pp, and narrow `seller_type`'s by less than 0.1 pp. That is the same finding SC-04 reports from the other direction: they buy pooled accuracy without buying it evenly.
@@ -719,7 +721,7 @@ The hyperparameter search of issue #88 kept every value, so it is also the cost 
 | `lgbm-basic` | 18.98 s | 0.0683 Wh | 11.88 mg CO2eq | 6.7 % | 6.9 % |
 | `lgbm-extended` | 30.53 s | 0.1137 Wh | 19.80 mg CO2eq | 6.3 % | 10.3 % |
 
-`reports/figures/energy-vs-error.png` draws the same rows, built by the `compare-energy` stage from the artefacts rather than by hand.
+`reports/figures/energy-vs-error.pdf` draws the same rows, built by the `compare-energy` stage from the artefacts rather than by hand.
 On this run `lgbm-extended` costs 1.7 times the energy of `lgbm-basic` for 0.48 percentage points of MdAPE, which is 0.05 Wh more in absolute terms and negligible on its own.
 It earns that only when the user supplies the extra fields: given only the fields FR-01 requires it is worse than `lgbm-basic` (10.3 % against 6.9 %).
 The whole ladder is 0.191 Wh, 33.2 mg CO2eq and 51.6 s of fitting, against NFR-10's 15 minutes.

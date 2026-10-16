@@ -57,9 +57,17 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
 \paragraph{Result.}
 No model passes the gate, so no model is released.
 The candidate \texttt{lgbm-basic} meets SC-01, SC-02, SC-03 and SC-06.
-It misses SC-04 in one of the 26 segments the criterion checks: its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next segment is at 10.4\,\%.
+It misses SC-04 in one of the 26 segments the criterion checks (\cref{fig:segments}): its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next segment is at 10.4\,\%.
 SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented.
 We accept the miss as a limitation of this model and did not move the bound to make it pass (EDN-62).
+
+% figures/error-by-segment.pdf is a copy of the `compare-segments` stage's output.
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{error-by-segment}
+  \caption{The test error of the candidate \texttt{lgbm-basic} in the 26 segments that SC-04 checks, one dot per segment. A segment is checked when it has at least 500 test rows. The only one above the bound is cars older than 20 years, which are 784 of the 19,665 test rows.}
+  \label{fig:segments}
+\end{figure}
 
 The verdicts on SC-01, SC-02 and SC-04 do not depend on the seed of the seller-grouped split.
 We refitted the candidate on 20 other split seeds: the test MdAPE was 6.72\,\% on average with a standard deviation of 0.26 percentage points, against 6.73\,\% on the committed split.

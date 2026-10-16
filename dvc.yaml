@@ -53,6 +53,36 @@ stages:
       - data/raw/listings.parquet
 
   # ----------------------------------------------------------------------
+  # profile-data: the raw listings per make and per country.
+  #
+  # The table and the figure behind the dataset card's first finding, that a few
+  # makes and one country hold most of the rows, counted on the raw file because
+  # that is what the scope rules were decided on. A stage rather than a notebook
+  # cell for the reason `compare-energy` is one: a new snapshot redraws the figure
+  # the report prints, and nobody draws it by hand.
+  #
+  # `split.holdout_country` is declared because the stage reads it, to mark that
+  # country's bar. Nothing depends on this stage: it is a leaf beside the
+  # pipeline's spine, so it cannot hold up a model.
+  # ----------------------------------------------------------------------
+  profile-data:
+    cmd: python3 -m recommenditos.data.profile_data
+    deps:
+      - recommenditos/data/profile_data.py
+      - recommenditos/plots.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - data/raw/listings.parquet
+    params:
+      - split.holdout_country
+    outs:
+      - reports/figures/data-composition.csv:
+          cache: false
+      - reports/figures/data-composition.pdf:
+          cache: false
+
+  # ----------------------------------------------------------------------
   # preprocess: raw listings to the interim contract (#34).
   # ----------------------------------------------------------------------
   preprocess:
@@ -340,6 +370,7 @@ stages:
     cmd: python3 -m recommenditos.modeling.compare_energy
     deps:
       - recommenditos/modeling/compare_energy.py
+      - recommenditos/plots.py
       - recommenditos/modeling/energy.py
       - recommenditos/modeling/evaluate.py
       - recommenditos/modeling/model.py
@@ -357,5 +388,35 @@ stages:
     outs:
       - reports/figures/energy-vs-error.csv:
           cache: false
-      - reports/figures/energy-vs-error.png:
+      - reports/figures/energy-vs-error.pdf:
+          cache: false
+
+  # ----------------------------------------------------------------------
+  # compare-segments: the candidate's test error in every level SC-04 checks.
+  #
+  # The gate reads the worst level only. This draws all of them against the
+  # bound, from `evaluate`'s record, so the report shows whether a miss is one
+  # level or a pattern. A stage of its own for the reason `compare-energy` is:
+  # redrawing the figure does not rerun the evaluation.
+  #
+  # It declares the bound and no other key of `evaluate`, so tightening another
+  # criterion does not redraw it; a changed bound reruns `evaluate` first, and
+  # this through `reports/metrics`. `report.candidate_variant` says whose record
+  # is drawn, because no artefact names the candidate while no variant passes
+  # the gate (EDN-62).
+  # ----------------------------------------------------------------------
+  compare-segments:
+    cmd: python3 -m recommenditos.modeling.compare_segments
+    deps:
+      - recommenditos/modeling/compare_segments.py
+      - recommenditos/plots.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - reports/metrics
+    params:
+      - report.candidate_variant
+      - evaluate.success_criteria.sc04_segment_mdape_max
+    outs:
+      - reports/figures/error-by-segment.pdf:
           cache: false

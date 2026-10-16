@@ -23,6 +23,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: Where the stages write a figure, and where the LaTeX build reads it from. The
+#: Docker and CI builds of the report mount only the second folder.
+STAGE_FIGURES = ROOT / "reports" / "figures"
+REPORT_FIGURES = ROOT / "reports" / "latex" / "figures"
+
 
 def git(*args: str) -> list[str]:
     # `core.quotepath=off` so a path with a non-ASCII character comes back as itself.
@@ -69,4 +74,49 @@ def test_every_uncached_output_in_the_checkout_is_the_one_the_lock_records(uncac
     assert not changed, (
         "dvc.lock records other bytes for these outputs than the checkout holds. Either a "
         f"stage was rerun without committing both, or Git converted the file: {changed}"
+    )
+
+
+def test_every_figure_the_report_copies_from_a_stage_is_that_stages_output():
+    # The report cannot read `reports/figures/`, so a figure a stage draws is
+    # committed a second time where the build finds it. Nothing but this test
+    # notices when a stage was rerun and the copy was not refreshed: the report
+    # would go on printing the figure of the previous model.
+    copies = [
+        path
+        for path in sorted(REPORT_FIGURES.glob("*.pdf"))
+        if (STAGE_FIGURES / path.name).exists()
+    ]
+    assert copies, f"no figure in {REPORT_FIGURES} is the copy of a stage's output"
+
+    stale = [
+        path.name
+        for path in copies
+        if path.read_bytes() != (STAGE_FIGURES / path.name).read_bytes()
+    ]
+
+    assert not stale, (
+        f"these figures in reports/latex/figures/ differ from the stage's output in "
+        f"reports/figures/; copy them over: {stale}"
+    )
+
+
+def test_every_figure_a_stage_draws_for_the_report_is_in_the_reports_folder(uncached_outputs):
+    # The other half: a figure the report includes by a stage's file name has to
+    # have its copy, or the LaTeX build fails only in CI, where the folder is
+    # all the build sees.
+    drawn = {
+        Path(out.fs_path).name for out in uncached_outputs if Path(out.fs_path).suffix == ".pdf"
+    }
+    sources = "".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "reports" / "latex" / "sections").glob("*.tex")
+    )
+    included = {name for name in drawn if f"{{{Path(name).stem}}}" in sources}
+
+    missing = sorted(name for name in included if not (REPORT_FIGURES / name).exists())
+
+    assert included, "the report includes no figure a stage draws"
+    assert not missing, (
+        f"the report includes these figures, and reports/latex/figures/ lacks them: {missing}"
     )

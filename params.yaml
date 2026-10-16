@@ -465,3 +465,10 @@ evaluate:
     # per field follows EDN-23: an assertion flag is `False`, an equipment list is
     # empty, everything else is absent.
     sc06_masked_mdape_ratio_max: 1.5
+
+report:
+  # The variant whose error per segment level the report's figure shows: the
+  # candidate put forward for release (EDN-62). `metrics.json` names a variant
+  # only once one passes the gate, and none does yet, so the choice is stated
+  # here and the `compare-segments` stage reads it.
+  candidate_variant: lgbm-basic

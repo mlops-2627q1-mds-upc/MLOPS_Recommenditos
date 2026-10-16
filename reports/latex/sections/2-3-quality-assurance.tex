@@ -45,10 +45,11 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
   \label{tab:energy}
 \end{table}
 
+% figures/energy-vs-error.pdf is a copy of the `compare-energy` stage's output.
 \begin{figure}[ht]
   \centering
   \includegraphics[width=0.66\textwidth]{energy-vs-error}
-  \caption{Training energy against test error for the four variants. The blue points are requests with every field, the orange points requests with only the fields FR-01 requires.}
+  \caption{Training energy against test error for the four variants. A filled point is the error on requests with every field, a ring the error on requests with only the fields FR-01 requires.}
   \label{fig:energy}
 \end{figure}
 
@@ -89,7 +90,7 @@ The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, 
 The configuration is in \texttt{pyproject.toml}.
 
 The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint} and a required CI job.
-On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 74 files as formatted.
+On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 81 files as formatted.
 
 The Pylint rules found five magic values in the command-line stubs of the template, which we removed.
 We also found that \texttt{make lint} covered only \texttt{recommenditos/}, while CI linted \texttt{tests/} and \texttt{notebooks/} as well; all three now lint the same files.
@@ -118,7 +119,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-In CI it has 826 tests, of which 800 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
