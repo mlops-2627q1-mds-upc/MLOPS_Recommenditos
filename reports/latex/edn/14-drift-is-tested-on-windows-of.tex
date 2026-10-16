@@ -8,7 +8,7 @@
   milestone = {M6: Monitoring},
   topic = {Monitoring, Requirements},
   participants = {@lukas2510},
-  decision = {The drift job compares windows of 1,000 requests with 10,000 training listings, feature by feature at a Bonferroni-corrected level of 0.005, without the \texttt{model} feature.
+  decision = {The drift job compares windows of 1,000 requests with 10,000 training listings, feature by feature, Bonferroni-corrected from a family-wise level of 0.005 over the 23 tested features, without the \texttt{model} feature.
 The \texttt{ES} replay must be flagged with at least three drifted features besides \texttt{country\_\allowbreak{}code}.
 Of 20 i.i.d. control windows, at most 1 may be flagged.},
   rationale = {\emph{Alternatives considered:}

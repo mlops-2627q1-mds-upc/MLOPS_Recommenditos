@@ -244,7 +244,7 @@ How to add an entry:
 - **Activity / Topic:** ML System Design, Explainability
 - **Participants:** @lukas2510
 - **Decision:** The API computes FR-08's per-request explanation from the booster's own SHAP export, LightGBM's `predict(pred_contrib=True)`.
-  The `shap` package is used for offline analysis only and is never installed in the API image.
+  The `shap` package is reserved for offline analysis, is not yet a project dependency and is never installed in the API image.
   The project runs on Python 3.12, which `shap` requires.
 - **Alternatives considered:**
   - `shap.TreeExplainer` in the serving path: one implementation everywhere, but `shap` imports `numba` and `llvmlite` at load, and both would enter the image.
@@ -318,7 +318,7 @@ How to add an entry:
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** Monitoring, Requirements
 - **Participants:** @lukas2510
-- **Decision:** The drift job compares windows of 1,000 requests with 10,000 training listings, feature by feature at a Bonferroni-corrected level of 0.005, without the `model` feature.
+- **Decision:** The drift job compares windows of 1,000 requests with 10,000 training listings, feature by feature, Bonferroni-corrected from a family-wise level of 0.005 over the 23 tested features, without the `model` feature.
   The `ES` replay must be flagged with at least three drifted features besides `country_code`.
   Of 20 i.i.d. control windows, at most 1 may be flagged.
 - **Alternatives considered:**
@@ -582,7 +582,7 @@ How to add an entry:
 - **Decision:** Everything configurable about the pipeline lives in `params.yaml` and is declared per stage under `params:` in `dvc.yaml`: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the model variants and the thresholds of the success criteria.
   Paths stay in `recommenditos/config.py`.
 - **Alternatives considered:**
-  - Python constants in `config.py`, as the course demo does: DVC cannot see a constant, so a changed hyperparameter reruns nothing and `dvc repro` reports the pipeline as up to date.
+  - Python constants, as the course demo keeps in `train.py`: DVC sees a constant only through the hash of its module, so a changed hyperparameter retrains every variant, and `dvc params diff` and `dvc exp` cannot see it.
   - `config.py` reading `params.yaml`: hides which stage reads which key.
 - **Rationale:** M2 is about a change rerunning what it should and nothing else.
   DVC hashes the declared keys, `dvc params diff` shows what changed between two commits, and `dvc exp` can sweep a value without a code change.

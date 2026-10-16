@@ -16,7 +16,7 @@ The credentials are in a \texttt{.env} file that Git ignores.
 
 \paragraph{What we track.}
 The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder.
-The ladder is defined in \texttt{params.yaml} and has four steps, each of which changes one thing: \texttt{b0}, the median price per make, model and age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features; and \texttt{lgbm-extended}, the same model on 162 features, which add the equipment lists, the history flags and further technical columns.
+The ladder is defined in \texttt{params.yaml} and has four steps: \texttt{b0}, the median price per make, model and age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features, trained on its rows plus blanked copies of them (EDN-82); and \texttt{lgbm-extended}, LightGBM without such copies on 162 features, which add the equipment lists, the history flags and further technical columns.
 Each run logs:
 
 \begin{itemize}
