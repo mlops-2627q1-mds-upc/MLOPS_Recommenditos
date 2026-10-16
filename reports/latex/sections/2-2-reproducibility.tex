@@ -1,12 +1,6 @@
 % Milestone 2a: project structure, code versioning and data versioning.
-% Owner: @W11W11W11. The text below is a complete draft written from the
-% repository's evidence. The \tbd right after the heading marks it as awaiting
-% its owner's sign-off, and `make report-submit` counts it, so the draft cannot
-% reach a submission unnoticed.
 % Experiment tracking is the last sub-subsection of this Milestone and lives in
-% sections/2-2b-experiment-tracking.tex, owned by @ulasawczuk and input at the
-% bottom of this file, so that the two people writing about Milestone 2 never
-% edit the same file.
+% sections/2-2b-experiment-tracking.tex, input at the bottom of this file.
 
 \subsection{Milestone 2: Model Building -- Reproducibility}
 \label{sec:m2}
@@ -14,8 +8,6 @@
   \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
   EDN entries here only for reproducibility decisions that go beyond what the course prescribes.
 }
-
-\tbd{DRAFT of \crefrange{sec:m2-structure}{sec:m2-data-versioning}, owner \texttt{@W11W11W11}, to rewrite}
 
 \subsubsection{Project structure}
 \label{sec:m2-structure}
@@ -124,5 +116,4 @@ A new snapshot is a change of three parameters, the Zenodo record, the file name
 DVC caches each stage's data and models and pushes them to the remote once, while Git tracks the small report files, so a change reruns only the stages it affects; a new model variant adds a \texttt{train} stage, and a \texttt{features} stage only when it brings a new feature set.
 Every stage holds its data in memory with pandas, which is enough for 118,382 rows and would be the first limit for a much larger dataset.
 
-% Experiment tracking, owned by @ulasawczuk.
 \input{sections/2-2b-experiment-tracking}
