@@ -259,6 +259,21 @@ Access to the FIB Virtech VM and the date of the M4a session are still not recor
 - The freeze window of [CONTRIBUTING.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md) starts on 2026-10-18, so the report is merged by then.
 - The first report is due on 2026-10-19 at 23:59.
 
+**The presentation (#92).**
+15 minutes in nine parts, and every member presents (the individual factor counts the discussions in the laboratory):
+
+| Part | Minutes | Presenter |
+| ---- | ------- | --------- |
+| 1. Problem and use cases | 1 | Michal |
+| 2. Requirements and success criteria | 1.5 | Michal |
+| 3. Data | 2 | Mark |
+| 4. Way of working | 1 | Mark |
+| 5. Structure and pipeline | 3 | Kevin |
+| 6. Experiments and model choice | 2.5 | Lukas |
+| 7. Energy | 1 | Lukas |
+| 8. Quality assurance | 2.5 | Ula |
+| 9. Summary, lessons learned and outlook | 0.5 | Ula |
+
 ## Sprint 4 progress (2026-10-17)
 
 Recorded on day 5 of the sprint from the merged and open pull requests.
