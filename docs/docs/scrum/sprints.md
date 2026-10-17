@@ -240,8 +240,6 @@ Access to the FIB Virtech VM and the date of the M4a session are still not recor
 
 ## Sprint 4 planning notes (2026-10-13)
 
-Written on 2026-10-17 from the issues the sprint works on, because the sprint was not planned in writing at the session.
-
 **Sprint goal:** submit the first report on 2026-10-19 and give the M1-M3 presentation on 2026-10-20.
 
 **Backlog:**
