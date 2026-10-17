@@ -90,7 +90,7 @@ We profiled the file ourselves. Our findings shaped the project as follows:
   \label{fig:composition}
 \end{figure}
 
-The model card states each limitation together with what it rules out.
+The dataset card states each limitation together with what it rules out.
 The target is an asking price, not a sale price.
 The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-32).
 The raw file contains seven columns with personal data of sellers. They never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20).
