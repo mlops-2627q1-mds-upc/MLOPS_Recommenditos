@@ -20,7 +20,7 @@ That check also gave us the dataset (EDN-01) and the scope rules of \cref{sec:go
 
 \paragraph{The requirements.}
 The system has 16 functional and 15 non-functional requirements, summarised in \cref{tab:requirements}.
-Each one has a MoSCoW priority and an acceptance criterion that a test or a named manual check can verify; \cref{sec:m3-model-testing} shows which of them have this evidence today.
+Each one has a MoSCoW priority (must, should, could or won't have) and an acceptance criterion that a test or a named manual check can verify; \cref{sec:m3-model-testing} shows which of them have this evidence today.
 Each non-functional requirement names its quality characteristic in ISO/IEC 25010 or 25059.
 
 \begin{table}[ht]
@@ -29,7 +29,7 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
     \toprule
     Area & IDs & What is required \\
     \midrule
-    Input & FR-01 to FR-05 & A valuation needs a small set of required facts and accepts optional ones; implausible input and unsupported makes are refused, with every problem named. \\
+    Input & FR-01 to FR-05 & A valuation needs a small set of required fields and accepts optional ones; implausible input and unsupported makes are refused, with every problem named. \\
     \addlinespace[2pt]
     Answers & FR-06 to FR-09 & A price estimate with the model version; a price range with bounds; an explanation of the estimate; comparable real listings. \\
     \addlinespace[2pt]
@@ -39,9 +39,9 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
     \addlinespace[2pt]
     Performance & NFR-02 to NFR-05 & 95\,\% of valuations within 200\,ms; 20 requests per second for five minutes; everything fits the 4\,GB machine; recovery within 30 seconds of a crash. \\
     \addlinespace[2pt]
-    Engineering & NFR-06, 07, 12 to 14 & Same splits and metrics from a clean clone; 80\,\% test coverage and clean linting; start with one command; automatic deployment with rollback; every run records its code, data and parameters. \\
+    Engineering & NFR-06, 07, 12 to 14 & Same splits and metrics from a clean clone; 80\,\% test coverage and clean linting; the system starts with one command; automatic deployment with rollback; every run records its code, data and parameters. \\
     \addlinespace[2pt]
-    Privacy, security & NFR-08, 09, 15 & No personal data beyond the raw data; public endpoints are read-only; no secret in the Git history. \\
+    Privacy, security & NFR-08, 09, 15 & Personal data of sellers stays in the raw data; public endpoints are read-only; no secret in the Git history. \\
     \addlinespace[2pt]
     Energy, drift & NFR-10, NFR-11 & Emissions recorded for every training run, and training within 15 minutes on a laptop; a new market is detected within the first 1,000 answers. \\
     \bottomrule
@@ -51,15 +51,15 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
 \end{table}
 
 \paragraph{Requirements and specification.}
-The lecturer's feedback on our first version was that it read as a specification, because it fixed endpoints, status codes and image tags.
+The lecturer's feedback on our first version of the requirements was that it read as a specification, because it fixed endpoints, status codes and image tags.
 We split it (EDN-27): \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{requirements.md}} states what must hold and for whom, and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{specification.md}} states how each requirement is realised, under the same IDs.
 A design change no longer changes a requirement.
 
 \paragraph{Measured targets.}
 We checked targets against the data before we committed to them.
-FR-01 makes body type and seller type required fields, because they are filled in 100\,\% and 99.986\,\% of the training rows, so the model cannot learn what a missing value means (EDN-15).
+FR-01 makes body type and seller type required fields, because they are filled in 100\,\% and 99.986\,\% of the training rows, respectively, so the model cannot learn what a missing value means (EDN-15).
 NFR-05 first promised an uptime percentage, which a single unattended machine cannot guarantee; it now requires recovery within 30 seconds and no downtime during the graded presentation (EDN-10).
-A target the team has not confirmed yet is marked \textbf{[proposed]} in the document.
+A target the team has not confirmed yet is marked \textbf{[proposed]} in the requirements document.
 
 \subsubsection{Dataset card}
 \label{sec:m1-dataset-card}
@@ -76,15 +76,16 @@ We profiled the file ourselves, and what we found shaped the project:
 
 \begin{itemize}
   \item Germany has 38.5\,\% of the rows, and BMW, Porsche, Mercedes-Benz and Audi together have 82.9\,\% (\cref{fig:composition}). This led to the scope rules, and the card states that the data does not represent the European used-car market as a whole.
-  \item 6,347 listings are duplicates. The \texttt{vin} column is filled in only 34.0\,\% of the rows, so we find them with a composite key and remove them before the split.
+  \item 6,347 listings are duplicates. The \texttt{vin} column is filled in only 34.0\,\% of the rows, so we treat two listings as duplicates when they agree in make, model, version, mileage, registration date, price and power, and remove the duplicates before the split.
   \item 164 listings are registered after the snapshot date and would have a negative age. We remove them.
+  \item Prices start at 1\,EUR, which is a placeholder or an input error, and the listings above 2 million EUR are collector cars, which are too rare for the model to learn. We keep only prices between 500\,EUR and 2 million EUR.
 \end{itemize}
 
 % figures/data-composition.pdf is a copy of the `profile-data` stage's output.
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth]{data-composition}
-  \caption{The share of the 118,382 raw listings per make and per country. The Spanish listings are held out as a market the model never sees (EDN-03); 6,079 of them remain after cleaning.}
+  \caption{The share of the 118,382 raw listings per make and per country. The Spanish listings are held out as a market the model has not seen (EDN-03); 6,079 of them remain after cleaning.}
   \label{fig:composition}
 \end{figure}
 
@@ -122,12 +123,12 @@ The validation set is used for early stopping and tuning, the calibration set is
 }
 
 The model card is \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{\texttt{docs/docs/model-card.md}} and follows the Hugging Face annotated template \cite{hf-model-card}.
-It says at the top that no model is released yet and which results are measured.
+It states at the top that no model is released yet and which of its results are measured.
 Its main points:
 
 \begin{itemize}
   \item \textbf{Model.} LightGBM on $\log(\mathrm{price})$, compared with two baselines: B0, the median price per make, model and age band, and B1, a Ridge regression (EDN-02).
-  \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). It is trained on its rows plus two copies of each with optional input fields removed (EDN-82). Early stopping chose 1,394 trees under a ceiling of 5,000, and the model file has 8.7\,MB.
+  \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). It is trained on its rows plus two copies of each in which optional input fields are blanked (EDN-82). Early stopping chose 1,394 trees under a ceiling of 5,000, and the model file has 8.7\,MB.
   \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment and the energy of each training run (\cref{sec:m3-energy}).
   \item \textbf{Who is affected by a wrong answer.} A seller acts on one number, and an estimate that is 10\,\% too low costs them money without their noticing. This is why a valuation comes with an explanation (FR-08). A buyer uses the price interval to check an offer, which is what SC-05 bounds.
   \item \textbf{Limitations.} The error on cars older than 20 years is above SC-04's bound, which we accept as a limitation of this model (EDN-62). Honda, Hyundai, Aston Martin and Volkswagen are served but have fewer than 500 test rows each, so SC-04 does not check them.
@@ -173,6 +174,6 @@ The board is linked on the cover.
 
 \paragraph{Coding agents.}
 Coding agents write most of the code, under a rule in our working agreements (EDN-81).
-In the rule's words, an independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge (\cref{tab:ci-checks} lists the nine).
+The rule says that an independent agent with a fresh context reviews every substantive change by reproducing its claims and trying to break it, and the required checks gate the merge (\cref{tab:ci-checks} lists the nine).
 A person decides the questions that belong in the EDN and is accountable for the change.
 The team confirmed this wording at the laboratory session of 13 October 2026.
