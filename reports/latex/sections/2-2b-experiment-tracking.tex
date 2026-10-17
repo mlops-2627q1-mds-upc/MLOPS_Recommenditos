@@ -15,8 +15,8 @@ We track experiments with MLflow on the team's DagsHub repository, which is also
 The credentials are in a \texttt{.env} file that Git ignores.
 
 \paragraph{What we track.}
-The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder.
-The ladder is defined in \texttt{params.yaml} and has four steps: \texttt{b0}, the median price per make, model and age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features, trained on its rows plus blanked copies of them (EDN-82); and \texttt{lgbm-extended}, LightGBM without such copies on 162 features, which add the equipment lists, the history flags and further technical columns.
+The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder, a sequence of models from a simple baseline to the full model.
+The ladder is defined in \texttt{params.yaml} and has four steps: \texttt{b0}, which predicts the median training price of cars with the same make, model and two-year age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features, trained on its rows plus blanked copies of them (EDN-82); and \texttt{lgbm-extended}, LightGBM without such copies on 162 features, which add the equipment lists, the history flags and further technical columns.
 Each run logs:
 
 \begin{itemize}
@@ -55,7 +55,7 @@ A new variant is one more entry in \texttt{params.yaml}.
 \Cref{tab:runs} compares the four runs, which the \href{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}{experiment on DagsHub} lists as well.
 The extended feature set improves the MdAPE by 0.48 percentage points when the user gives every field.
 With only the fields FR-01 requires, \texttt{lgbm-extended} is at 10.30\,\%, which is 1.65 times its own full-input value and above SC-06's bound of 1.5, and it is worse than \texttt{lgbm-basic} at 6.86\,\%.
-\texttt{lgbm-basic} was at 8.26\,\% on that request, which was almost absent from its training rows, until we trained it on copies of them with optional fields removed (EDN-82).
+Such requests were almost absent from the training rows, and \texttt{lgbm-basic} was at 8.26\,\% on them until we trained it on blanked copies (EDN-82).
 \texttt{lgbm-extended} is trained without such copies: with them it reached 7.14\,\% on that request on the validation split, but it was worse than \texttt{lgbm-basic} on a request that gives exactly the basic set's six optional fields.
 \texttt{lgbm-extended} also takes 1.6 times as long to fit.
 We therefore put \texttt{lgbm-basic} forward as the candidate (EDN-62).
