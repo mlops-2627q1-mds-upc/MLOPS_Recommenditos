@@ -19,14 +19,14 @@
 }
 
 We use the Cookiecutter Data Science template \cite{ccds} with \texttt{uv} as the dependency manager.
-We changed it where this project needed it:
+We changed the project structure where this project needed it:
 
 \begin{itemize}
-  \item \textbf{One module per DVC pipeline stage (EDN-28, \cref{fig:pipeline}).} The template's three flat modules became one module per stage, in \texttt{recommenditos/\allowbreak data/} and \texttt{recommenditos/\allowbreak modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each ticket also has its own file, so several people can work on the pipeline at once.
+  \item \textbf{One module per DVC pipeline stage (EDN-28, \cref{fig:pipeline}).} The template's three flat modules became one module per stage, in \texttt{recommenditos/\allowbreak data/} and \texttt{recommenditos/\allowbreak modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each stage was also its own ticket with its own file, so several people could work on the pipeline at once without editing the same file.
   \item \textbf{Configuration in \texttt{params.yaml} (EDN-30).} Everything configurable is there, and \texttt{config.py} holds only paths. A changed parameter reruns the stages that read it, and \texttt{dvc params diff} shows what changed between two commits.
-  \item \textbf{Stages beyond the course demo.} A tabular model needs a \texttt{features} stage. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12). Further stages draw \cref{fig:segments,fig:composition,fig:energy} from the pipeline's outputs.
+  \item \textbf{Stages beyond the course demo.} Our model works on a table of car properties, so a \texttt{features} stage turns the cleaned columns into model inputs, for example the age from the registration date. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12). Further stages draw \cref{fig:segments,fig:composition,fig:energy} from the pipeline's outputs.
   \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned and processed data (\cref{sec:m3-data-testing}).
-  \item \textbf{Dependency groups (EDN-47).} \texttt{[project] dependencies} is the serving runtime only, and the pipeline and development tools are dependency groups. The API image installs only what serving needs, and a CI job checks that serving code imports nothing from a group.
+  \item \textbf{Dependency groups (EDN-47).} In \texttt{pyproject.toml}, \texttt{[project] dependencies} lists only the serving runtime, and the pipeline and development tools are dependency groups. The API image installs only what serving needs, and a CI job checks that serving code imports nothing from a group.
 \end{itemize}
 
 \subsubsection{Code versioning}
@@ -37,7 +37,7 @@ We changed it where this project needed it:
   Already in place: GitHub Flow with branches named after their type (\texttt{feature/}, \texttt{fix/}, \texttt{docs/}, \dots), branch protection on \texttt{main}, squash merge as the only merge method, Conventional Commits enforced by pre-commit and by a CI check on PR titles, pre-commit hooks (ruff, nbstripout, file hygiene).
 }
 
-We follow GitHub Flow.
+As our Git workflow we follow GitHub Flow \cite{github-flow}.
 \texttt{main} is the released state, every change is made on a short-lived branch named after its type (\texttt{feature/}, \texttt{fix/}, \texttt{docs/}, \dots), and it reaches \texttt{main} through a pull request.
 
 Branch protection enforces this.
@@ -46,7 +46,9 @@ No approval is required; \cref{sec:m1-coordination} describes how changes are re
 Squash merge is the only merge method, so \texttt{main} has one commit per pull request.
 With squash merge the pull request title becomes the commit message, so the commit message format of Conventional Commits \cite{conventional-commits} is checked twice: by a \texttt{commit-msg} hook locally and by a CI check on the title.
 
-Eleven pre-commit hooks run before every commit: \texttt{ruff} as linter and formatter, \texttt{nbstripout} for removing notebook outputs, \texttt{gitleaks}, and checks for whitespace, YAML and TOML syntax, merge-conflict markers, line endings and files over 1\,MB.
+Eleven pre-commit hooks run before every commit.
+They run \texttt{ruff} as linter and formatter, \texttt{nbstripout} for removing notebook outputs, and \texttt{gitleaks} for finding secrets.
+The remaining hooks check whitespace, YAML and TOML syntax, merge-conflict markers, line endings, and files over 1\,MB.
 CI runs all of them except \texttt{gitleaks} again on every file, and a separate CI job scans the whole history for secrets.
 
 \begin{table}[ht]
@@ -89,7 +91,7 @@ We version the data and the models with DVC.
 The remote is the DagsHub repository of an organisation the team owns, so access follows team membership and does not depend on one member's account (EDN-19).
 Each member's credentials are in \texttt{.dvc/config.local}, which Git ignores.
 
-The pipeline is defined in \texttt{dvc.yaml} (\cref{fig:pipeline}), and the committed \texttt{dvc.lock} records the hash of every input, parameter and output.
+The pipeline is defined in \texttt{dvc.yaml} (\cref{fig:pipeline}), and the committed \texttt{dvc.lock} records the hash of every input and output file and the value of every parameter.
 A Git commit therefore identifies the code, the data and the parameters together, and \texttt{dvc pull} restores the artefacts that belong to it.
 \texttt{dvc.lock} is reproducible only within one toolchain, because a Parquet file changes with the versions of the libraries that write it.
 
@@ -106,14 +108,14 @@ Three properties of the pipeline go beyond the course demo:
 
 \begin{itemize}
   \item \textbf{Raw data.} The \texttt{download} stage fetches the file from the Zenodo DOI and refuses it unless its MD5 equals the checksum Zenodo publishes (EDN-25). We keep no copy of the published CSV, only the Parquet file derived from it.
-  \item \textbf{Parameters.} Each stage lists only the \texttt{params.yaml} keys it reads, and \texttt{foreach} generates the \texttt{features} stage once per feature set and the \texttt{train} stage once per variant. Changing the hyperparameters of one variant retrains only that variant (EDN-30).
+  \item \textbf{Parameters.} Each stage lists only the \texttt{params.yaml} keys it reads, and \texttt{foreach} generates the \texttt{features} stage once per feature set and the \texttt{train} stage once per variant. Changing the hyperparameters of one variant therefore retrains only that variant (EDN-30).
   \item \textbf{Synthetic data.} With \texttt{download.source} set to \texttt{synthetic}, the \texttt{download} stage generates a dataset with the same schema, and \texttt{dvc repro} runs on a clean clone without the 548.6\,MB file and without DagsHub access (EDN-33). The tests use the same generator, so no real listing is committed to Git. \texttt{metrics.json} records which source produced it.
 \end{itemize}
 
 The \texttt{validate-data} stage is a gate inside the pipeline, which \cref{sec:m3-data-testing} describes.
 
 \paragraph{Scalability.}
-A new snapshot is a change of four parameters: the Zenodo record, the file name, its checksum, and the snapshot date the ages are computed from.
+A newer data snapshot, such as a later scrape published on Zenodo, is a change of four parameters: the Zenodo record, the file name, its checksum, and the snapshot date the ages are computed from.
 DVC then reruns the pipeline and computes the list of supported makes from the new data.
 DVC caches each stage's data and models and pushes them to the remote once, while Git tracks the small report files.
 A change therefore reruns only the stages it affects.
