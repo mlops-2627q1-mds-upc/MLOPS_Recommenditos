@@ -7,7 +7,7 @@ Record of each sprint's goal and outcome.
 | ------ | ----- | ---- | ------- |
 | 1      | 2026-09-22 - 2026-09-29 | M1 Inception setup: stand up team coordination (Discord), lock the dataset and modelling direction, and get DVC, requirements, and the model/dataset cards underway. | Met. 16 pull requests of sprint 1 scope merged, 7 issues closed. Dataset, modelling direction and drift scenario locked; DVC and the DagsHub remote in place with the raw file tracked; dataset card, model card, problem specification and requirements written. The model card (#5, PR #30) landed on the last day, minutes after the review was written, so nothing was carried into sprint 2 but the Discord ticket (#15), which is set up and still open. |
 | 2      | 2026-09-29 - 2026-10-06 | From documents to a running pipeline: land the contract every stage builds on, then fill the DVC stages in parallel, so the first report has measured numbers to cite. | Met. The pipeline runs end to end on the real Zenodo snapshot with every stage implemented, tracked in MLflow on DagsHub and gated by SC-01 to SC-06, and CodeCarbon measures every training fit. 29 pull requests merged and 26 issues closed after planning. Hyperparameter tuning (#88) and the split strategy (#89) were not started and move into sprint 3. |
-| 3 | 2026-10-06 - 2026-10-13 | Fine-tune the model and measure its carbon emissions, so the numbers the first report quotes are final before the delivery on 2026-10-19. | Mostly met. 16 pull requests merged and 7 issues closed after planning. The hyperparameter search (#88) and the split review (#89) kept the committed values, the search's energy is measured and NFR-10 now separates a search from the final fit (EDN-73), and `lgbm-basic` became the candidate after training on blanked copies (#116, EDN-82). The ticket for the carbon-emissions scope was never written, and the candidate changed on the last day, so the report's numbers were final only at the end of the sprint. |
+| 3 | 2026-10-06 - 2026-10-13 | Fine-tune the model and measure its carbon emissions, so the numbers the first report quotes are final before the delivery on 2026-10-19. | Met. 16 pull requests merged and 7 issues closed after planning. The hyperparameter search (#88) and the split review (#89) kept the committed values, and `lgbm-basic` became the candidate after training on blanked copies (#116, EDN-82). The carbon emissions are measured for every training fit and for the whole search, and NFR-10 now separates a search from the final fit (EDN-73); that work landed inside #88, because the planned ticket of its own was never opened. The candidate changed on the last day, so the report's numbers were final only at the end of the sprint. |
 | 4 | 2026-10-13 - 2026-10-20 | Finalise and submit the first report and prepare the M1-M3 presentation. | In progress |
 
 ## Sprint 1 planning notes (2026-09-22)
@@ -229,7 +229,9 @@ Written on 2026-10-17 from the merged pull requests and the closed issues, to be
 
 - [#44](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/44), [#92](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/92) and [#93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/93): the first report, the presentation and the delivery cut, which fall after the sprint by plan.
 - [#94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/94) stays open with the checkboxes it has left.
-- The ticket for the carbon-emissions scope, which the planning notes said was still to be written, was never opened. The sprint's energy work happened inside #88.
+- The carbon-emissions half of the sprint goal is done, but without the ticket of its own that the planning notes said was still to be written.
+  Its work landed inside #88 ([PR #101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101)): the energy of every fit of the search, its total reported apart from the final fit's, and NFR-10 changed to match (EDN-73).
+  It builds on the CodeCarbon measurement of every training fit from sprint 2 (#38).
 - Follow-ups opened during the sprint for the second delivery: [#108](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/108), [#113](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/113) and [#117](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117).
 
 **Risks from planning.**
@@ -359,9 +361,11 @@ Drafted from the sprint's record on 2026-10-17, to be confirmed by the team in t
     - The work is still concentrated: 13 of the 16 pull requests merged since planning were opened from @lukas2510's account and 3 from @kadameit's, and 6 of the 7 closed issues were assigned to those two accounts.
       The sprint 2 action item that every teammate owns a ticket of sprint 3 was not met.
     - The candidate changed on the last day of the sprint (#121), after the report draft, so the draft had to be updated again.
-    - The ticket for the carbon-emissions scope that the planning promised was never written, so half of the sprint goal had no ticket of its own.
+    - The carbon-emissions half of the sprint goal was done but had no ticket of its own, because the ticket the planning promised was never written, so the board does not show that work apart from #88.
+      The team agrees that the tickets have to be cut so that this does not happen again.
     - #117, opened during the sprint, has no milestone and no owner, which the sprint 1 action item rules out.
 - **Action items:**
     - From sprint 5 on, every teammate owns an M4 ticket and opens its pull request from their own account.
     - Give #117 a milestone and an owner.
+    - At sprint planning, every part of the sprint goal gets a ticket of its own, with an owner and the criterion that says when it is done, before the sprint starts; work found during the sprint gets its ticket when it is found.
     - Set the cut-off for changes that move reported numbers one day before the sprint ends, not on its last day.
