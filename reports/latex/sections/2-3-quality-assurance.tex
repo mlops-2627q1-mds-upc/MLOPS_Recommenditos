@@ -22,7 +22,9 @@ The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from 
 
 The figures are estimates.
 On our laptops a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
-We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants, before \texttt{lgbm-basic} got its copies (EDN-82); the fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
+We checked the estimate once against the counter, before \texttt{lgbm-basic} got its copies (EDN-82).
+For \texttt{b1}, \texttt{lgbm-basic}, and \texttt{lgbm-extended} it was about 70\,\% of the counter's reading, and estimate and counter gave the same ratio of 2.97 between the two LightGBM variants.
+The fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
 We therefore use the figures to compare variants and not as absolute values.
 The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
@@ -63,12 +65,13 @@ By CodeCarbon's estimate the most expensive fit uses about 0.11\,Wh, so the ener
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-73).
-When we measured this, the candidate ran 1.3 times the boosting rounds for 0.02 percentage points of test MdAPE, and the fit time grows linearly with the rounds.
+When we measured this, the candidate needed 1.3 times as many boosting rounds and gained 0.02 percentage points of test MdAPE, and the fit time grows linearly with the rounds.
 We accepted this so that the validation split, and not a fixed ceiling, decides the size of the model.
 
 \paragraph{Hyperparameter search.}
 The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-73).
-That is about 19 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
+That is about 19 times the whole ladder.
+The two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
 
@@ -103,7 +106,10 @@ It recomputes the figures of the card from the source file and fails when one do
 Ruff checks the code in its cells, and \texttt{nbstripout} removes the outputs before every commit, which also keeps rows of the dataset with personal data out of Git.
 Pynblint \cite{quaranta2022pynblint} checks the structure, for example the length of a cell and the share of Markdown cells.
 We enforce 13 of its 22 rules.
-The other 9 are excluded with a written reason: three read execution counts, which \texttt{nbstripout} removes, five check the repository for things CI already enforces, and one is switched off in Pynblint itself.
+The other 9 are excluded with a written reason.
+Three read execution counts, which \texttt{nbstripout} removes.
+Five check the repository for things CI already enforces.
+One is switched off in Pynblint itself.
 
 Pynblint exits with 0 whatever it finds, so we wrote a wrapper, \texttt{tools/notebook\_lint.py}, that reads its report and fails on any finding.
 CI runs it as a required check.
@@ -119,7 +125,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}, while NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
@@ -144,7 +150,8 @@ In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,
 \end{table}
 
 The gate tests check the logic of the gate, not the accuracy of the model.
-The accuracy is measured by the \texttt{evaluate} stage on the real test split, and on every run under different conditions: in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
+The accuracy is measured by the \texttt{evaluate} stage on the real test split.
+Every run also measures it in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
 
 Behavioural tests check the trained models, with one test class for each of the three types (\cref{tab:behavioural-tests}).
 
@@ -165,7 +172,8 @@ Behavioural tests check the trained models, with one test class for each of the 
   \label{tab:behavioural-tests}
 \end{table}
 
-Of the 64 cases, 42 run in CI on models trained from the synthetic data; the other 22 need the real models and their 8,859 validation rows and are skipped in CI.
+The behavioural tests run 64 cases.
+42 of them run in CI on models trained from the synthetic data, and the other 22 need the real models and the 8,859 validation rows, so CI skips them.
 
 \paragraph{Traceability.}
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).
@@ -215,7 +223,7 @@ The validation is built to stop a problem before training:
 
 \begin{itemize}
   \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so nothing is trained on data that did not pass.
-  \item \textbf{Reviewable result.} The stage writes \texttt{summary.json}, which Git tracks, so a pull request that changes the data shows what changed in the validation. It also writes the Data Docs.
+  \item \textbf{Reviewable result.} The stage writes \texttt{summary.json}, which Git tracks, so a pull request that changes the data shows what changed in the validation. It also writes Great Expectations' HTML report (Data Docs).
   \item \textbf{Tolerances.} A registration date after the snapshot date is tolerated in up to 1\,\% of the raw rows and forbidden in the cleaned data. A new scrape with many such rows fails the raw suite and is noticed, where preprocessing alone would remove them silently.
   \item \textbf{Fill rates.} Both suites require the six columns that the published file fills in every row to stay filled in 99.9\,\% of the rows (EDN-68), so a column that turns empty in a new scrape fails the validation.
 \end{itemize}
