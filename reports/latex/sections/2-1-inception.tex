@@ -53,12 +53,13 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
 \paragraph{Requirements and specification.}
 The lecturer's feedback on our first version of the requirements was that it read as a specification, because it fixed endpoints, status codes and image tags.
 We split it (EDN-27): \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{requirements.md}} states what must hold and for whom, and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{specification.md}} states how each requirement is realised, under the same IDs.
-A design change no longer changes a requirement.
+A design change therefore no longer changes a requirement.
 
 \paragraph{Measured targets.}
 We checked targets against the data before we committed to them.
-FR-01 makes body type and seller type required fields, because they are filled in 100\,\% and 99.986\,\% of the training rows, respectively, so the model cannot learn what a missing value means (EDN-15).
-NFR-05 first promised an uptime percentage, which a single unattended machine cannot guarantee; it now requires recovery within 30 seconds and no downtime during the graded presentation (EDN-10).
+Body type and seller type are filled in 100\,\% and 99.986\,\% of the training rows, respectively, so the model has almost never seen them missing and cannot learn what a missing value means.
+FR-01 therefore makes them required fields (EDN-15).
+NFR-05 first promised an uptime percentage, which a single unattended machine cannot guarantee. It now requires recovery within 30 seconds and no downtime during the graded presentation (EDN-10).
 A target the team has not confirmed yet is marked \textbf{[proposed]} in the requirements document.
 
 \subsubsection{Dataset card}
