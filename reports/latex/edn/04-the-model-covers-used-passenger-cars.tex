@@ -9,7 +9,7 @@
   topic = {Problem Specification},
   participants = {@lukas2510},
   decision = {The model covers used passenger cars: \texttt{offer\_\allowbreak{}type =\allowbreak{} U}, not pre-registered, \texttt{vehicle\_\allowbreak{}type =\allowbreak{} Car}.
-The pipeline filters out new cars, pre-registered cars and transporters, and the API rejects them.
+The pipeline filters out new cars, pre-registered cars, and transporters, and the API rejects them.
 \texttt{is\_\allowbreak{}preregistered} defines the scope and is therefore not a feature.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
@@ -21,7 +21,7 @@ The pipeline filters out new cars, pre-registered cars and transporters, and the
 Known limit: a \texttt{False} in \texttt{is\_\allowbreak{}preregistered} can mean ``not stated'' (EDN-23), so some unmarked pre-registered listings remain in the training data.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
-  assessment = {AI profiled the data, ran the comparison on both scopes and recommended this scope.
+  assessment = {AI profiled the data, ran the comparison on both scopes, and recommended this scope.
 Lukas checked that the numbers came from the real dataset.
 AI later found that its own proposal to use \texttt{is\_\allowbreak{}preregistered} as a feature contradicted this entry, and withdrew it.},
   aievidence = {Claude Code sessions of 2026-09-22 (issue \#2) and 2026-09-29 (issue \#25).},

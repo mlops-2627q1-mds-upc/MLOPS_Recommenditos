@@ -7,7 +7,7 @@
   milestone = {M2: Reproducibility},
   topic = {Data Validation, Testing Strategy},
   participants = {@lukas2510},
-  decision = {\texttt{recommenditos/\allowbreak{}schema.\allowbreak{}py} holds the structural contract of the raw, interim and processed frames: column names, dtypes and nullability, with a \texttt{validate} and a \texttt{conform} method.
+  decision = {\texttt{recommenditos/\allowbreak{}schema.\allowbreak{}py} holds the structural contract of the raw, interim and processed frames: column names, dtypes, and nullability, with a \texttt{validate} and a \texttt{conform} method.
 Value rules stay in the Great Expectations suites.
 Every stage validates after reading and conforms before writing.},
   rationale = {\emph{Alternatives considered:}
@@ -22,7 +22,7 @@ A value break is a change in the data and belongs in a suite with a tolerance.
 It also selects only the contract's columns, which keeps the personal-data columns out of later frames.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
-  assessment = {AI installed Pandera, Great Expectations and pyarrow against our pandas version and measured what survives a Parquet round trip.
+  assessment = {AI installed Pandera, Great Expectations, and pyarrow against our pandas version and measured what survives a Parquet round trip.
 Two findings decided the option: a string dtype that changes across the boundary, and Pandera ignoring the datetime unit.
 Lukas chose from the three options with these findings.},
   aievidence = {Claude Code session of 2026-09-29, probes in a scratch environment.},

@@ -24,6 +24,7 @@ LaTeX sources for our two course deliverables:
 - `\tbd{...}` marks a placeholder.
   It renders in red in every build, and `make report-submit` counts the ones left.
 - Refer to EDN entries by ID in the report, e.g. "(EDN-03)".
+- Use the Oxford comma in every list of three or more items, with "and" as with "or": "make, model, and age band". The course's report template writes it that way, and the whole report and the EDN follow it; for the EDN, write it in `reports/edn.md`.
 - A figure that shows data is drawn by a pipeline stage, not by hand: the stage writes a PDF to `reports/figures/`, and its copy in `figures/` is what the report includes.
   `recommenditos/plots.py` holds the style every such figure shares, and its docstring says how colour and size are used; `recommenditos/modeling/compare_segments.py` is the stage to copy from.
   Draw a figure at the size it is printed at, and check it on the built page and in a greyscale print before it goes in.

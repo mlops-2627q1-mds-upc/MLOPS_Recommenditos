@@ -15,20 +15,20 @@ We track experiments with MLflow on the team's DagsHub repository, which is also
 The credentials are in a \texttt{.env} file that Git ignores.
 
 \paragraph{What we track.}
-The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder.
-The ladder is defined in \texttt{params.yaml} and has four steps, each of which changes one thing: \texttt{b0}, the median price per make, model and age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features; and \texttt{lgbm-extended}, the same model on 162 features, which add the equipment lists, the history flags and further technical columns.
+The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder, a sequence of models from a simple baseline to the full model.
+The ladder is defined in \texttt{params.yaml} and has four steps: \texttt{b0}, which predicts the median training price of cars with the same make, model, and two-year age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features, trained on its rows plus blanked copies of them (EDN-82); and \texttt{lgbm-extended}, LightGBM without such copies on 162 features, which add the equipment lists, the history flags, and further technical columns.
 Each run logs:
 
 \begin{itemize}
   \item the parameters of its stage and the name of its feature set;
-  \item the metrics: MdAPE, the shares within $\pm$10\,\% and $\pm$20\,\%, the mean absolute error in EUR and the success criteria;
+  \item the metrics: MdAPE, the shares within $\pm$10\,\% and $\pm$20\,\%, the mean absolute error in EUR, and the success criteria;
   \item the fit time and CodeCarbon's energy and emissions figures (\cref{sec:m3-energy});
   \item the model artefact;
   \item the Git commit and the hashes of the stage's inputs, so that a run can be matched to a committed state of the pipeline (NFR-14).
 \end{itemize}
 
 \paragraph{How others can compare and extend the results.}
-Each variant is its own DVC stage, so \texttt{dvc.lock} pins the code, data and parameters behind a run, and \texttt{dvc repro train@lgbm-basic} on the same commit reproduces it.
+Each variant is its own DVC stage, so \texttt{dvc.lock} pins the code, data, and parameters behind a run, and \texttt{dvc repro train@lgbm-basic} on the same commit reproduces it.
 The comparison is also committed: the \texttt{evaluate} stage writes one record per variant to \texttt{reports/metrics/} and a summary to \texttt{metrics.json}.
 A pull request that changes a result shows the change in its diff, and a reader needs no account on the tracking server.
 A new variant is one more entry in \texttt{params.yaml}.
@@ -55,12 +55,12 @@ A new variant is one more entry in \texttt{params.yaml}.
 \Cref{tab:runs} compares the four runs, which the \href{https://dagshub.com/recommenditos/MLOPS_Recommenditos/experiments}{experiment on DagsHub} lists as well.
 The extended feature set improves the MdAPE by 0.48 percentage points when the user gives every field.
 With only the fields FR-01 requires, \texttt{lgbm-extended} is at 10.30\,\%, which is 1.65 times its own full-input value and above SC-06's bound of 1.5, and it is worse than \texttt{lgbm-basic} at 6.86\,\%.
-\texttt{lgbm-basic} was at 8.26\,\% on that request, which was almost absent from its training rows, until we trained it on copies of them with optional fields removed (EDN-82).
+Such requests were almost absent from the training rows, and \texttt{lgbm-basic} was at 8.26\,\% on them until we trained it on blanked copies (EDN-82).
 \texttt{lgbm-extended} is trained without such copies: with them it reached 7.14\,\% on that request on the validation split, but it was worse than \texttt{lgbm-basic} on a request that gives exactly the basic set's six optional fields.
 \texttt{lgbm-extended} also takes 1.6 times as long to fit.
 We therefore put \texttt{lgbm-basic} forward as the candidate (EDN-62).
 
 The hyperparameter search is tracked separately.
 Its 34 fits are runs in a second experiment, \texttt{recommenditos-price-tuning}, so they do not mix with the ladder.
-The search compared \texttt{learning\_rate}, \texttt{num\_leaves} and \texttt{min\_child\_samples} on the validation split for both LightGBM variants and found no value that is measurably better than the committed ones.
+The search compared \texttt{learning\_rate}, \texttt{num\_leaves}, and \texttt{min\_child\_samples} on the validation split for both LightGBM variants and found no value that is measurably better than the committed ones.
 The results in \cref{tab:runs} use these values; the search was not repeated after \texttt{lgbm-basic} got its copies.

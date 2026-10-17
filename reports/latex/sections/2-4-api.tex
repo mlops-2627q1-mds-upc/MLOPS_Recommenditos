@@ -10,7 +10,7 @@
   \textbf{Template:} Physical and logical architectures of the system, including diagrams.
   Design patterns used.
   Selection and justification of design decisions (e.g.\ cloud provider).
-  The demo repo compares free tiers of AWS, Azure, GCP, Okteto and the FIB Virtech VM (free for the semester, 4\,GB RAM, 20\,GB storage); see references/course-demos.md.\\
+  The demo repo compares free tiers of AWS, Azure, GCP, Okteto, and the FIB Virtech VM (free for the semester, 4\,GB RAM, 20\,GB storage); see references/course-demos.md.\\
   \textbf{Rubric (15 pts, the largest single item):} In what ways does our system design balance clarity and justified complexity while applying suitable architectural patterns and principles?\\
   Component responsibilities and interactions are typical M4 EDN entries.
 }
@@ -20,10 +20,10 @@
 \paragraph{Cloud provider.}
 \label{sec:m4-cloud}
 We deploy on the FIB Virtech virtual machine that the course provides (EDN-17).
-The course lists four free alternatives: AWS, Azure, GCP and Okteto.
+The course lists four free alternatives: AWS, Azure, GCP, and Okteto.
 
 Memory decided the choice, together with the fact that the course provides the machine.
-Our stack is an API container, Prometheus, Grafana and a scheduled drift job, which does not fit into the 1\,GB and 0.6\,GB of the AWS and GCP free tiers.
+Our stack is an API container, Prometheus, Grafana, and a scheduled drift job, which does not fit into the 1\,GB and 0.6\,GB of the AWS and GCP free tiers.
 Okteto offers 3\,GB and Azure between 1 and 4\,GB, depending on the instance, so neither has more memory than the 4\,GB of the FIB machine.
 The FIB machine also has 20\,GB of disk and is free for the semester the project runs.
 Because the course provides it, nobody needs a personal cloud account with payment details (EDN-17).
