@@ -16,19 +16,19 @@ The credentials are in a \texttt{.env} file that Git ignores.
 
 \paragraph{What we track.}
 The experiment \texttt{recommenditos-price} holds one run per variant of our experiment ladder, a sequence of models from a simple baseline to the full model.
-The ladder is defined in \texttt{params.yaml} and has four steps: \texttt{b0}, which predicts the median training price of cars with the same make, model and two-year age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features, trained on its rows plus blanked copies of them (EDN-82); and \texttt{lgbm-extended}, LightGBM without such copies on 162 features, which add the equipment lists, the history flags and further technical columns.
+The ladder is defined in \texttt{params.yaml} and has four steps: \texttt{b0}, which predicts the median training price of cars with the same make, model, and two-year age band; \texttt{b1}, a Ridge regression; \texttt{lgbm-basic}, LightGBM on the 16 basic features, trained on its rows plus blanked copies of them (EDN-82); and \texttt{lgbm-extended}, LightGBM without such copies on 162 features, which add the equipment lists, the history flags, and further technical columns.
 Each run logs:
 
 \begin{itemize}
   \item the parameters of its stage and the name of its feature set;
-  \item the metrics: MdAPE, the shares within $\pm$10\,\% and $\pm$20\,\%, the mean absolute error in EUR and the success criteria;
+  \item the metrics: MdAPE, the shares within $\pm$10\,\% and $\pm$20\,\%, the mean absolute error in EUR, and the success criteria;
   \item the fit time and CodeCarbon's energy and emissions figures (\cref{sec:m3-energy});
   \item the model artefact;
   \item the Git commit and the hashes of the stage's inputs, so that a run can be matched to a committed state of the pipeline (NFR-14).
 \end{itemize}
 
 \paragraph{How others can compare and extend the results.}
-Each variant is its own DVC stage, so \texttt{dvc.lock} pins the code, data and parameters behind a run, and \texttt{dvc repro train@lgbm-basic} on the same commit reproduces it.
+Each variant is its own DVC stage, so \texttt{dvc.lock} pins the code, data, and parameters behind a run, and \texttt{dvc repro train@lgbm-basic} on the same commit reproduces it.
 The comparison is also committed: the \texttt{evaluate} stage writes one record per variant to \texttt{reports/metrics/} and a summary to \texttt{metrics.json}.
 A pull request that changes a result shows the change in its diff, and a reader needs no account on the tracking server.
 A new variant is one more entry in \texttt{params.yaml}.
@@ -62,5 +62,5 @@ We therefore put \texttt{lgbm-basic} forward as the candidate (EDN-62).
 
 The hyperparameter search is tracked separately.
 Its 34 fits are runs in a second experiment, \texttt{recommenditos-price-tuning}, so they do not mix with the ladder.
-The search compared \texttt{learning\_rate}, \texttt{num\_leaves} and \texttt{min\_child\_samples} on the validation split for both LightGBM variants and found no value that is measurably better than the committed ones.
+The search compared \texttt{learning\_rate}, \texttt{num\_leaves}, and \texttt{min\_child\_samples} on the validation split for both LightGBM variants and found no value that is measurably better than the committed ones.
 The results in \cref{tab:runs} use these values; the search was not repeated after \texttt{lgbm-basic} got its copies.

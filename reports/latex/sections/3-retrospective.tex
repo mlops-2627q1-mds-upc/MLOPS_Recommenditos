@@ -15,16 +15,16 @@
   Explain which concepts we used from which other courses.
 }
 
-\tbd{DRAFT for the whole team to confirm and extend in the laboratory session. Everything below is assembled from the sprint records and retrospective notes in \texttt{docs/docs/scrum/sprints.md}, which cover sprint~1 and the start of sprint~2 only. It is a starting point for the retrospective, not its outcome: the team confirms, corrects and extends it together, and each member supplies their own part of \cref{sec:retro-courses}.}
+\tbd{DRAFT for the whole team to confirm and extend in the laboratory session. Everything below is assembled from the sprint records and retrospective notes in \texttt{docs/docs/scrum/sprints.md}, which cover sprint~1 and the start of sprint~2 only. It is a starting point for the retrospective, not its outcome: the team confirms, corrects, and extends it together, and each member supplies their own part of \cref{sec:retro-courses}.}
 
-\subsection{Challenges, barriers and opportunities}
+\subsection{Challenges, barriers, and opportunities}
 \label{sec:retro-challenges}
 
 \paragraph{The pipeline is sequential, and five people are not.}
 The single largest barrier was structural rather than technical.
-Download feeds preprocessing, which feeds validation, the split, the features, the training and the evaluation, so for as long as none of the contracts between the stages existed, only one person could work on the pipeline at a time.
+Download feeds preprocessing, which feeds validation, the split, the features, the training, and the evaluation, so for as long as none of the contracts between the stages existed, only one person could work on the pipeline at a time.
 Sprint~1 showed what that costs: seven pull requests were open simultaneously, two of them with merge conflicts, and nothing could be built on the data contract while its own pull request was open.
-Sprint~2 was cut around the barrier instead of around the milestones, by landing the shared contracts first: one ticket delivered every DVC stage as a running stub, \texttt{params.yaml}, the schema contract and a synthetic fixture, and it unblocked eight tickets at once.
+Sprint~2 was cut around the barrier instead of around the milestones, by landing the shared contracts first: one ticket delivered every DVC stage as a running stub, \texttt{params.yaml}, the schema contract, and a synthetic fixture, and it unblocked eight tickets at once.
 The same cut gave each remaining ticket its own files, which is why one owner per file also became the rule for this report.
 
 \paragraph{Evidence that stops being true.}
@@ -46,7 +46,7 @@ In both cases the check that settled it was one API call and was available befor
 \paragraph{An uneven distribution of work in sprint~1, and what we changed.}
 The sprint~1 retrospective records that in that first sprint almost every commit on \texttt{main} came from one person.
 Because the laboratory grade carries an individual factor based on contributions, the team treated that as a finding to act on rather than as an observation, and turned it into an action item in the same session: every member owns at least one pipeline stage and writes the report section for the practice they built.
-The sprint~2 plan is cut that way, with the download and preprocess stages, the split and features stages, the training stage and its emissions tracking, the Great Expectations suites and the evaluate stage each assigned to a different member, and the section ownership of this report follows the same rule of one owner per file.
+The sprint~2 plan is cut that way, with the download and preprocess stages, the split and features stages, the training stage and its emissions tracking, the Great Expectations suites, and the evaluate stage each assigned to a different member, and the section ownership of this report follows the same rule of one owner per file.
 This is a statement about sprint~1 and the correction it produced, not about the delivery as a whole; whether the correction held is what the sprints after it show.
 \tbd{the team's own account of how the distribution developed over sprints~2 and~3, and whether the action item worked}
 
@@ -60,13 +60,13 @@ Holding a whole country out of training turned the monitoring milestone from a s
 Making the data source a parameter meant a synthetic fixture could unblock five people without anyone being able to ship a model trained on fabricated data unnoticed.
 And writing the decisions down as they were taken, with their alternatives, meant the report can cite reasoning rather than reconstruct it.
 
-\tbd{the team's additions for Milestones 4 to 6: what the deployment, the packaging and the monitoring turned out to cost, and which of the risks above actually materialised}
+\tbd{the team's additions for Milestones 4 to 6: what the deployment, the packaging, and the monitoring turned out to cost, and which of the risks above actually materialised}
 
 \subsection{Lessons learned and what we would do differently}
 \label{sec:retro-lessons}
 
 \paragraph{Land the contracts before the work that depends on them.}
-The single change that made the project move was landing the schema, the parameters and the fixture as one ticket before anybody started on a stage.
+The single change that made the project move was landing the schema, the parameters, and the fixture as one ticket before anybody started on a stage.
 We would do that first next time rather than after a sprint of pull requests blocking each other.
 
 \paragraph{Measure a requirement before committing to it, not after.}
@@ -83,7 +83,7 @@ Asserting that each case survives the rules, rather than that it exists, is the 
 This also became the rule for working with coding agents: a ticket handed to an agent needs a local oracle, and an agent's claim decides nothing until it has been checked at the point the value is used.
 
 \paragraph{Make the process trace a by-product of the work.}
-Labels, milestones and owners assigned when a ticket is written cost nothing; assigned at the sprint review they cost a reconstruction from the git history, and six tickets of sprint~1 never got them at all.
+Labels, milestones, and owners assigned when a ticket is written cost nothing; assigned at the sprint review they cost a reconstruction from the git history, and six tickets of sprint~1 never got them at all.
 The same applies to the ceremonies: holding them in the one session where the whole team is present is worth more than holding them on the day a document happened to name.
 
 \paragraph{Reserve shared identifiers centrally.}

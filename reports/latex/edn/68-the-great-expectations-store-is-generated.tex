@@ -8,9 +8,9 @@
   milestone = {M3: Quality Assurance},
   topic = {Data Validation, Testing Strategy},
   participants = {@lukas2510},
-  decision = {The \texttt{configure\_\allowbreak{}gx} stage rebuilds the Great Expectations context under \texttt{gx/\allowbreak{}} from code, \texttt{schema.\allowbreak{}py} and \texttt{params.\allowbreak{}yaml} on every run.
+  decision = {The \texttt{configure\_\allowbreak{}gx} stage rebuilds the Great Expectations context under \texttt{gx/\allowbreak{}} from code, \texttt{schema.\allowbreak{}py}, and \texttt{params.\allowbreak{}yaml} on every run.
 \texttt{gx/\allowbreak{}} is a DVC-cached output and is not committed.
-The suites' column, dtype and non-null checks are generated from \texttt{schema.\allowbreak{}py}.
+The suites' column, dtype, and non-null checks are generated from \texttt{schema.\allowbreak{}py}.
 Fill rates are tolerant rules in both suites, and the contracts keep only structural nullability.
 Any failed expectation fails \texttt{validate-\allowbreak{}data}.},
   rationale = {\emph{Alternatives considered:}

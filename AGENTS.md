@@ -6,6 +6,8 @@ The course language is English, so everything we produce is in English, always.
 That covers commit messages, branch names, PR titles, descriptions and comments, issues and issue comments, code, identifiers, code comments, docstrings, documentation, the report and the EDN.
 Chat with the team may happen in any language, but nothing written into the repo or onto GitHub does.
 
+The report and the EDN use the Oxford comma in every list of three or more items ("make, model, and age band"), as the course's report template does; see the Writing section of [reports/latex/README.md](reports/latex/README.md).
+
 ## Git workflow
 
 Full workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md) - read it before opening a PR.

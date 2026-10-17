@@ -3,7 +3,7 @@
 \label{sec:m3}
 \guidance{
   \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
-  The testing strategy for code, data and model is a typical M3 EDN entry.
+  The testing strategy for code, data, and model is a typical M3 EDN entry.
 }
 
 \subsubsection{Energy efficiency awareness}
@@ -84,15 +84,15 @@ We will report it in Milestone~4 as an average per answer over the load test, be
 \guidance{
   \textbf{Template:} e.g.\ pylint.\\
   \textbf{Rubric (10 pts, shared with model and data testing):} To what degree does our linting contribute to the overall quality and consistency of the codebase?\\
-  The lab lists Pynblint (notebook and repository QA), Pylint or flake8.
+  The lab lists Pynblint (notebook and repository QA), Pylint, or flake8.
   We run ruff through pre-commit and CI; the demo additionally enables Pylint rules in ruff (\texttt{PL}), which our config does too.
 }
 
 We use ruff as linter and formatter for all Python code, including the code cells of notebooks.
-The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import order and the Pylint rules.
+The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import order, and the Pylint rules.
 The configuration is in \texttt{pyproject.toml}.
 
-The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint} and a required CI job.
+The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint}, and a required CI job.
 On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 81 files as formatted.
 
 The Pylint rules found five magic values in the command-line stubs of the template, which we removed.
@@ -136,13 +136,13 @@ In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,
     \midrule
     Pipeline stages & Every stage runs on a generated dataset in a temporary directory, without network or credentials (EDN-33). Each output satisfies its contract, the split loses no row, no seller is in two sets, and the holdout contains all Spanish listings and no others. \\
     \addlinespace[2pt]
-    Edge cases & The generated dataset always contains the cases the pipeline rules exist for, such as a duplicate, a registration after the snapshot date, an unsupported make and prices outside the training range. A test of a rule therefore always finds its case in the data. \\
+    Edge cases & The generated dataset always contains the cases the pipeline rules exist for, such as a duplicate, a registration after the snapshot date, an unsupported make, and prices outside the training range. A test of a rule therefore always finds its case in the data. \\
     \addlinespace[2pt]
     Release gate & 21 tests drive the gate with constructed models and records (NFR-01): a criterion passes and fails at its bound, and a criterion that cannot be measured blocks the gate. \\
     \addlinespace[2pt]
     Prediction & A single row gets the same prediction as the same row in a batch, and every prediction lies inside the training price range. \\
     \addlinespace[2pt]
-    Tooling & The requirement matrix, the notebook lint wrapper and the EDN generator have tests of their own. \\
+    Tooling & The requirement matrix, the notebook lint wrapper, and the EDN generator have tests of their own. \\
     \bottomrule
   \end{tabularx}
   \caption{What the test suite covers.}
@@ -180,7 +180,7 @@ A test names the requirement it verifies with the marker \texttt{@pytest.\allowb
 The job fails when a requirement that is due by the current milestone has no evidence (EDN-44).
 Today 67 tests carry a marker.
 Of the 31 requirements, 3 are verified by a test (NFR-01, NFR-08, NFR-14), 3 are named by a test while the evidence they promise is a manual drill (NFR-06, NFR-07, NFR-10), 9 have a manual check with named evidence, and 16 have no evidence yet.
-Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~3 are NFR-01, 06, 07, 08, 14 and 15, and each has its evidence.
+Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~3 are NFR-01, 06, 07, 08, 14, and 15, and each has its evidence.
 
 \subsubsection{Data testing}
 \label{sec:m3-data-testing}
@@ -193,7 +193,7 @@ Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~
 We validate the data in two layers, because they catch different problems (EDN-31).
 
 \paragraph{Structure.}
-\texttt{recommenditos/schema.py} fixes the column names, types and nullability of the raw, cleaned and processed data.
+\texttt{recommenditos/schema.py} fixes the column names, types, and nullability of the raw, cleaned, and processed data.
 Every stage validates its input after reading and its output before writing, and it writes only the columns the contract names, which keeps the seven personal-data columns out of the processed data (NFR-08).
 A violation is a bug in our code, so it fails the stage that caused it.
 We wrote the contract by hand and did not use Pandera, because the contract fixes the unit of every datetime column and Pandera does not check it.

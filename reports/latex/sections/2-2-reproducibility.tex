@@ -25,7 +25,7 @@ We changed the project structure where this project needed it:
   \item \textbf{One module per DVC pipeline stage (EDN-28, \cref{fig:pipeline}).} The template's three flat modules became one module per stage, in \texttt{recommenditos/\allowbreak data/} and \texttt{recommenditos/\allowbreak modeling/}. A stage names the code it runs as its dependency, so a code change reruns only the stages it affects. Each stage was also its own ticket with its own file, so several people could work on the pipeline at once without editing the same file.
   \item \textbf{Configuration in \texttt{params.yaml} (EDN-30).} Everything configurable is there, and \texttt{config.py} holds only paths. A changed parameter reruns the stages that read it, and \texttt{dvc params diff} shows what changed between two commits.
   \item \textbf{Stages beyond the course demo.} Our model works on a table of car properties, so a \texttt{features} stage turns the cleaned columns into model inputs, for example the age from the registration date. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12). Further stages draw \cref{fig:segments,fig:composition,fig:energy} from the pipeline's outputs.
-  \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned and processed data (\cref{sec:m3-data-testing}).
+  \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned, and processed data (\cref{sec:m3-data-testing}).
   \item \textbf{Dependency groups (EDN-47).} In \texttt{pyproject.toml}, \texttt{[project] dependencies} lists only the serving runtime, and the pipeline and development tools are dependency groups. The API image installs only what serving needs, and a CI job checks that serving code imports nothing from a group.
 \end{itemize}
 
@@ -72,7 +72,7 @@ CI runs all of them except \texttt{gitleaks} again on every file, and a separate
   \label{tab:ci-checks}
 \end{table}
 
-CI first detects which areas a change touches and runs the test, documentation and report jobs only for their own area, so a documentation change does not wait for the test suite.
+CI first detects which areas a change touches and runs the test, documentation, and report jobs only for their own area, so a documentation change does not wait for the test suite.
 
 The \texttt{.gitignore} ignores everything under \texttt{data/} except the \texttt{.dvc} pointer files, so a raw file with personal data cannot be committed by accident.
 EDN IDs are reserved on \texttt{main} before a branch uses one, because sprint~1 assigned EDN-19 twice on parallel branches.
@@ -92,7 +92,7 @@ The remote is the DagsHub repository of an organisation the team owns, so access
 Each member's credentials are in \texttt{.dvc/config.local}, which Git ignores.
 
 The pipeline is defined in \texttt{dvc.yaml} (\cref{fig:pipeline}), and the committed \texttt{dvc.lock} records the hash of every input and output file and the value of every parameter.
-A Git commit therefore identifies the code, the data and the parameters together, and \texttt{dvc pull} restores the artefacts that belong to it.
+A Git commit therefore identifies the code, the data, and the parameters together, and \texttt{dvc pull} restores the artefacts that belong to it.
 \texttt{dvc.lock} is reproducible only within one toolchain, because a Parquet file changes with the versions of the libraries that write it.
 
 % figures/pipeline.pdf is drawn from dvc.yaml by figures/pipeline.sh; rerun it
