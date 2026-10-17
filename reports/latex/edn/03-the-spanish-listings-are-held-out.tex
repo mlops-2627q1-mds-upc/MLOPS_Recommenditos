@@ -8,12 +8,12 @@
   milestone = {M1: Project Inception},
   topic = {Dataset Selection, Monitoring},
   participants = {@lukas2510, after supervisor feedback (S. del Rey)},
-  decision = {All AutoScout24 \texttt{ES} listings are held out of training, validation and calibration and replayed in M6 as a new market.
+  decision = {All AutoScout24 \texttt{ES} listings are held out of training, validation, and calibration and replayed in M6 as a new market.
 The DataMarket sample of Spanish cars is dropped.
 The holdout is selected per listing, and the \texttt{split} stage reports any seller that also lists outside \texttt{ES}.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item DataMarket as a stress test on the shared makes: market, year, portal and brand mix shift together, so an alarm could not be attributed, and it has no licence file.
+\item DataMarket as a stress test on the shared makes: market, year, portal, and brand mix shift together, so an alarm could not be attributed, and it has no licence file.
 \item Holding out whole sellers that touch \texttt{ES}: puts non-Spanish rows into the holdout and gains nothing, since no seller crosses the border in the real snapshot.
 \end{itemize}
 \par

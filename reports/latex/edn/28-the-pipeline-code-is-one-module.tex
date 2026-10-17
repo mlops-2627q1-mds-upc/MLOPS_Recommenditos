@@ -7,11 +7,11 @@
   milestone = {M2: Reproducibility},
   topic = {Project Structure},
   participants = {@lukas2510},
-  decision = {Each DVC stage has its own module under \texttt{recommenditos/\allowbreak{}data/\allowbreak{}} or \texttt{recommenditos/\allowbreak{}modeling/\allowbreak{}}, instead of the flat Cookiecutter Data Science layout with \texttt{dataset.\allowbreak{}py}, \texttt{features.\allowbreak{}py} and \texttt{modeling/\allowbreak{}train.\allowbreak{}py}.
+  decision = {Each DVC stage has its own module under \texttt{recommenditos/\allowbreak{}data/\allowbreak{}} or \texttt{recommenditos/\allowbreak{}modeling/\allowbreak{}}, instead of the flat Cookiecutter Data Science layout with \texttt{dataset.\allowbreak{}py}, \texttt{features.\allowbreak{}py}, and \texttt{modeling/\allowbreak{}train.\allowbreak{}py}.
 The course demo repository is structured the same way.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item The flat Cookiecutter layout as generated: download, preprocessing and split would share one file, so an edit to it reruns every stage that depends on it.
+\item The flat Cookiecutter layout as generated: download, preprocessing, and split would share one file, so an edit to it reruns every stage that depends on it.
 \end{itemize}
 \par
 \emph{Why:} The course prescribes Cookiecutter Data Science and allows justified deviations.

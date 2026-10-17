@@ -19,7 +19,7 @@ Without a reachable server a stage runs untracked and says so in \texttt{model.\
 \end{itemize}
 \par
 \emph{Why:} The rubric asks for results that can be compared and understood.
-With one run per variant, MLflow's own table shows parameters, losses, energy figures and test metrics side by side, without joining.
+With one run per variant, MLflow's own table shows parameters, losses, energy figures, and test metrics side by side, without joining.
 The cost is that \texttt{evaluate} depends on an id from \texttt{train}: a model trained without tracking has no run to append to.
 The switch serves whoever produces the numbers for the report: with it, a misconfiguration cannot pass while logging nothing.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},

@@ -13,14 +13,14 @@
 }
 
 \paragraph{How the problem was selected.}
-We had four ideas before the first sprint: a used-car price component, a route-safety model, a recommender and a grocery idea.
+We had four ideas before the first sprint: a used-car price component, a route-safety model, a recommender, and a grocery idea.
 We chose the used-car price component because it sounded the most feasible and interested the team; we did not compare the four ideas in depth (EDN-80).
 What we did check, against the real data, was that the idea is feasible.
 That check also gave us the dataset (EDN-01) and the scope rules of \cref{sec:goal} (EDN-04, EDN-05).
 
 \paragraph{The requirements.}
 The system has 16 functional and 15 non-functional requirements, summarised in \cref{tab:requirements}.
-Each one has a MoSCoW priority (must, should, could or won't have) and an acceptance criterion that a test or a named manual check can verify; \cref{sec:m3-model-testing} shows which of them have this evidence today.
+Each one has a MoSCoW priority (must, should, could, or won't have) and an acceptance criterion that a test or a named manual check can verify; \cref{sec:m3-model-testing} shows which of them have this evidence today.
 Each non-functional requirement names its quality characteristic in ISO/IEC 25010 or 25059.
 
 \begin{table}[ht]
@@ -39,7 +39,7 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
     \addlinespace[2pt]
     Performance & NFR-02 to NFR-05 & 95\,\% of valuations within 200\,ms; 20 requests per second for five minutes; everything fits the 4\,GB machine; recovery within 30 seconds of a crash. \\
     \addlinespace[2pt]
-    Engineering & NFR-06, 07, 12 to 14 & Same splits and metrics from a clean clone; 80\,\% test coverage and clean linting; the system starts with one command; automatic deployment with rollback; every run records its code, data and parameters. \\
+    Engineering & NFR-06, 07, 12 to 14 & Same splits and metrics from a clean clone; 80\,\% test coverage and clean linting; the system starts with one command; automatic deployment with rollback; every run records its code, data, and parameters. \\
     \addlinespace[2pt]
     Privacy, security & NFR-08, 09, 15 & Personal data of sellers stays in the raw data; public endpoints are read-only; no secret in the Git history. \\
     \addlinespace[2pt]
@@ -51,7 +51,7 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
 \end{table}
 
 \paragraph{Requirements and specification.}
-The lecturer's feedback on our first version of the requirements was that it read as a specification, because it fixed endpoints, status codes and image tags.
+The lecturer's feedback on our first version of the requirements was that it read as a specification, because it fixed endpoints, status codes, and image tags.
 We split it (EDN-27): \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{\texttt{requirements.md}} states what must hold and for whom, and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{\texttt{specification.md}} states how each requirement is realised, under the same IDs.
 A design change therefore no longer changes a requirement.
 
@@ -76,8 +76,8 @@ It documents the AutoScout24 snapshot of \cref{sec:goal}: one scrape dated 2025-
 We profiled the file ourselves. Our findings shaped the project as follows:
 
 \begin{itemize}
-  \item Germany has 38.5\,\% of the rows, and BMW, Porsche, Mercedes-Benz and Audi together have 82.9\,\% (\cref{fig:composition}). The brand skew is why we support only makes with at least 300 listings (EDN-05), and the card states that the data does not represent the European used-car market as a whole.
-  \item 6,347 listings are duplicates. The \texttt{vin} column (the vehicle identification number) is filled in only 34.0\,\% of the rows, so we treat two listings as duplicates when they agree in make, model, version, mileage, registration date, price and power, and remove the duplicates before the split.
+  \item Germany has 38.5\,\% of the rows, and BMW, Porsche, Mercedes-Benz, and Audi together have 82.9\,\% (\cref{fig:composition}). The brand skew is why we support only makes with at least 300 listings (EDN-05), and the card states that the data does not represent the European used-car market as a whole.
+  \item 6,347 listings are duplicates. The \texttt{vin} column (the vehicle identification number) is filled in only 34.0\,\% of the rows, so we treat two listings as duplicates when they agree in make, model, version, mileage, registration date, price, and power, and remove the duplicates before the split.
   \item 164 listings are registered after the snapshot date and would have a negative age. We remove them.
   \item Prices start at 1\,EUR, which is a placeholder or an input error, and the listings above 2 million EUR are collector cars, which are too rare for the model to learn. We keep only prices between 500\,EUR and 2 million EUR.
 \end{itemize}
@@ -95,7 +95,7 @@ The target is an asking price, not a sale price.
 The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-32).
 The raw file contains seven columns with personal data of sellers. They never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20).
 
-After the scope, date, price and deduplication rules, 105,405 of the 118,382 listings remain.
+After the scope, date, price, and deduplication rules, 105,405 of the 118,382 listings remain.
 The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
 We reviewed this split strategy after training and kept it.
 \Cref{tab:split} shows the result.
@@ -128,11 +128,11 @@ It states at the top that no model is released yet and which of its results are 
 Its main points:
 
 \begin{itemize}
-  \item \textbf{Model.} LightGBM on $\log(\mathrm{price})$ (EDN-02). It is compared with two baselines: B0, which predicts the median training price of cars with the same make, model and two-year age band, and B1, a Ridge regression.
+  \item \textbf{Model.} LightGBM on $\log(\mathrm{price})$ (EDN-02). It is compared with two baselines: B1, a Ridge regression, and B0, which predicts the median training price of cars with the same make, model, and two-year age band.
   \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). It is trained on its rows plus two copies of each in which optional input fields are blanked (EDN-82). Early stopping chose 1,394 trees under a ceiling of 5,000, and the model file has 8.7\,MB.
-  \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment and the energy of each training run (\cref{sec:m3-energy}).
+  \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment, and the energy of each training run (\cref{sec:m3-energy}).
   \item \textbf{Who is affected by a wrong answer.} A seller acts on one number, and an estimate that is 10\,\% too low costs them money without their noticing. This is why a valuation comes with an explanation (FR-08). A buyer uses the price interval to check an offer, which is what SC-05 bounds.
-  \item \textbf{Limitations.} The error on cars older than 20 years is above SC-04's bound, which we accept as a limitation of this model (EDN-62). Honda, Hyundai, Aston Martin and Volkswagen are served but have fewer than 500 test rows each, so SC-04 does not check them.
+  \item \textbf{Limitations.} The error on cars older than 20 years is above SC-04's bound, which we accept as a limitation of this model (EDN-62). Honda, Hyundai, Aston Martin, and Volkswagen are served but have fewer than 500 test rows each, so SC-04 does not check them.
 \end{itemize}
 
 \subsubsection{Project coordination and communication}
@@ -140,20 +140,20 @@ Its main points:
 \guidance{
   \textbf{Template:} What tools have been selected, why, and how are they used?\\
   \textbf{Rubric (4 pts):} How effectively do our coordination and communication practices support collaboration and leave a useful trace of our progress?\\
-  Already in place (see \texttt{docs/docs/scrum/} and \texttt{CONTRIBUTING.md}): Scrum with GitHub Issues and a GitHub Projects board, Discord for async communication, a weekly sync in the Tuesday laboratory session instead of a daily standup, a Definition of Done, working agreements and a sprint log, issue and PR templates.
+  Already in place (see \texttt{docs/docs/scrum/} and \texttt{CONTRIBUTING.md}): Scrum with GitHub Issues and a GitHub Projects board, Discord for async communication, a weekly sync in the Tuesday laboratory session instead of a daily standup, a Definition of Done, working agreements, a sprint log, and issue and PR templates.
   Show the trace: board screenshot, sprint log, linked issues and PRs.
 }
 
 We work in Scrum with one-week sprints.
 GitHub Issues is the backlog, a GitHub Projects board (Backlog, To Do, In Progress, In Review, Done) is the sprint board, and Discord is the team chat.
-We chose GitHub for everything except chat so that an issue, its branch, its pull request and its commit are linked to each other and the trace of our progress sits next to the code.
+We chose GitHub for everything except chat so that an issue, its branch, its pull request, and its commit are linked to each other and the trace of our progress sits next to the code.
 The board is linked on the cover.
 
 \begin{itemize}
-  \item \textbf{Ceremonies.} A sprint runs from Tuesday to Tuesday. Planning, review and retrospective take place in the Tuesday laboratory session, the only time the whole team is in one room. We have no daily standup.
-  \item \textbf{Tickets.} Every issue has an owner, a milestone label (\texttt{M1} to \texttt{M6}) and an area label such as \texttt{area:data}. Sprint~1 had no labels until its last day, so we now add them when the issue is written.
-  \item \textbf{Written process.} \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}} hold the roles, the Definition of Done and the working agreements.
-  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 38 entries of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}} record the engineering decisions taken so far with their alternatives.
+  \item \textbf{Ceremonies.} A sprint runs from Tuesday to Tuesday. Planning, review, and retrospective take place in the Tuesday laboratory session, the only time the whole team is in one room. We have no daily standup.
+  \item \textbf{Tickets.} Every issue has an owner, a milestone label (\texttt{M1} to \texttt{M6}), and an area label such as \texttt{area:data}. Sprint~1 had no labels until its last day, so we now add them when the issue is written.
+  \item \textbf{Written process.} \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum}{\texttt{docs/docs/scrum/}} and \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md}{\texttt{CONTRIBUTING.md}} hold the roles, the Definition of Done, and the working agreements.
+  \item \textbf{Trace.} The \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/scrum/sprints.md}{sprint log} records each sprint's goal, planning, review, and retrospective with links to its issues and pull requests (\cref{tab:sprints}). The 38 entries of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md}{\texttt{reports/edn.md}} record the engineering decisions taken so far with their alternatives.
 \end{itemize}
 
 \begin{table}[ht]
@@ -162,9 +162,9 @@ The board is linked on the cover.
     \toprule
     Sprint & Dates (2026) & Goal & Result \\
     \midrule
-    1 & 22 to 29 Sep & Coordination set up, dataset and modelling direction fixed, DVC, requirements and the two cards started & 16 pull requests merged, 7 issues closed \\
+    1 & 22 to 29 Sep & Coordination set up, dataset and modelling direction fixed, DVC, requirements, and the two cards started & 16 pull requests merged, 7 issues closed \\
     \addlinespace[2pt]
-    2 & 29 Sep to 6 Oct & A pipeline that runs end to end on the real data, tracked in MLflow and gated by the success criteria & 29 pull requests merged, 26 issues closed \\
+    2 & 29 Sep to 6 Oct & A pipeline that runs end to end on the real data, tracked in MLflow, and gated by the success criteria & 29 pull requests merged, 26 issues closed \\
     \addlinespace[2pt]
     3 & 6 to 13 Oct & Tune the model and measure its carbon emissions & in progress \\
     \bottomrule

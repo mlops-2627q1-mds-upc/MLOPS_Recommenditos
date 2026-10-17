@@ -8,7 +8,7 @@
   milestone = {M4: Model Deployment},
   topic = {API Design, Feature Encoding},
   participants = {@lukas2510},
-  decision = {A \texttt{country\_\allowbreak{}code} or a \texttt{model} that the training data does not contain is accepted, passed to the model as unknown and reported in the response's \texttt{warnings} field (FR-05).
+  decision = {A \texttt{country\_\allowbreak{}code} or a \texttt{model} that the training data does not contain is accepted, passed to the model as unknown, and reported in the response's \texttt{warnings} field (FR-05).
 The \texttt{features} stage follows the same rule: a categorical has the training levels only, and any other value becomes missing.
 The \texttt{ES} holdout's \texttt{country\_\allowbreak{}code} is therefore missing in every row, on purpose.},
   rationale = {\emph{Alternatives considered:}
