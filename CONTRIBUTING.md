@@ -17,7 +17,7 @@ Conventions for tracking granularity, the remote, and pipeline ownership live in
 ## Workflow
 
 1. Pick an issue, assign yourself, move it to **In Progress** on the board.
-2. Branch off `main`: `feature/<short-description>` or `fix/<short-description>`.
+2. Branch off `main` with a short-lived branch named after the type of the change: `<type>/<short-description>`, for example `feature/`, `fix/`, `docs/`, `test/`, `ci/` or `chore/`.
 3. Commit using [Conventional Commits](https://www.conventionalcommits.org/) (enforced by pre-commit) - e.g. `feat: add price model training script`.
 4. Open a pull request into `main` with a title that also follows Conventional Commits (checked in CI) - it becomes the squash commit message. Move the issue to **In Review**.
 5. Passing checks required before merging. No direct pushes to `main`.

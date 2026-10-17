@@ -13,7 +13,7 @@ Team conventions for how we work together on this project.
 
 ## Git and PRs
 
-- Branch naming: `feature/<short-description>` or `fix/<short-description>`, always branched off `main`.
+- Branch naming: `<type>/<short-description>`, named after the type of the change (for example `feature/`, `fix/`, `docs/`, `test/`, `ci/` or `chore/`), always branched off `main`.
 - Every change goes through a pull request into `main`; there are no direct pushes.
 - Passing checks gate the merge; a formal approval does not.
   GitHub blocks self-approval and a pull request written with an agent runs under its author's account, so requiring one would leave those pull requests unmergeable.

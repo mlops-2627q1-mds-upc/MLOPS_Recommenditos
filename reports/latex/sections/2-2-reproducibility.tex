@@ -34,11 +34,11 @@ We changed it where this project needed it:
 \guidance{
   \textbf{Template:} e.g.\ GitHub Flow.\\
   \textbf{Rubric (15 pts, shared with data versioning):} How do our version control practices keep collaboration smooth and minimise mistakes?\\
-  Already in place: GitHub Flow with \texttt{feature/} and \texttt{fix/} branches, branch protection on \texttt{main}, squash merge as the only merge method, Conventional Commits enforced by pre-commit and by a CI check on PR titles, pre-commit hooks (ruff, nbstripout, file hygiene).
+  Already in place: GitHub Flow with branches named after their type (\texttt{feature/}, \texttt{fix/}, \texttt{docs/}, \dots), branch protection on \texttt{main}, squash merge as the only merge method, Conventional Commits enforced by pre-commit and by a CI check on PR titles, pre-commit hooks (ruff, nbstripout, file hygiene).
 }
 
 We follow GitHub Flow.
-\texttt{main} is the released state, every change is made on a short-lived \texttt{feature/} or \texttt{fix/} branch, and it reaches \texttt{main} through a pull request.
+\texttt{main} is the released state, every change is made on a short-lived branch named after its type (\texttt{feature/}, \texttt{fix/}, \texttt{docs/}, \dots), and it reaches \texttt{main} through a pull request.
 
 Branch protection enforces this.
 Nobody can push to \texttt{main} directly, and a pull request can be merged once the nine required checks of \cref{tab:ci-checks} pass.
