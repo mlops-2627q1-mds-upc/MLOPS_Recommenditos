@@ -44,10 +44,12 @@ How to add an entry:
 
 ### EDN-01: The main dataset is the AutoScout24 listings snapshot
 
+> **Revised on 2026-10-18**: records who found the dataset; the decision is unchanged.
+> 
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Dataset Selection
-- **Participants:** All team members
+- **Participants:** @michudud04 found the dataset and proposed it; all team members confirmed the choice
 - **Decision:** Use the AutoScout24 Car Listings Dataset (2025 snapshot, Zenodo DOI `10.5281/zenodo.17643343`) as the training data for the used-car price component.
 - **Alternatives considered:**
   - Smaller generic Kaggle used-car datasets: mostly one country, fewer rows and features, weaker or undocumented provenance and licence.
@@ -56,7 +58,10 @@ How to add an entry:
   Its skew toward premium brands is accepted as a stated scope limit (EDN-05).
 - **AI involvement:** Information seeking, Alternative assessment
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI profiled the raw file (rows, columns, countries, brand mix, missing values) and summarised the trade-off against the smaller datasets.
+- **Assessment of the AI contribution:** @michudud04 found the dataset on Zenodo after
+  a preliminary inspection of related datasets. It was selected because of its large 
+  number of rows. AI then profiled the raw file (rows, columns, countries, brand mix, 
+  missing values) and summarised the trade-off against the smaller datasets.
   The team reviewed the figures and confirmed the choice in sprint planning.
 - **AI interaction evidence:** Dataset profile and trade-off in `docs/docs/project-brief.md`, sections 2 and 3.1 (2026-09-22).
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13), [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3).
