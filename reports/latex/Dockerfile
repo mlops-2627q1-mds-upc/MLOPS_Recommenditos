@@ -41,12 +41,12 @@ RUN printf '%s\n' \
     && retry ./install-tl --profile texlive.profile --repository "$TL_REPO" \
     && ln -s "$(ls -d /opt/texlive/bin/*-linux)" /opt/texlive/bin/linux
 ENV PATH=/opt/texlive/bin/linux:$PATH
-# Packages used by preamble.tex and edn.tex. Add new ones here.
+# Packages used by preamble.tex, report.tex and edn.tex. Add new ones here.
 RUN retry tlmgr install \
         collection-latex latexmk biber biblatex biblatex-ieee \
         babel-english lm microtype xcolor booktabs tools enumitem etoolbox \
         fancyhdr listings tcolorbox pgf environ tikzfill pdfcol listingsutf8 \
-        csquotes cleveref url
+        csquotes cleveref url pdfpages eso-pic pdflscape
 # The formats are built while the packages install, and without them every
 # compilation fails, so fail the image build here and not in the report job.
 RUN test -f /opt/texlive/texmf-var/web2c/pdftex/pdflatex.fmt
