@@ -94,28 +94,12 @@ The decisions behind them, and how AI was involved in each, are recorded in our 
 \ifconsensus
   $\boxtimes$~\textbf{\enquote{All team members agree that they had an equal contribution to this delivery and project: completing a fair share of the team's work with acceptable/high quality, keeping commitments, and completing assignments on time, helping teammates who are having difficulty when it is easy or important.}}
 \else
-  There is no consensus on an equal contribution.
-  Each team member rated their peers' contributions to this delivery using the CATME scale in \cref{tab:catme-scale}; \cref{tab:catme-ratings} shows the received ratings in rows.
+  There is no consensus on an equal contribution, so each member rated the others on the CATME scale (1--5, 3 is a fair share), and the team agreed on the ratings below (received ratings in rows).
+  \MemberA\ did most of the coordination, set up GitHub and DagsHub, implemented almost all of the code and wrote the first draft of this report, so we ask for an individual factor of 1.2 for \MemberA.
+  All others contributed a fair share and keep 1.0.
 
-  \begin{table}[ht]
-    \centering\small
-    \begin{tabularx}{\textwidth}{@{}cX@{}}
-      \toprule
-      Rating & Description \\
-      \midrule
-      5 & Does more or higher-quality work than expected. Makes important contributions that improve the team's work. Helps teammates who are having difficulty completing their work. \\
-      4 & Demonstrates behaviors described immediately above and below. \\
-      3 & Completes a fair share of the team's work with acceptable quality. Keeps commitments and completes assignments on time. Helps teammates who are having difficulty when it is easy or important. \\
-      2 & Demonstrates behaviors described immediately above and below. \\
-      1 & Does not do a fair share of the team's work. Delivers sloppy or incomplete work. \\
-      \bottomrule
-    \end{tabularx}
-    \caption{CATME ratings (from \url{https://info.catme.org/features/catme-five-dimensions/}).}
-    \label{tab:catme-scale}
-  \end{table}
-
-  \begin{table}[ht]
-    \centering\small
+  \begin{center}
+    \footnotesize
     \begin{tabular}{@{}lcccccc@{}}
       \toprule
       & \MemberA & \MemberB & \MemberC & \MemberD & \MemberE & Average \\
@@ -127,12 +111,5 @@ The decisions behind them, and how AI was involved in each, are recorded in our 
       \MemberE & 3 & 3 & 3 & 3 & -- & 3.0 \\
       \bottomrule
     \end{tabular}
-    \caption{Received peer evaluations (rows: evaluated member).}
-    \label{tab:catme-ratings}
-  \end{table}
-
-  The team agreed on these ratings.
-  \MemberA\ did most of the team coordination, set up the GitHub repository and DagsHub, implemented almost all of the code and wrote the first draft of this report.
-  We therefore ask for an individual factor of 1.2 for \MemberA.
-  All other members contributed a fair share and keep 1.0.
+  \end{center}
 \fi
