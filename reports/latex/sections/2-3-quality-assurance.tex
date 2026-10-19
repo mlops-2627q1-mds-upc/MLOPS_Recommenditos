@@ -90,6 +90,7 @@ We will report it in Milestone~4 as an average per answer over the load test, be
 }
 
 We use ruff as linter and formatter for all Python code, including the code cells of notebooks.
+The one-off scripts under \texttt{reports/analysis/} are excluded: they are evidence of a measurement, kept as they were run.
 The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import order, and the Pylint rules.
 The configuration is in \texttt{pyproject.toml}.
 
@@ -109,7 +110,7 @@ Pynblint \cite{quaranta2022pynblint} checks the structure, for example the lengt
 We enforce 13 of its 22 rules.
 The other 9 are excluded with a written reason.
 Three read execution counts, which \texttt{nbstripout} removes.
-Five check the repository for things CI already enforces.
+Five check the repository for things our own setup already enforces, through CI, branch protection, the pre-commit hooks, or our rule on where a notebook lives.
 One is switched off in Pynblint itself.
 
 Pynblint exits with 0 whatever it finds, so we wrote a wrapper, \texttt{tools/notebook\_lint.py}, that reads its report and fails on any finding.
@@ -181,7 +182,8 @@ A test names the requirement it verifies with the marker \texttt{@pytest.\allowb
 The job fails when a requirement that is due by the current milestone has no evidence (EDN-44).
 Today 67 tests carry a marker.
 Of the 31 requirements, 3 are verified by a test (NFR-01, NFR-08, NFR-14), 3 are named by a test while the evidence they promise is a manual drill (NFR-06, NFR-07, NFR-10), 9 have a manual check with named evidence, and 16 have no evidence yet.
-Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~3 are NFR-01, 06, 07, 08, 14, and 15, and each has its evidence.
+Those 16 are all due in Milestone~4 or later.
+Of the six due by Milestone~3, NFR-01, 08, and 14 are verified by a test, and NFR-06, 07, and 15 name a manual check, which the gate sees named but cannot see run.
 
 \subsubsection{Data testing}
 \label{sec:m3-data-testing}
@@ -223,7 +225,7 @@ Great Expectations checks the values in two DVC stages (EDN-68).
 The validation is built to stop a problem before training:
 
 \begin{itemize}
-  \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so nothing is trained on data that did not pass.
+  \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so \texttt{dvc repro} stops before anything is trained on data that did not pass.
   \item \textbf{Reviewable result.} The stage writes \texttt{summary.json}, which Git tracks, so a pull request that changes the data shows what changed in the validation. It also writes Great Expectations' HTML report (Data Docs).
   \item \textbf{Tolerances.} A registration date after the snapshot date is tolerated in up to 1\,\% of the raw rows and forbidden in the cleaned data. A new scrape with many such rows fails the raw suite and is noticed, where preprocessing alone would remove them silently.
   \item \textbf{Fill rates.} Both suites require the six columns that the published file fills in every row to stay filled in 99.9\,\% of the rows (EDN-68), so a column that turns empty in a new scrape fails the validation.
