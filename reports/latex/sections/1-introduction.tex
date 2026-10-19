@@ -16,8 +16,7 @@ In the first use case, car valuation (UC1), an owner describes their car and rec
 In the second, purchase guidance (UC2), a buyer describes the car they are looking for and receives a typical price with a 90\,\% interval and comparable real listings (FR-02, FR-07, FR-09).
 
 The learning task is a regression on $\log(\mathrm{price})$.
-We train on the AutoScout24 Car Listings Dataset (EDN-01), a snapshot of 118,382 listings with 75 columns from eight European countries.
-It is published on Zenodo under DOI \href{https://doi.org/10.5281/zenodo.17643343}{10.5281/zenodo.17643343}.
+We train on the AutoScout24 Car Listings Dataset (EDN-01), a snapshot of 118,382 listings with 75 columns from eight European countries, published on Zenodo \cite{celik2025autoscout24}.
 The scope is used passenger cars (EDN-04) of the 11 makes with at least 300 listings each, which together cover 98.6\,\% of the used listings (EDN-05).
 For a car outside this scope the component will return a refusal and no estimate (FR-04).
 We hold out all Spanish listings as a market the model has not seen, so that Milestone~6 can show drift detection and retraining on real data (EDN-03).
@@ -78,7 +77,7 @@ SC-01 and SC-02 held on all 20 splits, and SC-04 was missed on all 20.
 Cars older than 20 years averaged 18.2\,\%, so the committed 16.80\,\% is the lowest of the 21 values (EDN-32).
 
 We kept the model simple and put the effort into the engineering practices described in \cref{sec:methodology}.
-The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (MLOps\_\TeamName\_EDN.pdf), which this report cites by entry ID.
+The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (Appendix~\ref{app:edn}), which this report cites by entry ID.
 
 \subsection{Teammates' evaluation}
 \label{sec:teammates-evaluation}
