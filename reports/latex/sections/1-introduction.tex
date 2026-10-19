@@ -85,7 +85,7 @@ The decisions behind them, and how AI was involved in each, are recorded in our 
 }
 
 \newif\ifconsensus
-\consensustrue
+\consensusfalse
 
 \ifconsensus
   $\boxtimes$~\textbf{\enquote{All team members agree that they had an equal contribution to this delivery and project: completing a fair share of the team's work with acceptable/high quality, keeping commitments, and completing assignments on time, helping teammates who are having difficulty when it is easy or important.}}
@@ -116,14 +116,19 @@ The decisions behind them, and how AI was involved in each, are recorded in our 
       \toprule
       & \MemberA & \MemberB & \MemberC & \MemberD & \MemberE & Average \\
       \midrule
-      \MemberA & -- & & & & & \\
-      \MemberB & & -- & & & & \\
-      \MemberC & & & -- & & & \\
-      \MemberD & & & & -- & & \\
-      \MemberE & & & & & -- & \\
+      \MemberA & -- & 5 & 5 & 5 & 5 & 5.0 \\
+      \MemberB & 3 & -- & 3 & 3 & 3 & 3.0 \\
+      \MemberC & 3 & 3 & -- & 3 & 3 & 3.0 \\
+      \MemberD & 3 & 3 & 3 & -- & 3 & 3.0 \\
+      \MemberE & 3 & 3 & 3 & 3 & -- & 3.0 \\
       \bottomrule
     \end{tabular}
     \caption{Received peer evaluations (rows: evaluated member).}
     \label{tab:catme-ratings}
   \end{table}
+
+  The team agreed on these ratings.
+  \MemberA\ did most of the team coordination, set up the GitHub repository and DagsHub, implemented almost all of the code and wrote the first draft of this report.
+  We therefore ask for an individual factor of 1.2 for \MemberA.
+  All other members contributed a fair share and keep 1.0.
 \fi
