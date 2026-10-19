@@ -274,6 +274,9 @@ Access to the FIB Virtech VM and the date of the M4a session are still not recor
 | 8. Quality assurance | 2.5 | Ula |
 | 9. Summary, lessons learned and outlook | 0.5 | Ula |
 
+Every member finishes the slides of their parts by Sunday, 2026-10-18, so that the slides can be checked for formatting and content issues before the presentation.
+Every member also reads through the whole report before it is submitted.
+
 ## Sprint 4 progress (2026-10-17)
 
 Recorded on day 5 of the sprint from the merged and open pull requests.
