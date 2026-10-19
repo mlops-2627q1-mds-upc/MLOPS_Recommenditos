@@ -59,6 +59,15 @@
 \typeout{Report: pages before the appendix: \the\ReadonlyShipoutCounter}
 
 \appendix
+% A divider page, so the reader sees where the report ends and the EDN begins.
+\vspace*{\fill}
+\begin{center}
+  {\Huge\bfseries Appendix\par}
+  \vspace{1.5em}
+  {\Large A\quad Engineering Decision Notebook\par}
+\end{center}
+\vspace*{\fill}
+\clearpage
 \IfFileExists{build/\EdnJob.pdf}{%
   \includepdf[pages=-, addtotoc={1, section, 1, Engineering Decision Notebook, app:edn}]{build/\EdnJob.pdf}%
 }{%
