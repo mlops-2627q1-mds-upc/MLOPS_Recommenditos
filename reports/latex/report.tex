@@ -19,6 +19,35 @@
 \usepackage{pdfpages}
 \providecommand{\EdnJob}{edn}
 
+% \appendixpdf{title}{file}{label} appends a PDF as the next appendix: it takes
+% the next letter, gets a line in the contents and a bookmark, and is listed on
+% the divider page, which \appendixdivider prints from the .apx file, the way
+% \tableofcontents prints from the .toc file.
+\makeatletter
+\newcommand{\appendixpdf}[3]{%
+  \IfFileExists{#2}{%
+    \includepdf[pages=-, addtotoc={1, section, 1, {#1}, #3}]{#2}%
+  }{%
+    \clearpage
+    \section{#1}\label{#3}
+    \tbd{#1: the PDF was not found. Build with build.sh, which builds it first.}%
+  }%
+  \immediate\write\@auxout{\string\@writefile{apx}{\string\appendixline{\thesection}{\unexpanded{#1}}}}%
+}
+\newcommand{\appendixline}[2]{{\Large #1\quad #2\par}\medskip}
+\newcommand{\appendixdivider}{%
+  \clearpage
+  \vspace*{\fill}
+  \begin{center}
+    {\Huge\bfseries Appendix\par}
+    \vspace{1.5em}
+    \@starttoc{apx}
+  \end{center}
+  \vspace*{\fill}
+  \clearpage
+}
+\makeatother
+
 \begin{document}
 
 \input{sections/cover}
@@ -59,20 +88,8 @@
 \typeout{Report: pages before the appendix: \the\ReadonlyShipoutCounter}
 
 \appendix
-% A divider page, so the reader sees where the report ends and the EDN begins.
-\vspace*{\fill}
-\begin{center}
-  {\Huge\bfseries Appendix\par}
-  \vspace{1.5em}
-  {\Large A\quad Engineering Decision Notebook\par}
-\end{center}
-\vspace*{\fill}
-\clearpage
-\IfFileExists{build/\EdnJob.pdf}{%
-  \includepdf[pages=-, addtotoc={1, section, 1, Engineering Decision Notebook, app:edn}]{build/\EdnJob.pdf}%
-}{%
-  \section{Engineering Decision Notebook}
-  \tbd{The EDN PDF was not found: build with build.sh, which builds the EDN before the report.}
-}
+% A divider page, so the reader sees where the report ends and the appendices begin.
+\appendixdivider
+\appendixpdf{Engineering Decision Notebook}{build/\EdnJob.pdf}{app:edn}
 
 \end{document}
