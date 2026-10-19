@@ -45,7 +45,7 @@ How to add an entry:
 ### EDN-01: The main dataset is the AutoScout24 listings snapshot
 
 > **Revised on 2026-10-18**: records who found the dataset; the decision is unchanged.
-> 
+>
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Dataset Selection
@@ -59,8 +59,8 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative assessment
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** @michudud04 found the dataset on Zenodo after
-  a preliminary inspection of related datasets. It was selected because of its large 
-  number of rows. AI then profiled the raw file (rows, columns, countries, brand mix, 
+  a preliminary inspection of related datasets. It was selected because of its large
+  number of rows. AI then profiled the raw file (rows, columns, countries, brand mix,
   missing values) and summarised the trade-off against the smaller datasets.
   The team reviewed the figures and confirmed the choice in sprint planning.
 - **AI interaction evidence:** Dataset profile and trade-off in `docs/docs/project-brief.md`, sections 2 and 3.1 (2026-09-22).
