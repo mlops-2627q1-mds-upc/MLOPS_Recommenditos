@@ -26,7 +26,7 @@ We changed the project structure where this project needed it:
   \item \textbf{Configuration in \texttt{params.yaml} (EDN-30).} Everything configurable is there, and \texttt{config.py} holds only paths. A changed parameter reruns the stages that read it, and \texttt{dvc params diff} shows what changed between two commits.
   \item \textbf{Stages beyond the course demo.} Our model works on a table of car properties, so a \texttt{features} stage turns the cleaned columns into model inputs, for example the age from the registration date. The \texttt{evaluate} stage writes the result of the release gate to a file that a person reads before promoting a model (EDN-12). Further stages draw \cref{fig:segments,fig:composition,fig:energy} from the pipeline's outputs.
   \item \textbf{A data contract (EDN-31).} \texttt{recommenditos/schema.py} defines the columns of the raw, cleaned, and processed data (\cref{sec:m3-data-testing}).
-  \item \textbf{Dependency groups (EDN-47).} In \texttt{pyproject.toml}, \texttt{[project] dependencies} lists only the serving runtime, and the pipeline and development tools are dependency groups. The API image installs only what serving needs, and a CI job checks that serving code imports nothing from a group.
+  \item \textbf{Dependency groups (EDN-47).} In \texttt{pyproject.toml}, \texttt{[project] dependencies} lists only the serving runtime, and the pipeline and development tools are dependency groups. The API image of Milestone~5 will install that runtime alone, and a required CI job already installs it on its own and runs the serving path from it, so a serving module that imports a group's package fails the build today.
 \end{itemize}
 
 \subsubsection{Code versioning}
