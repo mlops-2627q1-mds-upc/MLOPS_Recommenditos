@@ -24,8 +24,16 @@
 % the divider page, which \appendixdivider prints from the .apx file, the way
 % \tableofcontents prints from the .toc file.
 \makeatletter
+\newcounter{apxpageoffset}
 \newcommand{\appendixpdf}[3]{%
   \IfFileExists{#2}{%
+    % The appended PDF prints its own page numbers from 1, so its pages count
+    % as A-1, A-2, ... and the contents and the viewer show that, not the
+    % report's page counter.
+    \clearpage
+    \setcounter{apxpageoffset}{\value{page}}%
+    \addtocounter{apxpageoffset}{-1}%
+    \renewcommand{\thepage}{\thesection-\the\numexpr\value{page}-\value{apxpageoffset}\relax}%
     \includepdf[pages=-, addtotoc={1, section, 1, {#1}, #3}]{#2}%
   }{%
     \clearpage
