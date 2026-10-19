@@ -9,6 +9,7 @@ What belongs here and what each field means: [references/Instruction_EDN_MLOps_v
 The course asks for a selected set of short entries.
 Record a decision when it meaningfully affects the design, quality, development, deployment, or operation of the ML system and could reasonably have gone differently.
 A bug fix, an implementation detail, the use of a tool the course prescribes, and a choice without a realistic alternative get no entry; they belong in the code, the docs, or the pull request.
+An entry for a milestone we have not built yet states the design we have settled on, not something already running; the preamble of the PDF says so once, so an entry does not have to repeat it.
 
 On 2026-10-12 and 2026-10-13 the 79 entries EDN-01 to EDN-81 were trimmed to the 37 that meet this criterion, and every kept entry was rewritten to the shape below.
 An entry that amended, reversed, or continued another one was merged into the surviving entry, which states the decision as it stands now.
