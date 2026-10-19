@@ -130,7 +130,7 @@ Its main points:
 \begin{itemize}
   \item \textbf{Model.} LightGBM on $\log(\mathrm{price})$ (EDN-02). It is compared with two baselines: B1, a Ridge regression, and B0, which predicts the median training price of cars with the same make, model, and two-year age band.
   \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). It is trained on its rows plus two copies of each in which optional input fields are blanked (EDN-82). Early stopping chose 1,394 trees under a ceiling of 5,000, and the model file has 8.7\,MB.
-  \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment, and the energy of each training run (\cref{sec:m3-energy}).
+  \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment (\cref{fig:segments}), and the energy of each training run (\cref{sec:m3-energy}).
   \item \textbf{Who is affected by a wrong answer.} A seller acts on one number, and an estimate that is 10\,\% too low costs them money without their noticing. This is why a valuation comes with an explanation (FR-08). A buyer uses the price interval to check an offer, which is what SC-05 bounds.
   \item \textbf{Limitations.} The error on cars older than 20 years is above SC-04's bound, which we accept as a limitation of this model (EDN-62). Honda, Hyundai, Aston Martin, and Volkswagen are served but have fewer than 500 test rows each, so SC-04 does not check them.
 \end{itemize}
