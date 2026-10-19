@@ -61,7 +61,7 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
 As of the first delivery, no model passes the gate yet, so none is released.
 The candidate \texttt{lgbm-basic}, a LightGBM model on the 16 basic features of a car, meets SC-01, SC-02, SC-03, and SC-06.
 It misses SC-04 in one of the 26 segments the criterion checks (\cref{fig:segments}): its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next-worst segment is at 10.4\,\%.
-SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented.
+SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented: FR-07 is due in Milestone~4, and the calibration split of \cref{tab:split} is held for them.
 We accept the miss as a limitation of this model and keep the bound at 15\,\% (EDN-62).
 
 % figures/error-by-segment.pdf is a copy of the `compare-segments` stage's output.
