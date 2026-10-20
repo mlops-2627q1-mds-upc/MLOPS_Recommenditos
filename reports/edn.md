@@ -1022,6 +1022,18 @@ How to add an entry:
 - **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), [PR #121](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/121), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
 - **In LaTeX:** yes
 
+### EDN-83: Type checking of the package and tools (#133)
+
+### EDN-84: The API's error shape (#135)
+
+### EDN-85: How serving applies the interval calibration (#137)
+
+### EDN-86: Where the prediction log and the feedback are stored (#140)
+
+### EDN-87: How the API runs on the VM in Milestone 4 (#142)
+
+### EDN-88: The latency, throughput and resource targets after the load test (#143)
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
