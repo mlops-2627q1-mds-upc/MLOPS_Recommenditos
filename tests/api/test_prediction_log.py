@@ -226,7 +226,9 @@ def test_nfr03_a_route_that_records_twice_fails(store: SqliteStore):
         price_eur=1.0,
         model=ModelInfo(variant="lgbm-basic", version="0" * 32, trained_at=None),
         request_id="r-1",
-        explanation=Explanation(base_price_eur=1.0, top_features=[]),
+        explanation=Explanation(
+            base_price_eur=1.0, top_features=[], other_features_effect_pct=0.0
+        ),
         warnings=[],
     )
     log.record(request, answer)
