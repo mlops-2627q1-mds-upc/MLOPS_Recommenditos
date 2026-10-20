@@ -81,7 +81,10 @@ class ComparablesIndex:
 
     @classmethod
     def load(cls, path: Path) -> "ComparablesIndex":
-        listings = pd.read_parquet(path)
+        # One thread: Arrow's thread pool and its allocator arenas would add
+        # about 40 MiB of resident memory per worker process for a file that
+        # reads in milliseconds either way (NFR-04).
+        listings = pd.read_parquet(path, use_threads=False)
         COMPARABLES_SCHEMA.validate(listings)
         make = pd.Categorical(listings["make"])
         model = pd.Categorical(listings["model"])
