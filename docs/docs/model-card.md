@@ -555,7 +555,7 @@ The 20 splits share one pool of listings, so the spread describes how a figure m
 
 Two things this does not cover.
 A temporal split would be the stronger test for a price model and is impossible, because the snapshot carries no listing dates (see [Bias, Risks, and Limitations](#bias-risks-and-limitations)).
-And whether the UC2 intervals cover each make equally, Mercedes-Benz above all since the calibration set holds the least of it, is not measured yet: SC-05 reports the pooled coverage, and the coverage per make on the test set is issue #108.
+Whether the UC2 intervals cover each make equally, Mercedes-Benz above all since the calibration set holds the least of it, is measured on the test set in [Coverage per make](#coverage-per-make).
 
 ### Results
 
@@ -602,6 +602,42 @@ The variants without a price range report SC-05 as `not_measured`, which blocks 
 
 The point-estimate half of the partial-input scenario P1 is reported beside the SC-06 sweep: the candidate goes from 6.73 % MdAPE to 16.23 % (2.4x) when only `make`, `model`, `registration_date` and `mileage_km_raw` are given, `lgbm-extended` to 19.02 % (3.0x) and `b1` to 2.5x its full-input value, while `b0` is unchanged because it reads only three columns. A point estimate that is typically 16 % off is not something to serve as a number, which is exactly what UC2's interval answers instead.
 The typical price `/price-range` reports beside the range is the point model's when the request carries every field FR-01 requires, and the 50 % quantile model's otherwise (FR-07, EDN-85): the point model has never seen a required field missing, and on the calibration split its MdAPE on a make-only request is 98.5 % against 40.1 % for the 50 % model, while on a full request it is 0.21 pp better than that model (`reports/analysis/price_range_point_estimate_results.txt`). P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
+
+
+#### Coverage per make
+
+SC-05 gates the pooled coverage only.
+`evaluate` also writes the coverage and the mean relative width of the range per make and scenario to `reports/metrics/interval-coverage-by-make.csv`, with the number of test rows of each make, and nothing in that table enters the gate.
+A make with fewer than `evaluate.success_criteria.sc05_min_make_rows` (500) test rows is reported and not judged, because the binomial standard error of a coverage over `n` rows at 90 % is `sqrt(0.9 * 0.1 / n)`, 1.3 points at 500 rows against a band of plus or minus 2 points, and 3.3 points at 81.
+The standard error assumes independent rows, which the listings of one dealer are not, so it is a lower bound on the noise.
+Measured on the 19,665 test rows for `lgbm-basic`, the only variant with a price range:
+
+| Make | Test rows | Full inputs: coverage | Full inputs: mean width | P1: coverage | P1: mean width |
+| --- | --- | --- | --- | --- | --- |
+| All makes (SC-05) | 19,665 | 90.2 % | 0.46 | 91.0 % | 0.93 |
+| BMW | 7,219 | 90.3 % | 0.46 | 91.2 % | 0.92 |
+| Porsche | 4,510 | 90.8 % | 0.44 | 90.2 % | 0.90 |
+| Audi | 2,431 | 90.4 % | 0.38 | **95.4 %** | 0.86 |
+| Mercedes-Benz | 2,220 | 90.8 % | 0.35 | **93.9 %** | 0.92 |
+| Alfa Romeo | 1,300 | 91.2 % | 0.59 | 90.5 % | 1.10 |
+| Suzuki | 824 | **85.9 %** | 0.59 | **81.7 %** | 0.87 |
+| Volvo | 714 | 90.2 % | 0.80 | **87.1 %** | 1.10 |
+| Honda | 177 | 84.8 % (not judged) | 0.62 | 88.7 % (not judged) | 0.96 |
+| Hyundai | 105 | 85.7 % (not judged) | 0.62 | 85.7 % (not judged) | 2.02 |
+| Aston Martin | 84 | 86.9 % (not judged) | 0.76 | 79.8 % (not judged) | 1.33 |
+| Volkswagen | 81 | 84.0 % (not judged) | 0.73 | 75.3 % (not judged) | 1.17 |
+
+Bold marks a judged make outside 88 % to 92 %.
+Five judged cells are outside the band, Suzuki in both scenarios and Audi, Mercedes-Benz and Volvo on P1, and the four makes under 500 rows sit between 75 % and 89 % with standard errors of 2.3 to 3.3 points, so they are neither cleared nor convicted.
+
+- **Mercedes-Benz** is inside the band for full inputs (90.8 %, 0.8 points above nominal, 1.2 standard errors) and outside it for P1: 93.9 %, 3.9 points above nominal, 6.1 standard errors.
+  The range is too wide for this make when little is known about the car, which is the safe direction for a buyer using it as a sanity check, and its mean width on P1 (0.92) is the pool's (0.93), so it is not a narrower range that was paid for with the extra coverage.
+  The calibration set holds 8.67 % Mercedes-Benz against 11.11 % in test ([the split analysis](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)); this table shows the effect is a coverage that is high rather than low.
+  It does not show that the make's share in calibration is the cause: Audi, with 12.0 % of the calibration listings against 12.4 % of the test rows among the supported makes, deviates further in the same direction.
+- **Suzuki** is the make the pooled figure hides: 4.1 points below nominal for full inputs and 8.3 points below on P1, with 824 test rows, so the shortfall is well outside the noise.
+- The pooled P1 figure of 91.0 % is the weighted result of over-coverage for Audi and Mercedes-Benz and under-coverage for Suzuki and Volvo.
+  Whether to calibrate per make is not decided; issue #108 holds the options.
+  Until it is, the range is calibrated on the pooled calibration set, and a reader of a Suzuki or Mercedes-Benz range on partial input should read the table above rather than the nominal 90 %.
 
 #### The per-segment breakdown, and the fairness reading
 

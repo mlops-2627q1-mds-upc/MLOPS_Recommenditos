@@ -80,7 +80,7 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
 | `train` | `recommenditos/modeling/train.py`, and `intervals.py` for a variant with a price range | `models/<variant>/`, `reports/emissions/<variant>.csv` |
-| `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs}.csv` |
+| `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs,interval-coverage-by-make}.csv` |
 | `compare-energy` | `recommenditos/modeling/compare_energy.py` | `reports/figures/energy-vs-error.{csv,pdf}` |
 | `compare-segments` | `recommenditos/modeling/compare_segments.py` | `reports/figures/error-by-segment.pdf` |
 
@@ -107,6 +107,7 @@ MAPIE's `ConformalizedQuantileRegressor` then computes the two conformity offset
 `train` reads the `calibration` matrix only for such a variant, and no stage reads it for anything else.
 Serving adds the offsets to the boosters' predictions itself, so the API image needs no MAPIE, and `tests/test_intervals.py` checks that the served range equals MAPIE's on the same rows.
 `evaluate` measures SC-05 on the test split for every variant whose bundle carries the range, as the coverage and mean relative width for full inputs and for P1, and reports it as not measured for the others.
+It also writes the same two figures per make and scenario, with the test rows of each make and a judgement against the band, to `reports/metrics/interval-coverage-by-make.csv`; a make under `sc05_min_make_rows` is reported and not judged, and the table never enters the gate (issue #108, [model card](model-card.md#coverage-per-make)).
 
 `train` measures the energy of its fit with CodeCarbon and nothing else of the stage (issue #38).
 CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached so that a retrain's energy is in the pull request diff, and into the MLflow run beside the accuracy metrics `evaluate` appends.

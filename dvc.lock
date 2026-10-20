@@ -826,12 +826,12 @@ stages:
       size: 38657
     - path: recommenditos/modeling/evaluate.py
       hash: md5
-      md5: 1b3b02695c210e3046c50d2c9d43c181
-      size: 54220
+      md5: 416d54496bcdb34e7514844483452117
+      size: 58336
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: f7ccf160741a25b7ab2607b275b74b58
-      size: 90305
+      md5: c53726a9086edfad1dfd9df26b785ae0
+      size: 91504
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -888,6 +888,7 @@ stages:
             sc04_min_segment_rows: 500
             sc05_coverage_min: 0.88
             sc05_coverage_max: 0.92
+            sc05_min_make_rows: 500
             sc06_masked_mdape_ratio_max: 1.5
         request:
           required_input_fields:
@@ -948,9 +949,9 @@ stages:
       size: 1658
     - path: reports/metrics
       hash: md5
-      md5: c1dc3180d7eee660f718c800cb2ed2ea.dir
-      size: 111037
-      nfiles: 6
+      md5: 0f671855979f264032c4258d2c036aaa.dir
+      size: 121303
+      nfiles: 7
   compare-energy:
     cmd: python3 -m recommenditos.modeling.compare_energy
     deps:
@@ -977,12 +978,12 @@ stages:
       size: 20285
     - path: recommenditos/modeling/evaluate.py
       hash: md5
-      md5: 1b3b02695c210e3046c50d2c9d43c181
-      size: 54220
+      md5: 416d54496bcdb34e7514844483452117
+      size: 58336
     - path: recommenditos/modeling/model.py
       hash: md5
-      md5: f7ccf160741a25b7ab2607b275b74b58
-      size: 90305
+      md5: c53726a9086edfad1dfd9df26b785ae0
+      size: 91504
     - path: recommenditos/pipeline.py
       hash: md5
       md5: 1aeecabea6313a59af39005ae2827d8a
@@ -1010,9 +1011,9 @@ stages:
       nfiles: 4
     - path: reports/metrics
       hash: md5
-      md5: c1dc3180d7eee660f718c800cb2ed2ea.dir
-      size: 111037
-      nfiles: 6
+      md5: 0f671855979f264032c4258d2c036aaa.dir
+      size: 121303
+      nfiles: 7
     params:
       params.yaml:
         train.variants:
@@ -1124,9 +1125,9 @@ stages:
       size: 36792
     - path: reports/metrics
       hash: md5
-      md5: c1dc3180d7eee660f718c800cb2ed2ea.dir
-      size: 111037
-      nfiles: 6
+      md5: 0f671855979f264032c4258d2c036aaa.dir
+      size: 121303
+      nfiles: 7
     params:
       params.yaml:
         evaluate.success_criteria.sc04_segment_mdape_max: 0.15

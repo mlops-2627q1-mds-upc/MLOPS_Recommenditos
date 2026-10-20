@@ -656,6 +656,248 @@
       "passed": null
     }
   ],
+  "interval_by_make": [
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "(pooled)",
+      "n": 19665,
+      "coverage": 0.9022629036359013,
+      "std_error": 0.0021393127492027905,
+      "mean_relative_width": 0.4639985067607088,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "BMW",
+      "n": 7219,
+      "coverage": 0.9027566144895415,
+      "std_error": 0.003530878177800678,
+      "mean_relative_width": 0.46179439107609604,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Porsche",
+      "n": 4510,
+      "coverage": 0.907760532150776,
+      "std_error": 0.004467175181476048,
+      "mean_relative_width": 0.437245200511824,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Audi",
+      "n": 2431,
+      "coverage": 0.9041546688605512,
+      "std_error": 0.006084554357361275,
+      "mean_relative_width": 0.38024987513920766,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Mercedes-Benz",
+      "n": 2220,
+      "coverage": 0.9076576576576577,
+      "std_error": 0.006367145399670132,
+      "mean_relative_width": 0.34699312738815596,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Alfa Romeo",
+      "n": 1300,
+      "coverage": 0.9123076923076923,
+      "std_error": 0.008320502943378437,
+      "mean_relative_width": 0.5896992980646228,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Suzuki",
+      "n": 824,
+      "coverage": 0.8592233009708737,
+      "std_error": 0.010450995214374264,
+      "mean_relative_width": 0.5940306760225526,
+      "judgement": "outside_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Volvo",
+      "n": 714,
+      "coverage": 0.9019607843137255,
+      "std_error": 0.011227217828476795,
+      "mean_relative_width": 0.7980726275464781,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Honda",
+      "n": 177,
+      "coverage": 0.847457627118644,
+      "std_error": 0.022549380840084864,
+      "mean_relative_width": 0.6229599120687535,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Hyundai",
+      "n": 105,
+      "coverage": 0.8571428571428571,
+      "std_error": 0.029277002188455994,
+      "mean_relative_width": 0.621136866767571,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Aston Martin",
+      "n": 84,
+      "coverage": 0.8690476190476191,
+      "std_error": 0.032732683535398856,
+      "mean_relative_width": 0.7588218123039752,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "full",
+      "make": "Volkswagen",
+      "n": 81,
+      "coverage": 0.8395061728395061,
+      "std_error": 0.03333333333333333,
+      "mean_relative_width": 0.7285228941046642,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "(pooled)",
+      "n": 19665,
+      "coverage": 0.9101449275362319,
+      "std_error": 0.0021393127492027905,
+      "mean_relative_width": 0.9330445211957313,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "BMW",
+      "n": 7219,
+      "coverage": 0.9117606316664358,
+      "std_error": 0.003530878177800678,
+      "mean_relative_width": 0.9186547865439799,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Porsche",
+      "n": 4510,
+      "coverage": 0.9017738359201773,
+      "std_error": 0.004467175181476048,
+      "mean_relative_width": 0.9037628243278887,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Audi",
+      "n": 2431,
+      "coverage": 0.9539284245166598,
+      "std_error": 0.006084554357361275,
+      "mean_relative_width": 0.861535370068069,
+      "judgement": "outside_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Mercedes-Benz",
+      "n": 2220,
+      "coverage": 0.9387387387387387,
+      "std_error": 0.006367145399670132,
+      "mean_relative_width": 0.9153180047052347,
+      "judgement": "outside_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Alfa Romeo",
+      "n": 1300,
+      "coverage": 0.9046153846153846,
+      "std_error": 0.008320502943378437,
+      "mean_relative_width": 1.0956777058012606,
+      "judgement": "in_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Suzuki",
+      "n": 824,
+      "coverage": 0.816747572815534,
+      "std_error": 0.010450995214374264,
+      "mean_relative_width": 0.8679771449241046,
+      "judgement": "outside_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Volvo",
+      "n": 714,
+      "coverage": 0.8711484593837535,
+      "std_error": 0.011227217828476795,
+      "mean_relative_width": 1.100153781688451,
+      "judgement": "outside_band"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Honda",
+      "n": 177,
+      "coverage": 0.8870056497175142,
+      "std_error": 0.022549380840084864,
+      "mean_relative_width": 0.9613715374849177,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Hyundai",
+      "n": 105,
+      "coverage": 0.8571428571428571,
+      "std_error": 0.029277002188455994,
+      "mean_relative_width": 2.0236070096831376,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Aston Martin",
+      "n": 84,
+      "coverage": 0.7976190476190477,
+      "std_error": 0.032732683535398856,
+      "mean_relative_width": 1.3291660207787575,
+      "judgement": "not_judged_too_few_rows"
+    },
+    {
+      "variant": "lgbm-basic",
+      "scenario": "(P1: make, model, registration date, mileage)",
+      "make": "Volkswagen",
+      "n": 81,
+      "coverage": 0.7530864197530864,
+      "std_error": 0.03333333333333333,
+      "mean_relative_width": 1.1702146107600144,
+      "judgement": "not_judged_too_few_rows"
+    }
+  ],
   "sc01_measured": 0.06733805931326535,
   "sc01_passed": true,
   "sc02_measured": 0.8999237223493516,
