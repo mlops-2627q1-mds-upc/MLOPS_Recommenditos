@@ -25,9 +25,12 @@ classifiers = [
 # A package belongs here only when a module the API imports needs it, at import
 # time or to predict. `make test-serving`, and CI's `Serving runtime` job, install
 # this list on its own and run the serving path from it, so a module on that path
-# that needs a group's package fails the build instead of the M5 image. FastAPI,
-# uvicorn and pydantic join this list with the API in M4.
+# that needs a group's package fails the build instead of the M5 image.
 dependencies = [
+    # The HTTP API in `recommenditos/api/` (M4). The floor is the version the API
+    # was built and tested against; it brings starlette, the ASGI toolkit the
+    # middlewares are written for.
+    "fastapi>=0.142.2",
     # The `b1` pipeline is persisted with joblib rather than by hand: a fitted
     # `ColumnTransformer` carries the category lists, the imputer means, the
     # scaler statistics and the infrequent-level groupings, and none of that is
@@ -55,6 +58,9 @@ dependencies = [
     # `recommenditos/config.py` loads `<repo>/.env` when it is imported, and every
     # module imports it. A missing file is not an error, so the image needs the
     # package but no `.env`.
+    # The request and response bodies of the API. FastAPI requires it anyway, but
+    # `recommenditos/api/schemas.py` imports it directly, so it is declared.
+    "pydantic>=2.13.5",
     "python-dotenv",
     # params.yaml, read by every stage and by the tests that check dvc.yaml. Also
     # a runtime dependency because `recommenditos/pipeline.py` imports it, and the
@@ -67,6 +73,8 @@ dependencies = [
     # rich and Pygments) is cheaper than splitting those modules, which would
     # break EDN-28's one module per stage and the `deps` dvc.yaml names for them.
     "typer",
+    # The ASGI server that runs the API (`make api`, and the image in M5).
+    "uvicorn>=0.54.0",
 ]
 requires-python = "~=3.12.0"
 
@@ -146,6 +154,10 @@ test = [
     # CI calls `coverage report` itself for the job summary, so it is declared
     # rather than left to arrive with pytest-cov.
     "coverage",
+    # The HTTP client behind FastAPI's `TestClient`, which the API tests use.
+    # Starlette 1.x moved its test client from httpx to httpx2. Test-only: the
+    # API serves requests and makes none.
+    "httpx2>=2.15.1",
     "pytest",
     "pytest-cov",
 ]
