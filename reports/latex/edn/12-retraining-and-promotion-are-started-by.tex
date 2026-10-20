@@ -3,7 +3,7 @@
 \ednentry{
   id = {EDN-12},
   title = {Retraining and promotion are started by a person, and a failing gate blocks the merge},
-  note = {\textbf{Revised on 2026-10-20}: the gate verdict is now enforced by a required CI check; before, only the reviewer read it.},
+  note = {\textbf{Revised on 2026-10-20}: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.},
   date = {2026-09-22},
   milestone = {M6: Monitoring},
   topic = {ML System Design, Model Performance},
@@ -11,17 +11,18 @@
   decision = {When the drift job flags the \texttt{ES} replay, a team member retrains with \texttt{ES} included and opens the promotion pull request by hand.
 The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
 A required CI check fails a pull request that changes \texttt{dvc.\allowbreak{}lock} unless the committed \texttt{metrics.\allowbreak{}json} has \texttt{gate\_\allowbreak{}passed: true} and names the promoted model as \texttt{deployable\_\allowbreak{}variant}.
-The reviewer's approval stays on top, and FR-15 states all of this.},
+A criterion waived by an EDN entry listed in \texttt{params.\allowbreak{}yaml} (SC-04, EDN-62) does not count, and \texttt{metrics.\allowbreak{}json} reports it.
+FR-15 states this; the reviewer's approval stays on top.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to build and debug in the last weeks before the final presentation, with little slack if it breaks.
+\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation.
 \item The gate as a manual check only: one mistaken merge deploys a rejected model.
 \item A check in CD: it fails only after the merge.
 \end{itemize}
 \par
 \emph{Why:} The \texttt{ES} holdout exists to show this loop closing (EDN-03).
 A person reacting to the signal closes it too, and is safer live.
-From M5 on every merge to \texttt{main} deploys (NFR-13), and the CI check is the only one of the three that stops a rejected model before the merge.
+From M5 every merge to \texttt{main} deploys (NFR-13), and only the CI check stops a rejected model before the merge.
 It needs no data and reads \texttt{gate\_\allowbreak{}passed}, so a new criterion changes nothing in it.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
