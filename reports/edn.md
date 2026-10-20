@@ -1068,7 +1068,7 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape.
 - **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
-- **Other evidence:** [Issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135), [API docs](../docs/docs/api.md), [`errors.py`](../recommenditos/api/errors.py), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457).
+- **Other evidence:** [Issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135), [PR #151](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151), [API docs](../docs/docs/api.md), [`errors.py`](../recommenditos/api/errors.py), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457).
 - **In LaTeX:** yes
 
 ### EDN-85: How serving applies the interval calibration (#137)
