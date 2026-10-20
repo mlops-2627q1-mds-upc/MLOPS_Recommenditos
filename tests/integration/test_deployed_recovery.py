@@ -21,7 +21,9 @@ RECOVERY_S = 30
 
 
 @pytest.mark.req("NFR-05")
-def test_the_api_is_healthy_again_within_30_s_of_a_crash(client, api_container):
+def test_the_api_is_healthy_again_within_30_s_of_a_crash(
+    client, api_container, record_testsuite_property
+):
     before = api_container.inspect()
     pid, restarts, image = before["State"]["Pid"], before["RestartCount"], before["Image"]
     assert pid > 0, "the API container has no running process"
@@ -46,4 +48,5 @@ def test_the_api_is_healthy_again_within_30_s_of_a_crash(client, api_container):
     after = api_container.inspect()
     assert after["RestartCount"] == restarts + 1, "Docker did not restart the API after the kill"
     assert status == 200, f"/health still answers {status} {recovered_after:.1f} s after the kill"
-    print(f"/health 200 again {recovered_after:.1f} s after SIGKILL of the API process")
+    # In the JUnit file, which CI and `make test-integration` write.
+    record_testsuite_property("recovery_s", round(recovered_after, 1))

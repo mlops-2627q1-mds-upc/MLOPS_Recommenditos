@@ -288,6 +288,9 @@ jobs:
         if: needs.changes.outputs.stack == 'true'
       - name: Fit a synthetic lgbm-basic bundle where the Dockerfile expects it
         if: needs.changes.outputs.stack == 'true'
+        # `shell: bash` for pipefail, so a failed fit fails here and not at the
+        # image's COPY.
+        shell: bash
         run: |
           version=$(uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models | tail -n 1)
           echo "RECOMMENDITOS_EXPECTED_MODEL_VERSION=$version" >> "$GITHUB_ENV"

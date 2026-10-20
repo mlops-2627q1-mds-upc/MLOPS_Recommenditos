@@ -135,20 +135,23 @@ stack-down:
 # The integration suite of tests/integration/ against a running stack, through
 # its proxy. Without coverage, which measures this process and not the API's, and
 # with a JUnit file of its own, so the full suite's is kept. Against a remote URL
-# the tests that need the Docker host are skipped, which makes `make smoke` the
-# post-deployment check.
+# the tests that need the Docker host are skipped. `make smoke`, the
+# post-deployment check, always deselects them: a smoke run on the VM itself or
+# through an SSH tunnel would otherwise kill the production API or inspect the
+# containers of the machine it runs on.
 STACK_URL ?= http://localhost:8080
+INTEGRATION_MARKERS ?= integration
 
 ## Run the integration suite against a running stack: make test-integration [STACK_URL=...]
 .PHONY: test-integration
 test-integration:
-	RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m integration \
+	RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
 		--no-cov --junitxml=reports/junit-integration.xml
 
 ## Check a deployed stack through its proxy: make smoke [SMOKE_URL=http://<vm>:<port>]
 .PHONY: smoke
 smoke:
-	$(MAKE) test-integration STACK_URL=$(SMOKE_URL)
+	$(MAKE) test-integration STACK_URL=$(SMOKE_URL) INTEGRATION_MARKERS="integration and not docker_host"
 
 ## Lint every notebook with Pynblint, in its own locked environment (tools/pynblint-env)
 .PHONY: notebook-lint

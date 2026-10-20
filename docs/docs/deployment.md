@@ -82,7 +82,7 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, the API's port is not published, and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
+- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, the API's port is not published, `/metrics` answers inside the Compose network, and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
 
 ```bash
 make test-integration                                # against http://localhost:8080
@@ -90,8 +90,9 @@ make test-integration STACK_URL=http://<host>:<port> # against another stack
 ```
 
 The base URL is `RECOMMENDITOS_STACK_URL`, which the make targets set.
-The tests that need the Docker host run when that URL is a loopback address and are skipped otherwise, so the same suite runs in CI, on a laptop and from outside the VM.
-Against a local URL they include the crash test, which takes the API down for a few seconds: run the suite from outside the VM, never on it.
+The tests that need the Docker host, the crash test among them, run when that URL is a loopback address and are skipped otherwise.
+`make smoke` never touches containers: it deselects those tests whatever the URL, so a smoke run on the VM, from a runner on it, or through an SSH tunnel cannot kill the production API or inspect the machine's own containers.
+`make test-integration` is the full run, for CI and the local stack.
 `/health` is compared with the hash `dvc.lock` records for the bundle (FR-12), unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` names another version.
 `make test` leaves the suite out (`-m "not integration"` in `pyproject.toml`).
 
@@ -147,8 +148,8 @@ ssh recommenditos@<vm> "sed -i 's/^API_IMAGE_TAG=.*/API_IMAGE_TAG=$TAG/' .env &&
 make smoke SMOKE_URL=http://<vm-host>:<port>
 ```
 
-`--wait` returns once both containers are healthy, and `make smoke` is what says the deployment worked: it runs the [integration suite](#integration-tests) against the VM and exits non-zero on any failure.
-Run it from outside the VM, because the proxy rules it checks are about requests from outside; the tests that need the Docker host are skipped from there.
+`--wait` returns once both containers are healthy, and `make smoke` is what says the deployment worked: it runs the [integration suite](#integration-tests) against the VM, without the tests that need the Docker host, and exits non-zero on any failure.
+Run it from outside the VM, because the proxy rules it checks are about requests from outside.
 On Windows, run these in Git Bash or WSL: Windows PowerShell 5 corrupts binary data in a pipe.
 Without either, save to a file instead: `docker save -o api.tar recommenditos-api:$TAG`, `scp api.tar recommenditos@<vm>:`, `ssh recommenditos@<vm> docker load -i api.tar`.
 

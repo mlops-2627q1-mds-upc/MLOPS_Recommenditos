@@ -13,7 +13,8 @@ Every test here is marked `integration`, which `make test` deselects. The base
 URL comes from `RECOMMENDITOS_STACK_URL` and defaults to the local stack. Tests
 marked `docker_host` inspect or kill containers, so they need the machine that
 runs the stack: they run when the base URL is a loopback address and are skipped
-otherwise, which is how the same suite serves CI, the laptop and the VM.
+otherwise. `make smoke`, the post-deployment check, deselects them whatever the
+URL, so it never kills or inspects a container (docs/docs/deployment.md).
 
 The model version `/health` reports is compared with `dvc.lock`, as FR-12 asks,
 unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` names another one: CI builds the
