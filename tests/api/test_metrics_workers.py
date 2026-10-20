@@ -121,7 +121,7 @@ def test_fr11_metrics_add_up_across_two_worker_processes(service: tuple[str, Pat
             sent += ROUND
             if len(_pids(directory, "counter")) >= WORKERS:
                 break
-    assert len(_pids(directory, "counter")) == WORKERS, "one worker answered every request"
+    assert len(_pids(directory, "counter")) == WORKERS, "not every worker answered a request"
 
     scrapes = [
         {
