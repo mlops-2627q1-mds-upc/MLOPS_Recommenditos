@@ -380,7 +380,7 @@ def _trim(lines: list[str]) -> list[str]:
 
 def _is_given(body: list[str] | None) -> bool:
     """Whether a field says something: not absent, not empty, not the template's "-"."""
-    return bool(body) and "\n".join(body).strip() not in ("", "-")
+    return body is not None and "\n".join(body).strip() not in ("", "-")
 
 
 # --- Markdown blocks ---------------------------------------------------------
