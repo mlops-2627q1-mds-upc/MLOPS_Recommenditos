@@ -822,7 +822,7 @@ How to add an entry:
 
 ### EDN-62: `lgbm-basic` is the candidate model
 
-> **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since 2026-10-13 (EDN-82) the ratio of `lgbm-basic` is 1.02, not 1.21.
+> **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since EDN-82 `lgbm-basic`'s ratio is 1.02, not 1.21.
 
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
@@ -831,21 +831,21 @@ How to add an entry:
 - **Decision:** `lgbm-basic` is the candidate the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
   `lgbm-extended` fails SC-06.
   SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
-  The promotion gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
+  The gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
 - **Alternatives considered:**
   - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
-  - Routing complete and partial requests to different models: two models and a routing rule.
+  - Routing complete and partial requests to different models: two models and a rule; left open for deployment.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
-  - Keeping the gate closed until a variant meets SC-04: no model could be promoted.
-- **Rationale:** On a request with only the fields FR-01 requires, the MdAPE of `lgbm-extended` rises to 1.65 times its full-input value and that of `lgbm-basic` to 1.02 times; the bound is 1.5.
-  On that request the ranking reverses.
-  The extended features worsen the over-20 segment, so they do not fix SC-04.
-  Without the waiver this accepted miss would block every promotion; every other criterion still gates.
+  - Keeping the gate closed until a variant meets SC-04: blocks every promotion.
+- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.65 times its full-input MdAPE and `lgbm-basic` to 1.02; the bound is 1.5.
+  Then the ranking reverses.
+  The extended features worsen the over-20 segment and do not fix SC-04.
+  The waiver makes NFR-01, this entry and the M4 deployment consistent, and is versioned and reviewed like any change; every other criterion still gates.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that the all-masked scenario is a request with only the required fields.
+- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that masking every optional field leaves a required-fields-only request.
   A failure it had predicted did not reproduce, and it reported that.
-  AI recommended this option; on 2026-10-20 it laid out the gate options and recommended the waiver, and Lukas decided.
+  AI recommended this option and left the serving and scope questions to Lukas; on 2026-10-20 it laid out the gate options and recommended the waiver, and Lukas decided.
 - **AI interaction evidence:** Claude Code sessions on issues #37 and #39 (2026-09-30) and #137 (2026-10-20).
 - **Other evidence:** [Model card](../docs/docs/model-card.md), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65), [issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137), [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158).
 - **In LaTeX:** yes
