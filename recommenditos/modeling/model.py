@@ -66,6 +66,10 @@ from recommenditos.schema import FEATURE_SPACE_FILE, Schema
 #: with predictions says which column is which without a convention.
 PREDICTION_NAME = "predicted_price_eur"
 
+#: The column of `LightGBMModel.log_price_contributions` that holds the base
+#: value, the log price every row's contributions start from.
+BASE_LOG_PRICE = "base_log_price"
+
 #: The metadata record, and the only file `load_model` opens before it knows
 #: which estimator it is loading.
 MODEL_FILE = "model.json"
@@ -1149,6 +1153,24 @@ class LightGBMModel(Model):
             )
         model.booster = estimator.booster_
         return model
+
+    def log_price_contributions(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Each row's log price split into one SHAP value per feature (FR-08, EDN-11).
+
+        LightGBM's own TreeSHAP export, `predict(pred_contrib=True)`, rather than
+        the `shap` package, which stays out of the serving runtime. One column
+        per feature, in `features` order, and `BASE_LOG_PRICE`, the booster's
+        mean log price over its training rows; a categorical is one column, as it
+        reaches the booster as one native categorical feature. A row sums to the
+        booster's log price before `predict_eur` bounds it to the training range.
+        """
+        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        contributions = self.booster.predict(self._as_codes(self._align(frame)), pred_contrib=True)
+        return pd.DataFrame(
+            np.asarray(contributions, dtype="float64"),
+            index=frame.index,
+            columns=[*self.features, BASE_LOG_PRICE],
+        )
 
     def _as_codes(self, aligned: pd.DataFrame) -> pd.DataFrame:
         coded = aligned.copy()

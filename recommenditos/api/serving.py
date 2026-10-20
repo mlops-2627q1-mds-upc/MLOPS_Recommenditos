@@ -10,6 +10,9 @@ A request reaches the model the way a training row did: as a `processed`-shaped
 row that the bundle's own feature space turns into a matrix, with every optional
 field the client left out set by `Model.mask_absent`, the one implementation of
 "the caller did not send this" that SC-06 and the blanked copies use too.
+
+Every valuation is explained by the booster's own SHAP export (FR-08, EDN-11),
+grouped by request field, so a bundle that has none cannot be served.
 """
 
 from collections.abc import Mapping
@@ -24,11 +27,12 @@ import numpy as np
 import pandas as pd
 
 from recommenditos.api.errors import pointer
-from recommenditos.api.schemas.common import FieldError, ListingFields, ModelInfo
-from recommenditos.api.schemas.predict import ValuationRequest
+from recommenditos.api.schemas.common import FieldError, FieldWarning, ListingFields, ModelInfo
+from recommenditos.api.schemas.predict import Explanation, FeatureEffect, ValuationRequest
 from recommenditos.data.build_features import build_matrix
 from recommenditos.modeling.model import (
-    Model,
+    BASE_LOG_PRICE,
+    LightGBMModel,
     ModelError,
     RequestContract,
     input_field_columns,
@@ -54,8 +58,21 @@ REQUEST_CONTRACT = RequestContract(
 )
 
 
+#: How many fields FR-08's explanation lists by name.
+TOP_FEATURES = 5
+
+
 class ServingError(ModelError):
     """The bundle cannot be served by this API."""
+
+
+@dataclass(frozen=True)
+class Estimate:
+    """One valuation: the price, what it rests on, and what the client should know."""
+
+    price_eur: float
+    explanation: Explanation
+    warnings: list[FieldWarning]
 
 
 def bundle_version(directory: Path) -> str:
@@ -83,7 +100,7 @@ def bundle_version(directory: Path) -> str:
 class ServedModel:
     """A loaded bundle, the values it accepts, and the fields it reads."""
 
-    model: Model
+    model: LightGBMModel
     info: ModelInfo
     #: Per checked request field, the values the model accepts.
     allowed: Mapping[str, tuple[str, ...]]
@@ -93,6 +110,11 @@ class ServedModel:
     @classmethod
     def load(cls, directory: Path) -> "ServedModel":
         model = load_model(directory)
+        if not isinstance(model, LightGBMModel):
+            raise ServingError(
+                f"{model.variant!r} is a {model.estimator!r} model, which has no SHAP export, so "
+                "no valuation could be explained (FR-08). The API serves LightGBM bundles."
+            )
         fields = input_field_columns(model, REQUEST_CONTRACT)
         undefined = sorted(set(fields) - set(ValuationRequest.model_fields))
         if undefined:
@@ -101,6 +123,9 @@ class ServedModel:
                 "request body does not define, so no request could ever supply them. Add them "
                 "to `ValuationRequest` before serving this bundle."
             )
+        # In the order of the request body, which is how FR-08's explanation
+        # breaks a tie between two equal effects.
+        fields = {name: fields[name] for name in ValuationRequest.model_fields if name in fields}
         levels = model.input_schema.levels
         allowed = {
             name: tuple(levels[name])
@@ -163,11 +188,30 @@ class ServedModel:
 
     # -- valuation ----------------------------------------------------------
 
-    def value(self, request: ValuationRequest) -> tuple[float, list[tuple[str, str]]]:
-        """The price of `request` in EUR, and the fields it reported as unseen."""
+    def value(self, request: ValuationRequest) -> Estimate:
+        """The price of `request` in EUR, its explanation, and the warnings for it."""
         matrix = self.matrix(request)
         price = float(self.model.predict_eur(matrix).iloc[0])
-        return price, self._unseen(request, matrix)
+        contributions = self.model.log_price_contributions(matrix).iloc[0]
+        warnings = [
+            FieldWarning(pointer=pointer([name]), detail=detail)
+            for name, detail in self._unseen(request, matrix)
+        ]
+        unbounded = float(np.exp(contributions.sum()))
+        if not np.isclose(price, unbounded, rtol=1e-9, atol=0.0):
+            warnings.append(
+                FieldWarning(
+                    pointer=pointer([]),
+                    detail=f"The model estimated {unbounded:,.2f} EUR, outside the price range "
+                    f"of its training data, so the price is that range's bound of {price:,.2f} "
+                    "EUR. The explanation describes the model's estimate before the bound.",
+                )
+            )
+        return Estimate(
+            price_eur=price,
+            explanation=explain(contributions, self.fields),
+            warnings=warnings,
+        )
 
     def matrix(self, request: ValuationRequest) -> pd.DataFrame:
         """`request` as the one-row matrix the model scores.
@@ -207,6 +251,40 @@ class ServedModel:
                 )
                 unseen.append((name, detail))
         return unseen
+
+
+def explain(
+    contributions: pd.Series, fields: Mapping[str, tuple[str, ...]], top: int = TOP_FEATURES
+) -> Explanation:
+    """FR-08's explanation of one row from its SHAP values in log price.
+
+    A field's contribution is the sum over the matrix columns it became, which
+    SHAP's additivity allows, so an equipment list counts once with all its
+    items and `registration_date` stands for the age. Fields are ranked by the
+    size of their contribution, ties in the order of `fields`, and each one is
+    reported as its multiplicative effect on the price, `exp(φ) - 1`, because
+    the model predicts log price and contributions there add up to a product.
+    Nothing is rounded, so that the product reproduces the unrounded estimate
+    to float precision and `price_eur`, its rounding, to the cent.
+    """
+    by_field = {
+        name: float(contributions[list(columns)].sum()) for name, columns in fields.items()
+    }
+    ranked = sorted(by_field, key=lambda name: abs(by_field[name]), reverse=True)
+    others = ranked[top:]
+    return Explanation(
+        base_price_eur=float(np.exp(contributions[BASE_LOG_PRICE])),
+        top_features=[
+            FeatureEffect(field=name, effect_pct=_effect_pct(by_field[name]))
+            for name in ranked[:top]
+        ],
+        other_features_effect_pct=_effect_pct(sum(by_field[name] for name in others)),
+    )
+
+
+def _effect_pct(log_contribution: float) -> float:
+    """A contribution to the log price as a percentage change of the price."""
+    return float(np.expm1(log_contribution) * 100)
 
 
 def _sent(request: ValuationRequest) -> set[str]:

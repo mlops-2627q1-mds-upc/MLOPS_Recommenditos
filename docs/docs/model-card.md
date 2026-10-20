@@ -23,7 +23,7 @@ Given a description of a car it returns a point estimate of the listing price (U
 It is the model behind the project's API.
 
 **Status: the four ladder variants train, all six success criteria are measured for the candidate, it passes NFR-01's gate with SC-04 waived, and nothing is released yet.**
-The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant and is waived by EDN-62, which accepted the miss, so the gate passes for `lgbm-basic` alone, and the serving sections (latency, image size, explanations) are still a plan.
+The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant and is waived by EDN-62, which accepted the miss, so the gate passes for `lgbm-basic` alone, and the serving sections on latency and image size are still a plan; the explanations are served (FR-08).
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the remaining placeholders are replaced as the `evaluate` stage's criteria and the API land.
 Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 
@@ -687,11 +687,12 @@ Three risks going into the rest of Milestone 3, all three now measured rather th
 Explanations are part of the product, not an afterthought: every valuation ships the properties that drove it (FR-08).
 
 - **Per prediction:** the base price plus the five features with the largest absolute SHAP contribution, and the combined contribution of everything else.
+  A feature is named by the request field it comes from, so the age is `registration_date` and an equipment list, many columns in the model, is one effect ([API docs](api.md#the-explanation)).
   Because the model predicts `log(price)`, a contribution is reported as its multiplicative effect on the price and the effects multiply rather than add.
   They are complete, so recomputing the estimate from the reported effects reproduces it, which is what the API test asserts.
 - **How it is computed:** from the trained booster's own SHAP export (LightGBM's `pred_contrib`, CatBoost's `ShapValues`), **not** the `shap` package.
   `shap` pulls in `numba` and `llvmlite`, measured at 189 MB, merely to import, which a CPU-only serving image should not carry (EDN-11).
-  A training-time test asserts the booster's export matches `shap.TreeExplainer` bit for bit.
+  A training-time test asserts the booster's export matches `shap.TreeExplainer` bit for bit; for LightGBM `shap` calls that same export, so the test also checks that each row's values add up to the model's log price.
 - **Globally:** `shap` is used offline, in training and notebooks, for summary plots and global feature importance.
 - **Behaviour under a changed input:** `tests/test_model_behaviour.py` asserts the direction of the three inputs whose effect on a price has a known sign, on aggregate, because boosted trees are not monotone row by row: the change has to move more predictions its way than the other.
   Measured on 2026-10-13 over the 8,859 validation rows, 20,000 km more lowers 92.1 % of the predictions of `lgbm-basic` and raises 7.4 %, and lowers 96.3 % and raises 3.3 % for `lgbm-extended`; a first registration one year earlier lowers 87.2 % and raises 12.8 %, and 92.7 % and 7.2 %; 20 kW more raises 78.7 % and lowers 19.7 %, and 77.3 % and 20.9 %.

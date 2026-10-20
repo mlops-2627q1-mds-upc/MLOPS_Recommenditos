@@ -141,6 +141,11 @@ pipeline = [
     # anyway, but a direct import of a transitive dependency breaks the day that
     # dependency changes, so it is declared here.
     "requests",
+    # `shap.TreeExplainer`, the reference the test of FR-08's explanation holds
+    # the booster's own SHAP export to, and offline global analysis. Never in the
+    # runtime list: it imports numba and llvmlite at load, and the API explains a
+    # valuation with LightGBM's `pred_contrib` instead (EDN-11).
+    "shap>=0.54.1",
     # `recommenditos/config.py` routes loguru through `tqdm.write` when tqdm can
     # be imported, so that a progress bar and a log line do not overwrite each
     # other. Deliberately not in the runtime list: serving draws no progress bar,
@@ -170,6 +175,9 @@ test = [
     # Starlette 1.x moved its test client from httpx to httpx2. Test-only: the
     # API serves requests and makes none.
     "httpx2>=2.15.1",
+    # Property tests over generated requests, such as FR-08's invariant that the
+    # explanation reproduces the estimate. Pure Python with one dependency.
+    "hypothesis>=6.170.5",
     "pytest",
     "pytest-cov",
 ]
