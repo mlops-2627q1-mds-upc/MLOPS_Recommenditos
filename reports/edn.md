@@ -7,30 +7,31 @@ Run `make edn` in the same pull request as any change to this file and commit wh
 
 What belongs here and what each field means: [references/Instruction_EDN_MLOps_v2026.md](../references/Instruction_EDN_MLOps_v2026.md).
 The course asks for a selected set of short entries.
-Record a decision when it meaningfully affects the design, quality, development, deployment or operation of the ML system and could reasonably have gone differently.
-A bug fix, an implementation detail, the use of a tool the course prescribes and a choice without a realistic alternative get no entry; they belong in the code, the docs or the pull request.
+Record a decision when it meaningfully affects the design, quality, development, deployment, or operation of the ML system and could reasonably have gone differently.
+A bug fix, an implementation detail, the use of a tool the course prescribes, and a choice without a realistic alternative get no entry; they belong in the code, the docs, or the pull request.
+An entry for a milestone we have not built yet states the design we have settled on, not something already running; the preamble of the PDF says so once, so an entry does not have to repeat it.
 
 On 2026-10-12 and 2026-10-13 the 79 entries EDN-01 to EDN-81 were trimmed to the 37 that meet this criterion, and every kept entry was rewritten to the shape below.
-An entry that amended, reversed or continued another one was merged into the surviving entry, which states the decision as it stands now.
+An entry that amended, reversed, or continued another one was merged into the surviving entry, which states the decision as it stands now.
 The originals are kept word for word in [edn-archive.md](edn-archive.md), which the PDF does not include, and [Retired and merged IDs](#retired-and-merged-ids) at the end of this file says what became of each ID.
 
 How to add an entry:
 
 - Copy the template at the end of this file and append the new entry after the last one, oldest entry first.
 - Give it the next free ID (`EDN-01`, `EDN-02`, ...).
-  IDs never change once assigned and are never reused, because the report, the docs and the code refer to them.
+  IDs never change once assigned and are never reused, because the report, the docs, and the code refer to them.
   Reserve the ID by adding its heading to this file on `main` before opening the branch that needs it.
   EDN-38 and EDN-76 were never assigned: they are skipped numbers, not removed entries.
 - Keep to the shape.
   An entry is read in about a minute, so it has about 220 words and never more than 300.
   The 300 are the one hard limit: `python -m tools.edn_latex --check` and the tests fail on an entry above it.
-  Counted are the title, the note line and the fields from **Decision** to **Other evidence**; a link counts by the words of its text, and text in double quotes does not count.
+  Counted are the title, the note line, and the fields from **Decision** to **Other evidence**; a link counts by the words of its text, and text in double quotes does not count.
   The figures per field are guide values:
   - title: one clause of about ten words that states the decision;
   - **Decision**: what we do, in about 45 words;
   - **Alternatives considered**: only alternatives we really weighed, one line each with the reason it lost; one is enough, and more than three is rare;
   - **Rationale**: the deciding argument, in about 60 words and with one or two numbers, each checked against its source; link the analysis and do not retell it;
-  - **Assessment of the AI contribution**: what AI contributed and what we checked, changed or rejected, in about 45 words;
+  - **Assessment of the AI contribution**: what AI contributed and what we checked, changed, or rejected, in about 45 words;
   - **AI interaction evidence**: the session and its topic, or one quoted prompt, in about 20 words;
   - **Other evidence**: about four links.
 - When a decision is revised, edit its entry so that it states the current decision, and say in one note line above the fields what changed and when.
@@ -44,10 +45,12 @@ How to add an entry:
 
 ### EDN-01: The main dataset is the AutoScout24 listings snapshot
 
+> **Revised on 2026-10-18**: records who found the dataset; the decision is unchanged.
+>
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Dataset Selection
-- **Participants:** All team members
+- **Participants:** @michudud04 found the dataset and proposed it; all team members confirmed the choice
 - **Decision:** Use the AutoScout24 Car Listings Dataset (2025 snapshot, Zenodo DOI `10.5281/zenodo.17643343`) as the training data for the used-car price component.
 - **Alternatives considered:**
   - Smaller generic Kaggle used-car datasets: mostly one country, fewer rows and features, weaker or undocumented provenance and licence.
@@ -56,7 +59,10 @@ How to add an entry:
   Its skew toward premium brands is accepted as a stated scope limit (EDN-05).
 - **AI involvement:** Information seeking, Alternative assessment
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI profiled the raw file (rows, columns, countries, brand mix, missing values) and summarised the trade-off against the smaller datasets.
+- **Assessment of the AI contribution:** @michudud04 found the dataset on Zenodo after
+  a preliminary inspection of related datasets. It was selected because of its large
+  number of rows. AI then profiled the raw file (rows, columns, countries, brand mix,
+  missing values) and summarised the trade-off against the smaller datasets.
   The team reviewed the figures and confirmed the choice in sprint planning.
 - **AI interaction evidence:** Dataset profile and trade-off in `docs/docs/project-brief.md`, sections 2 and 3.1 (2026-09-22).
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13), [issue #3](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/3).
@@ -74,11 +80,11 @@ How to add an entry:
   - Linear or Ridge regression only: simple and interpretable, but it misses interactions such as make by age by mileage.
   - kNN, random forest, tabular neural networks, hierarchical Bayes, LLM zero-shot: slower or weaker at this data size, or no fit for a CPU-only deployment with a small image.
 - **Rationale:** The course grades MLOps practice over raw accuracy.
-  LightGBM trains in minutes on a CPU, takes categoricals and missing values natively, keeps artefacts small and gives exact SHAP explanations.
+  LightGBM trains in minutes on a CPU, takes categoricals and missing values natively, keeps artefacts small, and gives exact SHAP explanations.
   The baselines show whether it earns its added complexity.
 - **AI involvement:** Information seeking, Alternative assessment
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI laid out the alternatives and the CPU, size and explainability constraints.
+- **Assessment of the AI contribution:** AI laid out the alternatives and the CPU, size, and explainability constraints.
   The team reviewed them and confirmed the choice in sprint planning, including CatBoost as a challenger only.
 - **AI interaction evidence:** "Why gradient boosting" in `docs/docs/project-brief.md`, section 4 (2026-09-22).
 - **Other evidence:** [PR #13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/13).
@@ -92,11 +98,11 @@ How to add an entry:
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Dataset Selection, Monitoring
 - **Participants:** @lukas2510, after supervisor feedback (S. del Rey)
-- **Decision:** All AutoScout24 `ES` listings are held out of training, validation and calibration and replayed in M6 as a new market.
+- **Decision:** All AutoScout24 `ES` listings are held out of training, validation, and calibration and replayed in M6 as a new market.
   The DataMarket sample of Spanish cars is dropped.
   The holdout is selected per listing, and the `split` stage reports any seller that also lists outside `ES`.
 - **Alternatives considered:**
-  - DataMarket as a stress test on the shared makes: market, year, portal and brand mix shift together, so an alarm could not be attributed, and it has no licence file.
+  - DataMarket as a stress test on the shared makes: market, year, portal, and brand mix shift together, so an alarm could not be attributed, and it has no licence file.
   - Holding out whole sellers that touch `ES`: puts non-Spanish rows into the holdout and gains nothing, since no seller crosses the border in the real snapshot.
 - **Rationale:** The supervisor asked whether DataMarket is feasible as a new market.
   It is not: 36.5 % of its rows are makes the model never sees.
@@ -119,7 +125,7 @@ How to add an entry:
 - **Activity / Topic:** Problem Specification
 - **Participants:** @lukas2510
 - **Decision:** The model covers used passenger cars: `offer_type = U`, not pre-registered, `vehicle_type = Car`.
-  The pipeline filters out new cars, pre-registered cars and transporters, and the API rejects them.
+  The pipeline filters out new cars, pre-registered cars, and transporters, and the API rejects them.
   `is_preregistered` defines the scope and is therefore not a feature.
 - **Alternatives considered:**
   - Keep everything, with the flags as features: more data, but one model would learn two price mechanisms, list prices and the second-hand market.
@@ -128,7 +134,7 @@ How to add an entry:
   Known limit: a `False` in `is_preregistered` can mean "not stated" (EDN-23), so some unmarked pre-registered listings remain in the training data.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI profiled the data, ran the comparison on both scopes and recommended this scope.
+- **Assessment of the AI contribution:** AI profiled the data, ran the comparison on both scopes, and recommended this scope.
   Lukas checked that the numbers came from the real dataset.
   AI later found that its own proposal to use `is_preregistered` as a feature contradicted this entry, and withdrew it.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-22 (issue #2) and 2026-09-29 (issue #25).
@@ -157,10 +163,10 @@ How to add an entry:
   Applying it in `features` makes the reported population the served one, and `train` and `evaluate` fail when that does not hold.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI counted the listings per make after scoping and deduplication, compared thresholds of 200, 300 and 500, and recommended the threshold.
+- **Assessment of the AI contribution:** AI counted the listings per make after scoping and deduplication, compared thresholds of 200, 300, and 500, and recommended the threshold.
   Lukas accepted because it states the brand skew openly instead of hiding it behind a warning.
   AI later found that the code and two documents disagreed on where the filter belongs, raised that as a decision, and corrected its own claim that out-of-scope rows would inflate the metrics.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-22 (issue #2), 2026-09-30 (issue #35) and 2026-10-05 (issue #63); prompt: "How do we handle the 25 makes, many of which have very few listings?".
+- **AI interaction evidence:** Claude Code sessions of 2026-09-22 (issue #2), 2026-09-30 (issue #35), and 2026-10-05 (issue #63); prompt: "How do we handle the 25 makes, many of which have very few listings?".
 - **Other evidence:** [Problem specification](../docs/docs/problem-spec.md) section 2, "The supported makes" in [the pipeline docs](../docs/docs/pipeline.md), [`served_vocabulary_results.txt`](analysis/served_vocabulary_results.txt), [issue #2](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/2), [PR #17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/17), [PR #71](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/71).
 - **In LaTeX:** yes
 
@@ -221,7 +227,7 @@ How to add an entry:
   It has no unplanned downtime during a graded presentation and its warm-up.
   Outside those windows, uptime is monitored with Better Uptime and Grafana and reported, not promised.
 - **Alternatives considered:**
-  - Keep 99 % uptime: nothing backs it on one VM without redundancy, SLA or on-call, and its measurement window was unbounded.
+  - Keep 99 % uptime: nothing backs it on one VM without redundancy, SLA, or on-call, and its measurement window was unbounded.
   - Lower the number to 95 %: as unverifiable as 99 %.
 - **Rationale:** M6 grades whether monitoring gives actionable insight, not whether a percentage was hit.
   The new requirement separates what we control, recovery and the presentation days, from what we can only observe.
@@ -244,7 +250,7 @@ How to add an entry:
 - **Activity / Topic:** ML System Design, Explainability
 - **Participants:** @lukas2510
 - **Decision:** The API computes FR-08's per-request explanation from the booster's own SHAP export, LightGBM's `predict(pred_contrib=True)`.
-  The `shap` package is used for offline analysis only and is never installed in the API image.
+  The `shap` package is reserved for offline analysis, is not yet a project dependency, and is never installed in the API image.
   The project runs on Python 3.12, which `shap` requires.
 - **Alternatives considered:**
   - `shap.TreeExplainer` in the serving path: one implementation everywhere, but `shap` imports `numba` and `llvmlite` at load, and both would enter the image.
@@ -307,18 +313,18 @@ How to add an entry:
   It laid out the options and named the counter-argument itself: the labels are replayed, so the report must say so.
   Lukas accepted the recommendation.
 - **AI interaction evidence:** Claude Code session of 2026-09-23, review of PR #19; Lukas asked (in German) for a closer explanation of FR-10 and of the recommendation.
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-10, FR-14 and NFR-09, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-10, FR-14, and NFR-09, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
 ### EDN-14: Drift is tested on windows of 1,000 requests at level 0.005
 
-> **Absorbs EDN-26 and EDN-29** (2026-09-29): the window, the exclusion of `model` and the significance level, each set after a new measurement.
+> **Absorbs EDN-26 and EDN-29** (2026-09-29): the window, the exclusion of `model`, and the significance level, each set after a new measurement.
 
 - **Date:** 2026-09-23
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** Monitoring, Requirements
 - **Participants:** @lukas2510
-- **Decision:** The drift job compares windows of 1,000 requests with 10,000 training listings, feature by feature at a Bonferroni-corrected level of 0.005, without the `model` feature.
+- **Decision:** The drift job compares windows of 1,000 requests with 10,000 training listings, feature by feature, Bonferroni-corrected from a family-wise level of 0.005 over the 23 tested features, without the `model` feature.
   The `ES` replay must be flagged with at least three drifted features besides `country_code`.
   Of 20 i.i.d. control windows, at most 1 may be flagged.
 - **Alternatives considered:**
@@ -364,7 +370,7 @@ How to add an entry:
   Its proposal to mask the condition flags as missing values was rejected, because it contradicts EDN-23 and the contract.
   For the endpoints it contributed the monitoring argument; Lukas dropped its further suggestions, a shared base schema and a combined convenience endpoint.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-29 (PR #19) and 2026-09-30 (issues #37 and #39).
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, FR-06 and FR-07, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), [`evaluate.py`](../recommenditos/modeling/evaluate.py).
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-01, FR-06, and FR-07, [problem specification](../docs/docs/problem-spec.md) SC-06, [`fillrates_results.txt`](analysis/fillrates_results.txt), [`evaluate.py`](../recommenditos/modeling/evaluate.py).
 - **In LaTeX:** yes
 
 ### EDN-17: The component is deployed on the FIB Virtech VM
@@ -378,7 +384,7 @@ How to add an entry:
 - **Decision:** The component is deployed on the FIB Virtech VM that the course offers: 4 GB of memory, 20 GB of disk, CPU only, free for one semester.
   Every target in the requirements is written for this machine.
 - **Alternatives considered:**
-  - The free tiers of AWS and GCP: 1 GB and 0.6 GB of memory do not hold an API container, Prometheus, Grafana and a scheduled drift job.
+  - The free tiers of AWS and GCP: 1 GB and 0.6 GB of memory do not hold an API container, Prometheus, Grafana, and a scheduled drift job.
   - Okteto or Azure: 3 GB, and 1 to 4 GB depending on the instance, so neither has more memory than the FIB machine.
   - A paid cloud or a free ARM tier: tied to a private account with payment details, and an ARM tier would need multi-architecture images.
 - **Rationale:** Memory decided the choice, together with the fact that the course provides the machine.
@@ -401,7 +407,7 @@ How to add an entry:
 - **Milestone:** M4: Model Deployment
 - **Activity / Topic:** API Design, Feature Encoding
 - **Participants:** @lukas2510
-- **Decision:** A `country_code` or a `model` that the training data does not contain is accepted, passed to the model as unknown and reported in the response's `warnings` field (FR-05).
+- **Decision:** A `country_code` or a `model` that the training data does not contain is accepted, passed to the model as unknown, and reported in the response's `warnings` field (FR-05).
   The `features` stage follows the same rule: a categorical has the training levels only, and any other value becomes missing.
   The `ES` holdout's `country_code` is therefore missing in every row, on purpose.
 - **Alternatives considered:**
@@ -479,7 +485,7 @@ How to add an entry:
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Feature Encoding and Data Validation
 - **Participants:** @lukas2510
-- **Decision:** `has_full_service_history`, `non_smoking` and `is_rental` stay plain booleans.
+- **Decision:** `has_full_service_history`, `non_smoking`, and `is_rental` stay plain booleans.
   They mean "the seller asserted this" or "the seller did not assert this", never "yes" or "no".
   No three-valued encoding is built.
   `is_used` is not a feature, because `offer_type` carries the same information reliably.
@@ -489,7 +495,7 @@ How to add an entry:
   - Recover the value from the free text: multilingual text parsing is out of scope and has no ground truth.
 - **Rationale:** A listing form offers a checkbox, so a tick is evidence and an empty box is the absence of evidence.
   No encoding can separate "no" from "not stated".
-  The risk is a reader who takes `False` as a denial, so the fix belongs in the problem specification, the dataset card and the model card.
+  The risk is a reader who takes `False` as a denial, so the fix belongs in the problem specification, the dataset card, and the model card.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** The three-valued encoding was AI's own earlier proposal in issue #25.
@@ -501,7 +507,7 @@ How to add an entry:
 
 ### EDN-25: The `download` stage fetches the raw file from Zenodo
 
-> **Absorbs EDN-07, EDN-35 and EDN-36** (2026-09-22 to 2026-09-30).
+> **Absorbs EDN-07, EDN-35, and EDN-36** (2026-09-22 to 2026-09-30).
 
 - **Date:** 2026-09-26
 - **Milestone:** M2: Reproducibility
@@ -534,13 +540,13 @@ How to add an entry:
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Requirements Engineering
 - **Participants:** @lukas2510
-- **Decision:** `docs/docs/requirements.md` states what must be true, for whom, with a priority and an acceptance criterion, and names no endpoints, formats, status codes or deployment mechanics.
+- **Decision:** `docs/docs/requirements.md` states what must be true, for whom, with a priority and an acceptance criterion, and names no endpoints, formats, status codes, or deployment mechanics.
   The design detail moves to `docs/docs/specification.md` under the same `FR-xx` and `NFR-xx` IDs.
 - **Alternatives considered:**
   - User stories (`US-xx`) with a specification behind them: a second ID space, while the course material and the report template speak of functional and non-functional requirements.
   - One page with softened wording: the design decisions would stay inside the requirements, only less visibly.
 - **Rationale:** The lecturer's feedback on M1 was that our requirements read as a specification.
-  The page named endpoints, status codes and container mechanics, so a design change looked like a requirement change.
+  The page named endpoints, status codes, and container mechanics, so a design change looked like a requirement change.
   One ID space keeps the trace from a requirement to its test intact.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
@@ -557,10 +563,10 @@ How to add an entry:
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Project Structure
 - **Participants:** @lukas2510
-- **Decision:** Each DVC stage has its own module under `recommenditos/data/` or `recommenditos/modeling/`, instead of the flat Cookiecutter Data Science layout with `dataset.py`, `features.py` and `modeling/train.py`.
+- **Decision:** Each DVC stage has its own module under `recommenditos/data/` or `recommenditos/modeling/`, instead of the flat Cookiecutter Data Science layout with `dataset.py`, `features.py`, and `modeling/train.py`.
   The course demo repository is structured the same way.
 - **Alternatives considered:**
-  - The flat Cookiecutter layout as generated: download, preprocessing and split would share one file, so an edit to it reruns every stage that depends on it.
+  - The flat Cookiecutter layout as generated: download, preprocessing, and split would share one file, so an edit to it reruns every stage that depends on it.
 - **Rationale:** The course prescribes Cookiecutter Data Science and allows justified deviations.
   A stage's `deps` should name the code that stage runs, so that `dvc repro` reruns the minimum.
   One file per ticket also lets several people build a sequential pipeline in parallel.
@@ -579,10 +585,10 @@ How to add an entry:
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Project Structure, Reproducibility
 - **Participants:** @lukas2510
-- **Decision:** Everything configurable about the pipeline lives in `params.yaml` and is declared per stage under `params:` in `dvc.yaml`: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the model variants and the thresholds of the success criteria.
+- **Decision:** Everything configurable about the pipeline lives in `params.yaml` and is declared per stage under `params:` in `dvc.yaml`: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the model variants, and the thresholds of the success criteria.
   Paths stay in `recommenditos/config.py`.
 - **Alternatives considered:**
-  - Python constants in `config.py`, as the course demo does: DVC cannot see a constant, so a changed hyperparameter reruns nothing and `dvc repro` reports the pipeline as up to date.
+  - Python constants, as the course demo keeps in `train.py`: DVC sees a constant only through the hash of its module, so a changed hyperparameter retrains every variant, and `dvc params diff` and `dvc exp` cannot see it.
   - `config.py` reading `params.yaml`: hides which stage reads which key.
 - **Rationale:** M2 is about a change rerunning what it should and nothing else.
   DVC hashes the declared keys, `dvc params diff` shows what changed between two commits, and `dvc exp` can sweep a value without a code change.
@@ -602,7 +608,7 @@ How to add an entry:
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Data Validation, Testing Strategy
 - **Participants:** @lukas2510
-- **Decision:** `recommenditos/schema.py` holds the structural contract of the raw, interim and processed frames: column names, dtypes and nullability, with a `validate` and a `conform` method.
+- **Decision:** `recommenditos/schema.py` holds the structural contract of the raw, interim and processed frames: column names, dtypes, and nullability, with a `validate` and a `conform` method.
   Value rules stay in the Great Expectations suites.
   Every stage validates after reading and conforms before writing.
 - **Alternatives considered:**
@@ -614,7 +620,7 @@ How to add an entry:
   It also selects only the contract's columns, which keeps the personal-data columns out of later frames.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI installed Pandera, Great Expectations and pyarrow against our pandas version and measured what survives a Parquet round trip.
+- **Assessment of the AI contribution:** AI installed Pandera, Great Expectations, and pyarrow against our pandas version and measured what survives a Parquet round trip.
   Two findings decided the option: a string dtype that changes across the boundary, and Pandera ignoring the datetime unit.
   Lukas chose from the three options with these findings.
 - **AI interaction evidence:** Claude Code session of 2026-09-29, probes in a scratch environment.
@@ -629,7 +635,7 @@ How to add an entry:
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Evaluation Protocol
 - **Participants:** @lukas2510
-- **Decision:** The listings outside `ES` are split 60 % train, 10 % validation, 10 % calibration and 20 % test, with the seed `20251108`, both pinned in `params.yaml`.
+- **Decision:** The listings outside `ES` are split 60 % train, 10 % validation, 10 % calibration, and 20 % test, with the seed `20251108`, both pinned in `params.yaml`.
   Whole sellers are assigned by a hash of the seed and `seller_group_id`, without stratification.
   The model card states the spread over 20 other splits and, as a limitation, that the snapshot has no listing dates for a temporal split.
 - **Alternatives considered:**
@@ -720,7 +726,7 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** Lukas chose groups over extras before the implementation.
-  AI traced the serving imports by running them, built both environments from the lock and showed that the check catches an injected training import.
+  AI traced the serving imports by running them, built both environments from the lock, and showed that the check catches an injected training import.
   An independent AI review found three ways the check could still be wrong; each is fixed and tested.
 - **AI interaction evidence:** Claude Code sessions of 2026-10-05 on issue #61 and on the review of PR #69.
 - **Other evidence:** [Issue #61](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/61), [PR #69](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/69), [`runtime_footprint_results.txt`](analysis/runtime_footprint_results.txt), the Dependencies section of [CONTRIBUTING.md](../CONTRIBUTING.md).
@@ -742,7 +748,7 @@ How to add an entry:
   - Nested runs under a parent: the four `train` stages are independent, so the parent has no natural owner.
   - Fail whenever tracking is unavailable: CI and a fresh clone have no DagsHub credentials, so `pytest` and `dvc repro` would fail for everyone.
 - **Rationale:** The rubric asks for results that can be compared and understood.
-  With one run per variant, MLflow's own table shows parameters, losses, energy figures and test metrics side by side, without joining.
+  With one run per variant, MLflow's own table shows parameters, losses, energy figures, and test metrics side by side, without joining.
   The cost is that `evaluate` depends on an id from `train`: a model trained without tracking has no run to append to.
   The switch serves whoever produces the numbers for the report: with it, a misconfiguration cannot pass while logging nothing.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
@@ -789,7 +795,7 @@ How to add an entry:
 - **Activity / Topic:** Feature Encoding, API Design, Evaluation Protocol
 - **Participants:** @lukas2510
 - **Decision:** A request that omits one of the four equipment lists is read as an empty list, so every column that list produces reaches the model as `False` and not as missing.
-  `Model.mask_absent` is the single implementation of what an omitted field is, for the API, for SC-06's masking sweep and for the tests.
+  `Model.mask_absent` is the single implementation of what an omitted field is, for the API, for SC-06's masking sweep, and for the tests.
 - **Alternatives considered:**
   - Omitted means absent, with missing values across the list's columns: what EDN-15 asks for in general, but no listing has a null list, so the model would score a state it was never fitted on.
   - Leave it to each caller: the docstrings said both things at once, and the obvious one-line masking silently chose the missing-value reading.
@@ -800,7 +806,7 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Rejected
 - **Assessment of the AI contribution:** A first AI review of PR #62 found the contradiction and recommended the empty list.
-  A second AI pass argued from the contract's wording for missing values, recommended that and implemented it.
+  A second AI pass argued from the contract's wording for missing values, recommended that, and implemented it.
   Lukas overruled the second pass on a ground neither had weighed: the training data has no null list.
   A figure the second pass gave for its option came from an error in its own probe.
   The shared helper is AI's and stayed.
@@ -844,9 +850,9 @@ How to add an entry:
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Data Validation, Testing Strategy
 - **Participants:** @lukas2510
-- **Decision:** The `configure_gx` stage rebuilds the Great Expectations context under `gx/` from code, `schema.py` and `params.yaml` on every run.
+- **Decision:** The `configure_gx` stage rebuilds the Great Expectations context under `gx/` from code, `schema.py`, and `params.yaml` on every run.
   `gx/` is a DVC-cached output and is not committed.
-  The suites' column, dtype and non-null checks are generated from `schema.py`.
+  The suites' column, dtype, and non-null checks are generated from `schema.py`.
   Fill rates are tolerant rules in both suites, and the contracts keep only structural nullability.
   Any failed expectation fails `validate-data`.
 - **Alternatives considered:**
@@ -910,7 +916,7 @@ How to add an entry:
   - Random or Optuna search with cross-validation: a new dependency and about five times the fits, for a region found flat.
 - **Rationale:** Across the twelve points of the first grid, no interval of the difference to the committed point lies below zero.
   At 1,000 the ceiling ended both fits; at 5,000 the validation curve decides the tree count.
-  The search of 2026-10-06 covered both LightGBM variants and `min_child_samples`, reproduced the first grid and kept every committed value.
+  The search of 2026-10-06 covered both LightGBM variants and `min_child_samples`, reproduced the first grid, and kept every committed value.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI designed the first sweep and stopped for the decision instead of committing a tuned value.
@@ -938,8 +944,8 @@ How to add an entry:
   The cost is a longer wait for the last required check of a pull request.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI traced the two known Windows failures to their causes, reproduced one end to end and recommended the required job, which Lukas chose.
-  The fixes, the tests written to fail first and the analysis of the failures the new job found were AI's.
+- **Assessment of the AI contribution:** AI traced the two known Windows failures to their causes, reproduced one end to end, and recommended the required job, which Lukas chose.
+  The fixes, the tests written to fail first, and the analysis of the failures the new job found were AI's.
 - **AI interaction evidence:** Claude Code session of 2026-10-06 on issue #84 and on the review of PR #73 and PR #75.
 - **Other evidence:** [Issue #84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/84), [PR #85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/85), the [failing run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/37438994409) before the fix, `.github/workflows/ci.yml`.
 - **In LaTeX:** yes
@@ -952,13 +958,13 @@ How to add an entry:
 - **Participants:** The team, as @lukas2510 recalls it; who took part in the discussion was not recorded
 - **Decision:** We build a used-car price component: a model behind an API that estimates the market price of a car and the price range a buyer should expect to pay.
 - **Alternatives considered:**
-  - A route-safety model, a recommender and a grocery idea: none was investigated in depth.
+  - A route-safety model, a recommender, and a grocery idea: none was investigated in depth.
     We looked for no dataset and defined no target for them, so their pros and cons were never established.
 - **Rationale:** This is @lukas2510's recollection, written down on 2026-10-12, and not a record from the time.
   Four ideas were on the table, and the team did not weigh them at length.
   The used-car price idea sounded the most feasible and interested us, so we checked that it was feasible and started.
   The other three were not rejected for a reason of their own: they were not picked.
-  Confirmed afterwards, and no reason at the time: a public dataset with a DOI (EDN-01), a measurable target (EDN-06) and fits of under a minute on a laptop.
+  Confirmed afterwards, and no reason at the time: a public dataset with a DOI (EDN-01), a measurable target (EDN-06), and fits of under a minute on a laptop.
 - **AI involvement:** Information seeking
 - **Response to AI:** Used as input for further analysis
 - **Assessment of the AI contribution:** As far as @lukas2510 recalls, AI did not take part in choosing among the four ideas.
@@ -980,15 +986,15 @@ How to add an entry:
   - Keep the old wording, "The reviewer is a person": a rule the team does not follow.
   - A second person approves every pull request: GitHub blocks approving one's own, and an agent's runs under its author's account, so most merges would wait.
 - **Rationale:** The rule now says what the trace shows: of the 56 pull requests merged by 2026-10-11, 2 carry a review by another person, and branch protection requires 9 checks and 0 approvals.
-  People decide: of the 76 original entries EDN-01 to EDN-78, the AI's proposal was accepted in 46, modified in 27, rejected in 2 and used as input in 1; of the 35 kept after the trim, in 23, 9, 1 and 1, with EDN-25 rejected and then partly adopted.
+  People decide: of the 76 original entries EDN-01 to EDN-78, the AI's proposal was accepted in 46, modified in 27, rejected in 2, and used as input in 1; of the 35 kept after the trim, in 23, 9, 1, and 1, with EDN-25 rejected and then partly adopted.
   Comments and pull requests under a member's account are often typed by an agent on that member's instruction, and the member answers for them.
   The weak spot: 48 of the 56 were opened and merged under one account without a second person's review, so in sprint 3 every teammate opens the pull request for their own ticket.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** The rule's text is AI's, adopted by @lukas2510 on 2026-09-29.
   On 2026-10-12 AI measured the numbers above, found that the review rule and the trace disagreed, and recommended the rewording, which @lukas2510 chose.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-21, 2026-09-29 and 2026-10-12.
-- **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95), [PR #101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101#issuecomment-6124299563), `gh pr list` and the branch protection of `main`, read on 2026-10-12.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-21, 2026-09-29, and 2026-10-12.
+- **Other evidence:** [PR #45](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/45), [issue #95](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/95), [PR #101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/101#issuecomment-6124299563), `gh pr list`, and the branch protection of `main`, read on 2026-10-12.
 - **In LaTeX:** yes
 
 ### EDN-82: `lgbm-basic` is trained on blanked copies of its listings
@@ -1010,7 +1016,7 @@ How to add an entry:
   The test split, read once after the decision, agrees: 8.26 % to 6.86 % there, 6.81 % to 6.73 % on a complete request, and SC-06 at 1.02 times instead of 1.21.
 - **AI involvement:** Information seeking, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, measured and recommended this option, which @lukas2510 took.
+- **Assessment of the AI contribution:** AI corrected the issue's premise (fields are often empty singly, almost never all together), proposed the rule, and measured and recommended this option, which @lukas2510 took.
   Independent agents reviewed the protocol before the fits, adding the condition that excluded `lgbm-extended`, and the code before the pipeline run; no person did.
 - **AI interaction evidence:** Claude Code session of 2026-10-13 on issue #116: measurement, three options, recommendation.
 - **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), [PR #121](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/121), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
@@ -1082,7 +1088,7 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 - **Rationale:** The deciding argument, in about 60 words and with one or two numbers, each checked against its source.
 - **AI involvement:** Select all that apply: No AI involvement | Information seeking | Alternative generation | Alternative assessment | Recommendation | Solution generation | Other (describe)
 - **Response to AI:** If AI contributed, select one: Accepted | Accepted with modifications | Rejected | Used as input for further analysis | Other (describe)
-- **Assessment of the AI contribution:** If AI contributed: what it contributed and what we checked, changed or rejected, in about 45 words.
+- **Assessment of the AI contribution:** If AI contributed: what it contributed and what we checked, changed, or rejected, in about 45 words.
 - **AI interaction evidence:** The session and its topic, or one quoted prompt.
 - **Other evidence:** About four links: issue, PR, analysis result, document.
 - **In LaTeX:** no

@@ -9,7 +9,7 @@
   topic = {ML System Design, Explainability},
   participants = {@lukas2510},
   decision = {The API computes FR-08's per-request explanation from the booster's own SHAP export, LightGBM's \texttt{predict(pred\_\allowbreak{}contrib=\allowbreak{}True)}.
-The \texttt{shap} package is used for offline analysis only and is never installed in the API image.
+The \texttt{shap} package is reserved for offline analysis, is not yet a project dependency, and is never installed in the API image.
 The project runs on Python 3.12, which \texttt{shap} requires.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]

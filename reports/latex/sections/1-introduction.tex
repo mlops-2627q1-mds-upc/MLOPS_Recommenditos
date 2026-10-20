@@ -16,24 +16,26 @@ In the first use case, car valuation (UC1), an owner describes their car and rec
 In the second, purchase guidance (UC2), a buyer describes the car they are looking for and receives a typical price with a 90\,\% interval and comparable real listings (FR-02, FR-07, FR-09).
 
 The learning task is a regression on $\log(\mathrm{price})$.
-We train on the AutoScout24 Car Listings Dataset, one snapshot of 118,382 listings with 75 columns from eight European countries, published on Zenodo under DOI \href{https://doi.org/10.5281/zenodo.17643343}{10.5281/zenodo.17643343} (EDN-01).
-The scope is used passenger cars (EDN-04) of the makes with at least 300 listings, which are 11 makes and 98.6\,\% of the used listings (EDN-05).
-For a car outside this scope the component returns a refusal and no estimate (FR-04).
-We hold out all Spanish listings as a market the model never sees, so that Milestone~6 can show drift detection and retraining on real data (EDN-03).
+We train on the AutoScout24 Car Listings Dataset (EDN-01), a snapshot of 118,382 listings with 75 columns from eight European countries, published on Zenodo \cite{celik2025autoscout24}.
+The scope is used passenger cars (EDN-04) of the 11 makes with at least 300 listings each, which together cover 98.6\,\% of the used listings (EDN-05).
+For a car outside this scope the component will return a refusal and no estimate (FR-04).
+We hold out all Spanish listings as a market the model has not seen, so that Milestone~6 can show drift detection and retraining on real data (EDN-03).
 
-In operation the component is a containerised API on the virtual machine the course provides, with 4\,GB of memory, 20\,GB of disk and no GPU (EDN-17).
-CI builds the released model into the image (EDN-08), and a person decides when to retrain and which model to promote (EDN-12).
+In operation the component will be a containerised API on the virtual machine the course provides, with 4\,GB of memory, 20\,GB of disk, and no GPU (EDN-17).
+CI will build the released model into the image (EDN-08), and a person will decide when to retrain and which model to promote (EDN-12).
 The 16 functional and 15 non-functional requirements are described in \cref{sec:m1-requirements}.
 
 \paragraph{Success criteria.}
-A model may be deployed when it meets all six criteria of \cref{tab:success-criteria} on the test split (EDN-06, EDN-15).
+A model may be deployed only if it meets all six criteria of \cref{tab:success-criteria} on the test split (EDN-06, EDN-15).
 The primary metric is the median absolute percentage error (MdAPE).
-The criteria are the release gate (NFR-01): the \texttt{evaluate} stage of the pipeline reads the bounds from \texttt{params.yaml}, measures each criterion and writes the verdict to \texttt{metrics.json} (EDN-58).
-SC-04 is also our fairness check, because it compares the error across countries, seller types and the other segments.
+Together the criteria form the release gate (NFR-01).
+The \texttt{evaluate} stage of the pipeline reads the bounds from \texttt{params.yaml}, measures each criterion, and writes the verdict to \texttt{metrics.json} (EDN-58).
+SC-04 is also our fairness check.
+It compares the error across segments, where a segment is one value of make, country, seller type, fuel category, or age band, such as BMW or cars older than 20 years.
 
-We set the bounds after one exploratory run on the final scope.
-In it the baseline B0, the median price per make, model and two-year age band, reached 11.9\,\% MdAPE and a first LightGBM model 6.7\,\% (EDN-06).
-The same run showed cars older than 20 years at 15.3\,\%, just above SC-04's bound.
+Our baseline B0 predicts the median price of cars with the same make, model, and two-year age band.
+We set the bounds after one exploratory run on the final scope, in which B0 reached an MdAPE of 11.9\,\% and a first LightGBM model reached 6.7\,\% (EDN-06).
+In the same run, the LightGBM model's MdAPE for cars older than 20 years was 15.3\,\%, just above SC-04's bound.
 We kept the bound at 15\,\% and recorded this segment as a known risk.
 
 \begin{table}[ht]
@@ -45,21 +47,21 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
     SC-01 & MdAPE & $\le$ 9\,\% & 6.73\,\% & met \\
     SC-02 & Predictions within $\pm$20\,\% of the asking price & $\ge$ 85\,\% & 90.0\,\% & met \\
     SC-03 & MdAPE reduction against baseline B0 & $\ge$ 30\,\% & 44.6\,\% & met \\
-    SC-04 & MdAPE in every level of make, country, seller type, fuel category and age band with at least 500 test rows & $\le$ 15\,\% & 16.80\,\% & missed \\
+    SC-04 & MdAPE in every segment (value of make, country, seller type, fuel category, or age band) with at least 500 test rows & $\le$ 15\,\% & 16.80\,\% & missed \\
     SC-05 & Coverage of the 90\,\% price intervals of UC2 & 88--92\,\% & -- & not measured \\
     SC-06 & MdAPE with optional input fields missing, relative to the MdAPE with every field given & $\le$ 1.5 & 1.02 & met \\
     \bottomrule
   \end{tabularx}
-  \caption{The success criteria and the result of the candidate model on the 19,665 test rows (\texttt{metrics.json}, \texttt{reports/metrics/lgbm-basic.json}). For SC-04 and SC-06 the table shows the worst case.}
+  \caption{The success criteria and the result of the candidate model \texttt{lgbm-basic} on the 19,665 test rows (\texttt{metrics.json}, \texttt{reports/metrics/lgbm-basic.json}). For SC-04 and SC-06 the table shows the worst case.}
   \label{tab:success-criteria}
 \end{table}
 
 \paragraph{Result.}
-No model passes the gate, so no model is released.
-The candidate \texttt{lgbm-basic} meets SC-01, SC-02, SC-03 and SC-06.
-It misses SC-04 in one of the 26 segments the criterion checks (\cref{fig:segments}): its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next segment is at 10.4\,\%.
-SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented.
-We accept the miss as a limitation of this model and did not move the bound to make it pass (EDN-62).
+As of the first delivery, no model passes the gate yet, so none is released.
+The candidate \texttt{lgbm-basic}, a LightGBM model on the 16 basic features of a car, meets SC-01, SC-02, SC-03, and SC-06.
+It misses SC-04 in one of the 26 segments the criterion checks (\cref{fig:segments}): its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next-worst segment is at 10.4\,\%.
+SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented: FR-07 is due in Milestone~4, and the calibration split of \cref{tab:split} is held for them.
+We accept the miss as a limitation of this model and keep the bound at 15\,\% (EDN-62).
 
 % figures/error-by-segment.pdf is a copy of the `compare-segments` stage's output.
 \begin{figure}[ht]
@@ -69,12 +71,13 @@ We accept the miss as a limitation of this model and did not move the bound to m
   \label{fig:segments}
 \end{figure}
 
-The verdicts on SC-01, SC-02 and SC-04 do not depend on the seed of the seller-grouped split.
+The verdicts on SC-01, SC-02, and SC-04 do not depend on the seed of the seller-grouped split.
 We refitted the candidate on 20 other split seeds: the test MdAPE was 6.72\,\% on average with a standard deviation of 0.26 percentage points, against 6.73\,\% on the committed split.
-SC-01 and SC-02 held on all 20 splits and SC-04 was missed on all 20, with 18.2\,\% on average for cars older than 20 years; the committed 16.80\,\% is the lowest of the 21 values (EDN-32).
+SC-01 and SC-02 held on all 20 splits, and SC-04 was missed on all 20.
+Cars older than 20 years averaged 18.2\,\%, so the committed 16.80\,\% is the lowest of the 21 values (EDN-32).
 
 We kept the model simple and put the effort into the engineering practices described in \cref{sec:methodology}.
-The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (MLOps\_\TeamName\_EDN.pdf), which this report cites by entry ID.
+The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (Appendix~\ref{app:edn}), which this report cites by entry ID.
 
 \subsection{Teammates' evaluation}
 \label{sec:teammates-evaluation}
@@ -85,45 +88,27 @@ The decisions behind them, and how AI was involved in each, are recorded in our 
 }
 
 \newif\ifconsensus
-\consensustrue
+\consensusfalse
 
 \ifconsensus
   $\boxtimes$~\textbf{\enquote{All team members agree that they had an equal contribution to this delivery and project: completing a fair share of the team's work with acceptable/high quality, keeping commitments, and completing assignments on time, helping teammates who are having difficulty when it is easy or important.}}
 \else
-  There is no consensus on an equal contribution.
-  Each team member rated their peers' contributions to this delivery using the CATME scale in \cref{tab:catme-scale}; \cref{tab:catme-ratings} shows the received ratings in rows.
+  There is no consensus on an equal contribution, so each member rated the others on the CATME scale (1--5, 3 is a fair share), and the team agreed on the ratings below (received ratings in rows).
+  \MemberA\ did most of the coordination as Scrum Master, set up the GitHub repository, the DagsHub organisation and MLflow tracking, implemented almost all of the code including CI and quality assurance, wrote the requirements, the specification and most of the documentation, and wrote the first draft of this report, so we ask for an individual factor of 1.2 for \MemberA.
+  All others contributed a fair share and keep 1.0.
 
-  \begin{table}[ht]
-    \centering\small
-    \begin{tabularx}{\textwidth}{@{}cX@{}}
-      \toprule
-      Rating & Description \\
-      \midrule
-      5 & Does more or higher-quality work than expected. Makes important contributions that improve the team's work. Helps teammates who are having difficulty completing their work. \\
-      4 & Demonstrates behaviors described immediately above and below. \\
-      3 & Completes a fair share of the team's work with acceptable quality. Keeps commitments and completes assignments on time. Helps teammates who are having difficulty when it is easy or important. \\
-      2 & Demonstrates behaviors described immediately above and below. \\
-      1 & Does not do a fair share of the team's work. Delivers sloppy or incomplete work. \\
-      \bottomrule
-    \end{tabularx}
-    \caption{CATME ratings (from \url{https://info.catme.org/features/catme-five-dimensions/}).}
-    \label{tab:catme-scale}
-  \end{table}
-
-  \begin{table}[ht]
-    \centering\small
+  \begin{center}
+    \footnotesize
     \begin{tabular}{@{}lcccccc@{}}
       \toprule
       & \MemberA & \MemberB & \MemberC & \MemberD & \MemberE & Average \\
       \midrule
-      \MemberA & -- & & & & & \\
-      \MemberB & & -- & & & & \\
-      \MemberC & & & -- & & & \\
-      \MemberD & & & & -- & & \\
-      \MemberE & & & & & -- & \\
+      \MemberA & -- & 5 & 5 & 5 & 5 & 5.0 \\
+      \MemberB & 3 & -- & 3 & 3 & 3 & 3.0 \\
+      \MemberC & 3 & 3 & -- & 3 & 3 & 3.0 \\
+      \MemberD & 3 & 3 & 3 & -- & 3 & 3.0 \\
+      \MemberE & 3 & 3 & 3 & 3 & -- & 3.0 \\
       \bottomrule
     \end{tabular}
-    \caption{Received peer evaluations (rows: evaluated member).}
-    \label{tab:catme-ratings}
-  \end{table}
+  \end{center}
 \fi

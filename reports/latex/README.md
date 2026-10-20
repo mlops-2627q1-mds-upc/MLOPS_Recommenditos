@@ -6,6 +6,8 @@ LaTeX sources for our two course deliverables:
   One source for both deliveries: the initial report shows Milestones 1-3, the final report adds Milestones 4-6 and the retrospective.
 - `edn.tex` - the Engineering Decision Notebook ([references/Instruction_EDN_MLOps_v2026.md](../../references/Instruction_EDN_MLOps_v2026.md)), one file per entry in `edn/`, transferred from the working copy [reports/edn.md](../edn.md).
 
+Atenea takes one PDF, so `build.sh` builds the EDN first and the report appends its pages, as built, as Appendix A (`pdfpages`). Links inside those pages are not clickable; the standalone EDN PDF keeps them.
+
 ## Layout
 
 | Path | What goes there |
@@ -24,6 +26,7 @@ LaTeX sources for our two course deliverables:
 - `\tbd{...}` marks a placeholder.
   It renders in red in every build, and `make report-submit` counts the ones left.
 - Refer to EDN entries by ID in the report, e.g. "(EDN-03)".
+- Use the Oxford comma in every list of three or more items, with "and" as with "or": "make, model, and age band". The course's report template writes it that way, and the whole report and the EDN follow it; for the EDN, write it in `reports/edn.md`.
 - A figure that shows data is drawn by a pipeline stage, not by hand: the stage writes a PDF to `reports/figures/`, and its copy in `figures/` is what the report includes.
   `recommenditos/plots.py` holds the style every such figure shares, and its docstring says how colour and size are used; `recommenditos/modeling/compare_segments.py` is the stage to copy from.
   Draw a figure at the size it is printed at, and check it on the built page and in a greyscale print before it goes in.
@@ -74,7 +77,7 @@ The commit itself, after `dvc pull`:
 
 The PDF and the hand-in:
 
-- [ ] The page count against the limit, and no placeholder left: `make report-submit DELIVERABLE=initial` (or `final`), which prints both and the space left on the last page.
+- [ ] The page count against the limit, and no placeholder left: `make report-submit DELIVERABLE=initial` (or `final`), which prints both and the space left on the last page. The limit counts the pages before the EDN appendix, which the build prints in brackets.
 - [ ] The size against Atenea's 20 MB: `ls -l reports/latex/build/MLOps_Recommenditos_*_report.pdf`. The same build writes `MLOps_Recommenditos_EDN.pdf`.
 - [ ] Every page break: no heading orphaned at the bottom of a page (such as 2.3 with no text under it) and no figure or table pushed away from its text.
 - [ ] Every link of the cover and the text opens in a browser that is not logged in, the repository above all, which the lecturer has to be able to open: `pdfinfo -url <pdf>` lists them.
@@ -114,8 +117,8 @@ The PDFs land in `reports/latex/build/`:
 
 | File | Contents |
 |------|----------|
-| `report.pdf` | Initial report draft (Milestones 1-3) with guidance boxes |
-| `report-final.pdf` | Final report draft (Milestones 1-6) with guidance boxes |
+| `report.pdf` | Initial report draft (Milestones 1-3) with guidance boxes, and the EDN draft as appendix |
+| `report-final.pdf` | Final report draft (Milestones 1-6) with guidance boxes, and the EDN draft as appendix |
 | `edn.pdf` | Engineering Decision Notebook draft |
 
 For the PDFs we hand in (no guidance, named as the course requires), append `initial` or `final` to the command:
@@ -124,7 +127,7 @@ For the PDFs we hand in (no guidance, named as the course requires), append `ini
 docker build -t mlops-latex reports/latex && docker run --rm -v "$PWD/reports/latex:/report" mlops-latex initial
 ```
 
-This produces `MLOps_Recommenditos_Initial_report.pdf` (or `..._Final_report.pdf`) and `MLOps_Recommenditos_EDN.pdf`, and prints each PDF's page count against the limit (15 pages initial, 30 final), the number of unfilled placeholders and, for the report, the space left on its last page, which is how much the sections can still grow.
+This produces `MLOps_Recommenditos_Initial_report.pdf` (or `..._Final_report.pdf`), with the EDN as its appendix, and `MLOps_Recommenditos_EDN.pdf`, and prints each PDF's page count, for the report also the pages before the EDN appendix, which is what counts against the limit (15 pages initial, 30 final), the number of unfilled placeholders and, for the report, the space left on its last page, which is how much the sections can still grow.
 
 The first run downloads and installs TeX Live and takes a few minutes; after that Docker reuses the image and a build takes seconds.
 The image (~240 MB) contains only a minimal, pinned TeX Live 2025, so everyone gets identical PDFs.

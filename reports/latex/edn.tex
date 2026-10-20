@@ -106,6 +106,7 @@
 
 This notebook records a selected set of engineering decisions that meaningfully shaped our ML system, and how AI contributed to them.
 It does not list every decision or every use of AI, nor the use of tools the course prescribes.
+Up to this delivery the system is built to Milestone~3: where an entry decides how the API, its image, the drift job, or the monitoring works, it states the design we have settled on and will build, not something already running.
 The IDs are not contiguous: on 12 and 13 October 2026 the notebook was trimmed to the decisions that meet this criterion, the IDs of merged and retired entries are not reused, and \texttt{reports/edn.md} in the repository lists what became of each.
 
 \tableofcontents
@@ -115,7 +116,7 @@ The IDs are not contiguous: on 12 and 13 October 2026 the notebook was trimmed t
   Create an entry when a decision could reasonably have been made differently and the choice has meaningful consequences for the project.
   Entries are written in \texttt{reports/edn.md} and transferred here by \texttt{make edn}, rerun in the same pull request as any change to that file, which writes one file per entry into \texttt{edn/} (the alternatives go into the rationale) and the \texttt{\textbackslash input} list into \texttt{edn/entries.tex}; never edit those files by hand.
   IDs are stable (EDN-01, EDN-02, \dots) so the report can refer to them; never renumber.
-  Link issues, PRs and commits as other evidence.
+  Link issues, PRs, and commits as other evidence.
   The example below is Example~3 of the course instructions and only shows in draft builds.
 }
 
