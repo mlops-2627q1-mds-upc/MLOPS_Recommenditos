@@ -101,6 +101,11 @@ class ServedModel:
         }
         allowed["make"] = tuple(sorted(model.metadata["training"]["supported_makes"]))
         allowed["country_code"] = COUNTRIES
+        # In the order of the request body, so that faults are listed as a client
+        # reads its own request.
+        allowed = {
+            name: allowed[name] for name in ValuationRequest.model_fields if name in allowed
+        }
         trained_on = set(levels.get("country_code", ()))
         if not trained_on <= set(COUNTRIES):
             raise ServingError(
