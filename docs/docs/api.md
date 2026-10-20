@@ -100,7 +100,7 @@ It is rare: with `lgbm-basic`, 1 of the 103,868 listings of the feature matrices
 The explanation is the costliest step of a request, because TreeSHAP visits every leaf of each of the 1,394 trees of `lgbm-basic`, where a prediction follows one path per tree.
 Measured in-process with `TestClient` on a shared 4-core development laptop, over 394 requests built from test listings, it took p50 34 ms and p95 49 ms of a request that took p50 63 ms and p95 93 ms; a second run under heavier load from other processes gave 44 and 71 ms of 81 and 140 ms.
 Both are inside NFR-02's 200 ms for `/predict`, which the load test on the target VM checks.
-`lgbm-extended`, with 162 columns in 33 fields, is close to that limit or over it: under a load average of 2.7 to 5.7 one run gave a whole request of p50 181 ms and p95 195 ms (explanation 78 and 83 ms) and another p50 250 ms and p95 357 ms (explanation 106 and 148 ms), against 65 and 78 ms for `lgbm-basic` in the first run.
+`lgbm-extended`, with 162 columns in 33 fields, is close to that limit or over it: under a load average of 2.7 to 5.7 one run gave a whole request of p50 181 ms and p95 195 ms (explanation 78 and 83 ms) and another p50 250 ms and p95 357 ms (explanation 106 and 148 ms), where `lgbm-basic` took p50 65 ms and p95 78 ms in the first run.
 
 ### Model version and request ID
 
