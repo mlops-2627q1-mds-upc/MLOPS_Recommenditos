@@ -273,6 +273,13 @@ _EXAMPLES: dict[int, dict[str, Any]] = {
         "detail": too_large_detail(10240),
         "instance": _EXAMPLE_INSTANCE,
     },
+    HTTPStatus.SERVICE_UNAVAILABLE: {
+        "type": BLANK,
+        "title": "Service Unavailable",
+        "status": 503,
+        "detail": "The served model 'lgbm-extended' carries no price-range models.",
+        "instance": "urn:uuid:0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
+    },
 }
 
 _DESCRIPTIONS: dict[int, str] = {
@@ -283,6 +290,7 @@ _DESCRIPTIONS: dict[int, str] = {
     "answered or stored (NFR-03).",
     HTTPStatus.UNPROCESSABLE_ENTITY: "The request is invalid; `errors` lists every invalid field.",
     HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "The body is larger than 10 KB (NFR-09).",
+    HTTPStatus.SERVICE_UNAVAILABLE: "The served bundle carries no interval models (EDN-85).",
 }
 
 
