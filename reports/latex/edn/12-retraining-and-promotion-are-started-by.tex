@@ -11,11 +11,11 @@
   decision = {When the drift job flags the \texttt{ES} replay, a team member retrains with \texttt{ES} included and opens the promotion pull request by hand.
 The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
 A required CI check fails a pull request that changes \texttt{dvc.\allowbreak{}lock} unless the committed \texttt{metrics.\allowbreak{}json} has \texttt{gate\_\allowbreak{}passed: true} and names the promoted model as \texttt{deployable\_\allowbreak{}variant}.
-A criterion waived by an EDN entry listed in \texttt{params.\allowbreak{}yaml} (SC-04, EDN-62) does not count, and \texttt{metrics.\allowbreak{}json} reports it.
+A criterion waived in \texttt{params.\allowbreak{}yaml} does not count; EDN-62 records the SC-04 waiver.
 FR-15 states this; the reviewer's approval stays on top.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation.
+\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
 \item The gate as a manual check only: one mistaken merge deploys a rejected model.
 \item A check in CD: it fails only after the merge.
 \end{itemize}

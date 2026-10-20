@@ -86,7 +86,7 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 
 `profile-data`, `features`, `evaluate` and the two `compare` stages have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
 Its text model needs no feature engineering, and it asserts its metric threshold inside `tests/test_model.py` instead of producing a metrics artefact, which is not enough for the gate [NFR-01](specification.md) describes.
-`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 37 leaves (30 of them rendered while `deployable_variant` is null and only `lgbm-basic` has SC-05's two) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
+`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 42 leaves (36 of them non-null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
 Five of those leaves are not measurements but provenance - `data_source` and each variant's `estimator` - because a number is only readable as a result once the file says which data produced it and which model answered.
 `dvc metrics diff` is long-format and lists only the leaves that changed, which is what compares two model versions across a merge.
 

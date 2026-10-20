@@ -278,10 +278,10 @@ How to add an entry:
 - **Decision:** When the drift job flags the `ES` replay, a team member retrains with `ES` included and opens the promotion pull request by hand.
   The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
   A required CI check fails a pull request that changes `dvc.lock` unless the committed `metrics.json` has `gate_passed: true` and names the promoted model as `deployable_variant`.
-  A criterion waived by an EDN entry listed in `params.yaml` (SC-04, EDN-62) does not count, and `metrics.json` reports it.
+  A criterion waived in `params.yaml` does not count; EDN-62 records the SC-04 waiver.
   FR-15 states this; the reviewer's approval stays on top.
 - **Alternatives considered:**
-  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation.
+  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
   - The gate as a manual check only: one mistaken merge deploys a rejected model.
   - A check in CD: it fails only after the merge.
 - **Rationale:** The `ES` holdout exists to show this loop closing (EDN-03).
@@ -822,30 +822,32 @@ How to add an entry:
 
 ### EDN-62: `lgbm-basic` is the candidate model
 
-> **Revised on 2026-10-13**: `lgbm-basic` is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.
+> **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since 2026-10-13 (EDN-82) the ratio of `lgbm-basic` is 1.02, not 1.21.
 
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
 - **Participants:** @lukas2510
-- **Decision:** `lgbm-basic` is the candidate that the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
+- **Decision:** `lgbm-basic` is the candidate the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
   `lgbm-extended` fails SC-06.
   SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
+  The promotion gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
 - **Alternatives considered:**
   - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
-  - One model for complete requests and the other for partial ones: two models and a routing rule; left open for the deployment milestone.
+  - Routing complete and partial requests to different models: two models and a routing rule.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
-- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.02 times (1.21 when this was decided); the bound is 1.5.
-  On that request the ranking of the two reverses.
-  The extended features also make the over-20 segment worse, so they are no remedy for SC-04.
+  - Keeping the gate closed until a variant meets SC-04: no model could be promoted.
+- **Rationale:** On a request with only the fields FR-01 requires, the MdAPE of `lgbm-extended` rises to 1.65 times its full-input value and that of `lgbm-basic` to 1.02 times; the bound is 1.5.
+  On that request the ranking reverses.
+  The extended features worsen the over-20 segment, so they do not fix SC-04.
+  Without the waiver this accepted miss would block every promotion; every other criterion still gates.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed.
-  One noticed that the all-masked scenario is a request with only the required fields, on which the ranking reverses.
-  AI recommended this option and left the serving and scope questions to Lukas.
-  A failure it had predicted did not reproduce on real data, and it reported that.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issues #37 and #39.
-- **Other evidence:** [Model card](../docs/docs/model-card.md) (Results), [`masked-inputs.csv`](metrics/masked-inputs.csv), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65).
+- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that the all-masked scenario is a request with only the required fields.
+  A failure it had predicted did not reproduce, and it reported that.
+  AI recommended this option; on 2026-10-20 it laid out the gate options and recommended the waiver, and Lukas decided.
+- **AI interaction evidence:** Claude Code sessions on issues #37 and #39 (2026-09-30) and #137 (2026-10-20).
+- **Other evidence:** [Model card](../docs/docs/model-card.md), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65), [issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137), [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158).
 - **In LaTeX:** yes
 
 ### EDN-68: The Great Expectations store is generated and cached

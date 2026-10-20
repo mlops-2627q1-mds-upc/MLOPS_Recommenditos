@@ -669,7 +669,8 @@ Same scope as above without `ES`, deduplicated, 96,831 listings, 80/20 split gro
 #### Summary
 
 The ladder reproduces the reference run, and the first three criteria pass with margin for both LightGBM variants: the candidate `lgbm-basic` is at 6.73 % MdAPE against SC-01's 9 %, 90.0 % within 20 % against SC-02's 85 %, and 44.6 % below the median baseline against SC-03's 30 %.
-Nothing is released on that, because NFR-01's word is "every": SC-04 fails for every variant, while SC-05 passes for the candidate, whose price range covers 90.2 % of full inputs and 91.0 % of P1 requests.
+SC-04 fails for every variant, and SC-05 passes for the candidate, whose price range covers 90.2 % of full inputs and 91.0 % of P1 requests.
+The gate passes `lgbm-basic` with SC-04 waived, because the team accepted that miss (EDN-62); releasing it stays a person's decision in a reviewed pull request (EDN-12).
 The chosen model is therefore `lgbm-basic` **as a candidate**, chosen over the lower pooled MdAPE of `lgbm-extended` because it is the one that meets SC-06 (EDN-62).
 Early stopping decides its tree count (EDN-73), which turned out to be worth 0.02 pp, and its `learning_rate`, `num_leaves` and `min_child_samples` are the values it was first fitted with because the search around them found nothing the validation split can tell apart, for either LightGBM variant (EDN-73).
 So the honest statement about it is not that it is tuned to an optimum but that the obvious knobs have been searched and kept, because none of them buys a resolvable gain.

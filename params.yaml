@@ -494,8 +494,8 @@ evaluate:
 report:
   # The variant whose error per segment level the report's figure shows: the
   # candidate put forward for release (EDN-62). `metrics.json` names a variant
-  # only once one passes the gate, and none does yet, so the choice is stated
-  # here and the `compare-segments` stage reads it.
+  # only once one passes the gate, so the choice is stated here, where it holds
+  # whatever a retrain's gate says, and the `compare-segments` stage reads it.
   # `tools/promotion_gate.py` reads it too, as the model being promoted: a pull
   # request that changes `dvc.lock` is blocked unless `metrics.json` names this
   # variant as `deployable_variant`. Changing it for a figure changes what the
