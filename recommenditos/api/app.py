@@ -1,11 +1,12 @@
 """The FastAPI application: one served model, versioned routes, one error shape.
 
 `create_app` reads the settings from the environment (`settings.py`), loads the
-bundle once, before the first request (FR-12: the bundle ships in the image and
-the API never calls MLflow), opens the prediction log, wires the middlewares and
-the error handlers, mounts the routers of `recommenditos.api.routes` (the client
-contract under `/v1`, the operational endpoints at the root), and finishes the
-OpenAPI document that `/docs` and `/redoc` render.
+bundle and the comparables index beside it once, before the first request
+(FR-12: both ship in the image and the API never calls MLflow), opens the
+prediction log, wires the middlewares and the error handlers, mounts the
+routers of `recommenditos.api.routes` (the client contract under `/v1`, the
+operational endpoints at the root), and finishes the OpenAPI document that
+`/docs` and `/redoc` render.
 
 uvicorn calls it as a factory in every worker process, through
 `python -m recommenditos.api` (`make api`, the image).
@@ -21,6 +22,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 from loguru import logger
 
+from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.errors import (
     PROBLEM_MEDIA_TYPE,
     STORE_UNAVAILABLE_DETAIL,
@@ -40,6 +42,7 @@ from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
 from recommenditos.api.schemas.common import FieldError, ListingFields
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import API_KEY_ENV_VAR, Settings
+from recommenditos.data.build_comparables import INDEX_FILE
 
 API_VERSION = "1.0.0"
 
@@ -77,6 +80,7 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
     directory = Path(model_dir or settings.model_dir)
     served = ServedModel.load(directory)
     logger.info(f"serving {served.info.variant} version {served.info.version} from {directory}")
+    index = _comparables_index(directory.parent / INDEX_FILE)
     if settings.api_key is None:
         logger.warning(f"{API_KEY_ENV_VAR} is not set: /v1/feedback refuses every request")
 
@@ -106,6 +110,7 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
         lifespan=lifespan,
     )
     app.state.served = served
+    app.state.comparables = index
     app.state.metrics = ApiMetrics(served.info)
     app.state.settings = settings
     # The last middleware added is the outermost: every response, a refused body
@@ -132,6 +137,21 @@ async def _store_unavailable(request: Request, error: Exception) -> Response:
         request_id_of(request),
         ProblemError(HTTPStatus.SERVICE_UNAVAILABLE, STORE_UNAVAILABLE_DETAIL),
     )
+
+
+def _comparables_index(path: Path) -> ComparablesIndex | None:
+    """FR-09's index, read from beside the bundle, where the pipeline and the image put it.
+
+    A service without one still values listings and answers `/v1/comparables`
+    with a 503; `/health` then reports no index, which the integration suite
+    holds against `dvc.lock`.
+    """
+    if not path.is_file():
+        logger.warning(f"no comparables index at {path}; /v1/comparables will answer 503")
+        return None
+    index = ComparablesIndex.load(path)
+    logger.info(f"serving the comparables index version {index.version} from {path}")
+    return index
 
 
 def _complete_listing_errors(

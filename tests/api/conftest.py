@@ -18,6 +18,7 @@ from pydantic import SecretStr
 import pytest
 
 from recommenditos.api.app import create_app
+from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import Settings
 
@@ -51,6 +52,14 @@ def served(app: FastAPI) -> ServedModel:
     model = app.state.served
     assert isinstance(model, ServedModel)
     return model
+
+
+@pytest.fixture(scope="session")
+def index(app: FastAPI) -> ComparablesIndex:
+    """The comparables index the app loaded from beside the bundle (FR-09)."""
+    loaded = app.state.comparables
+    assert isinstance(loaded, ComparablesIndex)
+    return loaded
 
 
 @pytest.fixture(scope="session")
