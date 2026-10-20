@@ -148,7 +148,7 @@ So neither code nor tests may assume POSIX: compare a path with `str(path)` rath
 `make test-serving` builds `.venv-serving/` from `uv.lock` with the runtime dependencies and the `test` group, and runs `tests/test_serving.py` from it.
 It loads that file and the modules in the table above, and nothing else: pytest runs with `--noconftest`, so what `tests/conftest.py` imports for the rest of the suite cannot fail the check.
 It fails when a serving module imports a group's package, when the serving path imports a module only the `test` group installs, such as `packaging`, and when the environment holds anything beyond the runtime and the `test` group.
-CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the M5 image build.
+CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the image build.
 It only matters when you change a dependency or what a serving module imports, but it is cheap enough to run every time.
 
 CI's `Promotion gate` job is a required check on every pull request, and it only has work to do on one that changes `dvc.lock`, the pull request that promotes a model ([EDN-12](reports/edn.md)).

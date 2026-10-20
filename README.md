@@ -59,10 +59,12 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 
 ```
 ├── .env.template      <- The variables `.env` needs; `.env` itself is gitignored
+├── Dockerfile         <- The API image; see docs/docs/deployment.md
 ├── LICENSE            <- Open-source license
 ├── Makefile           <- Convenience commands like `make lint` or `make test`
 ├── README.md          <- This file
 ├── data               <- Raw, interim and processed data, versioned with DVC
+├── deploy             <- The serving stack (Compose, nginx) and the VM bootstrap
 ├── docs               <- MkDocs project with the project documentation
 ├── gx                 <- Great Expectations context, built by `configure_gx` (DVC output, not committed)
 ├── models             <- Trained and serialized models
@@ -74,7 +76,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── references         <- Course material, data dictionaries and other references
 ├── reports            <- Report and EDN (LaTeX), metrics, generated figures
 ├── tests              <- Pytest test suite
-├── tools              <- Repository tooling: the requirement matrix, the notebook lint and its environment, the secret scan, the EDN transfer
+├── tools              <- Repository tooling: the requirement matrix, the notebook lint and its environment, the secret scan, the EDN transfer, the deployment smoke check
 └── recommenditos      <- Source code of the package
     ├── config.py      <- Paths
     ├── schema.py      <- The data contract every stage reads and writes against
