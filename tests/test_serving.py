@@ -49,23 +49,28 @@ only needed to train belongs in `train.py`, which serving never imports, and a
 fit that needs a group's package is a finding here too.
 """
 
-from collections.abc import Iterable
 from importlib.metadata import distributions, packages_distributions
 import json
 import os
-import re
 import subprocess
 import sys
-import tomllib
 
 from fastapi.testclient import TestClient
 import numpy as np
 import pandas as pd
 import pytest
+from tests.lockfile import (
+    PROJECT,
+    group_closure,
+    group_dependencies,
+    normalise,
+    read_lock,
+    runtime_closure,
+)
 
 from recommenditos.api.app import create_app
 from recommenditos.api.serving import ServingError
-from recommenditos.config import PARAMS_FILE, PROJ_ROOT
+from recommenditos.config import PARAMS_FILE
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
@@ -86,9 +91,6 @@ SERVING_RUNTIME_ENV_VAR = "RECOMMENDITOS_SERVING_RUNTIME"
 
 #: The group the serving check installs on top of the runtime list.
 TEST_GROUP = "test"
-
-#: The project's own distribution, which the lock lists as the root.
-PROJECT = "recommenditos"
 
 #: The size of the generated fixture, the same the rest of the suite uses: small
 #: enough to fit four variants in seconds, large enough that every make clears
@@ -342,13 +344,13 @@ def test_serving_imports_nothing_only_the_test_group_installs(
     assert result.returncode == 0, result.stderr
     imported = json.loads(result.stdout.strip().splitlines()[-1])
 
-    lock = _read_lock()
-    test_only = _closure(lock, _group(lock, TEST_GROUP)) - _closure(lock, _runtime(lock))
+    lock = read_lock()
+    test_only = group_closure(lock, TEST_GROUP) - runtime_closure(lock)
     owners = packages_distributions()
     leaned_on = sorted(
         f"{module} ({', '.join(sorted(test_only & dists))})"
         for module in imported
-        if (dists := {_normalise(name) for name in owners.get(module, ())}) & test_only
+        if (dists := {normalise(name) for name in owners.get(module, ())}) & test_only
     )
     assert not leaned_on, (
         f"serving {variant!r} imported modules that only the {TEST_GROUP!r} group installs: "
@@ -411,9 +413,9 @@ def test_the_environment_is_the_runtime_set_and_the_test_group_and_nothing_more(
     pass. Both closures are read from `uv.lock`, so the set is exactly what uv
     installs, and a dependency added to a group is covered the day it is added.
     """
-    lock = _read_lock()
-    allowed = _closure(lock, _runtime(lock)) | _closure(lock, _group(lock, TEST_GROUP))
-    installed = {_normalise(dist.metadata["Name"]) for dist in distributions()}
+    lock = read_lock()
+    allowed = runtime_closure(lock) | group_closure(lock, TEST_GROUP)
+    installed = {normalise(dist.metadata["Name"]) for dist in distributions()}
     extra = sorted(installed - allowed - {PROJECT})
     assert not extra, (
         f"the serving check is running in an environment with packages the runtime and "
@@ -433,61 +435,12 @@ def test_the_closures_the_check_relies_on_read_the_real_lock():
     package the test group declares is one the runtime does not install, which
     is what makes the test-only set the one worth guarding.
     """
-    lock = _read_lock()
-    runtime = _closure(lock, _runtime(lock))
-    test_only = _closure(lock, _group(lock, TEST_GROUP)) - runtime
-    declared = {_normalise(dependency["name"]) for dependency in _group(lock, TEST_GROUP)}
+    lock = read_lock()
+    runtime = runtime_closure(lock)
+    test_only = group_closure(lock, TEST_GROUP) - runtime
+    declared = {normalise(package["name"]) for package in group_dependencies(lock, TEST_GROUP)}
 
     # Followed transitively: lightgbm brings scipy and narwhals with it.
     assert {"lightgbm", "scipy", "narwhals"} <= runtime
     assert runtime.isdisjoint({"mlflow", "dvc", "requests", "tqdm", "pytest"})
     assert declared <= test_only
-
-
-# --------------------------------------------------------------------------
-# Reading `uv.lock`
-# --------------------------------------------------------------------------
-
-
-def _read_lock() -> dict[str, dict]:
-    """Every package of the lock by its normalised name."""
-    lock = tomllib.loads((PROJ_ROOT / "uv.lock").read_text(encoding="utf-8"))
-    return {_normalise(package["name"]): package for package in lock["package"]}
-
-
-def _runtime(lock: dict[str, dict]) -> list[dict]:
-    return lock[PROJECT].get("dependencies", [])
-
-
-def _group(lock: dict[str, dict], group: str) -> list[dict]:
-    return lock[PROJECT]["dev-dependencies"][group]
-
-
-def _closure(lock: dict[str, dict], roots: Iterable[dict]) -> set[str]:
-    """The packages `roots` pull in, with the extras they ask for.
-
-    Markers are not evaluated, so a Windows-only dependency counts as part of
-    the closure on Linux too. That can only make a closure larger, which errs
-    towards letting a package through rather than failing on one that uv would
-    not have installed anyway.
-    """
-    names: set[str] = set()
-    seen_extras: set[tuple[str, str]] = set()
-    pending = list(roots)
-    while pending:
-        dependency = pending.pop()
-        name = _normalise(dependency["name"])
-        package = lock[name]
-        if name not in names:
-            names.add(name)
-            pending.extend(package.get("dependencies", []))
-        for extra in dependency.get("extra", []):
-            if (name, extra) not in seen_extras:
-                seen_extras.add((name, extra))
-                pending.extend(package.get("optional-dependencies", {}).get(extra, []))
-    return names
-
-
-def _normalise(name: str) -> str:
-    """A distribution name as PEP 503 compares it, which is how the lock spells it."""
-    return re.sub(r"[-_.]+", "-", name).lower()

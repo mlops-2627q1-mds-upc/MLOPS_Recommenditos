@@ -115,6 +115,7 @@ make format         # ruff format + fix
 make lint           # mypy + ruff format --check + ruff check
 make test           # pytest, which also reports the coverage of recommenditos/
 make test-serving   # the serving path from the runtime dependencies alone
+make test-integration  # the API as deployed, through nginx (needs `make stack` first)
 make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
 
@@ -146,10 +147,14 @@ CI runs the same suite on Windows too, as the required check `Tests (Windows)` (
 So neither code nor tests may assume POSIX: compare a path with `str(path)` rather than a `/`-separated literal, write text with `newline="\n"` (`write_json` in `recommenditos/pipeline.py` does it for JSON), and print nothing a cp1252 console cannot encode.
 
 `make test-serving` builds `.venv-serving/` from `uv.lock` with the runtime dependencies and the `test` group, and runs `tests/test_serving.py` from it.
-It loads that file and the modules in the table above, and nothing else: pytest runs with `--noconftest`, so what `tests/conftest.py` imports for the rest of the suite cannot fail the check.
+It loads that file, `tests/lockfile.py` (standard library only) and the modules in the table above, and nothing else: pytest runs with `--noconftest`, so what `tests/conftest.py` imports for the rest of the suite cannot fail the check.
 It fails when a serving module imports a group's package, when the serving path imports a module only the `test` group installs, such as `packaging`, and when the environment holds anything beyond the runtime and the `test` group.
 CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the image build.
 It only matters when you change a dependency or what a serving module imports, but it is cheap enough to run every time.
+
+`make test-integration` runs `tests/integration/` against a running stack, through nginx, the way a client reaches the API: the image as built, the proxy's rules and limits, the healthcheck and the restart policy ([Deployment](docs/docs/deployment.md#integration-tests)).
+`make test` leaves it out, because it needs the stack: start it with `make stack` after `dvc pull`, run the suite, and stop it with `make stack-down`.
+Run it when you change the API, the `Dockerfile`, `deploy/` or the dependencies; CI's `Integration (Compose stack)` job runs it on every pull request that touches them.
 
 CI's `Promotion gate` job is a required check on every pull request, and it only has work to do on one that changes `dvc.lock`, the pull request that promotes a model ([EDN-12](reports/edn.md)).
 Such a pull request fails it unless the committed `metrics.json` has `gate_passed: true` and names the model being promoted, `report.candidate_variant` in `params.yaml`, as its `deployable_variant`.
