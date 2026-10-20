@@ -100,6 +100,43 @@ fixture:
 metrics:
 	uv run dvc metrics show
 
+# The API on the bundle in models/lgbm-basic (after `dvc pull`), or the one
+# RECOMMENDITOS_MODEL_DIR names. Swagger UI at /docs, ReDoc at /redoc.
+API_HOST ?= 127.0.0.1
+API_PORT ?= 8000
+
+## Run the API locally with uvicorn on http://127.0.0.1:8000 (docs at /docs)
+.PHONY: api
+api:
+	uv run uvicorn recommenditos.api.app:create_app --factory --host $(API_HOST) --port $(API_PORT)
+
+# The serving stack of docs/docs/deployment.md (EDN-87): the API image with the
+# pulled model, behind nginx, on http://localhost:8080. Needs Docker and `dvc pull`.
+COMPOSE = docker compose -f deploy/compose.yaml
+# The tag a deployment ships: the commit the image is built from.
+IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
+SMOKE_URL ?= http://localhost:8080
+
+## Build the API image recommenditos-api:<commit> for a deployment (docs/docs/deployment.md)
+.PHONY: image
+image:
+	docker build -t recommenditos-api:$(IMAGE_TAG) .
+
+## Build and start the API behind nginx on http://localhost:8080, waiting until healthy
+.PHONY: stack
+stack:
+	$(COMPOSE) up -d --build --wait
+
+## Stop the local stack and remove its containers
+.PHONY: stack-down
+stack-down:
+	$(COMPOSE) down
+
+## Check a running stack through its proxy: make smoke [SMOKE_URL=http://<vm>:<port>]
+.PHONY: smoke
+smoke:
+	uv run python -m tools.smoke_check $(SMOKE_URL)
+
 ## Lint every notebook with Pynblint, in its own locked environment (tools/pynblint-env)
 .PHONY: notebook-lint
 notebook-lint:

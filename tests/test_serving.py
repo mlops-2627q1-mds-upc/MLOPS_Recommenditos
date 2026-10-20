@@ -21,7 +21,8 @@ holds to the runtime set:
   and `config.py`;
 - `data/preprocess.py`, on purpose, because the API is to reuse its
   request-side functions (`hash_seller_group`, see docs/docs/pipeline.md);
-- `data/synthetic.py`, because the bundles are built from its fixture.
+- `data/synthetic.py`, because the bundles are built from its fixture;
+- `api/`, the FastAPI application around the seam, which the image runs.
 
 `modeling/evaluate.py` is deliberately not among them: it imports MLflow
 through `tracking.py`, so a function serving code needs from it, such as
@@ -57,10 +58,12 @@ import subprocess
 import sys
 import tomllib
 
+from fastapi.testclient import TestClient
 import numpy as np
 import pandas as pd
 import pytest
 
+from recommenditos.api import create_app
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
@@ -111,6 +114,48 @@ request = model.space.matrix(frame, reference_date=reference_date)
 model.predict_eur(request)
 if model.has_intervals:
     model.predict_interval_eur(request)
+print(json.dumps(sorted({name.partition(".")[0] for name in sys.modules})))
+"""
+
+
+#: The same, through the API: build the app around the bundle and send it one
+#: valuation as an ASGI request, without an HTTP client (the client libraries
+#: are test-only). The listing takes its categoricals from the bundle itself.
+_SERVE_THROUGH_THE_API = r"""
+import asyncio, json, sys
+from pathlib import Path
+from recommenditos.api import create_app
+app = create_app(Path(sys.argv[1]))
+served = app.state.served
+levels = served.model.input_schema.levels
+listing = {
+    "make": served.allowed["make"][0], "model": levels["model"][0],
+    "registration_date": "2019-06", "mileage_km_raw": 45000, "power_kw": 110,
+    "fuel_category": served.allowed["fuel_category"][0],
+    "transmission": served.allowed["transmission"][0],
+    "country_code": levels["country_code"][0],
+    "body_type": served.allowed["body_type"][0],
+    "seller_type": served.allowed["seller_type"][0],
+}
+body = json.dumps(listing).encode()
+sent = []
+async def receive():
+    return {"type": "http.request", "body": body, "more_body": False}
+async def send(message):
+    sent.append(message)
+scope = {
+    "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "POST",
+    "scheme": "http", "path": "/v1/predict", "raw_path": b"/v1/predict", "query_string": b"",
+    "root_path": "", "client": ("127.0.0.1", 1), "server": ("127.0.0.1", 80),
+    "headers": [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(body)).encode()),
+    ],
+}
+asyncio.run(app(scope, receive, send))
+status = sent[0]["status"]
+answer = json.loads(b"".join(m.get("body", b"") for m in sent[1:]))
+assert status == 200 and answer["price_eur"] > 0, (status, answer)
 print(json.dumps(sorted({name.partition(".")[0] for name in sys.modules})))
 """
 
@@ -256,24 +301,31 @@ def test_a_bundle_on_disk_prices_a_range(variant: str, served: dict):
     ).mean()
 
 
+@pytest.mark.parametrize("path", ["model", "api"])
 @pytest.mark.parametrize("variant", VARIANTS)
-def test_serving_imports_nothing_only_the_test_group_installs(variant: str, served: dict):
-    """The serving path does not lean on pytest's dependencies.
+def test_serving_imports_nothing_only_the_test_group_installs(
+    variant: str, path: str, served: dict
+):
+    """The serving path, and the API around it, do not lean on pytest's dependencies.
 
     The check's environment is the runtime set plus the `test` group, so a module
-    the serving path imported from `packaging` or `pluggy` would import here and
-    fail in the image. A fresh interpreter is the only place to ask which modules
-    the path imported: this process has pytest loaded already.
+    the serving path imported from `packaging` or `pluggy`, or the API from the
+    test client's `httpx2`, would import here and fail in the image. A fresh
+    interpreter is the only place to ask which modules the path imported: this
+    process has pytest loaded already.
     """
-    result = subprocess.run(
+    arguments = (
         [
-            sys.executable,
-            "-c",
             _SERVE_AND_LIST_MODULES,
             str(served["models"] / variant),
             str(served["processed"] / "test.parquet"),
             served["params"]["reference_date"],
-        ],
+        ]
+        if path == "model"
+        else [_SERVE_THROUGH_THE_API, str(served["models"] / variant)]
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", *arguments],
         capture_output=True,
         text=True,
         check=False,
@@ -296,6 +348,37 @@ def test_serving_imports_nothing_only_the_test_group_installs(variant: str, serv
         f"{', '.join(leaned_on)}. The API image will not have them; declare what serving "
         f"needs in `[project] dependencies`."
     )
+
+
+@pytest.mark.req("FR-06", "FR-12")
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_the_api_values_a_listing_with_a_bundle_on_disk(variant: str, served: dict):
+    """Every variant can be served: the API loads it and answers a valuation.
+
+    `tests/api/` tests the API in depth on `lgbm-basic`; this runs it in the
+    runtime-only environment, where the API image's dependencies are all there is.
+    """
+    with TestClient(create_app(served["models"] / variant)) as client:
+        app_model = client.app.state.served  # type: ignore[attr-defined]
+        levels = app_model.model.input_schema.levels
+        listing = {
+            "make": app_model.allowed["make"][0],
+            "model": levels["model"][0],
+            "registration_date": "2019-06",
+            "mileage_km_raw": 45000,
+            "power_kw": 110,
+            "fuel_category": app_model.allowed["fuel_category"][0],
+            "transmission": app_model.allowed["transmission"][0],
+            "country_code": levels["country_code"][0],
+            "body_type": app_model.allowed["body_type"][0],
+            "seller_type": app_model.allowed["seller_type"][0],
+        }
+        response = client.post("/v1/predict", json=listing)
+        health = client.get("/health").json()
+
+    assert response.status_code == 200, response.text
+    assert response.json()["price_eur"] > 0
+    assert health["model"]["variant"] == variant
 
 
 @pytest.mark.skipif(

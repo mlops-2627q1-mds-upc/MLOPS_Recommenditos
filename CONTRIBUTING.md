@@ -49,8 +49,7 @@ With Go 1.21 or newer, run `GOTOOLCHAIN=auto uv run pre-commit install-hooks` on
 
 `pyproject.toml` splits the dependencies in two, because the API image is built from one half only and NFR-04 caps that image at 1 GB ([EDN-47](reports/edn.md)):
 
-- `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing.
-  FastAPI, uvicorn and pydantic join it with the API in M4.
+- `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing, and the API around it (FastAPI, uvicorn, pydantic).
 - `[dependency-groups]` is everything else, by who needs it: `pipeline` (the DVC stages and experiment tracking, so also data validation and energy measurement), `notebook`, `docs`, `test` and `dev`.
 
 `[tool.uv] default-groups = "all"` is why a plain `uv sync` and `uv run` still install both halves.
@@ -75,6 +74,7 @@ These are the modules held to the runtime, all under `recommenditos/`, because t
 | `data/build_features.py`, `data/split_data.py`, `pipeline.py`, `schema.py`, `config.py` | What `model.py` imports |
 | `data/preprocess.py` | The API is to reuse its request-side functions, such as `hash_seller_group` |
 | `data/synthetic.py` | The check builds its bundles from this fixture |
+| `api/` | The API the image runs; the check sends it a valuation |
 
 `modeling/evaluate.py` is not one of them: it imports MLflow through `tracking.py`.
 So `point_metrics`, which [the pipeline docs](docs/docs/pipeline.md) list among the functions the API will import, has to move to one of the modules above before serving code can use it.
@@ -148,7 +148,7 @@ So neither code nor tests may assume POSIX: compare a path with `str(path)` rath
 `make test-serving` builds `.venv-serving/` from `uv.lock` with the runtime dependencies and the `test` group, and runs `tests/test_serving.py` from it.
 It loads that file and the modules in the table above, and nothing else: pytest runs with `--noconftest`, so what `tests/conftest.py` imports for the rest of the suite cannot fail the check.
 It fails when a serving module imports a group's package, when the serving path imports a module only the `test` group installs, such as `packaging`, and when the environment holds anything beyond the runtime and the `test` group.
-CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the M5 image build.
+CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the image build.
 It only matters when you change a dependency or what a serving module imports, but it is cheap enough to run every time.
 
 CI's `Promotion gate` job is a required check on every pull request, and it only has work to do on one that changes `dvc.lock`, the pull request that promotes a model ([EDN-12](reports/edn.md)).
