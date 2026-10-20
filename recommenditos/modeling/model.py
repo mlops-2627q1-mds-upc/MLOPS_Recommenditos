@@ -1181,7 +1181,8 @@ class LightGBMModel(Model):
         fields left out is encoded the way the interval models' training and
         calibration copies were (`Model.mask_absent`).
         """
-        if not self.has_intervals:
+        boosters = self.intervals
+        if boosters is None or not self.has_intervals:
             return super().predict_interval_eur(frame)
         aligned = self._align(frame)
         if aligned.empty:
@@ -1192,7 +1193,7 @@ class LightGBMModel(Model):
         coded = self._as_codes(aligned)
         log_price = {
             name: np.asarray(booster.predict(coded), dtype="float64")
-            for name, booster in self.intervals.items()
+            for name, booster in boosters.items()
         }
         offsets = self.metadata["intervals"]["offsets"]
         log_price["lower"] = log_price["lower"] - offsets["lower"]
