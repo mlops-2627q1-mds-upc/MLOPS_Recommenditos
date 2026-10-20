@@ -267,28 +267,33 @@ How to add an entry:
 - **Other evidence:** [Specification](../docs/docs/specification.md) FR-08, [project brief](../docs/docs/project-brief.md) section 6, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
-### EDN-12: Retraining and promotion are started by a person
+### EDN-12: Retraining and promotion are started by a person, and a failing gate blocks the merge
+
+> **Revised on 2026-10-20**: the gate verdict is now enforced by a required CI check; before, only the reviewer read it.
 
 - **Date:** 2026-09-22
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** ML System Design, Model Performance
 - **Participants:** @lukas2510
 - **Decision:** When the drift job flags the `ES` replay, a team member retrains with `ES` included and opens the promotion pull request by hand.
-  The candidate must pass the NFR-01 gate before the merge.
   The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
-  FR-15 states this as a requirement.
+  A required CI check fails a pull request that changes `dvc.lock` unless the committed `metrics.json` has `gate_passed: true` and names the promoted model as `deployable_variant`.
+  The reviewer's approval stays on top, and FR-15 states all of this.
 - **Alternatives considered:**
   - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to build and debug in the last weeks before the final presentation, with little slack if it breaks.
+  - The gate as a manual check only: one mistaken merge deploys a rejected model.
+  - A check in CD: it fails only after the merge.
 - **Rationale:** The `ES` holdout exists to show this loop closing (EDN-03).
-  A person reacting to the signal closes it as well, and is safer to demonstrate live.
-  Writing it down as a requirement keeps it from being dropped when M6 gets tight.
+  A person reacting to the signal closes it too, and is safer live.
+  From M5 on every merge to `main` deploys (NFR-13), and the CI check is the only one of the three that stops a rejected model before the merge.
+  It needs no data and reads `gate_passed`, so a new criterion changes nothing in it.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI noticed that the retrain-after-drift plan had never become a testable requirement.
-  It named the level of automation as the real choice and recommended the manual trigger because of the timeline.
-  Lukas confirmed.
-- **AI interaction evidence:** Claude Code session of 2026-09-22, review of PR #19.
-- **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-15, [specification](../docs/docs/specification.md) FR-14 and FR-15, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Assessment of the AI contribution:** AI noticed that the retrain-after-drift plan had never become a testable requirement and recommended the manual trigger because of the timeline.
+  On 2026-10-20 it found that no check read the verdict, laid out the options and recommended the CI check.
+  Lukas decided.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-22 (review of PR #19) and 2026-10-20 (issue #129).
+- **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-15, [specification](../docs/docs/specification.md) FR-14 and FR-15, [issue #129](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/129), [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
 ### EDN-13: The feedback endpoint is reachable only inside the Compose network
