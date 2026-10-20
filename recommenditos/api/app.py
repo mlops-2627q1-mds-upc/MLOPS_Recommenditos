@@ -6,9 +6,8 @@ the error handlers, mounts the routers of `recommenditos.api.routes` (the client
 contract under `/v1`, the operational endpoints at the root), and finishes the
 OpenAPI document that `/docs` and `/redoc` render.
 
-uvicorn calls it as a factory (`make api`):
-
-    uvicorn recommenditos.api.app:create_app --factory
+uvicorn calls it as a factory in every worker process, through
+`python -m recommenditos.api` (`make api`, the image).
 """
 
 from collections.abc import Callable
@@ -22,6 +21,7 @@ from fastapi.openapi.utils import get_openapi
 from loguru import logger
 
 from recommenditos.api.errors import PROBLEM_MEDIA_TYPE, install_handlers
+from recommenditos.api.metrics import ApiMetrics, MetricsMiddleware
 from recommenditos.api.middleware import (
     BodySizeLimitMiddleware,
     RequestIdMiddleware,
@@ -70,11 +70,14 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
         redoc_url="/redoc",
     )
     app.state.served = served
+    app.state.metrics = ApiMetrics(served.info)
     # The last middleware added is the outermost: every response, a refused body
     # and an unexpected failure included, carries the request ID.
     app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    # Outermost, so the metrics count and time the answer the client gets (FR-11).
+    app.add_middleware(MetricsMiddleware, metrics=app.state.metrics)
     install_handlers(app, _complete_listing_errors)
     for router in V1_ROUTERS:
         app.include_router(router, prefix="/v1")

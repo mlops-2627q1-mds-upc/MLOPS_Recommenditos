@@ -47,6 +47,11 @@ dependencies = [
     # pandas 3 or newer: the contract relies on its `str` dtype and on
     # `astype("str")` preserving a missing value instead of writing "nan".
     "pandas>=3",
+    # `/metrics` (FR-11): the metric types, the text exposition format and the
+    # multiprocess mode that keeps the figures right with several uvicorn workers.
+    # The floor is the version it was built and tested against. Pure Python, no
+    # dependencies of its own.
+    "prometheus-client>=0.26.0",
     # Parquet is the interchange format between pipeline stages: it is typed, so
     # a frame keeps its dtypes across a stage boundary instead of being re-inferred.
     # A runtime dependency, not a pipeline one, because `b0`'s lookup table is a

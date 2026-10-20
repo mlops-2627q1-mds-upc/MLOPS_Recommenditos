@@ -63,7 +63,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from recommenditos.api import create_app
+from recommenditos.api.app import create_app
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
@@ -124,7 +124,7 @@ print(json.dumps(sorted({name.partition(".")[0] for name in sys.modules})))
 _SERVE_THROUGH_THE_API = r"""
 import asyncio, json, sys
 from pathlib import Path
-from recommenditos.api import create_app
+from recommenditos.api.app import create_app
 app = create_app(Path(sys.argv[1]))
 served = app.state.served
 levels = served.model.input_schema.levels

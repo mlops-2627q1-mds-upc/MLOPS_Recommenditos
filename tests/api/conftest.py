@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from recommenditos.api import create_app
+from recommenditos.api.app import create_app
 from recommenditos.api.serving import ServedModel
 
 #: The variant the API serves by default (FR-12).
