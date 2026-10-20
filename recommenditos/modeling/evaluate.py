@@ -1125,7 +1125,8 @@ def main(
         f"measured (outstanding: {summary['criteria_not_measured'] or 'none'})."
     )
 
-    # Last, so that a failed MLflow call cannot leave tracked files from two runs side by side.
+    # Append to MLflow only after every result file is written, so a failed call
+    # cannot leave tracked files from two runs side by side.
     for record in records.values():
         _append_to_the_training_run(record)
 
