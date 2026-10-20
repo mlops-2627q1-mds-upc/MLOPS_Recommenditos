@@ -281,6 +281,7 @@ check_untyped_defs = true
 module = [
     "dvc.*",
     "joblib.*",
+    "mapie.*",
     "pandas.*",
     "sklearn.*",
 ]
