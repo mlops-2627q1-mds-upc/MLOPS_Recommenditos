@@ -3,10 +3,13 @@
 import ast
 from datetime import UTC, datetime
 import json
+import math
 from pathlib import Path
 import shutil
 
 from fastapi.testclient import TestClient
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 import numpy as np
 import pandas as pd
 from pydantic import ValidationError
@@ -14,10 +17,17 @@ import pytest
 from tests.api.helpers import assert_problem, pointers
 
 from recommenditos.api.app import create_app
-from recommenditos.api.schemas.predict import ValuationRequest
-from recommenditos.api.serving import COUNTRIES, REQUEST_CONTRACT, ServedModel
+from recommenditos.api.schemas.predict import Valuation, ValuationRequest
+from recommenditos.api.serving import (
+    COUNTRIES,
+    REQUEST_CONTRACT,
+    TOP_FEATURES,
+    ServedModel,
+    ServingError,
+    explain,
+)
 from recommenditos.data.build_features import weight_kg
-from recommenditos.modeling.model import MODEL_FILE, RequestContract, load_model
+from recommenditos.modeling.model import BASE_LOG_PRICE, MODEL_FILE, RequestContract, load_model
 from recommenditos.pipeline import read_frame
 from recommenditos.schema import PROCESSED_SCHEMA
 
@@ -48,7 +58,7 @@ def test_fr06_answers_a_price_in_eur_the_model_version_and_a_request_id(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert set(body) == {"price_eur", "model", "request_id", "warnings"}
+    assert set(body) == {"price_eur", "model", "request_id", "explanation", "warnings"}
     training = served.model.metadata["training"]
     assert training["price_min_eur"] <= body["price_eur"] <= training["price_max_eur"]
     assert body["model"] == served.info.model_dump()
@@ -439,3 +449,207 @@ def test_fr05_an_unseen_model_reaches_the_model_as_unknown(
     response = client.post(PREDICT, json={**listing, "model": "Concept One"})
 
     assert response.json()["price_eur"] == round(expected, 2)
+
+
+# --------------------------------------------------------------------------
+# FR-08: the explanation
+# --------------------------------------------------------------------------
+
+
+def _reproduced(explanation: dict) -> float:
+    """The base price times `1 + effect` over all six reported effects (FR-08)."""
+    effects = [entry["effect_pct"] for entry in explanation["top_features"]]
+    effects.append(explanation["other_features_effect_pct"])
+    return explanation["base_price_eur"] * math.prod(1 + effect / 100 for effect in effects)
+
+
+def _assert_reproduces(answer: dict, price: float | None = None) -> None:
+    """`answer`'s explanation gives `price`, its estimate unless another is named.
+
+    The tolerance is the rounding of the response and nothing more: the base
+    price and the estimate are each rounded to the cent, so the product may miss
+    by half a cent scaled from the base to the estimate, plus half a cent.
+    """
+    explanation = answer["explanation"]
+    price = answer["price_eur"] if price is None else price
+    tolerance = 0.005 * price / explanation["base_price_eur"] + 0.005 + 1e-9 * price
+    assert _reproduced(explanation) == pytest.approx(price, rel=0, abs=tolerance), answer
+
+
+def _field_contributions(served: ServedModel, listing: dict) -> dict[str, float]:
+    """Each request field's SHAP value in log price, from the booster's own export."""
+    matrix = served.matrix(ValuationRequest(**listing))
+    row = served.model.log_price_contributions(matrix).iloc[0]
+    return {name: float(row[list(columns)].sum()) for name, columns in served.fields.items()}
+
+
+@pytest.mark.req("FR-08")
+@pytest.mark.parametrize("variant", ["lgbm-basic", "lgbm-extended"])
+def test_fr08_the_explanation_reproduces_the_estimate(variant: str, trained: dict, matrices: dict):
+    """Rows of the synthetic test split, sent as requests: base x (1 + effect) is the price.
+
+    `lgbm-extended` is the variant whose equipment lists become many columns, so
+    it also shows that the explanation names request fields, never those columns.
+    """
+    rows = read_frame(Path(matrices["processed"]) / "test.parquet", PROCESSED_SCHEMA)
+    checked = 0
+    with TestClient(create_app(Path(trained["dir"]) / variant)) as api:
+        for _, row in rows.head(100).iterrows():
+            body = _request_body(row)
+            try:
+                ValuationRequest(**body)
+            except ValidationError:
+                continue
+            response = api.post(PREDICT, json=body)
+            if response.status_code == 422:
+                continue
+            answer = response.json()
+            _assert_reproduces(answer)
+            named = [entry["field"] for entry in answer["explanation"]["top_features"]]
+            assert len(named) == TOP_FEATURES == len(set(named))
+            assert set(named) <= set(ValuationRequest.model_fields)
+            checked += 1
+
+    assert checked >= 30
+
+
+def _valid_requests(served: ServedModel) -> st.SearchStrategy[dict]:
+    """Requests `/v1/predict` accepts, from the values the served bundle knows."""
+    levels = served.model.input_schema.levels
+    this_year = datetime.now(UTC).year
+    required = {
+        "make": st.sampled_from(served.allowed["make"]),
+        "model": st.sampled_from(levels["model"]),
+        "registration_date": st.builds(
+            "{:04d}-{:02d}".format,
+            st.integers(1990, this_year - 1),
+            st.integers(1, 12),
+        ),
+        "mileage_km_raw": st.floats(0, 1_000_000),
+        "power_kw": st.floats(1, 1_200),
+        "fuel_category": st.sampled_from(served.allowed["fuel_category"]),
+        "transmission": st.sampled_from(served.allowed["transmission"]),
+        "country_code": st.sampled_from(served.allowed["country_code"]),
+        "body_type": st.sampled_from(served.allowed["body_type"]),
+        "seller_type": st.sampled_from(served.allowed["seller_type"]),
+    }
+    optional = {
+        "nr_prev_owners": st.integers(0, 20),
+        "drive_train": st.sampled_from(served.allowed["drive_train"]),
+        "gears": st.integers(0, 12),
+        "cylinders_volume_cc": st.floats(0, 10_000),
+        "nr_seats": st.integers(1, 9),
+        "nr_doors": st.integers(1, 7),
+    }
+    return st.fixed_dictionaries(required, optional=optional)
+
+
+@pytest.mark.req("FR-08")
+@settings(max_examples=60, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@given(data=st.data())
+def test_fr08_any_valid_request_is_explained_to_its_estimate(
+    data: st.DataObject, client: TestClient, served: ServedModel
+):
+    """The reproduction invariant holds for every valid request, not just the data's rows."""
+    body = data.draw(_valid_requests(served))
+
+    response = client.post(PREDICT, json=body)
+
+    assert response.status_code == 200, response.text
+    _assert_reproduces(response.json())
+
+
+@pytest.mark.req("FR-08")
+def test_fr08_lists_the_five_fields_with_the_largest_effect_largest_first(
+    client: TestClient, listing: dict, served: ServedModel
+):
+    """Ranked by the size of each field's SHAP value, the rest combined, each as exp(φ) - 1."""
+    expected = _field_contributions(served, listing)
+
+    explanation = client.post(PREDICT, json=listing).json()["explanation"]
+
+    ranked = sorted(expected, key=lambda name: abs(expected[name]), reverse=True)
+    top, others = ranked[:TOP_FEATURES], ranked[TOP_FEATURES:]
+    assert [entry["field"] for entry in explanation["top_features"]] == top
+    for entry in explanation["top_features"]:
+        assert entry["effect_pct"] == pytest.approx(np.expm1(expected[entry["field"]]) * 100)
+    combined = sum(expected[name] for name in others)
+    assert explanation["other_features_effect_pct"] == pytest.approx(np.expm1(combined) * 100)
+    base = served.model.log_price_contributions(served.matrix(ValuationRequest(**listing)))
+    assert explanation["base_price_eur"] == round(float(np.exp(base[BASE_LOG_PRICE].iloc[0])), 2)
+
+
+@pytest.mark.req("FR-08")
+def test_fr08_equal_effects_keep_the_request_order_and_fewer_fields_are_all_listed():
+    """Ties do not depend on dict order or on the sort, and a small model lists every field."""
+    fields = {"make": ("make",), "model": ("model",), "registration_date": ("age_years",)}
+    tied = pd.Series({"make": 0.1, "model": -0.1, "age_years": 0.1, BASE_LOG_PRICE: 9.0})
+
+    explanation = explain(tied, fields, top=2)
+    small = explain(tied, fields)
+
+    assert [entry.field for entry in explanation.top_features] == ["make", "model"]
+    assert explanation.other_features_effect_pct == pytest.approx(np.expm1(0.1) * 100)
+    assert [entry.field for entry in small.top_features] == list(fields)
+    assert small.other_features_effect_pct == 0.0
+
+
+@pytest.mark.req("FR-08")
+def test_fr08_an_equipment_list_is_explained_as_one_field(trained: dict, listing: dict):
+    """The multi-hot columns of one equipment list add up to one field's effect."""
+    with TestClient(create_app(Path(trained["dir"]) / "lgbm-extended")) as extended:
+        served = extended.app.state.served  # type: ignore[attr-defined]
+        listing = {
+            **listing,
+            "equipment_comfort": list(
+                served.model.space.vocabulary.equipment["equipment_comfort"]
+            ),
+        }
+        expected = _field_contributions(served, listing)
+        answer = extended.post(PREDICT, json=listing).json()
+
+    assert len(served.fields["equipment_comfort"]) > 1
+    _assert_reproduces(answer)
+    assert set(expected) <= set(ValuationRequest.model_fields)
+    for entry in answer["explanation"]["top_features"]:
+        assert entry["effect_pct"] == pytest.approx(np.expm1(expected[entry["field"]]) * 100)
+
+
+@pytest.mark.req("FR-08")
+def test_fr08_a_bounded_estimate_is_reported_and_the_explanation_gives_the_unbounded_one(
+    bundle: Path, tmp_path: Path, listing: dict, client: TestClient
+):
+    """A price clipped to the training range is said so; the effects still multiply up.
+
+    No row of the real data reaches the bound (0 of 99,326 for `lgbm-basic`), so
+    the bundle's range is narrowed until this listing's estimate lies outside it.
+    """
+    unbounded = client.post(PREDICT, json=listing).json()["price_eur"]
+    edited = tmp_path / "bundle"
+    shutil.copytree(bundle, edited)
+    record = json.loads((edited / MODEL_FILE).read_text(encoding="utf-8"))
+    bound = round(unbounded / 2)
+    record["training"]["price_max_eur"] = bound
+    record["training"]["price_min_eur"] = min(record["training"]["price_min_eur"], bound / 2)
+    (edited / MODEL_FILE).write_text(json.dumps(record), encoding="utf-8")
+
+    with TestClient(create_app(edited)) as narrower:
+        answer = narrower.post(PREDICT, json=listing).json()
+
+    assert answer["price_eur"] == pytest.approx(bound, abs=0.01)
+    assert [warning["pointer"] for warning in answer["warnings"]] == ["#"]
+    _assert_reproduces(answer, price=unbounded)
+
+
+@pytest.mark.req("FR-08")
+@pytest.mark.parametrize("variant", ["b0", "b1"])
+def test_fr08_a_bundle_without_a_shap_export_is_refused_at_startup(variant: str, trained: dict):
+    with pytest.raises(ServingError, match="SHAP export"):
+        create_app(Path(trained["dir"]) / variant)
+
+
+@pytest.mark.req("FR-08")
+def test_fr08_the_documented_example_reproduces_its_estimate():
+    example = Valuation.model_config["json_schema_extra"]["examples"][0]  # type: ignore[index]
+
+    _assert_reproduces(example)

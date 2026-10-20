@@ -77,6 +77,7 @@ from recommenditos.modeling.evaluate import (
 )
 from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
+    BASE_LOG_PRICE,
     BLANKED_COPY_KINDS,
     ESTIMATORS,
     INTERVAL_QUANTILES,
@@ -662,6 +663,39 @@ def test_a_prediction_that_would_overflow_is_bounded_to_the_training_range(
         assert np.isfinite(predicted).all()
         assert (predicted > 0).all()
         np.testing.assert_allclose(predicted.to_numpy(), expected)
+
+
+@pytest.mark.req("FR-08")
+@pytest.mark.parametrize("variant", ["lgbm-basic", "lgbm-extended"])
+def test_fr08_the_boosters_shap_export_equals_shap_tree_explainer(
+    variant: str, trained: dict, test_frames: dict
+):
+    """The values the API explains with are `shap.TreeExplainer`'s (EDN-11).
+
+    Both are asked about the same rows: the explainer gets the matrix the booster
+    reads, `log_price_contributions` the frame a caller holds, so the test also
+    pins that the export aligns and codes that frame as prediction does and
+    labels its columns as the model's features. For a LightGBM booster `shap`
+    calls the same `pred_contrib` export itself, which is why the values are
+    identical; the check that does not rest on that is the second one, SHAP's
+    local accuracy: each row's values add up to the model's log price.
+    """
+    import shap  # noqa: PLC0415 - a pipeline-group package, and slow to import
+
+    model = trained["models"][variant]
+    frame = test_frames[model.feature_set]
+
+    contributions = model.log_price_contributions(frame)
+    explainer = shap.TreeExplainer(model.booster)
+    reference = explainer.shap_values(model._as_codes(model._align(frame)))
+
+    assert list(contributions.columns) == [*model.features, BASE_LOG_PRICE]
+    assert contributions.index.equals(frame.index)
+    np.testing.assert_array_equal(contributions[list(model.features)].to_numpy(), reference)
+    np.testing.assert_array_equal(contributions[BASE_LOG_PRICE], explainer.expected_value)
+    np.testing.assert_allclose(
+        contributions.sum(axis=1), model.predict_log_price(frame), rtol=1e-12, atol=0
+    )
 
 
 # --------------------------------------------------------------------------

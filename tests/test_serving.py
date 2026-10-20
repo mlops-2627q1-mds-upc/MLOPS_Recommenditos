@@ -64,6 +64,7 @@ import pandas as pd
 import pytest
 
 from recommenditos.api.app import create_app
+from recommenditos.api.serving import ServingError
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
@@ -166,6 +167,10 @@ def _variants() -> dict:
 
 #: Every variant, so a parametrised test says which one failed in its own name.
 VARIANTS = tuple(_variants())
+
+#: The variants the API can serve: those with a SHAP export to explain a
+#: valuation with (FR-08).
+SERVABLE = tuple(name for name, block in _variants().items() if block["estimator"] == "lightgbm")
 
 
 @pytest.fixture(scope="module")
@@ -301,8 +306,10 @@ def test_a_bundle_on_disk_prices_a_range(variant: str, served: dict):
     ).mean()
 
 
-@pytest.mark.parametrize("path", ["model", "api"])
-@pytest.mark.parametrize("variant", VARIANTS)
+@pytest.mark.parametrize(
+    ("variant", "path"),
+    [(variant, "model") for variant in VARIANTS] + [(variant, "api") for variant in SERVABLE],
+)
 def test_serving_imports_nothing_only_the_test_group_installs(
     variant: str, path: str, served: dict
 ):
@@ -350,13 +357,14 @@ def test_serving_imports_nothing_only_the_test_group_installs(
     )
 
 
-@pytest.mark.req("FR-06", "FR-12")
-@pytest.mark.parametrize("variant", VARIANTS)
+@pytest.mark.req("FR-06", "FR-08", "FR-12")
+@pytest.mark.parametrize("variant", SERVABLE)
 def test_the_api_values_a_listing_with_a_bundle_on_disk(variant: str, served: dict):
-    """Every variant can be served: the API loads it and answers a valuation.
+    """Every LightGBM variant can be served: the API loads it and answers a valuation.
 
     `tests/api/` tests the API in depth on `lgbm-basic`; this runs it in the
     runtime-only environment, where the API image's dependencies are all there is.
+    The explanation comes from the booster itself, so it is answered here too.
     """
     with TestClient(create_app(served["models"] / variant)) as client:
         app_model = client.app.state.served  # type: ignore[attr-defined]
@@ -378,7 +386,15 @@ def test_the_api_values_a_listing_with_a_bundle_on_disk(variant: str, served: di
 
     assert response.status_code == 200, response.text
     assert response.json()["price_eur"] > 0
+    assert len(response.json()["explanation"]["top_features"]) == 5
     assert health["model"]["variant"] == variant
+
+
+@pytest.mark.req("FR-08")
+@pytest.mark.parametrize("variant", sorted(set(VARIANTS) - set(SERVABLE)))
+def test_the_api_refuses_a_bundle_it_cannot_explain_at_startup(variant: str, served: dict):
+    with pytest.raises(ServingError, match="SHAP export"):
+        create_app(served["models"] / variant)
 
 
 @pytest.mark.skipif(
