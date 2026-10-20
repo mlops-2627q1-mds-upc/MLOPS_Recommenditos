@@ -410,6 +410,10 @@ def test_the_report_tables_carry_the_columns_the_report_is_written_against(pipel
     assert masked[0] == (
         "variant,criterion,field,n_columns_masked,mdape,mdape_ratio,threshold,passed"
     )
+    intervals = (pipeline["metrics_dir"] / evaluate.INTERVAL_COVERAGE_FILE).read_text()
+    assert intervals.splitlines()[0] == (
+        "variant,scenario,make,n,coverage,std_error,mean_relative_width,judgement"
+    )
 
 
 def test_the_report_tables_carry_every_variant_and_exclude_the_price_buckets(pipeline, params):
@@ -772,6 +776,7 @@ def test_a_failed_mlflow_append_leaves_every_result_file_from_this_run(
         *(metrics_dir / f"{v}.json" for v in params["train"]["variants"]),
         metrics_dir / evaluate.SEGMENTS_FILE,
         metrics_dir / evaluate.MASKED_INPUTS_FILE,
+        metrics_dir / evaluate.INTERVAL_COVERAGE_FILE,
         summary_path,
     ]
     for file in files:
