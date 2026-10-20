@@ -78,9 +78,9 @@ PRICE_BUCKETS = (
 )
 
 #: Relative width bucket bounds, `(upper - lower) / typical price`. Measured on the
-#: test split, the mean is about 0.5 for a full request, 0.9 for P1 and 1.4 for a
+#: test split, the mean is 0.47 for a full request, 0.93 for P1 and 2.30 for a
 #: make-only one (`reports/analysis/price_range_widths_results.txt`).
-WIDTH_BUCKETS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 3.0, 5.0)
+WIDTH_BUCKETS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 5.0)
 
 #: The `path` label of a request that matches no route, a 404 for any path.
 UNMATCHED_PATH = "<unmatched>"
