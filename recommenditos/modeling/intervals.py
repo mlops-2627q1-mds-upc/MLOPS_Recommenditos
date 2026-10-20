@@ -24,6 +24,7 @@ seller in one split).
 
 from collections.abc import Mapping
 from importlib.metadata import version as distribution_version
+import time
 import warnings
 
 from mapie.regression import ConformalizedQuantileRegressor
@@ -71,10 +72,14 @@ def fit_with_intervals(
             f"{CALIBRATION_SPLIT!r} split, which the fit was not given."
         )
     assert isinstance(model, LightGBMModel)  # interval_settings refuses anything else
+    # Timed apart from the point model, so the share of the measured fit the price
+    # range takes can be stated; CodeCarbon's figure covers both together.
+    started = time.perf_counter()
     estimators, record = fit_quantile_estimators(
         model, data, chosen, seed=seed, num_threads=num_threads
     )
     record = conformalize(model, estimators, record, data.calibration, seed=seed)
+    record["seconds"] = time.perf_counter() - started
     model.attach_intervals({name: each.booster_ for name, each in estimators.items()}, record)
     return model
 

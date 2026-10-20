@@ -79,14 +79,14 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `validate-data` | `recommenditos/data/validate_data.py` | `reports/data-validation/`: the summary, the validation results and the Data Docs; a failed expectation fails the pipeline |
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
-| `train` | `recommenditos/modeling/train.py` | `models/<variant>/`, `reports/emissions/<variant>.csv` |
+| `train` | `recommenditos/modeling/train.py`, and `intervals.py` for a variant with a price range | `models/<variant>/`, `reports/emissions/<variant>.csv` |
 | `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs}.csv` |
 | `compare-energy` | `recommenditos/modeling/compare_energy.py` | `reports/figures/energy-vs-error.{csv,pdf}` |
 | `compare-segments` | `recommenditos/modeling/compare_segments.py` | `reports/figures/error-by-segment.pdf` |
 
 `profile-data`, `features`, `evaluate` and the two `compare` stages have no equivalent in the [course demo](https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos).
 Its text model needs no feature engineering, and it asserts its metric threshold inside `tests/test_model.py` instead of producing a metrics artefact, which is not enough for the gate [NFR-01](specification.md) describes.
-`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 29 leaves (28 of them rendered while `deployable_variant` is null) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
+`metrics.json` is deliberately narrow: `dvc metrics show` renders one column per JSON leaf, so its 37 leaves (30 of them rendered while `deployable_variant` is null and only `lgbm-basic` has SC-05's two) are read with `dvc metrics show --md` and the per-variant record, the per-segment table and the masking sweep go to `reports/metrics/` instead.
 Five of those leaves are not measurements but provenance - `data_source` and each variant's `estimator` - because a number is only readable as a result once the file says which data produced it and which model answered.
 `dvc metrics diff` is long-format and lists only the leaves that changed, which is what compares two model versions across a merge.
 
@@ -98,6 +98,15 @@ A variant that names `blanked_copies` is fitted on its training rows plus copies
 Today that is `lgbm-basic`, with one copy of every row that omits all six optional fields and one that omits a random subset, because a request carrying only the required fields was almost absent from its training rows ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 A stage's `params` cannot be conditional, so a change to the block retrains every variant, and those without copies refit to the same trees.
 `evaluate` reads the same block for the fields SC-06 masks, so the two stages cannot come to disagree about which fields are optional.
+
+A variant that names `intervals` also fits UC2's price range in the same stage, the same measured fit and the same MLflow run ([EDN-85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+Today that is `lgbm-basic`.
+Three quantile LightGBM models, at 5 %, 95 % and 50 % and with the variant's hyperparameters, are fitted on the training rows plus one copy that omits every field but `make` and one that omits a random subset; `request.price_range_required_input_fields` says that `make` is the one field FR-02 requires.
+They are early-stopped on the validation rows with copies drawn the same way.
+MAPIE's `ConformalizedQuantileRegressor` then computes the two conformity offsets on the `calibration` split, with the same kinds of copies, and the bundle stores the boosters (`interval_{lower,upper,median}.txt`) and the offsets (`model.json`, `intervals`).
+`train` reads the `calibration` matrix only for such a variant, and no stage reads it for anything else.
+Serving adds the offsets to the boosters' predictions itself, so the API image needs no MAPIE, and `tests/test_intervals.py` checks that the served range equals MAPIE's on the same rows.
+`evaluate` measures SC-05 on the test split for every variant whose bundle carries the range, as the coverage and mean relative width for full inputs and for P1, and reports it as not measured for the others.
 
 `train` measures the energy of its fit with CodeCarbon and nothing else of the stage (issue #38).
 CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached so that a retrain's energy is in the pull request diff, and into the MLflow run beside the accuracy metrics `evaluate` appends.

@@ -1049,7 +1049,27 @@ How to add an entry:
 
 ### EDN-84: The API's error shape (#135)
 
-### EDN-85: How serving applies the interval calibration (#137)
+### EDN-85: Serving adds MAPIE's stored conformity offsets to the quantile models
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Model Deployment
+- **Participants:** @lukas2510 decided ([issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137))
+- **Decision:** MAPIE's `ConformalizedQuantileRegressor` calibrates UC2's quantile LightGBM models in the `train` stage only.
+  The `lgbm-basic` bundle stores the three boosters and the two conformity offsets, and `predict_interval_eur` adds them up with LightGBM alone, so the API image carries no MAPIE.
+- **Alternatives considered:**
+  - MAPIE in the serving runtime: the library computes every interval, but it adds a package to the image NFR-04 caps at 1 GB, for two predictions and an addition.
+  - Our own conformalized quantile regression without MAPIE: no dependency anywhere, but we would own the correctness of the calibration.
+- **Rationale:** The pattern EDN-11 set for SHAP: the statistics stay in a maintained library, and serving replays a constant.
+  A test shows that the range served from a bundle on disk equals MAPIE's on the same rows to a relative 1e-12.
+  On the test split the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the three options in the issue and recommended this one, which @lukas2510 took.
+  AI then implemented it, checked that MAPIE 1.6 moves each bound by one constant before storing it, and measured the coverage.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #137: options, implementation and coverage measurement.
+- **Other evidence:** [`lgbm-basic.json`](metrics/lgbm-basic.json), [Typical-price analysis](analysis/price_range_point_estimate_results.txt), MLflow run `train@lgbm-basic` in `recommenditos-price`.
+- **In LaTeX:** no
 
 ### EDN-86: Where the prediction log and the feedback are stored (#140)
 

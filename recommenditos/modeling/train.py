@@ -251,7 +251,8 @@ def interval_metrics(model: Model) -> dict:
     """The calibration of the price range as MLflow metrics, empty without one.
 
     The two offsets MAPIE computed, in log price, the trees each quantile model
-    kept, and the calibration rows they were computed on. `evaluate` adds the
+    kept, the calibration rows they were computed on, and the seconds the price
+    range took of the measured fit. `evaluate` adds the
     test coverage to the same run.
     """
     record = model.metadata.get("intervals")
@@ -266,6 +267,7 @@ def interval_metrics(model: Model) -> dict:
         },
         "n_calibration_listings": float(record["calibration"]["n_listings"]),
         "n_calibration_rows": float(record["calibration"]["n_rows"]),
+        "interval_fit_seconds": record["seconds"],
     }
 
 
