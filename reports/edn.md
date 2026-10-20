@@ -1036,7 +1036,7 @@ How to add an entry:
   - ty: 19 diagnostics, but at version 0.0.89 its rules change between releases and CI would be unstable.
 - **Rationale:** 307 of 350 functions in the package and tools carry a return annotation that nothing checked.
   mypy reports 19 findings in 9 files, none a real bug: each is a value the code does not show cannot be `None`, or a library type.
-  An explicit check or `assert` fixes each one.
+  A check, an `assert`, a corrected annotation or a small helper fixes each one.
   It has a pydantic plugin for the M4 API.
   It sees every DataFrame as `Any`, so column names and dtypes stay with `schema.py` and the tests.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
