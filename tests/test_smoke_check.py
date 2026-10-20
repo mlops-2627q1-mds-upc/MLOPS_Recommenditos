@@ -126,3 +126,12 @@ def test_no_answer_fails(stack, lock, capsys):
     code, out = run(url.rsplit(":", 1)[0] + ":9", lock, capsys)
     assert code == 1
     assert "no answer" in out
+
+
+def test_hsts_on_plain_http_fails(stack, lock, capsys):
+    url, routes = stack
+    headers = {**PROXY_HEADERS, "Strict-Transport-Security": "max-age=31536000"}
+    routes[("GET", "/health")] = (200, headers, routes[("GET", "/health")][2])
+    code, out = run(url, lock, capsys)
+    assert code == 1
+    assert "HSTS is set on plain HTTP" in out

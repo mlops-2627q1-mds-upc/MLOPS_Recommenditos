@@ -36,6 +36,7 @@ What each part guarantees:
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
 - **Compose** publishes only the proxy's port.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
+  A hung API, one whose process lives on but stops answering, is only marked unhealthy: Docker's restart policy acts when the process exits, so in M4 nothing restarts it automatically; doing so is an M5 item ([What M5 adds](#what-m5-adds)).
 - **nginx** refuses `/feedback` and `/metrics`, versioned or not, with a 403 (FR-10, EDN-13).
   The replay job and Prometheus reach those endpoints at `api:8000` inside the Compose network, never through the proxy.
   nginx matches the normalised path, so `//feedback`, `/v1/./feedback` and percent-encoded spellings are refused too.
@@ -87,13 +88,15 @@ From the repository root on your laptop, with `<admin>@<vm>` the account the lec
 
 ```bash
 ssh-copy-id <admin>@<vm>                                   # once, if you log in with a password
-scp -r deploy <admin>@<vm>:recommenditos-deploy
-ssh -t <admin>@<vm> sudo bash recommenditos-deploy/bootstrap.sh
+scp -r deploy <admin>@<vm>:
+ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
 ```
+
+Run the same two commands to bring a changed `bootstrap.sh`, `compose.yaml` or `nginx.conf` to the VM: `scp -r deploy <vm>:` replaces the files of `~/deploy`, whereas a named target directory that already exists, such as `<vm>:some-dir`, would receive a nested `some-dir/deploy/` and leave the old files in place.
 
 `bootstrap.sh` is idempotent and does four things:
 
-1. installs Docker Engine and the compose plugin from Docker's apt repository, and enables Docker at boot;
+1. installs Docker Engine and the compose plugin from Docker's apt repository, following Docker's install page (it first removes the distribution's conflicting packages, such as `docker.io`), and enables Docker at boot;
 2. creates the deploy user `recommenditos`, a member of the `docker` group, whose home `/opt/recommenditos` holds the stack;
 3. lets every SSH key of the account that ran it log in as `recommenditos`, so that every later step is `ssh recommenditos@<vm>` without sudo;
 4. copies `compose.yaml`, `nginx.conf` and `.env.template` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists.
@@ -182,7 +185,7 @@ Finally check NFR-05's reboot case: `sudo reboot`, and time until `curl http://<
 ## Without sudo or without Docker
 
 `bootstrap.sh` needs root for all four of its steps.
-If Docker is already installed and our account is in the `docker` group, none of them is needed: copy `compose.yaml`, `nginx.conf` and `.env` into a directory of our own and deploy as above, under our account.
+If Docker is already installed and our account is in the `docker` group, none of them is needed: copy `compose.yaml` and `nginx.conf` into a directory of our own, copy `.env.template` there as `.env` and fill it in, and deploy as above, under our account.
 If Docker is installed and we are not in the group, we ask the lecturer to add us; rootless Docker would also work, but it needs the `uidmap` package and subordinate IDs that only an admin can provide, and it cannot publish a port below 1024, so `HTTP_PORT` would move to 8080 or above.
 If there is no Docker and no sudo, the fallback is the course demo's recipe in our home directory: uv installs Python and `uv sync --locked --no-default-groups` the runtime, the bundle is copied with `scp`, uvicorn runs on an unprivileged port under `systemd --user` or a `@reboot` cron entry, and nginx, without root, runs on an unprivileged port as well.
 That loses the image as the unit we test and deploy, so we would ask for Docker before building it.
@@ -193,3 +196,4 @@ That loses the image as the unit we test and deploy, so we would ask for Docker 
   The steps of [Every deploy](#every-deploy) are what CD automates; `API_IMAGE_TAG` in the VM's `.env` is already the variable it sets.
 - `trivy` scans the image before it is deployed (NFR-09).
 - Hardening of the containers: a read-only root file system, dropped capabilities, `no-new-privileges` and memory limits.
+- Recovery from a hung API: a container that stays unhealthy is restarted, for example by a watchdog that restarts unhealthy containers, since Docker's restart policy covers only a process that exits.

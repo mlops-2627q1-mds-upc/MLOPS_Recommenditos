@@ -6,9 +6,12 @@
 #   3. SSH access to that user for whoever runs this script with sudo;
 #   4. the stack's files, and its `.env`, readable by the deploy user alone.
 #
-# Run it as root from the copied deploy/ directory:
+# Copy deploy/ into the admin's home and run it as root from there, with the same
+# two commands on every run (`scp -r deploy <vm>:` replaces the files of ~/deploy,
+# where a named target directory that already exists would get a nested copy):
 #
-#     sudo bash bootstrap.sh
+#     scp -r deploy <admin>@<vm>:
+#     ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
 #
 # It is idempotent: a second run changes nothing that is already in place, except
 # that it copies compose.yaml and nginx.conf again, which is how a change to them
@@ -35,15 +38,29 @@ echo "== 1. Docker Engine and the compose plugin"
 if docker compose version >/dev/null 2>&1; then
     echo "already installed: $(docker --version)"
 else
-    # The steps of https://docs.docker.com/engine/install/ubuntu/ (and /debian/).
+    # The steps of https://docs.docker.com/engine/install/ubuntu/ and /debian/ as of
+    # 2026-10: remove the distribution's conflicting packages (only those that are
+    # installed, since apt-get fails on a name the release does not know), then add
+    # Docker's repository as a deb822 source.
+    conflicting=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
+    installed=$(dpkg-query -W -f '${Package} ${Status}\n' "${conflicting[@]}" 2>/dev/null \
+        | awk '/ installed$/ {print $1}' || true)
+    if [[ -n $installed ]]; then
+        # shellcheck disable=SC2086
+        apt-get remove -y $installed
+    fi
     apt-get update
     apt-get install -y ca-certificates curl
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL "https://download.docker.com/linux/$ID/gpg" -o /etc/apt/keyrings/docker.asc
     chmod a+r /etc/apt/keyrings/docker.asc
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]" \
-        "https://download.docker.com/linux/$ID $VERSION_CODENAME stable" \
-        >/etc/apt/sources.list.d/docker.list
+    cat >/etc/apt/sources.list.d/docker.sources <<SOURCES
+Types: deb
+URIs: https://download.docker.com/linux/$ID
+Suites: ${UBUNTU_CODENAME:-$VERSION_CODENAME}
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc
+SOURCES
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
