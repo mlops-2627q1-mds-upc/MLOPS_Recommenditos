@@ -1094,7 +1094,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI laid out both options in the issue and recommended Compose, which @lukas2510 chose.
   AI then built and measured the stack and chose to copy the image; nothing about the VM is verified yet.
 - **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
-- **Other evidence:** [Issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142), [deployment docs](../docs/docs/deployment.md), [`compose.yaml`](../deploy/compose.yaml), [`nginx.conf`](../deploy/nginx.conf).
+- **Other evidence:** [Issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142), [PR #162](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/162), [deployment docs](../docs/docs/deployment.md), [`compose.yaml`](../deploy/compose.yaml), [`nginx.conf`](../deploy/nginx.conf).
 - **In LaTeX:** yes
 
 ### EDN-88: The latency, throughput and resource targets after the load test (#143)
