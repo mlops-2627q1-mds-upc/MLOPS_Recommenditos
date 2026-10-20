@@ -131,6 +131,9 @@ In the deployment only Prometheus reads it, inside the Compose network: nginx re
 | `http_request_errors_total` | counter | `method`, `path`, `status` | Answers with a status of 400 or above |
 | `recommenditos_predicted_price_eur` | histogram | - | The prices `/v1/predict` answered, for drift monitoring (M6) |
 | `recommenditos_prediction_warnings_total` | counter | `field` | `/v1/predict` warnings, by the field they point at (FR-05) |
+| `recommenditos_price_range_price_eur` | histogram | - | The typical prices `/v1/price-range` answered |
+| `recommenditos_price_range_relative_width` | histogram | - | The width of each answered range over its typical price, which falls the more fields a client sends |
+| `recommenditos_price_range_warnings_total` | counter | `field` | `/v1/price-range` warnings, by the field they point at (FR-05) |
 | `recommenditos_model_info` | gauge | `variant`, `version` | 1 for the served model; the version is the one `/health` reports |
 
 `path` is the route template, such as `/v1/predict`, never the raw path, so a client cannot grow the label set; a request that matches no route is counted under `<unmatched>`.

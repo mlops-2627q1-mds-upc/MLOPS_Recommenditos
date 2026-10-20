@@ -4,7 +4,7 @@ from http import HTTPStatus
 
 from fastapi import APIRouter
 
-from recommenditos.api.dependencies import RequestId, Served
+from recommenditos.api.dependencies import Metrics, RequestId, Served
 from recommenditos.api.errors import (
     ProblemError,
     pointer,
@@ -27,7 +27,9 @@ router = APIRouter(tags=["valuation"])
         HTTPStatus.SERVICE_UNAVAILABLE,
     ),
 )
-def price_range(car: PartialListing, served: Served, request_id: RequestId) -> PriceRange:
+def price_range(
+    car: PartialListing, served: Served, metrics: Metrics, request_id: RequestId
+) -> PriceRange:
     """The nominal 90 % price range of a car, and its typical price (FR-07).
 
     Only `make` is required (FR-02): any other field may be left out, and the
@@ -47,7 +49,7 @@ def price_range(car: PartialListing, served: Served, request_id: RequestId) -> P
             f"The served model {served.info.variant!r} carries no price-range models.",
         )
     estimate, unseen = served.price_range(car)
-    return PriceRange(
+    answer = PriceRange(
         price_eur=round(estimate.price_eur, 2),
         lower_eur=round(estimate.lower_eur, 2),
         upper_eur=round(estimate.upper_eur, 2),
@@ -56,3 +58,7 @@ def price_range(car: PartialListing, served: Served, request_id: RequestId) -> P
         request_id=request_id,
         warnings=[FieldWarning(pointer=pointer([name]), detail=detail) for name, detail in unseen],
     )
+    metrics.observe_price_range(
+        answer.price_eur, answer.lower_eur, answer.upper_eur, answer.warnings
+    )
+    return answer

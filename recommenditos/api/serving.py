@@ -269,7 +269,7 @@ class ServedModel:
     ) -> tuple[PriceRangeEstimate, list[tuple[str, str]]]:
         """The price range of `request` (FR-07), and the fields it reported as unseen."""
         matrix = self.matrix(request)
-        sent = _sent(request)
+        sent = sent_fields(request)
         complete = all(name in sent for name in REQUEST_CONTRACT.required_fields)
         row = price_range(self.model, matrix, complete=complete).iloc[0]
         estimate = PriceRangeEstimate(
@@ -296,14 +296,14 @@ class ServedModel:
             self.model.space.vocabulary,
             reference_date=datetime.now(UTC).date().isoformat(),
         )
-        sent = _sent(request)
+        sent = sent_fields(request)
         omitted = [name for name in self.fields if name not in sent]
         seam = seam_names(self.fields, REQUEST_CONTRACT)
         return self.model.mask_absent(matrix, [seam[name] for name in omitted])
 
     def _unseen(self, request: ListingFields, matrix: pd.DataFrame) -> list[tuple[str, str]]:
         """The categorical fields that were sent and reached the model as unknown (FR-05)."""
-        sent = _sent(request)
+        sent = sent_fields(request)
         unseen = []
         for name, columns in self.fields.items():
             column = columns[0]
@@ -351,7 +351,7 @@ def _effect_pct(log_contribution: float) -> float:
     return float(np.expm1(log_contribution) * 100)
 
 
-def _sent(request: ListingFields) -> set[str]:
+def sent_fields(request: ListingFields) -> set[str]:
     """The fields the client sent with a value; a field sent as null was not sent."""
     return {name for name in request.model_fields_set if getattr(request, name) is not None}
 

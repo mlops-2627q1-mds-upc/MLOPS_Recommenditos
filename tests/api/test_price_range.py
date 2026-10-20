@@ -16,7 +16,7 @@ import pytest
 from tests.api.helpers import assert_problem, pointers
 from tests.api.test_predict import _INVALID
 
-from recommenditos.api import create_app
+from recommenditos.api.app import create_app
 from recommenditos.api.schemas.partial_listing import PartialListing
 from recommenditos.api.schemas.predict import ValuationRequest
 from recommenditos.api.serving import COUNTRIES, REQUEST_CONTRACT, ServedModel, price_range
@@ -198,7 +198,7 @@ class _Stub:
 @pytest.mark.parametrize(
     ("point", "expected"),
     [
-        pytest.param(25_000.0, (10_000.0, 25_000.0, 20_000.0), id="point-above-the-upper-bound"),
+        pytest.param(25_000.0, (10_000.0, 25_000.0, 25_000.0), id="point-above-the-upper-bound"),
         pytest.param(8_000.0, (8_000.0, 8_000.0, 20_000.0), id="point-below-the-lower-bound"),
         pytest.param(15_000.0, (10_000.0, 15_000.0, 20_000.0), id="point-inside"),
     ],
