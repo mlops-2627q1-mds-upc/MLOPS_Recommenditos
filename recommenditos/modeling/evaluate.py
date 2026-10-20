@@ -32,8 +32,8 @@ Three outputs:
   and its LaTeX tables cite.
 
 The stage reports on the test rows the API would answer, which is the makes the
-model was fitted on (EDN-48). `features` has already restricted the test matrix
-to them (EDN-67), so this stage checks rather than filters: it takes the list out
+model was fitted on (EDN-05). `features` has already restricted the test matrix
+to them, so this stage checks rather than filters: it takes the list out
 of the model's own metadata rather than reading `supported_makes.json` again,
 refuses a test matrix holding or encoded over any other make, and checks the
 per-make segment levels against the same list. A filter here would only ever
@@ -103,14 +103,14 @@ _BUCKETED_SEGMENTS: dict[str, tuple[str, str]] = {
     "price_bucket": ("price", "price_bucket_edges"),
 }
 
-#: The segment whose levels have to be makes the API answers (EDN-48, FR-04).
+#: The segment whose levels have to be makes the API answers (EDN-05, FR-04).
 MAKE_SEGMENT = "make"
 
 #: The level a row gets when the value being segmented on is absent, and when it
 #: is below the first bucket edge. Two levels rather than one, because a null
 #: `registration_date` and a listing registered after the reference date are
 #: different data-quality findings, and folding a negative age into the youngest
-#: bucket would hide the second one entirely (EDN-22 removes it in `preprocess`).
+#: bucket would hide the second one entirely (`preprocess` removes it).
 MISSING_SEGMENT_LEVEL = "(missing)"
 INVALID_SEGMENT_LEVEL = "(invalid)"
 
@@ -849,7 +849,7 @@ def _evaluate_variant(
     test = read_frame(input_dir / feature_set / "test.parquet", space.schema)
     # Taken from the model's own metadata rather than from `supported_makes.json`,
     # so the evaluated population is checked against the one the model was
-    # fitted on (EDN-48) and the two cannot be read from different `split` runs.
+    # fitted on (EDN-05) and the two cannot be read from different `split` runs.
     check_served_makes_only(
         test, model.metadata["training"]["supported_makes"], name=f"{variant} test"
     )
@@ -935,8 +935,8 @@ def check_make_levels_are_served(
 ) -> None:
     """Refuse a per-make segment level naming a make the API answers with a 422.
 
-    EDN-48's third obligation. `features` restricts the test rows before they
-    are cut and `check_served_makes_only` checks the matrix, so this is the check
+    The supported-make rule (EDN-05) at the segment level. `features` restricts the test rows
+    before they are cut and `check_served_makes_only` checks the matrix, so this is the check
     on what the stage actually produced: without it, the report would print an
     error figure for a make FR-04 rejects, which is worse than printing nothing
     at all.
@@ -948,7 +948,7 @@ def check_make_levels_are_served(
         raise ValueError(
             f"the per-make segments of {variant!r} cover {', '.join(unserved)}, which the model "
             f"was not fitted on and FR-04 rejects with a 422. The test rows have to be "
-            f"restricted to the model's own supported makes before they are cut (EDN-48)."
+            f"restricted to the model's own supported makes before they are cut (EDN-05)."
         )
 
 

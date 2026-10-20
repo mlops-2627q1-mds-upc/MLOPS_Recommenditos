@@ -496,7 +496,7 @@ RAW_SCHEMA = Schema(
         Column("is_used", "bool", False, "Excluded: contradicts offer_type (EDN-23)."),
         Column("is_new", "bool", False, "Excluded: constant after scoping."),
         Column(
-            "is_preregistered", "bool", False, "Defines the scope filter (EDN-24), not a feature."
+            "is_preregistered", "bool", False, "Defines the scope filter (EDN-04), not a feature."
         ),
         Column("had_accident", "bool", False, "Excluded: True in 3 rows of 118,382."),
         Column("has_full_service_history", "bool", False, "One-sided assertion (EDN-23)."),
@@ -530,7 +530,7 @@ RAW_SCHEMA = Schema(
 # `split`, which also counts the supported makes (EDN-05 counts support after
 # the holdout) and writes them as an artefact; applying that list is the
 # business of the stages that build model input, not of `split`, which stays a
-# lossless partition (EDN-48).
+# lossless partition (EDN-05).
 #
 # The columns here are the raw ones that survive problem-spec section 4, so the
 # exclusion table is enforced by this schema rather than by a drop list a stage
@@ -544,8 +544,8 @@ _GROUP_COLUMNS: tuple[Column, ...] = (
         "str",
         False,
         "Hashed seller_company_name, location for private sellers. The split groups by it "
-        "so no seller appears in two sets (EDN-14). A grouping key, not an anonymisation: "
-        "unsalted, so the public source file inverts it (EDN-37).",
+        "so no seller appears in two sets (EDN-32). A grouping key, not an anonymisation: "
+        "unsalted, so the public source file inverts it (EDN-20).",
     ),
 )
 
@@ -598,7 +598,7 @@ def _as_interim(column: Column) -> Column:
     Two differences from the raw frame, both deliberate.
 
     `preprocess` parses the date, so the interim frame carries a real
-    timestamp and EDN-22's "registered after the snapshot" rule is a date
+    timestamp and the "registered after the snapshot" rule is a date
     comparison rather than a string one.
 
     Nullability is *structural* here, and is in the raw contract too: a column

@@ -19,7 +19,7 @@ in exactly one of the five artefacts, which is what makes "the split loses no
 row" a testable invariant instead of a hope, and what keeps EDN-05's threshold
 revisitable without re-running the split. The supported-make list is therefore
 a *record* here, and `features` is where it is applied, to every frame and
-before the vocabulary is built (EDN-48, EDN-67): problem-spec section 5
+before the vocabulary is built (EDN-05): problem-spec section 5
 describes the split as removing nothing but `ES`, while section 2 scopes the
 *model* to the supported makes. Which stage applies the list, which ones check
 it and which tests hold each guarantee is written down in

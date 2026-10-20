@@ -1,7 +1,7 @@
-"""The hyperparameter search: a grid of measured, tracked fits, decided on validation (EDN-78).
+"""The hyperparameter search: a grid of measured, tracked fits, decided on validation (EDN-73).
 
 The decision step of the protocol in `docs/docs/pipeline.md`, "Tuning a
-hyperparameter", which EDN-73 wrote down and EDN-78 extends. A sweep is one
+hyperparameter", which EDN-73 writes down. A sweep is one
 variant and a small grid, and it ends in one of two verdicts: keep the
 reference configuration, or adopt one point of the grid. What it never does is
 change `params.yaml`: adopting a value is a reviewed edit followed by a
@@ -51,10 +51,10 @@ totals of the sweep and its verdict, and three artifacts under `results/`:
   to the console when the sweep ends;
 - `results/emissions.csv`, CodeCarbon's own row for every fit of the sweep, with
   the columns that say how each figure was produced - CodeCarbon's version, the
-  CPU and RAM power, the operating system - because EDN-69 calls the figure an
+  CPU and RAM power, the operating system - because CodeCarbon's figure is an
   estimate, and an estimate is checked by its method.
 
-**MLflow is the only store (EDN-78).** Nothing of a sweep is written into the
+**MLflow is the only store (EDN-73).** Nothing of a sweep is written into the
 repository: the three files are written to a temporary directory and exist
 afterwards only as artifacts of the summary run. So a sweep refuses to start
 when tracking is not configured, because its results would have nowhere to go,
@@ -67,7 +67,7 @@ The search's energy is kept apart from the product's. Not in
 `reports/emissions/`: each variant's CSV there is the record of the fit that
 produced its model, which `train@<variant>` owns and the `compare-energy` stage
 reads. NFR-10's 15-minute budget is about retraining the product, and the
-search's cost scales with its grid instead (EDN-78).
+search's cost scales with its grid instead (EDN-73).
 
 **Provenance.** The runs carry the commit and `git_dirty` like every run the
 tracking seam opens. A sweep that reads the matrices at their default path also
@@ -326,7 +326,7 @@ def validation_seller_groups(
 
     The matrix does not carry `seller_group_id`, so it is joined back from the
     split frame `features` read: the matrix keeps that frame's served rows in
-    their order (EDN-67), which the row count and the prices check, so a matrix
+    their order (EDN-05), which the row count and the prices check, so a matrix
     from another run fails here rather than resampling the wrong groups.
     """
     frame = read_frame(processed_dir / f"{VALIDATION_SPLIT}.parquet", PROCESSED_SCHEMA)
@@ -358,7 +358,7 @@ class Sweep:
     #: The values to try, by hyperparameter, in the order the points vary.
     grid: Mapping[str, Sequence]
     #: Set on every point, the reference included: how the second grid of
-    #: EDN-78 holds `learning_rate` and `num_leaves` at the first grid's winner.
+    #: EDN-73 holds `learning_rate` and `num_leaves` at the first grid's winner.
     fixed: Mapping[str, object] = field(default_factory=dict)
 
 
@@ -375,7 +375,7 @@ class SearchPaths:
 
 @dataclass(frozen=True)
 class Protocol:
-    """The knobs of the protocol itself, at the values EDN-73 and EDN-78 decided."""
+    """The knobs of the protocol itself, at the values EDN-73 decided."""
 
     ceiling: int = SEARCH_CEILING
     draws: int = BOOTSTRAP_DRAWS
@@ -620,7 +620,7 @@ def _check_ceiling(ceiling: int, committed: dict) -> None:
 def _require_tracking_configured() -> None:
     """Refuse to start a sweep whose results would have nowhere to go.
 
-    MLflow is a sweep's only store (EDN-78), so a sweep without tracking would fit
+    MLflow is a sweep's only store (EDN-73), so a sweep without tracking would fit
     every point and keep nothing. `train` degrades instead, because a model is
     written to disk either way; a sweep's record is not.
     """

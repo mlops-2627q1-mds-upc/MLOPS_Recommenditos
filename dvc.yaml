@@ -345,7 +345,7 @@ stages:
       # sweep the report cites, as one CSV each across all variants. Not a
       # `metrics` entry: DVC renders one column per JSON leaf, and four variants
       # times six criteria is not a table anyone can read. `metrics.json` below
-      # keeps the 24 leaves that are, and the stage docstring says how to read it.
+      # keeps the 29 leaves that are, and the stage docstring says how to read it.
       - reports/metrics:
           cache: false
     metrics:
