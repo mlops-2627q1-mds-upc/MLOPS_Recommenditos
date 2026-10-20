@@ -323,7 +323,7 @@ uv run python -m recommenditos.modeling.tune lgbm-extended \
   --sweep 88-lgbm-extended-min-child-samples
 ```
 
-`--grid` takes any key the estimator reads, `min_child_samples` included, which is optional in `params.yaml` at LightGBM's default of 20; `n_estimators` and `early_stopping_rounds` are refused, because the search sets them itself.
+`--grid` takes any key the estimator reads, `min_child_samples` and `reg_lambda` included, which are optional in `params.yaml` at LightGBM's defaults of 20 and 0.0; `n_estimators` and `early_stopping_rounds` are refused, because the search sets them itself.
 A sweep id is used once: a second run under it is refused when the MLflow experiment already holds runs tagged with it, which is also what an interrupted sweep leaves behind; rerun it under a fresh id.
 The ceiling must be above the variant's `early_stopping_rounds`, and is checked before any run opens.
 Since a sweep writes nothing into the working tree, sweeps can follow one another without a commit in between: no sweep's runs are tagged `git_dirty` by another's files.
@@ -341,6 +341,7 @@ uv run python -m recommenditos.modeling.tune lgbm-extended   --grid reg_lambda=0
 ```
 
 The seven earlier sweeps decided at 95 %, but all kept their reference, and a stricter level can only turn an adoption into a keep, so at k = 9 their verdicts are the same and the nine sweeps hold the 5 % together.
+Both kept 0 on 2026-10-20, so `params.yaml` and `dvc.lock` are unchanged; the verdicts are in the [model card](model-card.md#hyperparameters-as-trained).
 A sweep after them uses k = 10, and so on; should an earlier sweep have adopted a point, it would be rechecked at the new k.
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:

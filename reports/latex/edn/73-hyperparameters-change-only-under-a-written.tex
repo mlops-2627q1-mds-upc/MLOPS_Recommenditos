@@ -8,7 +8,7 @@
   milestone = {M3: Quality Assurance},
   topic = {Hyperparameter Tuning, Evaluation Protocol},
   participants = {@lukas2510; @kadameit decided the search over both variants (2026-10-06) and the correction (2026-10-20)},
-  decision = {\texttt{learning\_\allowbreak{}rate} 0.05, \texttt{num\_\allowbreak{}leaves} 63, and \texttt{min\_\allowbreak{}child\_\allowbreak{}samples} 20 stay, because no search found a point measurably better on the validation split.
+  decision = {\texttt{learning\_\allowbreak{}rate} 0.05, \texttt{num\_\allowbreak{}leaves} 63, \texttt{min\_\allowbreak{}child\_\allowbreak{}samples} 20, and \texttt{reg\_\allowbreak{}lambda} 0 stay, because no search found a point measurably better on the validation split.
 A committed value is replaced only under the protocol in the pipeline docs: selection on the validation split by L1, when a point's simultaneous interval of the difference lies below zero, at level 1 -- 0.05/k for k sweeps decided on that split.
 \texttt{n\_\allowbreak{}estimators} is a ceiling of 5,000 with early stopping after 50 rounds.
 \texttt{tune.\allowbreak{}py} searches outside \texttt{dvc repro}, recorded in MLflow only.},
@@ -19,14 +19,14 @@ A committed value is replaced only under the protocol in the pipeline docs: sele
 \item No correction across sweeps: with k sweeps, a lucky point is adopted in up to k times 5\,\% of cases.
 \end{itemize}
 \par
-\emph{Why:} Across the twelve points of the first grid, no interval of the difference lies below zero.
+\emph{Why:} In no sweep does an interval of the difference lie below zero.
 At 5,000 the validation curve, not the ceiling, decides the tree count.
-The validation split is unchanged since 2026-10-01, and the MLflow experiment holds seven sweeps on it before issue \#117, so its two sweeps decide at k = 9.},
+The validation split is unchanged since 2026-10-01 and held seven sweeps before issue \#117, so its two \texttt{reg\_\allowbreak{}lambda} sweeps decided at k = 9: the best point differs by -0.00001 and +0.00014 in L1, against half-widths of 0.0009 and 0.0010.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted with modifications},
   assessment = {AI designed the sweeps and stopped before each decision.
 An independent AI review replaced a per-point interval, unsafe across eleven comparisons, with the simultaneous one.
 AI counted k from MLflow and \texttt{dvc.\allowbreak{}lock}; Kevin chose Bonferroni over grouped cross-validation.},
   aievidence = {Claude Code sessions on issues \#64, \#88, and \#117.},
-  evidence = {``Tuning a hyperparameter'' in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{the pipeline docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/tuning_sweep_results.txt}{\texttt{tuning\_\allowbreak{}sweep\_\allowbreak{}results.\allowbreak{}txt}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88}{issue \#88}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117}{issue \#117}.},
+  evidence = {``Tuning a hyperparameter'' in \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/pipeline.md}{the pipeline docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/tuning_sweep_results.txt}{\texttt{tuning\_\allowbreak{}sweep\_\allowbreak{}results.\allowbreak{}txt}}, MLflow sweeps \texttt{117-\allowbreak{}lgbm-\allowbreak{}basic-\allowbreak{}reg-\allowbreak{}lambda} and \texttt{117-\allowbreak{}lgbm-\allowbreak{}extended-\allowbreak{}reg-\allowbreak{}lambda}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88}{issue \#88}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117}{issue \#117}.},
 }
