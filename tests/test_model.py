@@ -77,6 +77,7 @@ from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
     BLANKED_COPY_KINDS,
     ESTIMATORS,
+    INTERVAL_QUANTILES,
     MISSING_LEVEL,
     MODEL_FILE,
     PREDICTION_NAME,
@@ -124,7 +125,15 @@ def test_every_variant_trains_on_the_fixture_without_credentials(trained: dict):
     }
     for variant, model in trained["models"].items():
         written = {path.name for path in (trained["dir"] / variant).iterdir()}
-        assert written == {MODEL_FILE, FEATURE_SPACE_FILE, payloads[model.estimator]}, variant
+        # A variant with a price range carries its three quantile boosters too (EDN-85).
+        ranges = (
+            {f"interval_{name}.txt" for name in INTERVAL_QUANTILES}
+            if model.has_intervals
+            else set()
+        )
+        assert written == {MODEL_FILE, FEATURE_SPACE_FILE, payloads[model.estimator]} | ranges, (
+            variant
+        )
 
 
 @pytest.mark.req("NFR-08")
@@ -1380,20 +1389,6 @@ def test_every_variant_names_a_known_estimator_and_an_existing_feature_set(param
         )
 
 
-def test_the_interval_method_of_sc05_is_reserved_and_absent(trained: dict):
-    """No variant may grow an interval method before SC-05 can really be measured.
-
-    `evaluate` hardcodes SC-05 as null today, so this pins nothing the metrics
-    artefact currently says. Issue #39 replaces that hardcoded null with a
-    capability check on this attribute, and a stub that raised would then make
-    the criterion read as measurable - which is the one thing NFR-01 cannot
-    tolerate. Pinned before the check exists, because once it does the stub is
-    the cheap way to make a null go away.
-    """
-    for variant, model in trained["models"].items():
-        assert not hasattr(model, "predict_interval_eur"), variant
-
-
 # --------------------------------------------------------------------------
 # MLflow: one run per variant, and training without a server
 # --------------------------------------------------------------------------
@@ -1718,13 +1713,13 @@ def test_only_the_fit_is_measured(matrices: dict, tmp_path: Path, monkeypatch):
     Both are made to take two seconds, which a fit of `b0` on the fixture never
     does, so a tracker opened before the read or closed after the write would
     record a duration of at least two seconds. CodeCarbon's duration is compared
-    against the call to `fit_variant` timed from inside, which is the section the
+    against the call to `fit_with_intervals` timed from inside, which is the section the
     issue asks to be measured and nothing more.
     """
     for name in REQUIRED_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     timed: dict = {}
-    read, save, fit = train.read_matrices, Model.save, train.fit_variant
+    read, save, fit = train.read_matrices, Model.save, train.fit_with_intervals
 
     def slow_read(*args, **kwargs):
         time.sleep(2)
@@ -1742,7 +1737,7 @@ def test_only_the_fit_is_measured(matrices: dict, tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(train, "read_matrices", slow_read)
     monkeypatch.setattr(Model, "save", slow_save)
-    monkeypatch.setattr(train, "fit_variant", timed_fit)
+    monkeypatch.setattr(train, "fit_with_intervals", timed_fit)
 
     train.main(
         "b0", matrices["features"], tmp_path / "models", PARAMS_FILE, tmp_path / "emissions"
@@ -2752,7 +2747,7 @@ def test_a_sweep_against_a_perfect_model_is_refused(trained, test_frames, params
 
 
 # --------------------------------------------------------------------------
-# SC-05: unmeasurable today, and measured when a model can
+# SC-05: not measured without a price range, and measured with one
 # --------------------------------------------------------------------------
 
 
@@ -2777,28 +2772,34 @@ class _IntervalModel(_DegradingModel):
         super().__init__(real, field="gears", present=1.0001, absent=1.0001)
         self._inside_rows = inside_rows
 
-    def predict_interval_eur(self, frame: pd.DataFrame, coverage: float = 0.90) -> pd.DataFrame:
+    @property
+    def has_intervals(self) -> bool:
+        return True
+
+    def predict_interval_eur(self, frame: pd.DataFrame) -> pd.DataFrame:
         inside = np.arange(len(frame)) < self._inside_rows
         price = frame["price"].to_numpy()
         return pd.DataFrame(
             {
                 "lower_eur": np.where(inside, price * _INSIDE[0], price * _OUTSIDE[0]),
                 "upper_eur": np.where(inside, price * _INSIDE[1], price * _OUTSIDE[1]),
+                "median_eur": price * 1.0001,
             },
             index=frame.index,
         )
 
 
 @pytest.mark.req("NFR-01")
-def test_sc05_is_not_measured_while_no_model_exposes_an_interval(
+def test_sc05_is_not_measured_for_a_variant_without_a_price_range(
     trained, test_frames, gate_criteria
 ):
-    # The state of the first delivery, and the reason NFR-01's gate cannot be met
-    # by any model yet. Reported as a structured status so a reader can tell "not
-    # measured" from "measured and failed" without parsing English.
+    # A variant whose bundle carries no calibrated range cannot meet NFR-01's gate.
+    # Reported as a structured status so a reader can tell "not measured" from
+    # "measured and failed" without parsing English.
     for variant in VARIANTS:
         model = trained["models"][variant]
-        assert not hasattr(model, INTERVAL_METHOD), variant
+        if model.has_intervals:
+            continue
         assert interval_metrics(model, {"full": test_frames[model.feature_set]}) is None, variant
 
     verdict = evaluate_sc05(None, gate_criteria)
@@ -2811,9 +2812,8 @@ def test_sc05_is_not_measured_while_no_model_exposes_an_interval(
 
 
 def test_interval_coverage_is_the_share_of_prices_inside_the_interval(trained, test_frames):
-    # The capability branch, exercised with a stub that has the method, which is
-    # what makes the `hasattr` check a seam rather than a dead branch: when UC2
-    # lands, the criterion starts being measured without an edit to the stage.
+    # The measured branch, exercised with a stub whose coverage is known by
+    # construction, so the arithmetic is checked apart from any fitted model.
     frame = test_frames["basic"]
     rows = len(frame)
     # Enough rows outside the interval that a coverage of 1.0 could not pass by
@@ -2826,7 +2826,7 @@ def test_interval_coverage_is_the_share_of_prices_inside_the_interval(trained, t
 
     assert rows > missed, "the fixture has to hold more rows than the interval misses"
     assert measured["full"]["coverage"] == pytest.approx(inside_rows / rows)
-    # The width is relative to the prediction, which is `price * 1.0001`.
+    # The width is relative to the interval's median, which is `price * 1.0001`.
     expected_width = (
         inside_rows * (_INSIDE[1] - _INSIDE[0])
         + (rows - inside_rows) * (_OUTSIDE[1] - _OUTSIDE[0])
@@ -3003,13 +3003,14 @@ def test_a_criterion_added_to_the_list_without_a_measurement_fails_the_stage(
 
 
 def _variant_record(name: str, mdape: float, **verdicts) -> dict:
-    """One variant's record as `gate_summary` reads it: MdAPE plus the six verdicts."""
+    """One variant's record as `gate_summary` reads it: MdAPE, SC-05's value and the verdicts."""
     decided = {f"{each}_passed": True for each in CRITERIA} | verdicts
     record = {
         "variant": name,
         "estimator": "lightgbm",
         "mdape": mdape,
         "within_20pct": 0.9,
+        "sc05_measured": None if decided["sc05_passed"] is None else 0.9,
         **decided,
     }
     return {

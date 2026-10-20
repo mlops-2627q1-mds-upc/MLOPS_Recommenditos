@@ -98,6 +98,13 @@ pipeline = [
     # that satisfies it and one that breaks it (reports/analysis/gx_probe.py).
     # Only the two validation stages import it, neither of them on the serving path.
     "great-expectations>=1.23.2",
+    # Calibrates UC2's price range with conformalized quantile regression
+    # (EDN-85). Only `recommenditos/modeling/intervals.py` imports it, in the
+    # `train` stage; the bundle stores the boosters and the two offsets, so the
+    # serving runtime does without it. The floor is the version the offsets were
+    # checked against, and `<2` because the 1.x API (`ConformalizedQuantileRegressor`
+    # with `prefit=True`) is what `intervals.py` is written against.
+    "mapie>=1.6,<2",
     # Figures. In this group rather than in `notebook`, because DVC stages draw
     # figures into `reports/figures/` too (the `compare-energy` stage of #38 is
     # the first), and an install of the pipeline alone has to be able to run them.

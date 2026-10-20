@@ -337,15 +337,30 @@ def test_a_model_that_misses_the_criteria_does_not_pass_the_gate(pipeline):
 
 
 @pytest.mark.req("NFR-01")
-def test_sc05_is_the_one_criterion_no_model_can_be_measured_against_yet(pipeline, params):
-    # Narrowed to SC-05 deliberately: SC-04 and SC-06 are measured now, and a test
-    # asserting they are `None` would be satisfied by an implementation that
-    # returned `None` unconditionally.
-    for variant in params["train"]["variants"]:
+def test_sc05_is_measured_for_the_variant_with_a_price_range_and_blocks_the_others(
+    pipeline, params
+):
+    # SC-05 is measured where a bundle carries the calibrated UC2 range (EDN-85),
+    # for full inputs and for P1, and stays `None` - blocking - for every variant
+    # without one. SC-06 is asserted measured beside it, so an implementation
+    # returning `None` everywhere cannot pass.
+    summary = json.loads(pipeline["summary"].read_text())
+    for variant, settings in params["train"]["variants"].items():
         record = json.loads((pipeline["metrics_dir"] / f"{variant}.json").read_text())
-        assert record["sc05_passed"] is None, variant
-        assert record["sc05_status"] == "not_measured", variant
         assert record["sc06_passed"] is not None, variant
+        leaves = summary["variants"][variant]
+        if "intervals" in settings:
+            assert record["sc05_status"] == "measured", variant
+            assert record["sc05_passed"] in (True, False), variant
+            assert set(record["sc05_coverage"]) == {"full", evaluate.P1_SCENARIO}
+            assert leaves["sc05_coverage"] == record["sc05_measured"]
+            assert leaves["sc05_passed"] == record["sc05_passed"]
+            assert "sc05 unmeasured" not in record["gate_blocked_by"], variant
+        else:
+            assert record["sc05_passed"] is None, variant
+            assert record["sc05_status"] == "not_measured", variant
+            assert leaves["sc05_coverage"] is None
+            assert leaves["sc05_passed"] is None
 
 
 @pytest.mark.req("NFR-01")

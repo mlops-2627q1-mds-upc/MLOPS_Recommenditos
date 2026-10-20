@@ -13,8 +13,9 @@ Three outputs:
 - `metrics.json`, the DVC `metrics` file: the gate verdict NFR-01 reads, plus
   the headline numbers of each variant. Deliberately narrow, because
   `dvc metrics show` flattens nested JSON into one column per leaf. This shape
-  has 29 leaves, 9 plus 5 per variant, of which it renders the ones that are not
-  null - 28 while no variant is deployable - and that is already past the width a
+  has 37 leaves, 9 plus 7 per variant, of which it renders the ones that are not
+  null - 30 while no variant is deployable and one carries a price range, since
+  SC-05's two leaves are null for a variant without one - and that is past the width a
   plain terminal table keeps, so read it with `dvc metrics show --md`. Anything
   more per variant belongs in the per-variant record below. `dvc metrics diff` is
   long-format and lists only the leaves that changed, which is what compares two
@@ -129,10 +130,14 @@ EXCLUDED_TOO_FEW_ROWS = "below_sc04_min_segment_rows"
 ALL_OPTIONAL_FIELDS = "(all optional fields)"
 P1_SCENARIO = "(P1: make, model, registration date, mileage)"
 
-#: The method a model gains when the UC2 conformal intervals are built, checked
-#: with `hasattr` so SC-05 starts being measured when one exists rather than when
-#: somebody remembers to edit this stage. `recommenditos.modeling.model` states
-#: why it is deliberately absent today.
+#: SC-05's two scenarios, as `interval_metrics` names them and as their MLflow
+#: metric keys spell them.
+FULL_SCENARIO = "full"
+_INTERVAL_SCENARIO_KEYS: dict[str, str] = {FULL_SCENARIO: "full", P1_SCENARIO: "p1"}
+
+#: The capability SC-05 is measured through: a bundle whose `has_intervals` is
+#: true serves `predict_interval_eur` (EDN-85). A bundle without the UC2 models
+#: reports the criterion as not measured, which blocks the gate.
 INTERVAL_METHOD = "predict_interval_eur"
 
 #: The two tables the report cites, one file across all variants each.
@@ -622,23 +627,24 @@ def evaluate_sc04(rows: "list[dict]", criteria: dict, *, segments: "tuple[str, .
 def interval_metrics(model: Model, frames: "dict[str, pd.DataFrame]") -> "dict | None":
     """Each scenario's interval coverage and mean relative width, or `None`.
 
-    `None` when the model exposes no interval method, which is the state of the
-    first delivery. A capability check rather than a hard-coded null, so the
-    criterion starts being measured when a model gains the method.
+    `None` when the bundle carries no calibrated price range (`has_intervals`),
+    so a variant without one reports SC-05 as not measured.
 
     Coverage is the share of rows whose price falls inside the interval. The mean
-    relative width is reported and is not a pass criterion: `params.yaml` sets no
-    threshold for it, correctly, because there is no reference value for how wide
-    a useful interval is.
+    relative width is the width over the interval's own median model, and it is
+    reported and not a pass criterion: `params.yaml` sets no threshold for it,
+    because there is no reference value for how wide a useful interval is. The
+    median rather than the point model, because the point model has never seen
+    a required field missing, so on P1 it is not a price to divide by (EDN-85).
     """
-    if not hasattr(model, INTERVAL_METHOD):
+    if not model.has_intervals:
         return None
     measured = {}
     for name, frame in frames.items():
-        interval = getattr(model, INTERVAL_METHOD)(frame)
+        interval = model.predict_interval_eur(frame)
         price = frame["price"]
         inside = (interval["lower_eur"] <= price) & (price <= interval["upper_eur"])
-        width = (interval["upper_eur"] - interval["lower_eur"]) / model.predict_eur(frame)
+        width = (interval["upper_eur"] - interval["lower_eur"]) / interval["median_eur"]
         measured[name] = {
             "coverage": float(inside.mean()),
             "mean_relative_width": float(width.mean()),
@@ -649,8 +655,8 @@ def interval_metrics(model: Model, frames: "dict[str, pd.DataFrame]") -> "dict |
 def evaluate_sc05(intervals: "dict | None", criteria: dict) -> dict:
     """SC-05: whether the nominal 90 % intervals cover the share they claim.
 
-    Unmeasurable in the first delivery, and that **blocks** the gate rather than
-    passing it: no model is deployable before the intervals exist and their
+    Unmeasurable for a variant without a price range, and that **blocks** the
+    gate rather than passing it: no model is deployable without intervals whose
     coverage has been checked. Reported as a structured status rather than a
     prose note, so a reader can tell "not measured" from "measured and failed"
     without parsing English, and `metrics.json` names the outstanding criterion.
@@ -665,9 +671,9 @@ def evaluate_sc05(intervals: "dict | None", criteria: dict) -> dict:
             "sc05_status": "not_measured",
             "sc05_capability_checked": INTERVAL_METHOD,
             "sc05_reason": (
-                f"no model exposes {INTERVAL_METHOD}: the UC2 conformal intervals, and the "
-                f"calibration split held for them, are a later ticket, so interval coverage "
-                f"cannot be measured by any means"
+                f"this bundle carries no calibrated price range, so it does not serve "
+                f"{INTERVAL_METHOD} and its interval coverage cannot be measured; a variant "
+                f"gains one by naming `intervals` in params.yaml (EDN-85)"
             ),
             "sc05_coverage": None,
             "sc05_worst_scenario": None,
@@ -922,7 +928,7 @@ def _evaluate_variant(
         intervals=interval_metrics(
             model,
             {
-                "full": test,
+                FULL_SCENARIO: test,
                 P1_SCENARIO: model.mask_absent(test, p1[0].fields),
             },
         ),
@@ -982,7 +988,7 @@ def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
 
     Every leaf here is a column of `dvc metrics show` and a candidate row of
     `dvc metrics diff`, so the shape is the promotion reviewer's checklist under
-    EDN-12 rather than an arbitrary summary, and it is kept to 29 leaves.
+    EDN-12 rather than an arbitrary summary, and it is kept to 37 leaves.
     `dvc metrics show` omits a null leaf rather than showing it empty, so
     `deployable_variant` appears as a column only once a variant is deployable;
     `dvc metrics diff` renders it as `-` and shows the transition.
@@ -1030,16 +1036,20 @@ def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
         "deployable_variant": None if deployable is None else deployable["variant"],
         "best_variant": best["variant"],
         "best_mdape": best["mdape"],
-        # Five leaves per variant, so `dvc metrics show --md` stays a table a
+        # Seven leaves per variant, so `dvc metrics show --md` stays a table a
         # person can read and every row of `dvc metrics diff` says something.
         # `estimator` is one of them for the same reason `data_source` is above:
         # the variant *name* says which rung of the ladder was meant, and only
-        # this says which model answered for it.
+        # this says which model answered for it. SC-05's coverage and verdict are
+        # two more, because it is the one criterion only a variant with a price
+        # range can meet, and null for every other (EDN-85).
         "variants": {
             name: {
                 "estimator": record["estimator"],
                 "mdape": record["mdape"],
                 "within_20pct": record["within_20pct"],
+                "sc05_coverage": record["sc05_measured"],
+                "sc05_passed": record["sc05_passed"],
                 "gate_passed": record["gate_passed"],
                 "gate_blocked_by": record["gate_blocked_by"],
             }
@@ -1061,6 +1071,12 @@ def _append_to_the_training_run(record: dict) -> None:
                 "mae_eur": record["mae_eur"],
                 "mape": record["mape"],
                 **{f"{each}_measured": record[f"{each}_measured"] for each in CRITERIA},
+                # SC-05's scenarios one by one, for a variant with a price range.
+                **{
+                    f"interval_{metric}_{_INTERVAL_SCENARIO_KEYS[scenario]}": value
+                    for scenario, measured in (record["sc05_coverage"] or {}).items()
+                    for metric, value in measured.items()
+                },
             }
         )
         run.set_tags(

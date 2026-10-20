@@ -280,6 +280,7 @@ stages:
       deps:
         - recommenditos/modeling/train.py
         - recommenditos/modeling/model.py
+        - recommenditos/modeling/intervals.py
         - recommenditos/modeling/energy.py
         - recommenditos/tracking.py
         - recommenditos/provenance.py
