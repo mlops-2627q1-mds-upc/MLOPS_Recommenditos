@@ -85,6 +85,13 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      # The mypy hook checks against the installed packages (EDN-83), so the
+      # project is synced before pre-commit runs, as in the test job.
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
       - uses: pre-commit/action@v3.0.1
         env:
           # The gitleaks hook scans only staged changes, and CI has none, so here

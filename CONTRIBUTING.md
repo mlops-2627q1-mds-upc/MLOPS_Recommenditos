@@ -112,13 +112,26 @@ If the hook fires on something else that is not a secret, the fix is a narrow al
 
 ```bash
 make format         # ruff format + fix
-make lint           # ruff format --check + ruff check
+make lint           # mypy + ruff format --check + ruff check
 make test           # pytest, which also reports the coverage of recommenditos/
 make test-serving   # the serving path from the runtime dependencies alone
 make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
 
-`make lint` runs the same ruff rules as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+`make lint` runs the same ruff rules and the same mypy check as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+
+### Type checking
+
+mypy (default mode plus `check_untyped_defs`, no `strict`) checks `recommenditos/` and `tools/` against the installed packages, so run it through `uv run` (`make typecheck`).
+Its hook is local and calls `uv run mypy`, and CI runs it in the `Lint & format` job after a `uv sync`, so a type error blocks the merge.
+It keeps the annotations true and finds a forgotten `None` or a wrong attribute in seconds.
+It cannot see pandas, which ships no type information: every DataFrame is `Any` to it, so column names and dtypes stay with `recommenditos/schema.py` and the tests.
+`tests/` is not checked yet.
+
+Fix a finding in the code: make it show why the value is there, with an explicit check, or an `assert` where it is an invariant.
+Do not use `cast` or `# type: ignore`; where an ignore is unavoidable, name its error code and say why in a comment.
+An untyped third-party package gets a `[[tool.mypy.overrides]]` entry in `pyproject.toml`, one module at a time, never a global `ignore_missing_imports`; a package with accurate stubs (`types-PyYAML`, `types-requests`, `types-tqdm`) goes into the `dev` group instead.
+Do not add `pandas-stubs`: its false positives on everyday indexing invite an `ignore` each (EDN-83).
 
 `make notebook-lint` is exactly what CI's `Notebook lint (Pynblint)` job runs, and the rules it enforces are the table in [docs/docs/notebooks.md](docs/docs/notebooks.md#pynblint-rules).
 
