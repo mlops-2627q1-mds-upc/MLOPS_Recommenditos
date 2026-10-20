@@ -319,7 +319,7 @@ def test_the_api_values_a_listing_with_a_bundle_on_disk(variant: str, served: di
             "seller_type": app_model.allowed["seller_type"][0],
         }
         response = client.post("/v1/predict", json=listing)
-        health = client.get("/v1/health").json()
+        health = client.get("/health").json()
 
     assert response.status_code == 200, response.text
     assert response.json()["price_eur"] > 0

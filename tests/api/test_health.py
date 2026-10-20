@@ -1,4 +1,4 @@
-"""`GET /v1/health`: the status and the loaded model version (FR-11, FR-12)."""
+"""`GET /health`: the status and the loaded model version (FR-11, FR-12)."""
 
 from pathlib import Path
 import tempfile
@@ -16,7 +16,7 @@ from recommenditos.api.serving import ServedModel, bundle_version
 def test_fr11_health_returns_the_status_and_the_loaded_model(
     client: TestClient, served: ServedModel, bundle: Path
 ):
-    response = client.get("/v1/health")
+    response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {

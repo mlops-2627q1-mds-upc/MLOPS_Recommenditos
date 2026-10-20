@@ -2,8 +2,9 @@
 
 `create_app` loads the bundle once, before the first request (FR-12: the bundle
 ships in the image and the API never calls MLflow), wires the middlewares and
-the error handlers, mounts the routers of `recommenditos.api.routes` under
-`/v1`, and finishes the OpenAPI document that `/docs` and `/redoc` render.
+the error handlers, mounts the routers of `recommenditos.api.routes` (the client
+contract under `/v1`, the operational endpoints at the root), and finishes the
+OpenAPI document that `/docs` and `/redoc` render.
 
 uvicorn calls it as a factory (`make api`):
 
@@ -26,7 +27,7 @@ from recommenditos.api.middleware import (
     RequestIdMiddleware,
     UnexpectedErrorMiddleware,
 )
-from recommenditos.api.routes import V1_ROUTERS
+from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
 from recommenditos.api.schemas import ListingFields
 from recommenditos.api.serving import ServedModel
 from recommenditos.config import MODELS_DIR
@@ -77,6 +78,8 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
     install_handlers(app, _complete_listing_errors)
     for router in V1_ROUTERS:
         app.include_router(router, prefix="/v1")
+    for router in OPERATIONAL_ROUTERS:
+        app.include_router(router)
     app.openapi = _openapi(app, served)  # type: ignore[method-assign]
     return app
 

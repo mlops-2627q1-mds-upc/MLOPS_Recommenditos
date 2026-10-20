@@ -30,13 +30,16 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
 
 ## Endpoints
 
-Every endpoint is versioned under `/v1`, so an incompatible change can ship as `/v2` beside it.
+The client contract is versioned under `/v1`, so an incompatible change can ship as `/v2` beside it.
+The operational endpoints are not part of that contract and stay at the root, where a browser, an uptime monitor and Prometheus look for them: `/`, `/health`, and `/metrics` once it exists.
 
 | Endpoint | Purpose | Requirements |
 |----------|---------|--------------|
 | `POST /v1/predict` | The point estimate of the asking price in EUR, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06 |
-| `GET /v1/health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
+| `GET /health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
+| `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
 
+`/v1/predict` values one car per request, because UC1 is one seller asking about one listing and every answer becomes one record of the prediction log; it has no batch form.
 `/predict` requires the ten fields of FR-01 and accepts every other input of the basic and the extended feature set as optional.
 The served model reads the fields its feature set holds; an omitted one reaches it as absent, an omitted equipment list as an empty one.
 A field the request body does not define is refused, so a misspelt optional field does not go unnoticed.
@@ -46,7 +49,7 @@ The values a categorical field accepts come from the loaded bundle, not from the
 `country_code` accepts the 8 countries of the data.
 A country or a `model` the training data does not hold, `ES` today, is answered and reported in `warnings` (FR-05).
 
-The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /v1/health` and `dvc.lock` can be compared directly.
+The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
 Every response carries an `X-Request-ID` header; `/predict` repeats it as `request_id`, and a problem names it in `instance`.
 
 ## Errors
@@ -105,7 +108,7 @@ The code is in `recommenditos/api/`:
 
 1. Add `routes/<group>.py` with `router = APIRouter(tags=[...])` and its operations.
    Take `served: Served` for the model and `request_id: RequestId` for the request ID.
-2. Add its router to `V1_ROUTERS` in `routes/__init__.py`, in alphabetical order, one per line.
+2. Add its router to `V1_ROUTERS` in `routes/__init__.py` if it is part of the client contract, or to `OPERATIONAL_ROUTERS` if it is for operating the service, in alphabetical order, one per line.
 3. Build the request body from the field types in `schemas.py`.
    A body that describes a listing derives from `ListingFields`, which makes the error handler run the served model's checks on it, so its 422 lists every invalid field like `/predict`'s.
    Give every request and response body an `examples` entry in its `model_config`.

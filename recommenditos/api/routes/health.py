@@ -1,4 +1,4 @@
-"""`GET /v1/health`: the status and the loaded model (FR-11)."""
+"""`GET /health`: the status and the loaded model (FR-11)."""
 
 from fastapi import APIRouter
 

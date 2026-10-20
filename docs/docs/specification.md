@@ -44,7 +44,8 @@ The allowed categorical values and the supported makes are not fixed in the sche
 
 ### Outputs and endpoints
 
-All endpoint paths are served under `/v1` (omitted from the table below for brevity).
+The client endpoints (`/predict`, `/price-range`, `/comparables`, `/feedback`) are served under `/v1`, omitted from the table below for brevity.
+The operational endpoints `/health` and `/metrics` are not part of the versioned client contract and are served at the root, where monitors and Prometheus look for them ([API docs](api.md#endpoints)).
 
 | ID | Realisation | Verified by |
 |----|-------------|-------------|
