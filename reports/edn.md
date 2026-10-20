@@ -1022,7 +1022,30 @@ How to add an entry:
 - **Other evidence:** [Measurement results](analysis/blanked_fields_results.txt), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #118](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/118), [PR #121](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/121), MLflow sweep `116-blanked-fields` in `recommenditos-price-tuning`.
 - **In LaTeX:** yes
 
-### EDN-83: Type checking of the package and tools (#133)
+### EDN-83: Python code is type-checked with mypy in its default mode
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** Testing Strategy, CI/CD
+- **Participants:** @lukas2510 decided
+- **Decision:** mypy, in its default mode plus `check_untyped_defs`, checks `recommenditos/` and `tools/` in a pre-commit hook and in the required `Lint & format` job.
+  Untyped third-party packages are ignored module by module, `pandas-stubs` is not installed, and a finding is fixed in the code, not silenced.
+- **Alternatives considered:**
+  - No type checker: ruff and the tests catch a lot, but annotations drift unnoticed and a forgotten `None` shows only in a test.
+  - basedpyright: infers types from pandas' source and sees more there, but reported 193 errors, mostly pandas noise, and agents would scatter `ignore` comments.
+  - ty: 19 diagnostics, but at version 0.0.89 its rules change between releases and CI would be unstable.
+- **Rationale:** 307 of 350 functions in the package and tools carry a return annotation that nothing checked.
+  mypy reports 19 findings in 9 files, none a real bug: each is a value the code does not show cannot be `None`, or a library type.
+  A check, an `assert`, a corrected annotation or a small helper fixes each one.
+  It has a pydantic plugin for the M4 API.
+  It sees every DataFrame as `Any`, so column names and dtypes stay with `schema.py` and the tests.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured the error counts of the three checkers, laid out the options and recommended mypy, which @lukas2510 chose.
+  It fixed the findings and wired the hook and the CI job; a deliberate type error turned the hook red, and a reviewer agent checked the pull request.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #133: three checkers measured, four options, recommendation.
+- **Other evidence:** [Issue #133](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133), [PR #149](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/149), [`[tool.mypy]`](../pyproject.toml).
+- **In LaTeX:** yes
 
 ### EDN-84: The API's error shape (#135)
 

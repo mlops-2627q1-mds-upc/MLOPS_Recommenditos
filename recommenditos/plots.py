@@ -27,9 +27,12 @@ needs no backend chosen for a process that has no display.
 """
 
 from pathlib import Path
+from typing import Literal
 
 import matplotlib
 from matplotlib.axes import Axes
+from matplotlib.backend_bases import RendererBase
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
 #: The regular case, and the one case the figure is about.
@@ -75,7 +78,19 @@ def new_figure(width_in: float, height_in: float) -> Figure:
     return Figure(figsize=(width_in, height_in))
 
 
-def style_axes(axis: Axes, *, grid: str = "both") -> None:
+def renderer(axis: Axes) -> RendererBase:
+    """The renderer that measures text on `axis`'s figure, which must have an Agg canvas.
+
+    The figures here are bare `Figure`s with a `FigureCanvasAgg` attached, the one
+    canvas that can say how large a piece of text will be before it is saved.
+    """
+    canvas = axis.figure.canvas
+    if not isinstance(canvas, FigureCanvasAgg):
+        raise TypeError(f"text can only be measured on an Agg canvas, not on {type(canvas)}")
+    return canvas.get_renderer()
+
+
+def style_axes(axis: Axes, *, grid: Literal["x", "y", "both"] = "both") -> None:
     """Recessive axes: a solid hairline grid, no box, secondary ink on the ticks.
 
     `grid` names the axis whose ticks get gridlines: `"x"`, `"y"` or `"both"`.

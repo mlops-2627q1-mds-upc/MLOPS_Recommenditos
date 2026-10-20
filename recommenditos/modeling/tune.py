@@ -531,6 +531,7 @@ def search(
 def _run(context: _Context) -> dict:
     """Fit every point, decide, and log the record with the summary run."""
     workdir = context.workdir
+    assert workdir is not None, "`search` sets the working directory before it runs"
     errors: dict[Point, np.ndarray] = {}
     relative: dict[Point, np.ndarray] = {}
     fits: list[Fit] = []
@@ -693,6 +694,7 @@ def _sort_key(point: Point) -> tuple:
 def _fit_point(context: _Context, point: Point) -> tuple[Fit, np.ndarray, np.ndarray]:
     """Fit one point, measured and tracked, and return it with its per-row errors."""
     sweep, params, data = context.sweep, context.params, context.data
+    assert context.workdir is not None, "`search` sets the working directory before it runs"
     hyperparameters = {**context.base, **dict(point)}
     if "n_estimators" in context.estimator.hyperparameters:
         hyperparameters["n_estimators"] = context.protocol.ceiling
@@ -896,6 +898,7 @@ def _report(document: dict) -> str:
 def _log_summary(context: _Context, document: dict) -> None:
     """The sweep's own run: its totals, its verdict, and its three files."""
     sweep, totals, verdict = context.sweep, document["totals"], document["verdict"]
+    assert context.workdir is not None, "`search` sets the working directory before it runs"
     run_name = f"{sweep.name}-{sweep.variant}-summary"
     with _tracked(context.protocol.experiment, run_name) as run:
         run.set_tags(
