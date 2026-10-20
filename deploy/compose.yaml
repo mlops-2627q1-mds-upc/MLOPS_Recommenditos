@@ -29,6 +29,14 @@ services:
     tmpfs:
       - /tmp/prometheus:uid=10001,gid=10001,mode=0700
     restart: unless-stopped
+    environment:
+      # FR-10's key for /v1/feedback, from `.env` beside this file. Empty, the
+      # endpoint refuses every request and the rest of the API works (NFR-15).
+      RECOMMENDITOS_API_KEY: ${RECOMMENDITOS_API_KEY:-}
+    volumes:
+      # The prediction log and the feedback, one SQLite file (EDN-86). A named
+      # volume, so it survives a new image and M6's drift job can mount it.
+      - prediction-log:/var/lib/recommenditos
     # The test is the image's HEALTHCHECK (urllib against /health). Probed every
     # second while the API starts, so nginx and `--wait` see it healthy as soon as
     # it is, then every 10 s (NFR-05).
@@ -51,3 +59,6 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
+
+volumes:
+  prediction-log:

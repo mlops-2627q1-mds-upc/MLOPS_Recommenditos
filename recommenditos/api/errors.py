@@ -74,6 +74,12 @@ class PayloadTooLarge(StarletteHTTPException):
         super().__init__(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, too_large_detail(limit))
 
 
+#: The 503 when the prediction log or the feedback cannot be written.
+STORE_UNAVAILABLE_DETAIL = (
+    "The service cannot record requests right now, so it answers none. Try again later."
+)
+
+
 def too_large_detail(limit: int) -> str:
     return f"The request body is larger than the limit of {limit} bytes."
 
@@ -212,13 +218,42 @@ def install_handlers(app: FastAPI, complete: ErrorCompleter) -> None:
 # Documentation
 # --------------------------------------------------------------------------
 
+_EXAMPLE_INSTANCE = "urn:uuid:0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f"
+
+
+def _blank_example(status: int, detail: str) -> dict[str, Any]:
+    return {
+        "type": BLANK,
+        "title": HTTPStatus(status).phrase,
+        "status": int(status),
+        "detail": detail,
+        "instance": _EXAMPLE_INSTANCE,
+    }
+
+
 _EXAMPLES: dict[int, dict[str, Any]] = {
+    HTTPStatus.UNAUTHORIZED: _blank_example(
+        HTTPStatus.UNAUTHORIZED,
+        "This endpoint requires a valid API key in the X-API-Key header.",
+    ),
+    HTTPStatus.NOT_FOUND: _blank_example(
+        HTTPStatus.NOT_FOUND,
+        "No answer with request ID 0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f is in the prediction log.",
+    ),
+    HTTPStatus.CONFLICT: _blank_example(
+        HTTPStatus.CONFLICT,
+        "Another price (19900.0 EUR) is stored for request ID "
+        "0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f; a stored price is not replaced.",
+    ),
+    HTTPStatus.SERVICE_UNAVAILABLE: _blank_example(
+        HTTPStatus.SERVICE_UNAVAILABLE, STORE_UNAVAILABLE_DETAIL
+    ),
     HTTPStatus.UNPROCESSABLE_ENTITY: {
         "type": VALIDATION_ERROR,
         "title": "Invalid request",
         "status": 422,
         "detail": "The request has 2 invalid fields.",
-        "instance": "urn:uuid:0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
+        "instance": _EXAMPLE_INSTANCE,
         "errors": [
             {
                 "pointer": "#/make",
@@ -236,11 +271,16 @@ _EXAMPLES: dict[int, dict[str, Any]] = {
         "title": "Content Too Large",
         "status": 413,
         "detail": too_large_detail(10240),
-        "instance": "urn:uuid:0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
+        "instance": _EXAMPLE_INSTANCE,
     },
 }
 
 _DESCRIPTIONS: dict[int, str] = {
+    HTTPStatus.UNAUTHORIZED: "The `X-API-Key` header is missing or wrong (FR-10).",
+    HTTPStatus.NOT_FOUND: "The prediction log holds no answer with this request ID.",
+    HTTPStatus.CONFLICT: "Another price is stored for this request ID.",
+    HTTPStatus.SERVICE_UNAVAILABLE: "The prediction log cannot be written; nothing was "
+    "answered or stored (NFR-03).",
     HTTPStatus.UNPROCESSABLE_ENTITY: "The request is invalid; `errors` lists every invalid field.",
     HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "The body is larger than 10 KB (NFR-09).",
 }

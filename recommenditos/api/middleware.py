@@ -5,6 +5,7 @@ the request and response and is the slower and less predictable of the two.
 """
 
 from http import HTTPStatus
+import time
 import uuid
 
 from loguru import logger
@@ -32,7 +33,9 @@ class RequestIdMiddleware:
 
     The ID is generated here, never taken from the client, so that it identifies
     one request of this service. `/predict` returns it in its body (FR-06) and
-    every problem names it in `instance`.
+    every problem names it in `instance`. `request.state.request_started` is the
+    `time.perf_counter()` at which the request arrived, which the prediction log
+    measures the latency from (FR-13).
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -43,7 +46,9 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send)
             return
         request_id = str(uuid.uuid4())
-        scope.setdefault("state", {})["request_id"] = request_id
+        state = scope.setdefault("state", {})
+        state["request_id"] = request_id
+        state["request_started"] = time.perf_counter()
 
         async def send_with_id(message: Message) -> None:
             if message["type"] == "http.response.start":
