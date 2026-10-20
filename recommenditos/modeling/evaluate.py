@@ -1105,7 +1105,6 @@ def main(
             f"{'passed' if record['gate_passed'] else 'blocked by ' + record['gate_blocked_by']}"
             f" -> {path}."
         )
-        _append_to_the_training_run(record)
 
     _write_table(
         metrics_dir / SEGMENTS_FILE,
@@ -1125,6 +1124,11 @@ def main(
         f"{summary['n_variants_passing_measurable']} meet every criterion that could be "
         f"measured (outstanding: {summary['criteria_not_measured'] or 'none'})."
     )
+
+    # Append to MLflow only after every result file is written, so a failed call
+    # cannot leave tracked files from two runs side by side.
+    for record in records.values():
+        _append_to_the_training_run(record)
 
 
 if __name__ == "__main__":
