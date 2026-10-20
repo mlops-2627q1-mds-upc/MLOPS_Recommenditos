@@ -208,7 +208,7 @@ def _label(axis: Axes, level: Level, y: float, bound_pct: float, taken: list[Bbo
     and is in primary ink. It is the level the figure is about, so with no free
     place it is labelled over its dot all the same.
     """
-    renderer = axis.figure.canvas.get_renderer()
+    renderer = plots.renderer(axis)
     frame = axis.get_window_extent(renderer)
     line_px = axis.transData.transform((bound_pct, y))[0]
     gap_px = _points(axis, _LINE_GAP_PT)
@@ -346,7 +346,7 @@ def figure_of(levels: list[Level], bound_pct: float, criterion: str = "SC-04") -
     # What a label may not overlap: the bound's label, every dot, and then every
     # label before it.
     reach_px = _points(axis, _DOT_PT / 2)
-    taken = [bound_label.get_window_extent(figure.canvas.get_renderer())]
+    taken = [bound_label.get_window_extent(plots.renderer(axis))]
     taken += [
         Bbox.from_extents(x - reach_px, dot_y - reach_px, x + reach_px, dot_y + reach_px)
         for x, dot_y in (

@@ -187,7 +187,7 @@ def _label_pairs(axis: Axes, pairs: list[tuple[str, float, float, float | None]]
     no free place it is centred, as a name on a line is still better than none.
     The layout has to be final when this runs, because it measures the text.
     """
-    renderer = axis.figure.canvas.get_renderer()
+    renderer = plots.renderer(axis)
     reach = _MARK_REACH_PT * axis.figure.dpi / _POINTS_PER_INCH
     taken = []
     for _, x, low, high in pairs:

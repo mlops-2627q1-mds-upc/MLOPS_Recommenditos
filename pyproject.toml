@@ -151,6 +151,7 @@ test = [
 ]
 # Contributor tooling: formatting and lint, and the git hooks.
 dev = [
+    "mypy>=2.4.0",
     # pre-commit runs its own copy as a hook; this one is for running it by hand.
     "nbstripout",
     # uv does not seed an environment with pip, and nothing in the project calls
@@ -158,6 +159,9 @@ dev = [
     "pip",
     "pre-commit",
     "ruff",
+    "types-pyyaml>=6.0.12.20260906",
+    "types-requests>=2.33.0.20261006",
+    "types-tqdm>=4.70.0.20260906",
 ]
 
 [tool.uv]
@@ -248,3 +252,29 @@ extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL"]
 [tool.ruff.lint.isort]
 known-first-party = ["recommenditos"]
 force-sort-within-sections = true
+
+# EDN-83: mypy in its default mode plus `check_untyped_defs`, no `strict`. It reads
+# the annotations the code already carries and reports a drifted one, a forgotten
+# `None`, a wrong attribute. It cannot see pandas: the package ships no type
+# information and `pandas-stubs` is not installed (known for false positives on
+# everyday indexing, each one an invitation to an `ignore`), so every DataFrame is
+# `Any` to it. Column names and dtypes stay with `recommenditos/schema.py` and the
+# tests. `tests/` is not checked yet. A finding is fixed in the code, not silenced.
+[tool.mypy]
+files = ["recommenditos", "tools"]
+python_version = "3.12"
+check_untyped_defs = true
+# Plugins go here when their package is a runtime dependency. The pydantic plugin
+# is added with the API, in M4: plugins = ["pydantic.mypy"]
+
+# Untyped third-party packages, ignored one by one rather than with a global
+# `ignore_missing_imports`, so that a new untyped import is a visible choice.
+# A package that ships types, or whose stubs are in the `dev` group, is not listed.
+[[tool.mypy.overrides]]
+module = [
+    "dvc.*",
+    "joblib.*",
+    "pandas.*",
+    "sklearn.*",
+]
+ignore_missing_imports = true
