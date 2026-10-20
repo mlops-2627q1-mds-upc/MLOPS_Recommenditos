@@ -285,6 +285,41 @@ jobs:
             reports/requirement-matrix.md
             reports/requirement-matrix.json
 
+  # FR-15: a model is promoted by merging a pull request that changes `dvc.lock`
+  # (EDN-08), and from M5 on every merge to `main` deploys it (NFR-13). The gate
+  # of NFR-01 writes its verdict into the committed `metrics.json`, and this job
+  # fails a pull request that moves `dvc.lock` unless that verdict passes for the
+  # model being promoted (EDN-12, #129). The logic is tools/promotion_gate.py.
+  #
+  # No paths filter, and the job succeeds at once when `dvc.lock` is untouched:
+  # it is a required check, and a required check that a filter skips never
+  # reports, which blocks the merge of every pull request that is not a
+  # promotion. The tool decides itself whether `dvc.lock` changed.
+  #
+  # `HEAD^1` is the base: on a pull_request event the checkout is GitHub's merge
+  # commit of the head into the base, whose first parent is the base tip, so the
+  # diff is exactly what the pull request changes, whatever has reached `main`
+  # since the branch was cut. A push to `main` has no gate to apply.
+  promotion-gate:
+    name: Promotion gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+      - uses: astral-sh/setup-uv@v10.1.0
+        if: github.event_name == 'pull_request'
+        with:
+          python-version: "3.12"
+          # Seconds to install, and the shared cache key is the full
+          # environment's, which this job must not save under.
+          enable-cache: false
+      - name: Check the committed verdict of a promotion
+        if: github.event_name == 'pull_request'
+        run: uv run --no-project --with pyyaml python -m tools.promotion_gate --base HEAD^1
+
   # NFR-15: no secret is committed, in any commit of the history. The gitleaks
   # pre-commit hook stops one in a staged change; this job is the net for what
   # reaches GitHub without that hook - a commit made with `--no-verify`, or by

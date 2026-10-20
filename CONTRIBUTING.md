@@ -151,6 +151,10 @@ It fails when a serving module imports a group's package, when the serving path 
 CI's `Serving runtime` job runs the same target and is a required check, so such a module fails the PR rather than the M5 image build.
 It only matters when you change a dependency or what a serving module imports, but it is cheap enough to run every time.
 
+CI's `Promotion gate` job is a required check on every pull request, and it only has work to do on one that changes `dvc.lock`, the pull request that promotes a model ([EDN-12](reports/edn.md)).
+Such a pull request fails it unless the committed `metrics.json` has `gate_passed: true` and names the model being promoted, `report.candidate_variant` in `params.yaml`, as its `deployable_variant`.
+Run `uv run python -m tools.promotion_gate --base $(git merge-base origin/main HEAD)` to see the verdict before you push; a failing gate means the candidate does not meet the success criteria, and the fix is a better model, not a different file.
+
 ## Requirement traceability
 
 Every `FR-xx` and `NFR-xx` of the [requirements](docs/docs/requirements.md) is either verified by a test or verified by hand, and NFR-07 asks us to prove which.
