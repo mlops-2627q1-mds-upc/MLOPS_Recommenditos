@@ -42,7 +42,7 @@ class RequestIdMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        request_id = uuid.uuid4().hex
+        request_id = str(uuid.uuid4())
         scope.setdefault("state", {})["request_id"] = request_id
 
         async def send_with_id(message: Message) -> None:
@@ -116,7 +116,7 @@ class BodySizeLimitMiddleware:
             refusal = self._refusal(declared)
             if refusal is not None:
                 status, type_, detail = refusal
-                request_id = str(scope.get("state", {}).get("request_id", uuid.uuid4().hex))
+                request_id = str(scope.get("state", {}).get("request_id", uuid.uuid4()))
                 response = problem_response(request_id, ProblemError(status, detail, type_=type_))
                 await response(scope, receive, send)
                 return

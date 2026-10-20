@@ -100,6 +100,16 @@ fixture:
 metrics:
 	uv run dvc metrics show
 
+# The API on the bundle in models/lgbm-basic (after `dvc pull`), or the one
+# RECOMMENDITOS_MODEL_DIR names. Swagger UI at /docs, ReDoc at /redoc.
+API_HOST ?= 127.0.0.1
+API_PORT ?= 8000
+
+## Run the API locally with uvicorn on http://127.0.0.1:8000 (docs at /docs)
+.PHONY: api
+api:
+	uv run uvicorn recommenditos.api.app:create_app --factory --host $(API_HOST) --port $(API_PORT)
+
 ## Lint every notebook with Pynblint, in its own locked environment (tools/pynblint-env)
 .PHONY: notebook-lint
 notebook-lint:

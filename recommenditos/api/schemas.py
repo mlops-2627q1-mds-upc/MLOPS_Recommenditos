@@ -264,7 +264,7 @@ class Valuation(BaseModel):
                 {
                     "price_eur": 21890.0,
                     "model": _MODEL_EXAMPLE,
-                    "request_id": "0b9f3c1e6c0a4b5e9d1f2a3b4c5d6e7f",
+                    "request_id": "0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
                     "warnings": [],
                 }
             ]
