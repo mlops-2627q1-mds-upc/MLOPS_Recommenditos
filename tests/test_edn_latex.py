@@ -407,6 +407,17 @@ def test_a_second_transfer_changes_nothing(workspace):
     assert edn_md.read_text() == notebook_before
 
 
+def test_a_transfer_writes_lf_line_endings_on_every_platform(workspace):
+    edn_md, latex_dir = workspace
+    edn_md.write_text(notebook(entry_md(1), entry_md(2, **{"In LaTeX": None})), "utf-8")
+
+    result = transfer(edn_md, latex_dir)
+
+    assert result.written and result.notebook_changed
+    for path in [*result.written, edn_md]:
+        assert b"\r\n" not in path.read_bytes(), path.name
+
+
 def test_an_edit_rewrites_only_the_entry_it_touches(workspace):
     edn_md, latex_dir = workspace
     edn_md.write_text(notebook(entry_md(1), entry_md(2)), "utf-8")
