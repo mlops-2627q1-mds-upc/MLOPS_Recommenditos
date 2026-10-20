@@ -55,12 +55,12 @@ dependencies = [
     # this list (157 MB of the 421 MB measured for EDN-47), which is worth knowing
     # in M5.
     "pyarrow",
+    # The request and response bodies of the API. FastAPI requires it anyway, but
+    # `recommenditos/api/schemas/` imports it directly, so it is declared.
+    "pydantic>=2.13.5",
     # `recommenditos/config.py` loads `<repo>/.env` when it is imported, and every
     # module imports it. A missing file is not an error, so the image needs the
     # package but no `.env`.
-    # The request and response bodies of the API. FastAPI requires it anyway, but
-    # `recommenditos/api/schemas.py` imports it directly, so it is declared.
-    "pydantic>=2.13.5",
     "python-dotenv",
     # params.yaml, read by every stage and by the tests that check dvc.yaml. Also
     # a runtime dependency because `recommenditos/pipeline.py` imports it, and the
@@ -277,7 +277,9 @@ files = ["recommenditos", "tools"]
 python_version = "3.12"
 check_untyped_defs = true
 # Plugins go here when their package is a runtime dependency. The pydantic plugin
-# is added with the API, in M4: plugins = ["pydantic.mypy"]
+# checks the API's request and response models: a constructor call with a missing
+# or misspelt field, or a field of the wrong type, is a finding.
+plugins = ["pydantic.mypy"]
 
 # Untyped third-party packages, ignored one by one rather than with a global
 # `ignore_missing_imports`, so that a new untyped import is a visible choice.

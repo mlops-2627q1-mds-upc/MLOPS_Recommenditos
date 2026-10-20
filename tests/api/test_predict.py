@@ -1,18 +1,25 @@
 """`POST /v1/predict`: the valuation (FR-06), its inputs (FR-01, FR-03 to FR-05)."""
 
+import ast
 from datetime import UTC, datetime
 import json
 from pathlib import Path
 import shutil
 
 from fastapi.testclient import TestClient
+import numpy as np
+import pandas as pd
+from pydantic import ValidationError
 import pytest
 from tests.api.helpers import assert_problem, pointers
 
 from recommenditos.api import create_app
-from recommenditos.api.schemas import ValuationRequest
+from recommenditos.api.schemas.predict import ValuationRequest
 from recommenditos.api.serving import COUNTRIES, REQUEST_CONTRACT, ServedModel
-from recommenditos.modeling.model import MODEL_FILE, RequestContract
+from recommenditos.data.build_features import weight_kg
+from recommenditos.modeling.model import MODEL_FILE, RequestContract, load_model
+from recommenditos.pipeline import read_frame
+from recommenditos.schema import PROCESSED_SCHEMA
 
 PREDICT = "/v1/predict"
 
@@ -56,14 +63,72 @@ def test_fr06_every_request_gets_its_own_id(client: TestClient, listing: dict):
     assert first != second
 
 
-@pytest.mark.req("FR-06")
-def test_fr06_the_price_is_the_models_own_for_the_same_listing(
-    client: TestClient, listing: dict, served: ServedModel
-):
-    """The route adds nothing to the model's number but the rounding to cents."""
-    price, _ = served.value(ValuationRequest(**listing))
+def _request_body(row: pd.Series) -> dict:
+    """A processed-split row as the `/v1/predict` body a seller would send for it."""
+    body: dict = {}
+    for name, field in ValuationRequest.model_fields.items():
+        value = row.get(name)
+        if name in _EQUIPMENT:
+            body[name] = ast.literal_eval(value)
+        elif value is None or (not isinstance(value, str) and pd.isna(value)):
+            continue
+        elif name == "registration_date":
+            body[name] = value.strftime("%Y-%m")
+        elif name == "weight_kg":
+            body[name] = int(weight_kg(pd.Series([value])).iloc[0])
+        elif field.annotation in (bool,) or isinstance(value, bool | np.bool_):
+            body[name] = bool(value)
+        elif (
+            isinstance(value, float | np.floating) and float(value).is_integer() and name in _INTS
+        ):
+            body[name] = int(value)
+        else:
+            body[name] = value.item() if isinstance(value, np.generic) else value
+    return body
 
-    assert client.post(PREDICT, json=listing).json()["price_eur"] == round(price, 2)
+
+_EQUIPMENT = {
+    "equipment_comfort",
+    "equipment_entertainment",
+    "equipment_extra",
+    "equipment_safety",
+}
+_INTS = {"nr_prev_owners", "gears", "nr_seats", "nr_doors", "cylinders"}
+
+
+@pytest.mark.req("FR-06", "FR-01")
+@pytest.mark.parametrize("variant", ["lgbm-basic", "lgbm-extended"])
+def test_fr06_the_api_prices_a_listing_as_the_pipeline_encodes_it(
+    variant: str, trained: dict, matrices: dict
+):
+    """Rows of the synthetic test split, sent as requests, get the pipeline's own price.
+
+    The oracle is the `features` stage's path: `space.matrix` on the processed
+    row at the request date, then `predict_eur`. The API builds its row from
+    the request instead, so a skew in that translation (a shifted age, a weight
+    in the wrong unit, a lost optional field) changes a price here.
+    """
+    model = load_model(Path(trained["dir"]) / variant)
+    rows = read_frame(Path(matrices["processed"]) / "test.parquet", PROCESSED_SCHEMA)
+    today = datetime.now(UTC).date().isoformat()
+    checked = 0
+    with TestClient(create_app(Path(trained["dir"]) / variant)) as api:
+        for _, row in rows.head(200).iterrows():
+            body = _request_body(row)
+            try:
+                ValuationRequest(**body)
+            except ValidationError:
+                continue  # a row the API refuses, e.g. without a required field
+            response = api.post(PREDICT, json=body)
+            if response.status_code == 422:
+                continue  # an unsupported make or an unseen strict level
+            expected = model.predict_eur(
+                model.space.matrix(row.to_frame().T.astype(rows.dtypes), reference_date=today)
+            )
+            assert response.json()["price_eur"] == round(float(expected.iloc[0]), 2), body
+            checked += 1
+
+    assert checked >= 50
 
 
 # --------------------------------------------------------------------------
@@ -177,6 +242,56 @@ def test_fr03_refuses_an_invalid_value(field: str, value, client: TestClient, li
     problem = assert_problem(client.post(PREDICT, json={**listing, field: value}), 422)
 
     assert pointers(problem) == [f"#/{field}"]
+
+
+def _post(client: TestClient, body: dict):
+    """POST `body` as Python's `json` writes it, `NaN` and `Infinity` included.
+
+    The test client refuses to send them, but a client in another language may,
+    and the server's JSON parser accepts them.
+    """
+    return client.post(
+        PREDICT, content=json.dumps(body), headers={"content-type": "application/json"}
+    )
+
+
+_OUT_OF_BOUNDS = [
+    pytest.param("mileage_km_raw", float("nan"), id="mileage-nan"),
+    pytest.param("power_kw", float("inf"), id="power-infinity"),
+    pytest.param("nr_prev_owners", -3, id="owners-negative"),
+    pytest.param("nr_prev_owners", 21, id="owners-above-20"),
+    pytest.param("gears", 13, id="gears-above-12"),
+    pytest.param("nr_seats", 0, id="seats-0"),
+    pytest.param("nr_doors", -5, id="doors-negative"),
+    pytest.param("nr_doors", 10**29, id="doors-huge"),
+    pytest.param("cylinders", 17, id="cylinders-above-16"),
+    pytest.param("cylinders_volume_cc", -100, id="displacement-negative"),
+    pytest.param("cylinders_volume_cc", float("nan"), id="displacement-nan"),
+    pytest.param("weight_kg", -10, id="weight-negative"),
+    pytest.param("weight_kg", 10_001, id="weight-above-10t"),
+    pytest.param("electric_range_km", float("inf"), id="range-infinity"),
+    pytest.param("electric_range_km", -1, id="range-negative"),
+]
+
+
+@pytest.mark.req("FR-03")
+@pytest.mark.parametrize(("field", "value"), _OUT_OF_BOUNDS)
+def test_fr03_refuses_a_number_a_car_cannot_have(field: str, value, trained: dict, listing: dict):
+    """On `lgbm-extended`, which reads every optional number, weight included."""
+    with TestClient(
+        create_app(Path(trained["dir"]) / "lgbm-extended"), raise_server_exceptions=False
+    ) as extended:
+        problem = assert_problem(_post(extended, {**listing, field: value}), 422)
+
+    assert pointers(problem) == [f"#/{field}"]
+
+
+@pytest.mark.req("FR-03")
+@pytest.mark.parametrize("field", ["mileage_km_raw", "electric_range_km"])
+def test_fr03_a_nan_is_refused_as_not_finite(field: str, client: TestClient, listing: dict):
+    problem = assert_problem(_post(client, {**listing, field: float("nan")}), 422)
+
+    assert "finite" in problem["errors"][0]["detail"]
 
 
 _BOUNDARIES = [

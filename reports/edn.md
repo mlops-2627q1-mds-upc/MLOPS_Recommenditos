@@ -1063,7 +1063,7 @@ How to add an entry:
   - An error envelope of our own: free to shape, but one more format for every client to learn and for us to document, and FastAPI's 422 needs rewriting for it too.
 - **Rationale:** FR-16 requires one shape for validation errors, the scope check, the API key and the body-size limit, so FastAPI's default 422 had to be rewritten whichever shape we chose.
   Only the standard gives a client something it may already parse, which is what the rubric's "easy to adopt by others" asks for.
-  Seven error paths, from a missing field to an unknown route and the 413 of NFR-09, are tested to return the same shape.
+  Every error path, from a missing field to an unknown route, the 413 of NFR-09 and an unexpected failure, is tested to return the same shape.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape.

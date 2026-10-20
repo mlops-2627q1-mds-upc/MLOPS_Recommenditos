@@ -6,7 +6,8 @@ from fastapi import APIRouter
 
 from recommenditos.api.dependencies import RequestId, Served
 from recommenditos.api.errors import pointer, problem_responses, validation_problem
-from recommenditos.api.schemas import FieldWarning, Valuation, ValuationRequest
+from recommenditos.api.schemas.common import FieldWarning
+from recommenditos.api.schemas.predict import Valuation, ValuationRequest
 
 router = APIRouter(tags=["valuation"])
 

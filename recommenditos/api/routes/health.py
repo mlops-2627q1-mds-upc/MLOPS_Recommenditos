@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from recommenditos.api.dependencies import Served
-from recommenditos.api.schemas import Health
+from recommenditos.api.schemas.health import Health
 
 router = APIRouter(tags=["operations"])
 

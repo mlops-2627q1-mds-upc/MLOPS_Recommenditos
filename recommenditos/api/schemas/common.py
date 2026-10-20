@@ -1,4 +1,4 @@
-"""The request and response bodies of the API, and the field types they share.
+"""What every request and response body shares: field types, warnings, errors.
 
 A field is declared once, as an `Annotated` type that carries its JSON type, its
 bounds, its description and an example. A request body then only says which
@@ -13,11 +13,14 @@ the supported makes and the levels of the categoricals come from the bundle at
 startup (FR-03, FR-04, FR-12), so a field like `make` is a plain string here and
 the served model checks it. `create_app` writes those values into the OpenAPI
 document as enums, so `/docs` shows them anyway.
+
+`Problem` and `FieldError` are the error shape every endpoint shares (FR-16,
+EDN-84); `recommenditos/api/errors.py` builds and documents them.
 """
 
 from datetime import UTC, datetime
 import re
-from typing import Annotated, Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
@@ -74,11 +77,23 @@ RegistrationDate = Annotated[
 ]
 MileageKm = Annotated[
     float,
-    Field(ge=0, le=1_000_000, description="Mileage in km, 0 to 1,000,000.", examples=[45000]),
+    Field(
+        ge=0,
+        le=1_000_000,
+        allow_inf_nan=False,
+        description="Mileage in km, 0 to 1,000,000.",
+        examples=[45000],
+    ),
 ]
 PowerKw = Annotated[
     float,
-    Field(ge=1, le=1_200, description="Engine power in kW, 1 to 1,200.", examples=[110]),
+    Field(
+        ge=1,
+        le=1_200,
+        allow_inf_nan=False,
+        description="Engine power in kW, 1 to 1,200.",
+        examples=[110],
+    ),
 ]
 FuelCategory = Annotated[
     str, Field(description="Fuel category, one of the served model's.", examples=["Gasoline"])
@@ -105,7 +120,25 @@ DriveTrain = Annotated[
     str,
     Field(description="Drive train, one of the served model's.", examples=["Front Wheel Drive"]),
 ]
-Count = Annotated[int, Field(description="A count, such as doors or previous owners.")]
+# The optional numbers are bounded by what a passenger car can have, not by the
+# training data, which holds data-entry errors such as 99 previous owners or a
+# 16,000 kg car. A value outside reaches no model: it is a 422 (FR-03).
+PreviousOwners = Annotated[int, Field(ge=0, le=20, description="Previous owners, 0 to 20.")]
+Gears = Annotated[int, Field(ge=0, le=12, description="Gears, 0 to 12 (0 for a single-speed EV).")]
+Seats = Annotated[int, Field(ge=1, le=9, description="Seats, 1 to 9.")]
+Doors = Annotated[int, Field(ge=1, le=7, description="Doors, 1 to 7.")]
+Cylinders = Annotated[int, Field(ge=0, le=16, description="Cylinders, 0 to 16 (0 for an EV).")]
+DisplacementCc = Annotated[
+    float,
+    Field(
+        ge=0, le=10_000, allow_inf_nan=False, description="Engine displacement in cc, 0 to 10,000."
+    ),
+]
+WeightKg = Annotated[int, Field(ge=1, le=10_000, description="Kerb weight in kg, 1 to 10,000.")]
+ElectricRangeKm = Annotated[
+    float,
+    Field(ge=0, le=2_000, allow_inf_nan=False, description="Electric range in km, 0 to 2,000."),
+]
 EquipmentList = Annotated[
     list[str],
     Field(
@@ -146,77 +179,8 @@ class ListingFields(BaseModel):
     )
 
 
-class ValuationRequest(ListingFields):
-    """One listing to value (UC1): the ten fields FR-01 requires, the rest optional.
-
-    The optional fields are the inputs of the basic and the extended feature set.
-    The served model reads the ones its feature set holds and ignores the rest,
-    so a model trained on another set needs no change here (FR-12).
-    """
-
-    make: Make
-    model: ModelName
-    registration_date: RegistrationDate
-    mileage_km_raw: MileageKm
-    power_kw: PowerKw
-    fuel_category: FuelCategory
-    transmission: Transmission
-    country_code: CountryCode
-    body_type: BodyType
-    seller_type: SellerType
-
-    nr_prev_owners: Count | None = None
-    drive_train: DriveTrain | None = None
-    gears: Count | None = None
-    cylinders_volume_cc: Annotated[
-        float | None, Field(description="Engine displacement in cc.")
-    ] = None
-    nr_seats: Count | None = None
-    nr_doors: Count | None = None
-    cylinders: Count | None = None
-    weight_kg: Annotated[int | None, Field(description="Kerb weight in kg.")] = None
-    electric_range_km: Annotated[float | None, Field(description="Electric range in km.")] = None
-    equipment_comfort: EquipmentList = []
-    equipment_entertainment: EquipmentList = []
-    equipment_extra: EquipmentList = []
-    equipment_safety: EquipmentList = []
-    has_full_service_history: Flag = False
-    non_smoking: Flag = False
-    is_rental: Flag = False
-    body_color: Text | None = None
-    paint_type: Text | None = None
-    upholstery: Text | None = None
-    upholstery_color: Text | None = None
-    model_version: Annotated[
-        str | None, Field(description="The listing's free-text version line.")
-    ] = None
-    envir_standard: Text | None = None
-    original_market: Text | None = None
-
-    model_config = ConfigDict(
-        extra="forbid",
-        json_schema_extra={
-            "examples": [
-                {
-                    "make": "Volkswagen",
-                    "model": "Golf",
-                    "registration_date": "2019-06",
-                    "mileage_km_raw": 45000,
-                    "power_kw": 110,
-                    "fuel_category": "Gasoline",
-                    "transmission": "Manual",
-                    "country_code": "DE",
-                    "body_type": "Compact",
-                    "seller_type": "Dealer",
-                    "nr_prev_owners": 1,
-                }
-            ]
-        },
-    )
-
-
 # --------------------------------------------------------------------------
-# Responses
+# Shared parts of responses
 # --------------------------------------------------------------------------
 
 
@@ -238,72 +202,40 @@ class ModelInfo(BaseModel):
     trained_at: str | None = Field(description="When the bundle was trained, ISO 8601.")
 
 
-_MODEL_EXAMPLE: dict[str, Any] = {
+MODEL_EXAMPLE: dict[str, Any] = {
     "variant": "lgbm-basic",
     "version": "2b53bd3487f97475ebf0e6bd268ba0f0",
     "trained_at": "2026-10-13T12:05:02+00:00",
 }
 
 
-class Valuation(BaseModel):
-    """The estimated asking price of one listing (UC1, FR-06)."""
+# --------------------------------------------------------------------------
+# The error shape (RFC 9457)
+# --------------------------------------------------------------------------
 
-    price_eur: float = Field(description="Point estimate of the asking price in EUR.")
-    model: ModelInfo
-    request_id: str = Field(
-        description="Identifies this request; also sent as the `X-Request-ID` header."
-    )
-    warnings: list[FieldWarning] = Field(
-        description="Values the model has not seen and treated as unknown (FR-05). Empty when "
-        "there are none."
-    )
 
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "price_eur": 21890.0,
-                    "model": _MODEL_EXAMPLE,
-                    "request_id": "0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
-                    "warnings": [],
-                }
-            ]
-        }
+class FieldError(BaseModel):
+    """One invalid field of the request body."""
+
+    pointer: str = Field(
+        description="JSON Pointer (RFC 6901) to the field in the request body, as a URI "
+        "fragment: `#/power_kw`. `#` is the body as a whole."
+    )
+    detail: str = Field(description="What is wrong with the value.")
+    allowed: list[str] | None = Field(
+        default=None,
+        description="The values the served model accepts, where the field takes one of a set.",
     )
 
 
-class Health(BaseModel):
-    """Whether the service is up, and which model it serves (FR-11)."""
+class Problem(BaseModel):
+    """An error, as RFC 9457 Problem Details."""
 
-    status: Literal["ok"] = Field(description="`ok` whenever the service answers.")
-    model: ModelInfo
-
-    model_config = ConfigDict(
-        json_schema_extra={"examples": [{"status": "ok", "model": _MODEL_EXAMPLE}]}
-    )
-
-
-class ServiceIndex(BaseModel):
-    """What the service is, which model it serves, and where its documentation is."""
-
-    service: str = Field(description="The name of the service.")
-    api_version: str = Field(description="The version of the API document.")
-    model: ModelInfo
-    docs: str = Field(description="Swagger UI, the interactive API reference.")
-    redoc: str = Field(description="ReDoc, the same reference as a document.")
-    openapi: str = Field(description="The OpenAPI document itself.")
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "service": "Recommenditos used-car price API",
-                    "api_version": "1.0.0",
-                    "model": _MODEL_EXAMPLE,
-                    "docs": "/docs",
-                    "redoc": "/redoc",
-                    "openapi": "/openapi.json",
-                }
-            ]
-        }
+    type: str = Field(description="URI that identifies the kind of problem.")
+    title: str = Field(description="Short summary of the kind of problem.")
+    status: int = Field(description="The HTTP status code.")
+    detail: str = Field(description="What went wrong with this request.")
+    instance: str = Field(description="This occurrence: `urn:uuid:` and the request ID.")
+    errors: list[FieldError] | None = Field(
+        default=None, description="One entry per invalid field, for a 422."
     )

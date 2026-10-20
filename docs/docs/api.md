@@ -81,6 +81,7 @@ Status 422.
 The request body is not valid JSON, misses a required field, has a value of the wrong type or outside its range (FR-03), or names a value the served model does not accept, such as an unsupported make (FR-04).
 `errors` has one entry per invalid field, every invalid field of the request in one response.
 `pointer` is a JSON Pointer ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)) into the request body, written as a URI fragment; `#` alone means the body as a whole.
+No endpoint takes query or path parameters yet; the first one that does decides how its errors name them, and documents it here.
 `allowed` lists the accepted values where the field takes one of a set.
 
 ### payload-too-large
@@ -100,7 +101,8 @@ The code is in `recommenditos/api/`:
 |--------|---------------|
 | `app.py` | `create_app`: loads the bundle, wires middlewares and error handlers, mounts the routers, finishes the OpenAPI document |
 | `routes/` | One module per route group, each with a `router` |
-| `schemas.py` | The request and response bodies, and the field types they share |
+| `schemas/common.py` | What every body shares: the field types, `ListingFields`, the model description, warnings and the error shape |
+| `schemas/<group>.py` | The request and response bodies of one route group, named after its module in `routes/` |
 | `errors.py` | The problem shape, the handlers, and `problem_responses` for a route's documentation |
 | `serving.py` | `ServedModel`: the loaded bundle, what it accepts, and the valuation |
 | `dependencies.py` | `Served` and `RequestId`, which a route takes as parameters |
@@ -108,8 +110,9 @@ The code is in `recommenditos/api/`:
 
 1. Add `routes/<group>.py` with `router = APIRouter(tags=[...])` and its operations.
    Take `served: Served` for the model and `request_id: RequestId` for the request ID.
-2. Add its router to `V1_ROUTERS` in `routes/__init__.py` if it is part of the client contract, or to `OPERATIONAL_ROUTERS` if it is for operating the service, in alphabetical order, one per line.
-3. Build the request body from the field types in `schemas.py`.
+2. In `routes/__init__.py`, add the module to the import and its router to `V1_ROUTERS` if it is part of the client contract, or to `OPERATIONAL_ROUTERS` if it is for operating the service.
+   Both are one entry per line with a trailing comma, in alphabetical order, so that endpoints added in parallel touch different lines.
+3. Put its bodies in `schemas/<group>.py`, built from the field types in `schemas/common.py`.
    A body that describes a listing derives from `ListingFields`, which makes the error handler run the served model's checks on it, so its 422 lists every invalid field like `/predict`'s.
    Give every request and response body an `examples` entry in its `model_config`.
 4. Raise `ProblemError`, or `validation_problem([...])` for a 422, for an error; list `problem_responses(...)` with the statuses it can return in the decorator.

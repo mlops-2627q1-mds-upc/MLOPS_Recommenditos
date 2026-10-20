@@ -21,14 +21,14 @@ from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 from loguru import logger
 
-from recommenditos.api.errors import PROBLEM_MEDIA_TYPE, FieldError, install_handlers
+from recommenditos.api.errors import PROBLEM_MEDIA_TYPE, install_handlers
 from recommenditos.api.middleware import (
     BodySizeLimitMiddleware,
     RequestIdMiddleware,
     UnexpectedErrorMiddleware,
 )
 from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
-from recommenditos.api.schemas import ListingFields
+from recommenditos.api.schemas.common import FieldError, ListingFields
 from recommenditos.api.serving import ServedModel
 from recommenditos.config import MODELS_DIR
 
@@ -173,7 +173,7 @@ def _allowed_values_as_enums(document: dict[str, Any], served: ServedModel) -> N
 
 
 def _subclasses(cls: type) -> set[type]:
-    found = set(cls.__subclasses__())
+    found: set[type] = set(cls.__subclasses__())
     for sub in list(found):
         found |= _subclasses(sub)
     return found

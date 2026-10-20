@@ -19,8 +19,9 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from recommenditos.api.schemas.common import FieldError, Problem
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 
@@ -34,31 +35,12 @@ PAYLOAD_TOO_LARGE = f"{_TYPES_DOC}#payload-too-large"
 BLANK = "about:blank"
 
 
-class FieldError(BaseModel):
-    """One invalid field of the request body."""
-
-    pointer: str = Field(
-        description="JSON Pointer (RFC 6901) to the field in the request body, as a URI "
-        "fragment: `#/power_kw`. `#` is the body as a whole."
-    )
-    detail: str = Field(description="What is wrong with the value.")
-    allowed: list[str] | None = Field(
-        default=None,
-        description="The values the served model accepts, where the field takes one of a set.",
-    )
-
-
-class Problem(BaseModel):
-    """An error, as RFC 9457 Problem Details."""
-
-    type: str = Field(description="URI that identifies the kind of problem.")
-    title: str = Field(description="Short summary of the kind of problem.")
-    status: int = Field(description="The HTTP status code.")
-    detail: str = Field(description="What went wrong with this request.")
-    instance: str = Field(description="This occurrence: `urn:uuid:` and the request ID.")
-    errors: list[FieldError] | None = Field(
-        default=None, description="One entry per invalid field, for a 422."
-    )
+#: Status phrases that RFC 9110 renamed and Python 3.12's `http.HTTPStatus` still
+#: spells the old way.
+_RFC9110_TITLES: dict[int, str] = {
+    HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "Content Too Large",
+    HTTPStatus.UNPROCESSABLE_ENTITY: "Unprocessable Content",
+}
 
 
 class ProblemError(Exception):
@@ -77,7 +59,7 @@ class ProblemError(Exception):
         self.status = status
         self.detail = detail
         self.type = type_
-        self.title = title or HTTPStatus(status).phrase
+        self.title = title or _RFC9110_TITLES.get(status, HTTPStatus(status).phrase)
         self.errors = list(errors)
 
 
@@ -147,6 +129,9 @@ def field_errors(raw: Sequence[Mapping[str, Any]]) -> list[FieldError]:
     """
     by_field: dict[str, FieldError] = {}
     for error in raw:
+        # Every endpoint takes a JSON body and no query or path parameters, so a
+        # location is below `body`; the first endpoint with parameters decides how
+        # its errors name them.
         location = list(error.get("loc", ()))
         if location and location[0] == "body":
             location = location[1:]
@@ -248,14 +233,14 @@ _EXAMPLES: dict[int, dict[str, Any]] = {
     },
     HTTPStatus.REQUEST_ENTITY_TOO_LARGE: {
         "type": PAYLOAD_TOO_LARGE,
-        "title": "Request Entity Too Large",
+        "title": "Content Too Large",
         "status": 413,
         "detail": too_large_detail(10240),
         "instance": "urn:uuid:0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
     },
 }
 
-_DESCRIPTIONS = {
+_DESCRIPTIONS: dict[int, str] = {
     HTTPStatus.UNPROCESSABLE_ENTITY: "The request is invalid; `errors` lists every invalid field.",
     HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "The body is larger than 10 KB (NFR-09).",
 }

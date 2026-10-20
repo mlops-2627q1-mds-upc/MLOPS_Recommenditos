@@ -23,8 +23,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from recommenditos.api.errors import FieldError, pointer
-from recommenditos.api.schemas import ListingFields, ModelInfo, ValuationRequest
+from recommenditos.api.errors import pointer
+from recommenditos.api.schemas.common import FieldError, ListingFields, ModelInfo
+from recommenditos.api.schemas.predict import ValuationRequest
 from recommenditos.data.build_features import build_matrix
 from recommenditos.modeling.model import (
     Model,
@@ -93,6 +94,13 @@ class ServedModel:
     def load(cls, directory: Path) -> "ServedModel":
         model = load_model(directory)
         fields = input_field_columns(model, REQUEST_CONTRACT)
+        undefined = sorted(set(fields) - set(ValuationRequest.model_fields))
+        if undefined:
+            raise ServingError(
+                f"{model.variant!r} reads the input field(s) {', '.join(undefined)}, which the "
+                "request body does not define, so no request could ever supply them. Add them "
+                "to `ValuationRequest` before serving this bundle."
+            )
         levels = model.input_schema.levels
         allowed = {
             name: tuple(levels[name])

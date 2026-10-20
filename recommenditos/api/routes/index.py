@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request
 
 from recommenditos.api.dependencies import Served
-from recommenditos.api.schemas import ServiceIndex
+from recommenditos.api.schemas.index import ServiceIndex
 
 router = APIRouter(tags=["operations"])
 
