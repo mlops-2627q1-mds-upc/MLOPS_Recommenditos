@@ -163,7 +163,7 @@ They are trained on the listings plus one copy of each with every field but `mak
 The calibration split gets the same copies, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
 MAPIE runs in training only; the bundle stores the boosters and the two conformity offsets, and serving adds them up.
 Measured on the test split, the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes, and its mean width is 0.46 times the median for a full input and 0.93 times for P1.
-Where the typical price of a partial request comes from is open: `lgbm-basic` has never seen a required field missing, and on a make-only request its MdAPE is 98.5 % against 40.1 % for the 50 % quantile model (calibration split, `reports/analysis/price_range_point_estimate_results.txt`).
+The typical price of a request missing an FR-01 required field comes from the 50 % quantile model, because `lgbm-basic` has never seen a required field missing: on a make-only request its MdAPE is 98.5 % against 40.1 % for the 50 % model (FR-07, EDN-85) (calibration split, `reports/analysis/price_range_point_estimate_results.txt`).
 
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
 

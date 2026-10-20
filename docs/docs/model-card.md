@@ -601,7 +601,7 @@ The guarantee is marginal over the mix of complete and partial requests the cali
 The variants without a price range report SC-05 as `not_measured`, which blocks the gate for them rather than passing it (NFR-01).
 
 The point-estimate half of the partial-input scenario P1 is reported beside the SC-06 sweep: the candidate goes from 6.73 % MdAPE to 16.23 % (2.4x) when only `make`, `model`, `registration_date` and `mileage_km_raw` are given, `lgbm-extended` to 19.02 % (3.0x) and `b1` to 2.5x its full-input value, while `b0` is unchanged because it reads only three columns. A point estimate that is typically 16 % off is not something to serve as a number, which is exactly what UC2's interval answers instead.
-Which typical price `/price-range` reports beside the range is open: FR-07 names the point model, which has never seen a required field missing, and on the calibration split its MdAPE on a make-only request is 98.5 % against 40.1 % for the 50 % quantile model, while on a full request it is 0.21 pp better than that model (`reports/analysis/price_range_point_estimate_results.txt`). P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
+The typical price `/price-range` reports beside the range is the point model's when the request carries every field FR-01 requires, and the 50 % quantile model's otherwise (FR-07, EDN-85): the point model has never seen a required field missing, and on the calibration split its MdAPE on a make-only request is 98.5 % against 40.1 % for the 50 % model, while on a full request it is 0.21 pp better than that model (`reports/analysis/price_range_point_estimate_results.txt`). P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
 
 #### The per-segment breakdown, and the fairness reading
 
@@ -846,7 +846,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-62: `lgbm-basic` is the candidate model.
 - EDN-73: hyperparameters change only under a written tuning protocol.
 - EDN-82: `lgbm-basic` is trained on blanked copies of its listings.
-- EDN-85: serving adds the stored conformity offsets to the quantile models, without MAPIE.
+- EDN-85: serving adds the stored conformity offsets to the quantile models, without MAPIE, and a partial price-range request takes its typical price from their median.
 
 ## Model Card Authors
 

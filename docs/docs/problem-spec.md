@@ -212,4 +212,4 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-62: `lgbm-basic` is the candidate model.
 - EDN-73: hyperparameters change only under a written tuning protocol.
 - EDN-82: `lgbm-basic` is trained on blanked copies of its listings.
-- EDN-85: serving adds the stored conformity offsets to the quantile models, without MAPIE.
+- EDN-85: serving adds the stored conformity offsets to the quantile models, without MAPIE, and a partial price-range request takes its typical price from their median.
