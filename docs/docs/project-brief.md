@@ -187,7 +187,7 @@ SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps th
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
 The exact window is defined in the [specification](specification.md) FR-09.
 
-Explainability: SHAP (TreeExplainer) per prediction and globally.
+Explainability: TreeSHAP per prediction, from the booster's own export and summed per request field (FR-08), and globally with the `shap` package offline.
 
 Why gradient boosting: best-in-class on medium tabular data, native categoricals and missing values, trains in minutes on CPU, small artefacts, exact SHAP.
 Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical Bayes, LLM zero-shot.
@@ -240,6 +240,8 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
   It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
+  For a LightGBM booster `shap.TreeExplainer` calls that same export, and its own tree parser cannot read LightGBM's categorical splits, so the identity is by construction; `tests/test_model.py` also checks that each row's values add up to the model's log price.
+  `shap` sits in the `pipeline` group, which the test suite installs.
 - **Great Expectations 1.23.2** works on our pandas-3 frames for every expectation the suites use, each checked against a frame that satisfies it and one that breaks it ([EDN-68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/gx_probe.py`).
   Two gaps: it compares only a column's scalar type, so it cannot tell a nullable, extension or `object` dtype from its counterpart (`datetime64[us]` passes `datetime64[ns]`, `boolean` passes `bool`, `Float64` passes `float64`, `object` and `string[python]` pass `str`), and `schema.py` alone checks the declared dtype; and it cannot bound a text date, so the raw suite sees `registration_date` parsed.
   It is a pipeline dependency, not part of the API image.

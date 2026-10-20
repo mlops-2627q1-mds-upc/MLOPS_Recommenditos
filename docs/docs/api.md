@@ -16,7 +16,7 @@ make api                   # uvicorn on http://127.0.0.1:8000
 `make api` serves `models/lgbm-basic`.
 `RECOMMENDITOS_MODEL_DIR=models/lgbm-extended make api` serves another bundle, and `make api API_PORT=8080` another port.
 The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
-A bundle the API cannot serve, for example one that consumes no column for a field FR-01 requires, stops the service at startup instead of failing on the first request.
+A bundle the API cannot serve stops the service at startup instead of failing on the first request: one that consumes no column for a field FR-01 requires, and one without a SHAP export to explain a valuation with (FR-08), which today means every bundle but a LightGBM one (`b0` and `b1` are refused).
 
 `make api` runs `python -m recommenditos.api`, which passes its options on to uvicorn: `python -m recommenditos.api --workers 2`, or `WEB_CONCURRENCY=2 make api`, starts two worker processes.
 With more than one worker, set `PROMETHEUS_MULTIPROC_DIR` too (see [Metrics](#metrics)); the image does.
@@ -40,7 +40,7 @@ The operational endpoints are not part of that contract and stay at the root, wh
 
 | Endpoint | Purpose | Requirements |
 |----------|---------|--------------|
-| `POST /v1/predict` | The point estimate of the asking price in EUR, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06 |
+| `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08 |
 | `GET /health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
 | `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
@@ -54,6 +54,52 @@ The values a categorical field accepts come from the loaded bundle, not from the
 `/docs` lists them as enums, and a 422 for such a field lists them in `allowed`.
 `country_code` accepts the 8 countries of the data.
 A country or a `model` the training data does not hold, `ES` today, is answered and reported in `warnings` (FR-05).
+
+### The explanation
+
+`/v1/predict` explains every estimate, so that it can be checked instead of believed (FR-08):
+
+```json
+"explanation": {
+  "base_price_eur": 38389.96,
+  "top_features": [
+    {"field": "power_kw", "effect_pct": -35.2608},
+    {"field": "model", "effect_pct": -23.3608},
+    {"field": "make", "effect_pct": -17.9598},
+    {"field": "mileage_km_raw", "effect_pct": 14.5807},
+    {"field": "registration_date", "effect_pct": -6.2635}
+  ],
+  "other_features_effect_pct": -12.7763
+}
+```
+
+`base_price_eur` is where every estimate starts, the model's average log price over its training listings as a price.
+Each effect is a percentage change of the price: `-35.26` for `power_kw` means this car's power lowers the estimate by 35 %.
+The effects multiply, because the model predicts the log of the price: the base price times `1 + effect / 100` over the five listed fields and `other_features_effect_pct` gives `price_eur`, 14,639.20 EUR for the example request of `/docs`.
+
+The values are SHAP values from the booster's own export, LightGBM's `predict(pred_contrib=True)`, and not from the `shap` package, which stays out of the API image ([EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+A SHAP value φ in log price is reported as `exp(φ) - 1`, in percent.
+
+An effect belongs to a request field, named as the request body names it, because that is what a client can look up and change.
+The model reads matrix columns, and a field becomes one or more of them; the field's effect is the sum of its columns' SHAP values, which SHAP's additivity allows:
+
+| Request field | Model columns |
+|---------------|---------------|
+| `registration_date` | `age_years`, the age at the request date |
+| `equipment_comfort`, `equipment_entertainment`, `equipment_extra`, `equipment_safety` | one column per item the training data kept, so the whole list counts as one effect (extended set only) |
+| every other field | the column of the same name |
+
+`top_features` lists the five fields with the largest effect, whether it raises or lowers the price, largest first; two equal effects keep the order of the request body.
+A field the client left out has an effect too, the effect of the model not knowing it.
+`other_features_effect_pct` combines every other field the model reads, and is 0 when the model reads five fields or fewer, in which case `top_features` lists them all.
+The base price is rounded to the cent like `price_eur`; the effects are not rounded, so that the product reproduces the estimate to the cent.
+
+When the model's estimate lies outside the price range of its training data, `price_eur` is that range's bound and `warnings` says so with the pointer `#`; the explanation then gives the estimate before the bound.
+No listing of the data reaches the bound with `lgbm-basic`.
+
+Computing the explanation costs about 35 ms of the request, measured in-process on a development laptop over 394 requests built from test listings (p50 34 ms, p95 49 ms; the whole request p50 63 ms, p95 93 ms), which is inside NFR-02's 200 ms for `/predict`.
+
+### Model version and request ID
 
 The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
 Every response carries an `X-Request-ID` header; `/predict` repeats it as `request_id`, and a problem names it in `instance`.
