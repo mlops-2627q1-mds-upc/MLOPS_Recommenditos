@@ -34,6 +34,7 @@ What each part guarantees:
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
+  It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers, and `/metrics` adds up their figures ([API docs](api.md#metrics)).
 - **Compose** publishes only the proxy's port.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   A hung API, one whose process lives on but stops answering, is only marked unhealthy: Docker's restart policy acts when the process exits, so in M4 nothing restarts it automatically; doing so is an M5 item ([What M5 adds](#what-m5-adds)).

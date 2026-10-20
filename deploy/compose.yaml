@@ -20,6 +20,14 @@ services:
     # from a sibling service such as the replay job (FR-10, EDN-13).
     expose:
       - "8000"
+    # The workers' metric files (PROMETHEUS_MULTIPROC_DIR in the image), in memory
+    # rather than on the container's writable layer. Prometheus scrapes
+    # api:8000/metrics from inside this network; nginx refuses the path.
+    # Owned by the service user explicitly: without the options, Docker remounts
+    # it as root's 0755 when the container restarts, and the API then cannot
+    # start again after a crash.
+    tmpfs:
+      - /tmp/prometheus:uid=10001,gid=10001,mode=0700
     restart: unless-stopped
     # The test is the image's HEALTHCHECK (urllib against /health). Probed every
     # second while the API starts, so nginx and `--wait` see it healthy as soon as

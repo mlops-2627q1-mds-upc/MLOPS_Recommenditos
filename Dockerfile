@@ -61,9 +61,14 @@ RUN groupadd --system --gid 10001 api \
 COPY --from=builder /app/.venv /app/.venv
 COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 
+# PROMETHEUS_MULTIPROC_DIR: where every uvicorn worker writes its metrics, so
+# that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
+# Under /tmp, the one place the service user may write; Compose mounts a tmpfs
+# there, and the launcher creates the directory if nothing is mounted.
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
-    RECOMMENDITOS_MODEL_DIR=/app/models/${MODEL_VARIANT}
+    RECOMMENDITOS_MODEL_DIR=/app/models/${MODEL_VARIANT} \
+    PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
 
 WORKDIR /app
 # Numeric, so that a runtime can check it is not root without reading /etc/passwd.
@@ -75,4 +80,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --start-interval=1s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
 
-CMD ["uvicorn", "recommenditos.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# The launcher empties PROMETHEUS_MULTIPROC_DIR, then starts uvicorn with the app
+# factory; WEB_CONCURRENCY sets the number of workers (one by default).
+CMD ["python", "-m", "recommenditos.api", "--host", "0.0.0.0", "--port", "8000"]

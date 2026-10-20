@@ -177,6 +177,17 @@ def test_fr11_the_multiprocess_directory_is_emptied_of_metric_files_only(
 
 
 @pytest.mark.req("FR-11")
+def test_fr11_an_unwritable_multiprocess_directory_stops_the_service_with_its_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv(MULTIPROC_DIR_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr("os.access", lambda *_args: False)
+
+    with pytest.raises(PermissionError, match=MULTIPROC_DIR_ENV_VAR):
+        prepare_multiprocess_dir()
+
+
+@pytest.mark.req("FR-11")
 def test_fr11_without_the_variable_nothing_is_prepared(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv(MULTIPROC_DIR_ENV_VAR, raising=False)
 

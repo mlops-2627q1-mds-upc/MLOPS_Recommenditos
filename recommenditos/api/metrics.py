@@ -100,11 +100,16 @@ def prepare_multiprocess_dir() -> Path | None:
     the counts of its previous run to the new ones. Only prometheus_client's
     `*.db` files are deleted: a variable pointed at the wrong directory loses
     nothing else.
+
+    A directory the service cannot write to stops it here, with its name,
+    rather than failing every worker at startup.
     """
     directory = multiprocess_dir()
     if directory is None:
         return None
     directory.mkdir(parents=True, exist_ok=True)
+    if not os.access(directory, os.W_OK | os.X_OK):
+        raise PermissionError(f"{MULTIPROC_DIR_ENV_VAR}={directory} is not writable by this user")
     for path in directory.glob("*.db"):
         path.unlink()
     return directory
