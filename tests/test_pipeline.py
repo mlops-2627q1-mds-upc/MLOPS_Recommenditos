@@ -747,3 +747,39 @@ def _lookup(params: dict, dotted: str):
             return _MISSING
         current = current[part]
     return current
+
+
+def test_a_failed_mlflow_append_leaves_every_result_file_from_this_run(
+    pipeline, params, tmp_path, monkeypatch
+):
+    metrics_dir, summary_path = tmp_path / "metrics", tmp_path / "metrics.json"
+    metrics_dir.mkdir()
+    files = [
+        *(metrics_dir / f"{v}.json" for v in params["train"]["variants"]),
+        metrics_dir / evaluate.SEGMENTS_FILE,
+        metrics_dir / evaluate.MASKED_INPUTS_FILE,
+        summary_path,
+    ]
+    for file in files:
+        file.write_text("previous run", encoding="utf-8")
+
+    appended = []
+
+    def fail_on_the_second(record):
+        appended.append(record["variant"])
+        if len(appended) == 2:
+            raise ConnectionError("DagsHub is unreachable")
+
+    monkeypatch.setattr(evaluate, "_append_to_the_training_run", fail_on_the_second)
+
+    with pytest.raises(ConnectionError):
+        evaluate.main(
+            pipeline["features"],
+            pipeline["models"],
+            metrics_dir,
+            summary_path,
+            params_override(tmp_path, params, download={"source": download_raw_dataset.SYNTHETIC}),
+        )
+
+    assert len(appended) == 2
+    assert [f for f in files if f.read_text(encoding="utf-8") == "previous run"] == []
