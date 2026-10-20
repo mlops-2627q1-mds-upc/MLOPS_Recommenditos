@@ -907,23 +907,25 @@ How to add an entry:
 - **Activity / Topic:** Hyperparameter Tuning, Evaluation Protocol
 - **Participants:** @lukas2510; @kadameit decided the search over both variants (2026-10-06) and the correction (2026-10-20)
 - **Decision:** `learning_rate` 0.05, `num_leaves` 63, `min_child_samples` 20, and `reg_lambda` 0 stay, because no search found a point measurably better on the validation split.
-  A committed value is replaced only under the protocol in the pipeline docs: selection on the validation split by L1, when a point's simultaneous interval of the difference lies below zero, at level 1 - 0.05/k for k sweeps decided on that split.
+  A value changes only under the pipeline docs' protocol: selection on the validation split by L1, when a point's simultaneous interval lies below zero at level 1 - 0.05/k, for k sweeps on that split.
   `n_estimators` is a ceiling of 5,000 with early stopping after 50 rounds.
   `tune.py` searches outside `dvc repro`, recorded in MLflow only.
+  NFR-10's 15 minutes cover the final fit, and a search's energy is reported apart.
 - **Alternatives considered:**
   - Adopt the point with the lowest validation L1: its gain lies inside the noise.
-  - Optuna or seller-grouped cross-validation: about five times the fits and new code, for a region found flat.
-  - No correction across sweeps: with k sweeps, a lucky point is adopted in up to k times 5 % of cases.
-- **Rationale:** In no sweep does an interval of the difference lie below zero.
-  At 5,000 the validation curve, not the ceiling, decides the tree count.
-  The validation split is unchanged since 2026-10-01 and held seven sweeps before issue #117, so its two `reg_lambda` sweeps decided at k = 9: the best point differs by -0.00001 and +0.00014 in L1, against half-widths of 0.0009 and 0.0010.
+  - Optuna or seller-grouped cross-validation: about five times the fits, for a region found flat.
+  - No correction across sweeps: k sweeps adopt a lucky point in up to k times 5 % of cases.
+- **Rationale:** No sweep's interval lies below zero.
+  At 5,000, early stopping ends every fit.
+  The split, unchanged since 2026-10-01, held seven sweeps before issue #117, so its two `reg_lambda` sweeps decided at k = 9: best points -0.00001 and +0.00014 in L1, half-widths 0.0009 and 0.0010.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI designed the sweeps and stopped before each decision.
-  An independent AI review replaced a per-point interval, unsafe across eleven comparisons, with the simultaneous one.
-  AI counted k from MLflow and `dvc.lock`; Kevin chose Bonferroni over grouped cross-validation.
+  An AI review replaced a per-point interval, unsafe across eleven comparisons, with the simultaneous one.
+  Kevin had AI check the course demo, which keeps emissions in MLflow only, and chose that.
+  AI counted k from MLflow and `dvc.lock`, and Kevin chose Bonferroni over grouped cross-validation.
 - **AI interaction evidence:** Claude Code sessions on issues #64, #88, and #117.
-- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), MLflow sweeps `117-lgbm-basic-reg-lambda` and `117-lgbm-extended-reg-lambda`, [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), [issue #117](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117).
+- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), MLflow sweeps `117-*-reg-lambda`, [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), [issue #117](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117).
 - **In LaTeX:** yes
 
 ### EDN-75: The test suite also runs on Windows in CI

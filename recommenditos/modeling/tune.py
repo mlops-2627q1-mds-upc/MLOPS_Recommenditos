@@ -148,8 +148,8 @@ EMISSIONS_FILE = "emissions.csv"
 #: so the curve decides every point rather than the budget.
 SEARCH_CEILING = 20_000
 
-#: Bootstrap draws, and the joint coverage of the simultaneous intervals. At
-#: 2,000 draws the 95th percentile of the max statistic has 100 draws beyond it.
+#: Bootstrap draws, and the joint coverage of one sweep alone. At a family level
+#: of 1 - 0.05/k the max statistic's percentile has 100/k of the 2,000 draws beyond it.
 BOOTSTRAP_DRAWS = 2_000
 CONFIDENCE = 0.95
 
@@ -959,8 +959,8 @@ def main(  # noqa: PLR0913, PLR0917 (typer reads each command line option as a p
         int,
         typer.Option(
             min=1,
-            help="sweeps decided on this validation split so far, this one included; "
-            "the family level is Bonferroni-corrected across them",
+            help="sweeps decided on this validation split so far, this one included, "
+            "across which the family level is Bonferroni-corrected",
         ),
     ] = 1,
 ):

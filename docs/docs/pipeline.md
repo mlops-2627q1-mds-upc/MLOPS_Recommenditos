@@ -291,7 +291,7 @@ And these rules:
 - **The metric is `validation_l1_log_price`**, which `train` logs to MLflow and writes into `model.json`.
   It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot. Validation MdAPE is reported beside it and decides nothing.
 - **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** A point is adopted only when its simultaneous interval of the validation L1 difference lies entirely below zero, and when several do, the one with the lowest validation L1.
-  The interval is at the sweep's family level, 1 - 0.05/k, which `--sweeps-on-split k` sets; its default of 1 keeps the 95 % the sweeps before issue #117 used.
+  The interval is at the sweep's family level, 1 - 0.05/k, which `--sweeps-on-split k` sets. Its default of 1 keeps the 95 % the sweeps before issue #117 used.
   On this validation split that resolves a difference of about 1 % and nothing smaller: in the four sweeps of issue #88 the simultaneous half-widths ran from 0.0008 to 0.0015, which is 0.8 % to 1.6 % of the reference's validation L1 (0.100 for `lgbm-basic`, 0.097 for `lgbm-extended`), and the best point of any sweep was 0.4 % better.
 - **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-73); a point the ceiling still ended is flagged and never adopted.
   The search's validation figures are optimistic, because early stopping picks each point's tree count on the same validation rows that score it.
@@ -340,9 +340,10 @@ uv run python -m recommenditos.modeling.tune lgbm-basic   --grid reg_lambda=0,1,
 uv run python -m recommenditos.modeling.tune lgbm-extended   --grid reg_lambda=0,1,10,100 --sweeps-on-split 9 --sweep 117-lgbm-extended-reg-lambda
 ```
 
-The seven earlier sweeps decided at 95 %, but all kept their reference, and a stricter level can only turn an adoption into a keep, so at k = 9 their verdicts are the same and the nine sweeps hold the 5 % together.
-Both kept 0 on 2026-10-20, so `params.yaml` and `dvc.lock` are unchanged; the verdicts are in the [model card](model-card.md#hyperparameters-as-trained).
-A sweep after them uses k = 10, and so on; should an earlier sweep have adopted a point, it would be rechecked at the new k.
+Six of the seven earlier sweeps were interval sweeps at 95 %, and all six kept their reference. A stricter level can only turn an adoption into a keep, so at k = 9 their verdicts are the same, and the eight interval sweeps on this split hold the 5 % together.
+`116-blanked-fields` was a measurement under its own rule (EDN-82), not an interval sweep, and is counted in k to be conservative.
+Both kept 0 on 2026-10-20, so `params.yaml` and `dvc.lock` are unchanged, and the verdicts are in the [model card](model-card.md#hyperparameters-as-trained).
+A sweep after them uses k = 10, and so on. Should an earlier sweep have adopted a point, it would be rechecked at the new k.
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:
 
