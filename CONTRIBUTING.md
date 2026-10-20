@@ -49,8 +49,7 @@ With Go 1.21 or newer, run `GOTOOLCHAIN=auto uv run pre-commit install-hooks` on
 
 `pyproject.toml` splits the dependencies in two, because the API image is built from one half only and NFR-04 caps that image at 1 GB ([EDN-47](reports/edn.md)):
 
-- `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing.
-  FastAPI, uvicorn and pydantic join it with the API in M4.
+- `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing, and the API around it (FastAPI, uvicorn, pydantic).
 - `[dependency-groups]` is everything else, by who needs it: `pipeline` (the DVC stages and experiment tracking, so also data validation and energy measurement), `notebook`, `docs`, `test` and `dev`.
 
 `[tool.uv] default-groups = "all"` is why a plain `uv sync` and `uv run` still install both halves.
@@ -75,6 +74,7 @@ These are the modules held to the runtime, all under `recommenditos/`, because t
 | `data/build_features.py`, `data/split_data.py`, `pipeline.py`, `schema.py`, `config.py` | What `model.py` imports |
 | `data/preprocess.py` | The API is to reuse its request-side functions, such as `hash_seller_group` |
 | `data/synthetic.py` | The check builds its bundles from this fixture |
+| `api/` | The API the image runs; the check sends it a valuation |
 
 `modeling/evaluate.py` is not one of them: it imports MLflow through `tracking.py`.
 So `point_metrics`, which [the pipeline docs](docs/docs/pipeline.md) list among the functions the API will import, has to move to one of the modules above before serving code can use it.

@@ -1052,7 +1052,24 @@ How to add an entry:
 - **Other evidence:** [Issue #133](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133), [PR #149](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/149), [`[tool.mypy]`](../pyproject.toml).
 - **In LaTeX:** yes
 
-### EDN-84: The API's error shape (#135)
+### EDN-84: Every API error is an RFC 9457 Problem Details object
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** API Design
+- **Participants:** @lukas2510 decided ([issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135))
+- **Decision:** Every error response of the API is `application/problem+json` as RFC 9457 defines it: `type`, `title`, `status`, `detail`, `instance`, and for a 422 an `errors` list with one entry per invalid field, holding a JSON Pointer, a message and, for a field with a fixed set of values, the accepted ones.
+- **Alternatives considered:**
+  - An error envelope of our own: free to shape, but one more format for every client to learn and for us to document, and FastAPI's 422 needs rewriting for it too.
+- **Rationale:** FR-16 requires one shape for validation errors, the scope check, the API key and the body-size limit, so FastAPI's default 422 had to be rewritten whichever shape we chose.
+  Only the standard gives a client something it may already parse, which is what the rubric's "easy to adopt by others" asks for.
+  Every error path, from a missing field to an unknown route, the 413 of NFR-09 and an unexpected failure, is tested to return the same shape.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
+- **Other evidence:** [Issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135), [PR #151](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151), [API docs](../docs/docs/api.md), [`errors.py`](../recommenditos/api/errors.py), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457).
+- **In LaTeX:** yes
 
 ### EDN-85: How serving applies the interval calibration (#137)
 
