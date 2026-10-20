@@ -921,11 +921,12 @@ How to add an entry:
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI designed the sweeps and stopped before each decision.
-  An AI review replaced a per-point interval, unsafe across eleven comparisons, with the simultaneous one.
-  Kevin had AI check the course demo, which keeps emissions in MLflow only, and chose that.
+  An independent AI review replaced a per-point interval, unsafe across eleven comparisons, with the simultaneous one.
+  AI recommended committing sweep records beside MLflow.
+  Kevin had it check the course demo, which keeps them in MLflow only, and chose that.
   AI counted k from MLflow and `dvc.lock`, and Kevin chose Bonferroni over grouped cross-validation.
-- **AI interaction evidence:** Claude Code sessions on issues #64, #88, and #117.
-- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), MLflow sweeps `117-*-reg-lambda`, [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), [issue #117](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117).
+- **AI interaction evidence:** Claude Code sessions on #64, #88, and #117.
+- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), [issue #117](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117).
 - **In LaTeX:** yes
 
 ### EDN-75: The test suite also runs on Windows in CI
