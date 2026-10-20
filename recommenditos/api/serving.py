@@ -264,8 +264,8 @@ def explain(
     size of their contribution, ties in the order of `fields`, and each one is
     reported as its multiplicative effect on the price, `exp(φ) - 1`, because
     the model predicts log price and contributions there add up to a product.
-    The base price is rounded to the cent like the estimate; the effects are
-    not, so that the product reproduces the estimate to the cent.
+    Nothing is rounded, so that the product reproduces the unrounded estimate
+    to float precision and `price_eur`, its rounding, to the cent.
     """
     by_field = {
         name: float(contributions[list(columns)].sum()) for name, columns in fields.items()
@@ -273,7 +273,7 @@ def explain(
     ranked = sorted(by_field, key=lambda name: abs(by_field[name]), reverse=True)
     others = ranked[top:]
     return Explanation(
-        base_price_eur=round(float(np.exp(contributions[BASE_LOG_PRICE])), 2),
+        base_price_eur=float(np.exp(contributions[BASE_LOG_PRICE])),
         top_features=[
             FeatureEffect(field=name, effect_pct=_effect_pct(by_field[name]))
             for name in ranked[:top]

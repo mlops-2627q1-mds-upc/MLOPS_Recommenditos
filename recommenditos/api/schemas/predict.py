@@ -160,15 +160,15 @@ class Valuation(BaseModel):
                     "model": MODEL_EXAMPLE,
                     "request_id": "0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f",
                     "explanation": {
-                        "base_price_eur": 38389.96,
+                        "base_price_eur": 38389.95741359577,
                         "top_features": [
-                            {"field": "power_kw", "effect_pct": -35.2608},
-                            {"field": "model", "effect_pct": -23.3608},
-                            {"field": "make", "effect_pct": -17.9598},
-                            {"field": "mileage_km_raw", "effect_pct": 14.5807},
-                            {"field": "registration_date", "effect_pct": -6.2635},
+                            {"field": "power_kw", "effect_pct": -35.26084112077258},
+                            {"field": "model", "effect_pct": -23.360818674067794},
+                            {"field": "make", "effect_pct": -17.95976142027397},
+                            {"field": "mileage_km_raw", "effect_pct": 14.580681443498216},
+                            {"field": "registration_date", "effect_pct": -6.263490267105494},
                         ],
-                        "other_features_effect_pct": -12.7763,
+                        "other_features_effect_pct": -12.776273101340156,
                     },
                     "warnings": [],
                 }

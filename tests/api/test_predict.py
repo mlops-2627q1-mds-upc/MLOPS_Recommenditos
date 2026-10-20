@@ -466,14 +466,12 @@ def _reproduced(explanation: dict) -> float:
 def _assert_reproduces(answer: dict, price: float | None = None) -> None:
     """`answer`'s explanation gives `price`, its estimate unless another is named.
 
-    The tolerance is the rounding of the response and nothing more: the base
-    price and the estimate are each rounded to the cent, so the product may miss
-    by half a cent scaled from the base to the estimate, plus half a cent.
+    The tolerance is the rounding of the estimate to the cent and nothing more:
+    nothing in the explanation is rounded.
     """
-    explanation = answer["explanation"]
     price = answer["price_eur"] if price is None else price
-    tolerance = 0.005 * price / explanation["base_price_eur"] + 0.005 + 1e-9 * price
-    assert _reproduced(explanation) == pytest.approx(price, rel=0, abs=tolerance), answer
+    tolerance = 0.005 + 1e-9 * price
+    assert _reproduced(answer["explanation"]) == pytest.approx(price, rel=0, abs=tolerance), answer
 
 
 def _field_contributions(served: ServedModel, listing: dict) -> dict[str, float]:
@@ -576,7 +574,7 @@ def test_fr08_lists_the_five_fields_with_the_largest_effect_largest_first(
     combined = sum(expected[name] for name in others)
     assert explanation["other_features_effect_pct"] == pytest.approx(np.expm1(combined) * 100)
     base = served.model.log_price_contributions(served.matrix(ValuationRequest(**listing)))
-    assert explanation["base_price_eur"] == round(float(np.exp(base[BASE_LOG_PRICE].iloc[0])), 2)
+    assert explanation["base_price_eur"] == pytest.approx(np.exp(base[BASE_LOG_PRICE].iloc[0]))
 
 
 @pytest.mark.req("FR-08")

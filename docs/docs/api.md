@@ -61,15 +61,15 @@ A country or a `model` the training data does not hold, `ES` today, is answered 
 
 ```json
 "explanation": {
-  "base_price_eur": 38389.96,
+  "base_price_eur": 38389.95741359577,
   "top_features": [
-    {"field": "power_kw", "effect_pct": -35.2608},
-    {"field": "model", "effect_pct": -23.3608},
-    {"field": "make", "effect_pct": -17.9598},
-    {"field": "mileage_km_raw", "effect_pct": 14.5807},
-    {"field": "registration_date", "effect_pct": -6.2635}
+    {"field": "power_kw", "effect_pct": -35.26084112077258},
+    {"field": "model", "effect_pct": -23.360818674067794},
+    {"field": "make", "effect_pct": -17.95976142027397},
+    {"field": "mileage_km_raw", "effect_pct": 14.580681443498216},
+    {"field": "registration_date", "effect_pct": -6.263490267105494}
   ],
-  "other_features_effect_pct": -12.7763
+  "other_features_effect_pct": -12.776273101340156
 }
 ```
 
@@ -92,12 +92,14 @@ The model reads matrix columns, and a field becomes one or more of them; the fie
 `top_features` lists the five fields with the largest effect, whether it raises or lowers the price, largest first; two equal effects keep the order of the request body.
 A field the client left out has an effect too, the effect of the model not knowing it.
 `other_features_effect_pct` combines every other field the model reads, and is 0 when the model reads five fields or fewer, in which case `top_features` lists them all.
-The base price is rounded to the cent like `price_eur`; the effects are not rounded, so that the product reproduces the estimate to the cent.
+Nothing in the explanation is rounded, so that the product reproduces the unrounded estimate to float precision, and `price_eur`, which is rounded to the cent, to the cent; a client rounds for display.
 
 When the model's estimate lies outside the price range of its training data, `price_eur` is that range's bound and `warnings` says so with the pointer `#`; the explanation then gives the estimate before the bound.
 No listing of the data reaches the bound with `lgbm-basic`.
 
-Computing the explanation costs about 35 ms of the request, measured in-process on a development laptop over 394 requests built from test listings (p50 34 ms, p95 49 ms; the whole request p50 63 ms, p95 93 ms), which is inside NFR-02's 200 ms for `/predict`.
+The explanation is the costliest step of a request, because TreeSHAP walks each of the 1,394 trees of `lgbm-basic` once per feature path.
+Measured in-process with `TestClient` on a shared 4-core development laptop, over 394 requests built from test listings, it took p50 34 ms and p95 49 ms of a request that took p50 63 ms and p95 93 ms; a second run under heavier load from other processes gave 44 and 71 ms of 81 and 140 ms.
+Both are inside NFR-02's 200 ms for `/predict`, which the load test on the target VM checks.
 
 ### Model version and request ID
 
