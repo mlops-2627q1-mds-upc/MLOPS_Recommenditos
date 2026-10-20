@@ -269,7 +269,7 @@ How to add an entry:
 
 ### EDN-12: Retraining and promotion are started by a person, and a failing gate blocks the merge
 
-> **Revised on 2026-10-20**: the gate verdict is now enforced by a required CI check; before, only the reviewer read it.
+> **Revised on 2026-10-20**: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.
 
 - **Date:** 2026-09-22
 - **Milestone:** M6: Monitoring
@@ -278,14 +278,15 @@ How to add an entry:
 - **Decision:** When the drift job flags the `ES` replay, a team member retrains with `ES` included and opens the promotion pull request by hand.
   The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
   A required CI check fails a pull request that changes `dvc.lock` unless the committed `metrics.json` has `gate_passed: true` and names the promoted model as `deployable_variant`.
-  The reviewer's approval stays on top, and FR-15 states all of this.
+  A criterion waived in `params.yaml` does not count; EDN-62 records the SC-04 waiver.
+  FR-15 states this; the reviewer's approval stays on top.
 - **Alternatives considered:**
-  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to build and debug in the last weeks before the final presentation, with little slack if it breaks.
+  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
   - The gate as a manual check only: one mistaken merge deploys a rejected model.
   - A check in CD: it fails only after the merge.
 - **Rationale:** The `ES` holdout exists to show this loop closing (EDN-03).
   A person reacting to the signal closes it too, and is safer live.
-  From M5 on every merge to `main` deploys (NFR-13), and the CI check is the only one of the three that stops a rejected model before the merge.
+  From M5 every merge to `main` deploys (NFR-13), and only the CI check stops a rejected model before the merge.
   It needs no data and reads `gate_passed`, so a new criterion changes nothing in it.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
@@ -821,30 +822,32 @@ How to add an entry:
 
 ### EDN-62: `lgbm-basic` is the candidate model
 
-> **Revised on 2026-10-13**: `lgbm-basic` is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.
+> **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since EDN-82 `lgbm-basic`'s ratio is 1.02, not 1.21.
 
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
 - **Participants:** @lukas2510
-- **Decision:** `lgbm-basic` is the candidate that the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
+- **Decision:** `lgbm-basic` is the candidate the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
   `lgbm-extended` fails SC-06.
   SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
+  The gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
 - **Alternatives considered:**
   - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
-  - One model for complete requests and the other for partial ones: two models and a routing rule; left open for the deployment milestone.
+  - Routing complete and partial requests to different models: two models and a rule; left open for deployment.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
-- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.02 times (1.21 when this was decided); the bound is 1.5.
-  On that request the ranking of the two reverses.
-  The extended features also make the over-20 segment worse, so they are no remedy for SC-04.
+  - Keeping the gate closed until a variant meets SC-04: blocks every promotion.
+- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.65 times its full-input MdAPE and `lgbm-basic` to 1.02; the bound is 1.5.
+  Then the ranking reverses.
+  The extended features worsen the over-20 segment and do not fix SC-04.
+  The waiver makes NFR-01, this entry and the M4 deployment consistent, and is versioned and reviewed like any change; every other criterion still gates.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed.
-  One noticed that the all-masked scenario is a request with only the required fields, on which the ranking reverses.
-  AI recommended this option and left the serving and scope questions to Lukas.
-  A failure it had predicted did not reproduce on real data, and it reported that.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issues #37 and #39.
-- **Other evidence:** [Model card](../docs/docs/model-card.md) (Results), [`masked-inputs.csv`](metrics/masked-inputs.csv), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65).
+- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that masking every optional field leaves a required-fields-only request.
+  A failure it had predicted did not reproduce, and it reported that.
+  AI recommended this option and left the serving and scope questions to Lukas; on 2026-10-20 it laid out the gate options and recommended the waiver, and Lukas decided.
+- **AI interaction evidence:** Claude Code sessions on issues #37 and #39 (2026-09-30) and #137 (2026-10-20).
+- **Other evidence:** [Model card](../docs/docs/model-card.md), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65), [issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137), [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158).
 - **In LaTeX:** yes
 
 ### EDN-68: The Great Expectations store is generated and cached
@@ -1071,7 +1074,29 @@ How to add an entry:
 - **Other evidence:** [Issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135), [PR #151](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151), [API docs](../docs/docs/api.md), [`errors.py`](../recommenditos/api/errors.py), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457).
 - **In LaTeX:** yes
 
-### EDN-85: How serving applies the interval calibration (#137)
+### EDN-85: Serving adds MAPIE's offsets itself, and partial requests take the median's price
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Model Deployment
+- **Participants:** @lukas2510 decided ([issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137))
+- **Decision:** MAPIE's `ConformalizedQuantileRegressor` calibrates UC2's quantile LightGBM models in the `train` stage only.
+  The `lgbm-basic` bundle stores the three boosters and the two conformity offsets, and `predict_interval_eur` adds them up with LightGBM alone, so the API image carries no MAPIE.
+  `/price-range` takes its typical price from `lgbm-basic` when FR-01's required fields are all present, and otherwise from the 50 % quantile model (FR-07).
+- **Alternatives considered:**
+  - MAPIE in the serving runtime: the library computes every interval, but it adds a package to the image NFR-04 caps at 1 GB, for two predictions and an addition.
+  - Our own conformalized quantile regression without MAPIE: no dependency anywhere, but we would own the correctness of the calibration.
+  - Typical price always from `lgbm-basic`, or always from the 50 % model: the first is 98.5 % MdAPE off on a make-only request, the second 0.2 to 0.7 pp worse on complete ones.
+- **Rationale:** The pattern EDN-11 set for SHAP: the statistics stay in a maintained library, and serving replays a constant.
+  A test shows that the range served from a bundle on disk equals MAPIE's on the same rows to a relative 1e-12.
+  On the test split the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the options for both questions, measured the typical-price ones, and recommended these, which @lukas2510 took.
+  AI implemented it and checked that MAPIE 1.6 moves each bound by one constant before storing it.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #137: options, measurements, implementation.
+- **Other evidence:** [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158), [`lgbm-basic.json`](metrics/lgbm-basic.json), [Typical-price analysis](analysis/price_range_point_estimate_results.txt), MLflow run `train@lgbm-basic` in `recommenditos-price`.
+- **In LaTeX:** yes
 
 ### EDN-86: Where the prediction log and the feedback are stored (#140)
 

@@ -136,7 +136,7 @@ Price buckets are reported too, but they are not used in success criteria becaus
 
 ## 8. Success criteria
 
-A model is good enough to deploy when it meets all of the following on the test set ([EDN-06](#decision-records), SC-06 added by [EDN-15](#decision-records)):
+A model is good enough to deploy when it meets all of the following on the test set ([EDN-06](#decision-records), SC-06 added by [EDN-15](#decision-records)), except a criterion an EDN entry has accepted as missed, which NFR-01's gate then reports as waived (SC-04, [EDN-62](#decision-records)):
 
 | ID | Criterion |
 |----|-----------|
@@ -156,9 +156,9 @@ For `make` and `body_type`, the two required fields the published file fills in 
 When no level reaches the row minimum, SC-04 is reported as **not measured** rather than as met.
 "Every level satisfies P" is vacuously true over an empty set, and reporting that as a pass would claim a check nobody ran.
 
-SC-05 depends on the UC2 conformal intervals, which are built after the first delivery.
-Until they exist, the `evaluate` stage reports SC-05 as not measured, which **blocks** [NFR-01](requirements.md)'s gate rather than passing it: no model is deployable before the intervals are calibrated and their coverage checked.
-The metrics artefact reports separately how many candidates meet every criterion that *could* be measured, so the outstanding criterion is visible as such instead of reading as a model that failed.
+SC-05 is measured on the UC2 conformal intervals, which the `lgbm-basic` bundle carries ([EDN-85](#decision-records)).
+For a variant whose bundle carries none, the `evaluate` stage reports SC-05 as not measured, which **blocks** [NFR-01](requirements.md)'s gate rather than passing it: no model is deployable without intervals whose coverage has been checked.
+The metrics artefact reports separately how many candidates meet every criterion that *could* be measured, so an outstanding criterion is visible as such instead of reading as a model that failed.
 
 SC-06 covers what SC-04 and SC-05 do not: the point estimate for a request that leaves an optional field out, which the API explicitly allows ([specification](specification.md) FR-01).
 The optional fields are the **input fields** of the evaluated model's feature set that FR-01 does not require, which is 6 fields for the basic set and 23 for the extended one.
@@ -190,10 +190,11 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   The reference run named this as the known risk of the basic feature set, with the extended features or a scope change for classic cars as the possible remedies.
   The pipeline has since measured the segment at 16.80 % for the candidate model over 784 test rows (18.2 % on average over 20 other splits, see the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)), and it has ruled the extended features out as the remedy: they make this segment 1.6 pp worse (18.45 %) while improving the pooled figure.
-  The miss is accepted: SC-04 is recorded as missed, the 15 % threshold and the scope stay as they are, and the release gate stays closed on it ([EDN-62](#decision-records)).
+  The miss is accepted: SC-04 is recorded as missed, the 15 % threshold and the scope stay as they are, and the release gate reports it as waived by that entry rather than blocking on it ([EDN-62](#decision-records), NFR-01).
   The hyperparameter search kept the committed values ([EDN-73](#decision-records)), and the segment is over the bound on 20 of 20 other splits ([EDN-32](#decision-records)).
   The [model card](model-card.md#bias-risks-and-limitations) states the limitation in full.
-- SC-05 and SC-06 have no reference value yet: the intervals are built in a later step, and SC-06 is relative to the model's own full-input MdAPE by construction.
+- SC-05 has no reference value from the exploratory run; measured by the pipeline on the test split, the candidate's intervals cover 90.2 % of full inputs and 91.0 % of P1 requests (EDN-85).
+  SC-06 has none either, because it is relative to the model's own full-input MdAPE by construction.
   The fill rates behind SC-06 were measured on 2026-09-29 ([EDN-15](#decision-records)): in the training scope `body_type` is filled in 100.000 % of the listings and `seller_type` in 99.986 % (14 of 97,889 rows missing), `nr_doors`, `nr_seats` and `cylinders_volume_cc` in 91 to 99 %, and `nr_prev_owners`, `gears` and `drive_train` in 61 to 76 %.
 
 ## Decision records
@@ -211,3 +212,4 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-62: `lgbm-basic` is the candidate model.
 - EDN-73: hyperparameters change only under a written tuning protocol.
 - EDN-82: `lgbm-basic` is trained on blanked copies of its listings.
+- EDN-85: serving adds the stored conformity offsets to the quantile models, without MAPIE, and a partial price-range request takes its typical price from their median.

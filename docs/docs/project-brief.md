@@ -158,9 +158,12 @@ The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning
 Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
-Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) on top of quantile LightGBM models (e.g. 5 % / 95 %).
-Train with random masking of optional fields so the model produces wider intervals for partial inputs.
-The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
+Price ranges (UC2), **implemented** ([EDN-85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), #137): **Conformalized Quantile Regression** with MAPIE 1.6 on quantile LightGBM models at 5 %, 95 % and 50 %, part of the `lgbm-basic` bundle.
+They are trained on the listings plus one copy of each with every field but `make` omitted (FR-02 requires `make` alone) and one with a random subset omitted, so a partial request gets a wider range.
+The calibration split gets the same copies, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
+MAPIE runs in training only; the bundle stores the boosters and the two conformity offsets, and serving adds them up.
+Measured on the test split, the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes, and its mean width is 0.46 times the median for a full input and 0.93 times for P1.
+The typical price of a request missing an FR-01 required field comes from the 50 % quantile model, because `lgbm-basic` has never seen a required field missing: on a make-only request its MdAPE is 98.5 % against 40.1 % for the 50 % model (FR-07, EDN-85) (calibration split, `reports/analysis/price_range_point_estimate_results.txt`).
 
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
 

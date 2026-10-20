@@ -71,7 +71,9 @@ from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.model import (
     RequestContract,
     TrainingData,
+    fit_quantile_estimators,
     fit_variant,
+    interval_settings,
     load_model,
 )
 from recommenditos.pipeline import load_params, read_frame
@@ -108,7 +110,10 @@ from recommenditos.schema import PROCESSED_SCHEMA
 bundle, listings, reference_date = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
 model = load_model(bundle)
 frame = read_frame(listings, PROCESSED_SCHEMA).head(5)
-model.predict_eur(model.space.matrix(frame, reference_date=reference_date))
+request = model.space.matrix(frame, reference_date=reference_date)
+model.predict_eur(request)
+if model.has_intervals:
+    model.predict_interval_eur(request)
 print(json.dumps(sorted({name.partition(".")[0] for name in sys.modules})))
 """
 
@@ -211,6 +216,23 @@ def served(tmp_path_factory) -> dict:
             seed=params["seed"],
             num_threads=params["train"]["num_threads"],
         )
+        chosen = interval_settings(variant, settings)
+        if chosen is not None:
+            # The price range's boosters, fitted with LightGBM alone. Their
+            # calibration needs MAPIE, a pipeline package, so the offsets here are
+            # stand-ins: this file checks what serving reads and imports, and
+            # `tests/test_intervals.py` checks the served range against MAPIE's.
+            estimators, record = fit_quantile_estimators(
+                model,
+                data,
+                chosen,
+                seed=params["seed"],
+                num_threads=params["train"]["num_threads"],
+            )
+            record["offsets"] = {"lower": 0.05, "upper": 0.05}
+            model.attach_intervals(
+                {name: each.booster_ for name, each in estimators.items()}, record
+            )
         model.save(models / variant)
     return {"params": params, "processed": processed, "features": features, "models": models}
 
@@ -244,6 +266,39 @@ def test_a_bundle_on_disk_prices_a_listing(variant: str, served: dict):
     assert np.isfinite(prices).all()
     assert (prices > 0).all()
     np.testing.assert_array_equal(prices.to_numpy(), model.predict_eur(stage_rows).to_numpy())
+
+
+INTERVAL_VARIANTS = tuple(
+    name for name, settings in _variants().items() if interval_settings(name, settings) is not None
+)
+
+
+@pytest.mark.parametrize("variant", INTERVAL_VARIANTS)
+def test_a_bundle_on_disk_prices_a_range(variant: str, served: dict):
+    """UC2's range from disk, with the runtime set alone (EDN-85).
+
+    A request carrying only `make` is encoded through the bundle's own feature
+    space, as `/price-range` will encode it, and gets a finite, positive range
+    that is wider than the range of the complete listing.
+    """
+    model = load_model(served["models"] / variant)
+    supported = tuple(model.metadata["training"]["supported_makes"])
+    listings = _supported_only(
+        read_frame(served["processed"] / "test.parquet", PROCESSED_SCHEMA), supported
+    ).head(LISTINGS)
+    request = model.space.matrix(listings, reference_date=served["params"]["reference_date"])
+    make_only = model.mask_absent(request, [name for name in model.features if name != "make"])
+
+    full, partial = model.predict_interval_eur(request), model.predict_interval_eur(make_only)
+
+    assert model.has_intervals
+    for interval in (full, partial):
+        assert len(interval) == len(listings) > 0
+        assert np.isfinite(interval.to_numpy()).all()
+        assert (interval["lower_eur"] > 0).all()
+    assert (partial["upper_eur"] - partial["lower_eur"]).mean() > (
+        full["upper_eur"] - full["lower_eur"]
+    ).mean()
 
 
 @pytest.mark.parametrize("path", ["model", "api"])
