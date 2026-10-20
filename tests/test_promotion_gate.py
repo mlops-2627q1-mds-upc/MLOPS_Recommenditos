@@ -22,6 +22,11 @@ import yaml
 CANDIDATE = "lgbm-basic"
 
 PASSING = {"gate_passed": True, "deployable_variant": CANDIDATE, "n_variants_passing": 2}
+OTHER_WINS = {
+    "gate_passed": True,
+    "deployable_variant": "lgbm-extended",
+    "variants": {CANDIDATE: {"gate_passed": True}, "lgbm-extended": {"gate_passed": True}},
+}
 FAILING = {"gate_passed": False, "deployable_variant": None, "n_variants_passing": 0}
 
 
@@ -98,12 +103,35 @@ def test_a_passing_gate_for_another_variant_than_the_promoted_one_is_blocked(rep
     write_promotion(repo, {**PASSING, "deployable_variant": "lgbm-extended"})
     commit(repo)
     found = check("main", repo)
-    assert found == [
-        (
-            'deployable_variant is "lgbm-extended", not "lgbm-basic", '
-            "the model report.candidate_variant in params.yaml puts forward"
-        )
-    ]
+    assert len(found) == 1
+    assert found[0].startswith(
+        'deployable_variant is "lgbm-extended", not "lgbm-basic", '
+        "the model report.candidate_variant in params.yaml puts forward"
+    )
+
+
+@pytest.mark.req("FR-15", "NFR-01")
+def test_a_failing_candidate_beside_another_passing_variant_is_said_to_fail(repo):
+    other = {**OTHER_WINS, "variants": {CANDIDATE: {"gate_passed": False}, "lgbm-extended": {}}}
+    write_promotion(repo, other)
+    commit(repo)
+    (message,) = check("main", repo)
+    assert message.endswith("and the candidate itself fails the gate")
+
+
+@pytest.mark.req("FR-15", "NFR-01")
+def test_a_passing_candidate_beaten_by_another_variant_is_told_what_to_decide(repo):
+    write_promotion(repo, OTHER_WINS)
+    commit(repo)
+    (message,) = check("main", repo)
+    assert (
+        'The candidate passes the gate, but "lgbm-extended" passes it with the lower MdAPE'
+        in message
+    )
+    assert (
+        "change report.candidate_variant (an EDN decision) or keep the candidate and say why"
+        in (message)
+    )
 
 
 @pytest.mark.req("FR-15", "NFR-01")

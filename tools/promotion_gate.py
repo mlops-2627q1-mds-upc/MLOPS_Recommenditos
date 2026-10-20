@@ -108,12 +108,25 @@ def problems(metrics_bytes: bytes, lock: dict, variant: str) -> list[str]:
     if "deployable_variant" not in metrics:
         found.append(f"{METRICS} has no deployable_variant field")
     elif metrics["deployable_variant"] != variant:
-        found.append(
-            f"deployable_variant is {json.dumps(metrics['deployable_variant'])}, "
-            f"not {json.dumps(variant)}, the model report.candidate_variant in params.yaml "
-            "puts forward"
-        )
+        found.append(not_the_candidate(metrics, variant))
     return found
+
+
+def not_the_candidate(metrics: dict, variant: str) -> str:
+    """Why `deployable_variant` is not the candidate: it fails, or another passes better."""
+    named = json.dumps(metrics["deployable_variant"])
+    head = (
+        f"deployable_variant is {named}, not {json.dumps(variant)}, "
+        "the model report.candidate_variant in params.yaml puts forward"
+    )
+    record = (metrics.get("variants") or {}).get(variant)
+    if isinstance(record, dict) and record.get("gate_passed") is True:
+        return (
+            f"{head}. The candidate passes the gate, but {named} passes it with the "
+            "lower MdAPE: change report.candidate_variant (an EDN decision) "
+            "or keep the candidate and say why"
+        )
+    return f"{head}, and the candidate itself fails the gate"
 
 
 def check(base: str, root: Path = PROJ_ROOT) -> list[str]:

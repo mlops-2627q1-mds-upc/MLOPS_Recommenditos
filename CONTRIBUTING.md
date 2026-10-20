@@ -153,7 +153,7 @@ It only matters when you change a dependency or what a serving module imports, b
 
 CI's `Promotion gate` job is a required check on every pull request, and it only has work to do on one that changes `dvc.lock`, the pull request that promotes a model ([EDN-12](reports/edn.md)).
 Such a pull request fails it unless the committed `metrics.json` has `gate_passed: true` and names the model being promoted, `report.candidate_variant` in `params.yaml`, as its `deployable_variant`.
-Run `uv run python -m tools.promotion_gate --base origin/main` to see the verdict before you push; a failing gate means the candidate does not meet the success criteria, and the fix is a better model, not a different file.
+Run `uv run python -m tools.promotion_gate --base $(git merge-base origin/main HEAD)` to see the verdict before you push; a failing gate means the candidate does not meet the success criteria, and the fix is a better model, not a different file.
 
 ## Requirement traceability
 

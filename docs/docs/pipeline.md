@@ -412,7 +412,7 @@ The `Promotion gate` job of CI (`tools/promotion_gate.py`, a required check, [ED
 On a pull request that leaves `dvc.lock` alone the job succeeds at once; it runs on every pull request because a required check that is skipped never reports.
 The person's review of the metrics diff stays on top of it: the job rules out a rejected model, it does not approve an accepted one.
 The job cannot tell a promotion from any other change to `dvc.lock`, such as a re-run of the pipeline after a code change, so every pull request that updates the lock needs a passing verdict.
-While no variant passes the gate (SC-04, SC-05 and SC-06 today), none of them can merge.
+While no variant passes the gate, none of them can merge.
 
 Working on a stage
 ------------------
