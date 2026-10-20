@@ -1044,8 +1044,8 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI measured the error counts of the three checkers, laid out the options and recommended mypy, which @lukas2510 chose.
   It fixed the findings and wired the hook and the CI job; a deliberate type error turned the hook red, and a reviewer agent checked the pull request.
 - **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #133: three checkers measured, four options, recommendation.
-- **Other evidence:** [Issue #133](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133), [PR #PRNUM](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/PRNUM), [`[tool.mypy]`](../pyproject.toml).
-- **In LaTeX:** no
+- **Other evidence:** [Issue #133](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133), [PR #149](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/149), [`[tool.mypy]`](../pyproject.toml).
+- **In LaTeX:** yes
 
 ### EDN-84: The API's error shape (#135)
 
