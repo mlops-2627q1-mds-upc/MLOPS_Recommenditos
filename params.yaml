@@ -471,4 +471,8 @@ report:
   # candidate put forward for release (EDN-62). `metrics.json` names a variant
   # only once one passes the gate, and none does yet, so the choice is stated
   # here and the `compare-segments` stage reads it.
+  # `tools/promotion_gate.py` reads it too, as the model being promoted: a pull
+  # request that changes `dvc.lock` is blocked unless `metrics.json` names this
+  # variant as `deployable_variant`. Changing it for a figure changes what the
+  # promotion gate demands (EDN-12).
   candidate_variant: lgbm-basic

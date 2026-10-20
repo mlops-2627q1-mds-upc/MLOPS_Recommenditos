@@ -398,6 +398,22 @@ The tests build the frame in memory, so `pytest` writes nothing and no file can 
 When something needs the fixture as an actual file - a notebook is easier to poke at with one - `make fixture` writes it to `data/fixture/listings_fixture.parquet`.
 That path is gitignored: the generator is the artefact, the Parquet is a convenience, and both come from the same seeded function.
 
+Promoting a model
+-----------------
+
+A model is promoted by merging a pull request that changes `dvc.lock` ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12), and from M5 on every merge to `main` deploys.
+The `Promotion gate` job of CI (`tools/promotion_gate.py`, a required check, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) blocks such a pull request unless the committed verdict passes:
+
+- `metrics.json` is the file the new `dvc.lock` records for the `evaluate` stage (same MD5), so the verdict belongs to the run being promoted and was not edited or left over from an older run.
+- `gate_passed` is `true`.
+- `deployable_variant` is the model being promoted, which is `report.candidate_variant` in `params.yaml` (the variant put forward for release, [EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  The job reads these two leaves and no criterion, so a criterion added to the gate needs no change to it.
+
+On a pull request that leaves `dvc.lock` alone the job succeeds at once; it runs on every pull request because a required check that is skipped never reports.
+The person's review of the metrics diff stays on top of it: the job rules out a rejected model, it does not approve an accepted one.
+The job cannot tell a promotion from any other change to `dvc.lock`, such as a re-run of the pipeline after a code change, so every pull request that updates the lock needs a passing verdict.
+While no variant passes the gate, none of them can merge.
+
 Working on a stage
 ------------------
 
