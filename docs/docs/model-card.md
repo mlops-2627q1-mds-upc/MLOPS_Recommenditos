@@ -22,8 +22,8 @@ Recommenditos estimates what a used passenger car would be **asked for** on a Eu
 Given a description of a car it returns a point estimate of the listing price (UC1), and for a partial description a price interval with comparable listings (UC2).
 It is the model behind the project's API.
 
-**Status: the four ladder variants train, five of the six success criteria are measured, and nothing is released.**
-The training procedure, the point metrics and SC-01 to SC-04 and SC-06 below are measured; SC-04 fails for every variant and SC-05 has no measurement until the UC2 intervals exist, so NFR-01's gate blocks, and the serving sections (latency, image size, explanations, intervals) are still a plan.
+**Status: the four ladder variants train, all six success criteria are measured for the candidate, and nothing is released.**
+The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant, so NFR-01's gate blocks, and the serving sections (latency, image size, explanations) are still a plan.
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the remaining placeholders are replaced as the `evaluate` stage's criteria and the API land.
 Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 
@@ -57,7 +57,7 @@ The same trained booster serves the point estimate, its explanation and, through
 - **Version:** none yet.
   From the first release on, the served version is the one `dvc.lock` on `main` points to, reported by `GET /health` and verified in CI ([specification](specification.md) FR-12, EDN-08).
 - **Status:** `lgbm-basic` is the candidate, not released.
-  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 has no measurement until the UC2 conformal intervals exist. NFR-01's gate therefore blocks. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
+  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 passes for the candidate, the one variant that carries the UC2 price range, and is not measured for the others. NFR-01's gate therefore blocks. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
 
 ### Model Sources
 
@@ -222,7 +222,8 @@ An omitted assertion flag is `False`, which is all the source can mean (EDN-23),
 That second one is a decision rather than a reading of the data, and a distributional one: the raw field is always a list, so across the 105,405 scoped listings there is not one null in any of the four equipment fields, while the literal `[]` is 5.2 % to 8.0 % of them per field.
 "Empty" is therefore a state the model was fitted on and "absent" is one it never saw (EDN-61).
 The frame handed in is never modified.
-`model.predict_log_price(frame)` is the log of the same number, which is what a future conformal step needs; `predict_interval_eur` is the reserved name for SC-05's intervals and does not exist yet.
+`model.predict_log_price(frame)` is the log of the same number.
+`model.predict_interval_eur(frame)` returns UC2's nominal 90 % range for a bundle that `has_intervals`, today `lgbm-basic`: `lower_eur`, `upper_eur` and `median_eur`, the last from the 50 % quantile model (see [Price ranges](#price-ranges-uc2)).
 
 ## Training Details
 
@@ -406,6 +407,7 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
 | `booster.txt` | LightGBM variants: the native text format, saved at the early-stopped iteration. Not a pickle of the sklearn wrapper, because the text format survives a LightGBM upgrade, it is readable, and EDN-11's SHAP export needs a `Booster`. |
 | `pipeline.joblib` | `b1` only: the fitted scikit-learn pipeline. |
 | `lookup.parquet` | `b0` only: the whole model as one table a person can read, in EUR, with the row count behind each median. |
+| `interval_{lower,upper,median}.txt` | A variant with a price range, today `lgbm-basic`: the 5 %, 95 % and 50 % quantile boosters, in the same text format. `model.json` then holds their record under `intervals`: the quantiles, the copies they were fitted on, the trees each kept, the two conformity offsets MAPIE computed and the calibration rows behind them (EDN-85). |
 
 The feature space travels *with* the model rather than being looked up beside the matrices, because the bundle is baked into the API image on its own (EDN-08) and a code is a level's position: a model that encoded a request against one level order and scored it against another would be wrong with no error anywhere.
 `recommenditos/modeling/model.py` is the only code that opens any of these files.
@@ -450,7 +452,8 @@ A pipeline run is not always a committed one either: the experiment keeps the la
 Training does **not** require credentials or a network.
 With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally and records `mlflow.tracking_mode: "disabled"`, which is what lets CI and a fresh clone run the test suite; it never falls back to a local store, because since MLflow 3.16 that would mean a SQLite database in the repository root.
 `RECOMMENDITOS_REQUIRE_TRACKING=1` turns any tracking failure into a failed stage, and that is the setting to use for the runs whose numbers are cited, so that a silent skip is not discovered while the report is being written.
-- **Intervals (UC2):** Conformalized Quantile Regression with MAPIE (1.x) on quantile LightGBM models, trained with random masking of optional fields so that partial inputs produce wider intervals.
+- **Intervals (UC2) [decided, EDN-85]:** Conformalized Quantile Regression with MAPIE 1.6 on quantile LightGBM models at 5 %, 95 % and 50 %, fitted with `lgbm-basic`'s hyperparameters on its training rows plus one copy with every field but `make` omitted and one with a random subset omitted, so that partial inputs produce wider intervals.
+  MAPIE computes the two conformity offsets on the 8,987 calibration rows with copies drawn the same way, in the `train` stage only; the bundle stores the boosters and the offsets, and serving adds them up without MAPIE.
   The coverage guarantee is marginal, that is on average over all inputs, not per missing-field pattern.
 - **Point model and missing fields [decided, EDN-82]:** `lgbm-basic` is fitted on its 60,378 training rows plus two copies of each, 181,134 rows in all: one copy with all six optional input fields set to what an omitted field is, and one with a random subset of them omitted.
   A request carrying only the fields FR-01 requires was almost absent from the training rows (324 of 60,378 have all six optional fields empty), and LightGBM's native missing handling answered it at 8.57 % validation MdAPE; with the copies it is 7.19 %, and a complete request is not measurably worse (`reports/analysis/blanked_fields_results.txt`).
@@ -552,8 +555,7 @@ The 20 splits share one pool of listings, so the spread describes how a figure m
 
 Two things this does not cover.
 A temporal split would be the stronger test for a price model and is impossible, because the snapshot carries no listing dates (see [Bias, Risks, and Limitations](#bias-risks-and-limitations)).
-And whether the UC2 intervals cover each make equally, Mercedes-Benz above all since the calibration set holds the least of it, cannot be checked before the intervals exist: SC-05 is not measured, and the calibration set is written by `split` and read by no model yet.
-That check is deferred to the work that builds the intervals, where the coverage is to be reported per make on the test set beside the pooled figure SC-05 asks for.
+And whether the UC2 intervals cover each make equally, Mercedes-Benz above all since the calibration set holds the least of it, is not measured yet: SC-05 reports the pooled coverage, and the coverage per make on the test set is issue #108.
 
 ### Results
 
@@ -568,14 +570,14 @@ It is a **measured candidate, not a release**: the gate blocks, so nothing is pr
 | SC-02 | Predictions within 20 % of the asking price | at least 85 % | 90.0 %, yes | 90.4 %, yes |
 | SC-03 | MdAPE improvement over baseline B0 | at least 30 % lower | 44.6 % lower, yes | 48.6 % lower, yes |
 | SC-04 | MdAPE per segment level with at least 500 test rows | at most 15 % | 16.80 % (`age_bucket=over 20`, 784 rows), **no** | 18.45 %, **no** |
-| SC-05 | Empirical coverage of the nominal 90 % intervals, full inputs and partial scenario P1 | 88 % to 92 % | not measured, **no** | not measured, **no** |
+| SC-05 | Empirical coverage of the nominal 90 % intervals, full inputs and partial scenario P1 | 88 % to 92 % | 90.2 % full, 91.0 % P1, yes | no price range, not measured, **no** |
 | SC-06 | MdAPE with each optional field masked, and with all masked at once | at most 1.5x the full-input MdAPE | 1.02x, yes | **1.65x, no** |
 
 These are the figures of the committed split: over 20 other splits the candidate's test MdAPE is 6.72 % on average (standard deviation 0.26 pp) and its MdAPE for cars older than 20 years is 18.2 %, and the SC-04 figure above is the most favourable of 21 draws ([How comparable the sets are, and how much a figure moves with the split](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)).
 
 `b0` and `b1` miss SC-01, SC-02 and SC-03 as well, and are baselines rather than candidates; their per-criterion numbers are in `reports/metrics/<variant>.json`.
 
-**No variant is deployable**, because SC-04 fails for all four and SC-05 cannot be measured until the UC2 intervals exist, and the gate reports that rather than putting a model forward.
+**No variant is deployable**, because SC-04 fails for all four, and the gate reports that rather than putting a model forward.
 The candidate above is a documented judgement about which model *would* be released, not a computed one: `metrics.json`'s `best_variant` stays the lowest MdAPE overall, because that field means what it says, and `deployable_variant` stays null while anything blocks.
 The two failures are the interesting half of this card, and neither is a surprise:
 
@@ -586,14 +588,20 @@ The two failures are the interesting half of this card, and neither is a surpris
   The specification named two possible remedies, "the extended features or a scope change for classic cars", and measurement has **ruled the first one out**: the extended set makes this segment 1.6 pp worse while improving the pooled figure by 0.48 pp, so the extra features do not carry information about old cars.
   The hyperparameter search kept the committed values (EDN-73), so it leaves the figure where it is.
   That is a finding about the features and the model, not a reason to move the bar: the threshold stays at 15 %, no upper age bound is added, and the criterion is reported as missed.
-  Nothing is unblocked by softening it in any case, because SC-05 blocks the gate regardless.
 - **SC-06 passes for the candidate and fails on `lgbm-extended`, and there only when every optional field is absent at once.** Each of the 23 optional fields masked on its own costs at most 9.7 % of the MdAPE (`equipment_extra`, 1.10x), which is comfortably inside the bound; all 23 together cost 64.6 % (6.26 % to 10.30 %). `lgbm-basic` passes at 1.02x (6.73 % to 6.86 %): it has six optional fields to lose rather than 23, and it is trained on copies of its rows with those fields omitted (EDN-82), without which it was at 1.21x. `b0` and `b1` pass at 1.00x and 1.16x.
 
     **This is what decided the candidate (EDN-62), and it compares the two variants as they are trained.** The two rows above describe the same request: only the ten fields FR-01 requires. On that request `lgbm-basic` answers at **6.86 %** and `lgbm-extended` at **10.30 %**, so the variant with the 0.48 pp pooled advantage is beaten by 3.44 pp as soon as the caller stops filling in the optional fields, which FR-01 says a caller need not do. Most of that gap is training and not what the extended features cost: `lgbm-basic` is fitted on blanked copies of its rows and `lgbm-extended` is not, and with the same copies `lgbm-extended` answered that request at 7.14 % on the validation split, against 10.79 % without them and 7.19 % for `lgbm-basic` (EDN-82). As it is trained, the extended model's advantage is conditional on a well-filled request, which is precisely the fragility EDN-15 added SC-06 to expose, and a criterion a candidate misses is not something to serve. The worst single field is also worth naming per variant, because it is not the same one: `equipment_extra` for `lgbm-extended`, `drive_train` for `lgbm-basic` at 1.01x, `cylinders_volume_cc` for `b0`, `nr_doors` for `b1` at 1.16x, which is above that variant's all-at-once ratio of 1.13x. SC-06 bounds the worst of both kinds of request, so a criterion measured only on the all-at-once scenario would have missed it.
 
-SC-05 needs the UC2 conformal intervals, which are a later ticket.
-The `evaluate` stage reports it as `not_measured` with the capability it checked for, and that blocks the gate rather than passing it (NFR-01).
-The point-estimate half of the partial-input scenario P1 *is* measured now, and it is the strongest argument for building the intervals: the candidate goes from 6.73 % MdAPE to 16.23 % (2.4x) when only `make`, `model`, `registration_date` and `mileage_km_raw` are given, `lgbm-extended` to 19.02 % (3.0x) and `b1` to 2.5x its full-input value, while `b0` is unchanged because it reads only three columns. A point estimate that is typically 16 % off is not something to serve as a number, which is exactly what UC2's interval answers instead. P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
+#### Price ranges (UC2)
+
+SC-05 is measured on the conformal intervals of the `lgbm-basic` bundle (EDN-85), on the 19,665 test rows.
+The nominal 90 % range covers **90.2 %** of the prices for full inputs and **91.0 %** for P1, both inside the 88 % to 92 % band, so the criterion passes.
+Its mean width, relative to the 50 % quantile model, is 0.46 for a full input and 0.93 for P1, so leaving out everything but make, model, registration date and mileage doubles the range, as FR-02 asks.
+The guarantee is marginal over the mix of complete and partial requests the calibration copies make up, so the two scenarios landing in the band is a measurement, not a property of the method.
+The variants without a price range report SC-05 as `not_measured`, which blocks the gate for them rather than passing it (NFR-01).
+
+The point-estimate half of the partial-input scenario P1 is reported beside the SC-06 sweep: the candidate goes from 6.73 % MdAPE to 16.23 % (2.4x) when only `make`, `model`, `registration_date` and `mileage_km_raw` are given, `lgbm-extended` to 19.02 % (3.0x) and `b1` to 2.5x its full-input value, while `b0` is unchanged because it reads only three columns. A point estimate that is typically 16 % off is not something to serve as a number, which is exactly what UC2's interval answers instead.
+Which typical price `/price-range` reports beside the range is open: FR-07 names the point model, which has never seen a required field missing, and on the calibration split its MdAPE on a make-only request is 98.5 % against 40.1 % for the 50 % quantile model, while on a full request it is 0.21 pp better than that model (`reports/analysis/price_range_point_estimate_results.txt`). P1 is reported beside the SC-06 sweep and is structurally excluded from it, because it masks required fields.
 
 #### The per-segment breakdown, and the fairness reading
 
@@ -661,7 +669,7 @@ Same scope as above without `ES`, deduplicated, 96,831 listings, 80/20 split gro
 #### Summary
 
 The ladder reproduces the reference run, and the first three criteria pass with margin for both LightGBM variants: the candidate `lgbm-basic` is at 6.73 % MdAPE against SC-01's 9 %, 90.0 % within 20 % against SC-02's 85 %, and 44.6 % below the median baseline against SC-03's 30 %.
-Nothing is released on that, because NFR-01's word is "every": SC-04 fails for every variant and SC-05 has no measurement until the UC2 intervals exist.
+Nothing is released on that, because NFR-01's word is "every": SC-04 fails for every variant, while SC-05 passes for the candidate, whose price range covers 90.2 % of full inputs and 91.0 % of P1 requests.
 The chosen model is therefore `lgbm-basic` **as a candidate**, chosen over the lower pooled MdAPE of `lgbm-extended` because it is the one that meets SC-06 (EDN-62).
 Early stopping decides its tree count (EDN-73), which turned out to be worth 0.02 pp, and its `learning_rate`, `num_leaves` and `min_child_samples` are the values it was first fitted with because the search around them found nothing the validation split can tell apart, for either LightGBM variant (EDN-73).
 So the honest statement about it is not that it is tuned to an optimum but that the obvious knobs have been searched and kept, because none of them buys a resolvable gain.
@@ -838,6 +846,7 @@ The choices behind this page are recorded in [reports/edn.md](https://github.com
 - EDN-62: `lgbm-basic` is the candidate model.
 - EDN-73: hyperparameters change only under a written tuning protocol.
 - EDN-82: `lgbm-basic` is trained on blanked copies of its listings.
+- EDN-85: serving adds the stored conformity offsets to the quantile models, without MAPIE.
 
 ## Model Card Authors
 
