@@ -18,6 +18,14 @@ Key point for agents: branch protection blocks direct pushes to `main`, and squa
 `[project] dependencies` in `pyproject.toml` is the serving runtime the API image is built from, not a list of everything the project uses.
 Before adding or moving a dependency, read the Dependencies section of [CONTRIBUTING.md](CONTRIBUTING.md): almost every new package belongs in a group (`uv add --group pipeline <package>`), and `make test-serving` checks that serving code imports nothing from one.
 
+## Type checking
+
+mypy checks `recommenditos/` and `tools/` in pre-commit and in the required `Lint & format` CI job (`make typecheck`, or `make lint`).
+Fix a finding in the code with an explicit check or an `assert`, not with `cast` or `# type: ignore`; an unavoidable ignore names its error code and says why.
+An untyped third-party import gets a per-module override in `pyproject.toml`, never a global `ignore_missing_imports`, and `pandas-stubs` stays out.
+mypy cannot see pandas, so it says nothing on column names or dtypes.
+Details: the Type checking section of [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Project brief
 
 [docs/docs/project-brief.md](docs/docs/project-brief.md) holds the project goal, the verified data facts, the modelling and architecture plan and the open decisions.

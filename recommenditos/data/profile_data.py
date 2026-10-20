@@ -74,7 +74,7 @@ class Bar:
 
 def composition(frame: pd.DataFrame) -> list[dict]:
     """One row per level of each dimension, the largest first, as shares of all rows."""
-    rows = []
+    rows: list[dict] = []
     for column in DIMENSIONS:
         counts = frame[column].astype("object").fillna(MISSING).value_counts()
         ordered = sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))

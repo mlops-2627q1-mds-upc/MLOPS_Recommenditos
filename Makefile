@@ -28,9 +28,14 @@ clean:
 
 ## Lint using ruff (use `make format` to do formatting)
 .PHONY: lint
-lint:
+lint: typecheck
 	uv run ruff format --check
 	uv run ruff check
+
+## Type-check recommenditos/ and tools/ with mypy (configured in pyproject.toml)
+.PHONY: typecheck
+typecheck:
+	uv run mypy
 
 ## Format source code with ruff
 .PHONY: format

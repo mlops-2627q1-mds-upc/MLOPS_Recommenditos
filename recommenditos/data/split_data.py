@@ -199,7 +199,7 @@ def assign_split(groups: pd.Series, ratios: dict[str, float], seed: int) -> pd.S
     return groups.map(bucket)
 
 
-def supported_makes(makes: pd.Series, min_listings: int) -> list[dict[str, object]]:
+def supported_makes(makes: pd.Series, min_listings: int) -> list[dict[str, str | int]]:
     """The makes with at least `min_listings` listings, largest first (EDN-05).
 
     Each entry carries the count that admitted it, so a reader sees why every
@@ -225,7 +225,7 @@ def supported_makes(makes: pd.Series, min_listings: int) -> list[dict[str, objec
 
 
 def write_supported_makes(
-    makes: list[dict[str, object]], path: Path, min_listings: int, counted_over: int
+    makes: list[dict[str, str | int]], path: Path, min_listings: int, counted_over: int
 ) -> None:
     """Write the make list with the threshold and the population it was counted over.
 

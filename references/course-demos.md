@@ -1,8 +1,9 @@
 # Course demo repo - what matters for us
 
-Notes from the official demo repo <https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos> (read at commit `1b96937`, September 2026).
+Notes from the official demo repo <https://github.com/mlops-2627q1-mds-upc/MLOps-2627q1-demos> (first read in September 2026, re-checked on 2026-10-20 against commit `1b96937`, which is still the latest).
 The demo is an IMDB sentiment classifier (DistilBERT), so the code does not transfer 1:1, but it shows which tools and setup the teachers expect per milestone.
-Re-check the repo before each milestone: at the time of writing it has no demos for GitHub Actions (M5b) or monitoring (M6) yet.
+The repo has no demo for GitHub Actions (M5b) or monitoring (M6), only the tool names listed below.
+Re-check it before each milestone.
 
 ## Expected tools per milestone
 
@@ -13,7 +14,7 @@ Re-check the repo before each milestone: at the time of writing it has no demos 
 | M2 Reproducibility | Code and data versioning | Git (GitHub Flow), DVC with a DagsHub remote | `docs/git-demo.md`, `docs/dvc-demo.md` |
 | M2 Reproducibility | Experiment tracking | MLflow with DagsHub as tracking server | `docs/mlflow-demo.md` |
 | M3 QA | Energy efficiency | CodeCarbon, emissions logged to MLflow | `docs/codecarbon-demo.md`, `src/modeling/train_with_code_carbon.py` |
-| M3 QA | Static analysis | Ruff with Pylint rules (`PL`), Pynblint, Pylint, flake8 | `pyproject.toml` |
+| M3 QA | Static analysis | Ruff with Pylint rules (`PL`), Pynblint, Pylint, flake8, bandit, MyPy, nbqa | `pyproject.toml` |
 | M3 QA | Data and model testing | Pytest (+ pytest-cov), Great Expectations, Deepchecks for vision | `docs/pytest-demo.md`, `docs/great-expectations-demo.md` |
 | M3 QA | Non-functional requirements (optional) | SHAP, AIF360, TrustML | - |
 | M4 Deployment | ML system design | A cloud VM (FIB Virtech, AWS, GCP, Azure, Okteto) | `docs/deployment/` |
@@ -23,6 +24,15 @@ Re-check the repo before each milestone: at the time of writing it has no demos 
 The non-functional QA row (SHAP, AIF360, TrustML) is not in the grading table in `MLOps-lab.md`.
 It is a cheap way to reach the "extended or innovative" (Excellent) grade for M3.
 A broader list of MLOps tools the teachers point to: <https://agate-tangerine-725.notion.site/MLOps-tools-255624cb2156801e9a98db82fd911da2>.
+The Notion page needs JavaScript to be read, so a plain HTTP fetch returns nothing useful.
+
+### The teachers' tools list by area
+
+The tool names below are the ones the teachers list; the demo repo itself has no CI/CD or monitoring demo.
+
+- Deployment: FastAPI, Flask, Docker, Kubernetes, Gradio, Streamlit.
+- Monitoring: Prometheus, Grafana, Better Uptime, Alibi Detect, Evidently AI, Locust.
+- Quality assurance: the M3 row above, which adds bandit, MyPy and nbqa to the linters the demo configures.
 
 ## Setup details worth copying
 
@@ -62,7 +72,21 @@ A broader list of MLOps tools the teachers point to: <https://agate-tangerine-72
 ### API and deployment (M4)
 
 - `src/api/api.py` holds the FastAPI app, `src/api/schemas.py` the Pydantic request/response models; Swagger UI at `/docs`, ReDoc at `/redoc`.
-- The generic VM recipe: SSH key, clone the repo, `uv sync`, fill `.env`, `dvc pull` the model, run `uvicorn`, optionally put nginx in front as a reverse proxy.
+- The demo's API details:
+  - The model is loaded once in a `lifespan` handler.
+  - The tests use `with TestClient(app)`, so the lifespan handler runs; there are three tests.
+  - Logging uses loguru.
+  - There is a root endpoint `/` and a batch endpoint `/prediction`.
+  - Errors return status 400 or 500 with the exception text in the response.
+- The generic VM recipe: SSH key, clone the repo, `uv sync --all-groups`, fill `.env`, `dvc pull` the model, run `uvicorn`, optionally put nginx in front as a reverse proxy.
+- The recipe has defects that we do not copy:
+  - It starts `uvicorn app.api:app`, which does not match the demo's own `src/api/api.py`.
+  - It serves on port 80, which needs root.
+  - nginx proxies to port 5000 while the run step listens on 80.
+  - There is no systemd unit or other supervision, so nothing restarts the API after a crash or a reboot.
+  - `uv sync --all-groups` installs every dependency group, where we install the serving runtime only (EDN-47).
+  - How the API runs on our VM is the subject of EDN-87.
+- `docs/deployment/02_add_models.md` is irrelevant for us.
 - Free options compared in `docs/deployment/01_deploy_general.md`:
 
 | Provider | Compute | Storage | Max memory | Duration |
@@ -78,7 +102,8 @@ A broader list of MLOps tools the teachers point to: <https://agate-tangerine-72
 ### Docker (M5)
 
 - The demo Dockerfile is minimal (`python` base image, `pip install -r requirements.txt`, `uvicorn` as `CMD`).
-- We use uv and `pyproject.toml`, so our image should install from `uv.lock` instead; there is room to do better here (multi-stage build, non-root user, slim base).
+- We use uv and `pyproject.toml`, so our image installs from `uv.lock` and follows the pattern of the uv Docker guide <https://docs.astral.sh/uv/guides/integration/docker/> (multi-stage build, non-root user, slim base).
+- We bring Docker Compose forward to M4 (EDN-87), where the table above has it in M5.
 
 ## Papers behind the course
 
