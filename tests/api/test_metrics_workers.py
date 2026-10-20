@@ -72,13 +72,10 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
         MODEL_DIR_ENV_VAR: str(bundle),
         "MLFLOW_TRACKING_URI": "",
     }
-    windows = sys.platform == "win32"
     process = subprocess.Popen(
         [sys.executable, "-m", "recommenditos.api", "--host", "127.0.0.1"]
         + ["--port", str(port), "--workers", str(WORKERS), "--log-level", "warning"],
         env=env,
-        # A group of its own on Windows, so CTRL_BREAK reaches uvicorn and not pytest.
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0,  # type: ignore[attr-defined]
     )
     base = f"http://127.0.0.1:{port}"
     try:
@@ -90,12 +87,25 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
         _get(f"{base}/health")
         yield base, directory
     finally:
-        process.send_signal(signal.CTRL_BREAK_EVENT if windows else signal.SIGTERM)  # type: ignore[attr-defined]
-        try:
-            process.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
+        _stop(process)
+
+
+def _stop(process: subprocess.Popen) -> None:
+    """Stop the service and its workers.
+
+    SIGTERM lets uvicorn stop its workers itself. Windows has no such signal for
+    a process without a console of its own, and a console event would reach the
+    test runner too, so there the whole process tree is killed.
+    """
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], check=False)
+    else:
+        process.send_signal(signal.SIGTERM)
+    try:
+        process.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 @pytest.mark.req("FR-11", "NFR-03")
