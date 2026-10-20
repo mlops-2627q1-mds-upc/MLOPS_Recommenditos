@@ -13,7 +13,7 @@ from pydantic import ValidationError
 import pytest
 from tests.api.helpers import assert_problem, pointers
 
-from recommenditos.api import create_app
+from recommenditos.api.app import create_app
 from recommenditos.api.schemas.predict import ValuationRequest
 from recommenditos.api.serving import COUNTRIES, REQUEST_CONTRACT, ServedModel
 from recommenditos.data.build_features import weight_kg

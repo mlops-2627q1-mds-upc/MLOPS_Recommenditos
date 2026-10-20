@@ -18,6 +18,9 @@ make api                   # uvicorn on http://127.0.0.1:8000
 The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
 A bundle the API cannot serve, for example one that consumes no column for a field FR-01 requires, stops the service at startup instead of failing on the first request.
 
+`make api` runs `python -m recommenditos.api`, which passes its options on to uvicorn: `--workers 2`, or `WEB_CONCURRENCY=2`, starts two worker processes.
+With more than one worker, set `PROMETHEUS_MULTIPROC_DIR` too (see [Metrics](#metrics)); the image does.
+
 The deployed service runs the same app in a container behind nginx, on a laptop as on the VM: [Deployment](deployment.md) says how to build, start and check that stack.
 
 A valuation:
@@ -33,13 +36,14 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
 ## Endpoints
 
 The client contract is versioned under `/v1`, so an incompatible change can ship as `/v2` beside it.
-The operational endpoints are not part of that contract and stay at the root, where a browser, an uptime monitor and Prometheus look for them: `/`, `/health`, and `/metrics` once it exists.
+The operational endpoints are not part of that contract and stay at the root, where a browser, an uptime monitor and Prometheus look for them: `/`, `/health` and `/metrics`.
 
 | Endpoint | Purpose | Requirements |
 |----------|---------|--------------|
 | `POST /v1/predict` | The point estimate of the asking price in EUR, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06 |
 | `GET /health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
+| `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
 
 `/v1/predict` values one car per request, because UC1 is one seller asking about one listing and every answer becomes one record of the prediction log; it has no batch form.
 `/predict` requires the ten fields of FR-01 and accepts every other input of the basic and the extended feature set as optional.
@@ -53,6 +57,32 @@ A country or a `model` the training data does not hold, `ES` today, is answered 
 
 The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
 Every response carries an `X-Request-ID` header; `/predict` repeats it as `request_id`, and a problem names it in `instance`.
+
+## Metrics
+
+`GET /metrics` serves the metrics below in Prometheus' text exposition format.
+In the deployment only Prometheus reads it, inside the Compose network: nginx refuses the path from outside.
+
+| Metric | Type | Labels | What it counts |
+|--------|------|--------|----------------|
+| `http_requests_total` | counter | `method`, `path`, `status` | Answered requests |
+| `http_request_duration_seconds` | histogram | `method`, `path`, `status` | Time from receiving a request to the last byte of its answer |
+| `http_request_errors_total` | counter | `method`, `path`, `status` | Answers with a status of 400 or above |
+| `recommenditos_predicted_price_eur` | histogram | - | The prices `/v1/predict` answered, for drift monitoring (M6) |
+| `recommenditos_prediction_warnings_total` | counter | `field` | `/v1/predict` warnings, by the field they point at (FR-05) |
+| `recommenditos_model_info` | gauge | `variant`, `version` | 1 for the served model; the version is the one `/health` reports |
+
+`path` is the route template, such as `/v1/predict`, never the raw path, so a client cannot grow the label set; a request that matches no route is counted under `<unmatched>`.
+A method other than the standard ones is counted as `OTHER`.
+The latency histogram has bucket bounds at 0.2 s and 0.3 s, NFR-02's targets, so the share of answers within each target is read from one bucket.
+Every request is counted, a body refused before it was read and a last-resort 500 included, because the middleware that counts sits outside all others.
+The process's own CPU and memory are not here: cAdvisor or node-exporter report the container's (M6).
+
+The figures are correct for any number of uvicorn workers when `PROMETHEUS_MULTIPROC_DIR` names a writable directory.
+Each worker then writes its values to its own files there, and a scrape, answered by whichever worker, adds them up (prometheus_client's multiprocess mode).
+`python -m recommenditos.api` deletes the metric files in that directory once, before the workers start, so a restarted service starts from zero; a worker never does, so a worker that uvicorn restarts keeps the others' counts.
+Without the variable, as in the tests and a plain `make api`, each process reports its own figures, which is right only for one worker.
+Multiprocess mode supports neither custom collectors nor Info metrics, so the model is a gauge labelled with its version rather than an Info metric.
 
 ## Errors
 
@@ -107,8 +137,10 @@ The code is in `recommenditos/api/`:
 | `schemas/<group>.py` | The request and response bodies of one route group, named after its module in `routes/` |
 | `errors.py` | The problem shape, the handlers, and `problem_responses` for a route's documentation |
 | `serving.py` | `ServedModel`: the loaded bundle, what it accepts, and the valuation |
-| `dependencies.py` | `Served` and `RequestId`, which a route takes as parameters |
+| `dependencies.py` | `Served`, `Metrics` and `RequestId`, which a route takes as parameters |
 | `middleware.py` | The request ID, the last-resort 500, and the body-size limit |
+| `metrics.py` | The Prometheus metrics, the middleware that counts and times every request, and the multiprocess directory |
+| `__main__.py` | `python -m recommenditos.api`: prepares the multiprocess directory, then starts uvicorn |
 
 1. Add `routes/<group>.py` with `router = APIRouter(tags=[...])` and its operations.
    Take `served: Served` for the model and `request_id: RequestId` for the request ID.

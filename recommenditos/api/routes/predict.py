@@ -4,7 +4,7 @@ from http import HTTPStatus
 
 from fastapi import APIRouter
 
-from recommenditos.api.dependencies import RequestId, Served
+from recommenditos.api.dependencies import Metrics, RequestId, Served
 from recommenditos.api.errors import pointer, problem_responses, validation_problem
 from recommenditos.api.schemas.common import FieldWarning
 from recommenditos.api.schemas.predict import Valuation, ValuationRequest
@@ -19,7 +19,9 @@ router = APIRouter(tags=["valuation"])
         HTTPStatus.UNPROCESSABLE_ENTITY, HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     ),
 )
-def predict(listing: ValuationRequest, served: Served, request_id: RequestId) -> Valuation:
+def predict(
+    listing: ValuationRequest, served: Served, metrics: Metrics, request_id: RequestId
+) -> Valuation:
     """Values one listing with the served model.
 
     The ten required fields are those of FR-01; every other field is optional,
@@ -32,9 +34,11 @@ def predict(listing: ValuationRequest, served: Served, request_id: RequestId) ->
     if faults:
         raise validation_problem(faults)
     price, unseen = served.value(listing)
-    return Valuation(
+    valuation = Valuation(
         price_eur=round(price, 2),
         model=served.info,
         request_id=request_id,
         warnings=[FieldWarning(pointer=pointer([name]), detail=detail) for name, detail in unseen],
     )
+    metrics.observe_valuation(valuation.price_eur, valuation.warnings)
+    return valuation

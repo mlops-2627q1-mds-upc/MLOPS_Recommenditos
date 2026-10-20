@@ -108,7 +108,7 @@ API_PORT ?= 8000
 ## Run the API locally with uvicorn on http://127.0.0.1:8000 (docs at /docs)
 .PHONY: api
 api:
-	uv run uvicorn recommenditos.api.app:create_app --factory --host $(API_HOST) --port $(API_PORT)
+	uv run python -m recommenditos.api --host $(API_HOST) --port $(API_PORT)
 
 # The serving stack of docs/docs/deployment.md (EDN-87): the API image with the
 # pulled model, behind nginx, on http://localhost:8080. Needs Docker and `dvc pull`.
