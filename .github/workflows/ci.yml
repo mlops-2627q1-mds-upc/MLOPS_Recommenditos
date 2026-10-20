@@ -26,6 +26,7 @@ jobs:
       serving: ${{ steps.filter.outputs.serving }}
       docs: ${{ steps.filter.outputs.docs }}
       report: ${{ steps.filter.outputs.report }}
+      stack: ${{ steps.filter.outputs.stack }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -74,6 +75,24 @@ jobs:
               - "reports/latex/**"
               - "reports/edn.md"
               - "tools/edn_latex.py"
+              - "Makefile"
+              - ".github/workflows/ci.yml"
+            # What the integration job builds and runs: the package in the image,
+            # the image, the stack, the lock it installs from, the synthetic
+            # bundle (fitted with params.yaml) and the suite with what it imports.
+            stack:
+              - "recommenditos/**"
+              - "Dockerfile"
+              - ".dockerignore"
+              - "deploy/**"
+              - "pyproject.toml"
+              - "uv.lock"
+              - "params.yaml"
+              - "tests/integration/**"
+              - "tests/fixtures/synthetic_bundle.py"
+              - "tests/conftest.py"
+              - "tests/lockfile.py"
+              - "tests/api/helpers.py"
               - "Makefile"
               - ".github/workflows/ci.yml"
 
@@ -241,6 +260,52 @@ jobs:
             (cd "$site" && du -sh --exclude=__pycache__ -- * | sort -rh | head -n 10)
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The API as deployed: the image built from this commit, behind nginx in the
+  # Compose stack, tested over HTTP through the proxy by tests/integration/. It
+  # catches what the in-process tests cannot see: a broken image, a missing
+  # system library, a wrong proxy rule, a broken healthcheck or restart policy
+  # (docs/docs/deployment.md). CI cannot `dvc pull` the real bundle, so the image
+  # is built around one fitted on the synthetic fixture, and /health is held to
+  # that bundle's version instead of dvc.lock's.
+  #
+  # Gated by its steps, not by the job, so that it always reports and can be
+  # made a required check like `Tests`.
+  integration:
+    name: Integration (Compose stack)
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        if: needs.changes.outputs.stack == 'true'
+      - uses: astral-sh/setup-uv@v10.1.0
+        if: needs.changes.outputs.stack == 'true'
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+        if: needs.changes.outputs.stack == 'true'
+      - name: Fit a synthetic lgbm-basic bundle where the Dockerfile expects it
+        if: needs.changes.outputs.stack == 'true'
+        # `shell: bash` for pipefail, so a failed fit fails here and not at the
+        # image's COPY.
+        shell: bash
+        run: |
+          version=$(uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models | tail -n 1)
+          echo "RECOMMENDITOS_EXPECTED_MODEL_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Build the image and start the stack
+        if: needs.changes.outputs.stack == 'true'
+        run: docker compose -f deploy/compose.yaml up -d --build --wait
+      - name: Run the integration suite through the proxy
+        if: needs.changes.outputs.stack == 'true'
+        run: make test-integration
+      - name: Print the container logs
+        if: failure() && needs.changes.outputs.stack == 'true'
+        run: docker compose -f deploy/compose.yaml logs --no-color --timestamps
+      - name: Tear the stack down
+        if: always() && needs.changes.outputs.stack == 'true'
+        run: docker compose -f deploy/compose.yaml down --volumes --rmi local
 
   # NFR-07 promises that every requirement is traceable to the test that
   # verifies it or is marked as verified by hand, and that CI builds the matrix

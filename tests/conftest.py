@@ -16,6 +16,7 @@ import sys
 from dvc.repo import Repo
 import pandas as pd
 import pytest
+from tests.fixtures.synthetic_bundle import FIXTURE_ROWS, build_matrices, train_bundles
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
 import yaml
 
@@ -27,7 +28,6 @@ from recommenditos.config import (
     PROJ_ROOT,
     REPORTS_DIR,
 )
-from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.energy import EMISSIONS_DIR
@@ -43,9 +43,6 @@ from recommenditos.pipeline import load_params
 # run, is enough. `setdefault`, so a contributor who wants it can still turn it on.
 os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
 
-#: Small enough to keep the suite fast, large enough that a seller-grouped
-#: split and a per-make count still mean something.
-FIXTURE_ROWS = 2000
 
 #: The columns problem-spec section 4 excludes as PII. No processed artefact,
 #: model or log may carry one (NFR-08).
@@ -252,24 +249,8 @@ VARIANTS = tuple(train_variants())
 
 @pytest.fixture(scope="session")
 def matrices(tmp_path_factory, _generated_frame: pd.DataFrame) -> dict:
-    """The feature matrices and the make list, built from the synthetic fixture.
-
-    `validate-data` is skipped: it asserts the data's own expectations and writes
-    a summary nothing here reads, and `tests/test_pipeline.py` already runs it in
-    the chain.
-    """
-    root = tmp_path_factory.mktemp("model")
-    raw = root / "raw" / "listings.parquet"
-    raw.parent.mkdir(parents=True)
-    _generated_frame.to_parquet(raw, index=False)
-
-    processed = root / "processed"
-    features = processed / "features"
-    preprocess.main(raw, root / "interim" / "listings.parquet", PARAMS_FILE)
-    split_data.main(root / "interim" / "listings.parquet", processed, PARAMS_FILE)
-    for feature_set in feature_sets():
-        build_features.main(feature_set, processed, features, PARAMS_FILE)
-    return {"root": root, "processed": processed, "features": features}
+    """The feature matrices and the make list, built from the synthetic fixture."""
+    return build_matrices(tmp_path_factory.mktemp("model"), _generated_frame)
 
 
 @pytest.fixture(scope="session")
@@ -285,10 +266,9 @@ def trained(matrices: dict) -> dict:
     monkeypatch, because a session fixture outlives a function-scoped one and
     would otherwise inherit whatever `.env` the developer's machine has.
     """
-    # Imported here and not at the top: these three pull in MLflow, LightGBM and
+    # Imported here and not at the top: these pull in MLflow, LightGBM and
     # scikit-learn, and every run would pay for that, also one of a single test
     # file that trains nothing.
-    from recommenditos.modeling import train  # noqa: PLC0415
     from recommenditos.modeling.model import load_model  # noqa: PLC0415
     from recommenditos.tracking import REQUIRED_ENV_VARS  # noqa: PLC0415
 
@@ -296,10 +276,9 @@ def trained(matrices: dict) -> dict:
     with pytest.MonkeyPatch.context() as environment:
         for name in REQUIRED_ENV_VARS:
             environment.delenv(name, raising=False)
-        for variant in train_variants():
-            train.main(
-                variant, matrices["features"], models, PARAMS_FILE, matrices["root"] / "emissions"
-            )
+        train_bundles(
+            train_variants(), matrices["features"], models, matrices["root"] / "emissions"
+        )
     return {
         "dir": models,
         "emissions": matrices["root"] / "emissions",

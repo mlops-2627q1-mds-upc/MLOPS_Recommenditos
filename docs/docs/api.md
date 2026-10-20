@@ -202,5 +202,6 @@ The code is in `recommenditos/api/`:
 5. Add `tests/api/test_<group>.py`.
    The fixtures in `tests/api/conftest.py` give an app on a synthetic bundle (`client`, `served`) and a valid listing (`listing`), and `tests/api/helpers.py` checks the problem shape.
    `tests/api/test_openapi.py` walks every operation, so it fails until the new one has a request and a response example and documents its errors as problems (FR-16).
+6. Add `tests/integration/test_deployed_<group>.py` with one valid request through the proxy and the documented shape of its answer; `test_deployed_predict.py` is the example ([Deployment](deployment.md#integration-tests)).
 
 A module the API comes to import has to stay within the serving runtime; [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies) explains the check.
