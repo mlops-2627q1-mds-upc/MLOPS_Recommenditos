@@ -619,8 +619,9 @@ def test_fr08_a_bounded_estimate_is_reported_and_the_explanation_gives_the_unbou
 ):
     """A price clipped to the training range is said so; the effects still multiply up.
 
-    No row of the real data reaches the bound (0 of 99,326 for `lgbm-basic`), so
-    the bundle's range is narrowed until this listing's estimate lies outside it.
+    The real data reaches the bound rarely (1 of 103,868 rows for `lgbm-basic`, a
+    test listing at the lower bound), so the bundle's range is narrowed until
+    this listing's estimate lies outside it.
     """
     unbounded = client.post(PREDICT, json=listing).json()["price_eur"]
     edited = tmp_path / "bundle"

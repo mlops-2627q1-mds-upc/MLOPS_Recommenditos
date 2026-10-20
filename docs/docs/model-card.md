@@ -23,7 +23,7 @@ Given a description of a car it returns a point estimate of the listing price (U
 It is the model behind the project's API.
 
 **Status: the four ladder variants train, all six success criteria are measured for the candidate, it passes NFR-01's gate with SC-04 waived, and nothing is released yet.**
-The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant and is waived by EDN-62, which accepted the miss, so the gate passes for `lgbm-basic` alone, and the serving sections (latency, image size, explanations) are still a plan.
+The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant and is waived by EDN-62, which accepted the miss, so the gate passes for `lgbm-basic` alone, and the serving sections on latency and image size are still a plan; the explanations are served (FR-08).
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the remaining placeholders are replaced as the `evaluate` stage's criteria and the API land.
 Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 

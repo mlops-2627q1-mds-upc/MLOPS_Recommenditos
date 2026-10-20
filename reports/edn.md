@@ -245,17 +245,20 @@ How to add an entry:
 
 > **Absorbs EDN-09** (2026-09-22): the project moved to Python 3.12 so that `shap` runs for offline analysis.
 
+> **Revised on 2026-10-20**: `shap` became a `pipeline`-group dependency with FR-08's implementation (#136), and the rationale now says why the equality with `shap.TreeExplainer` is no independent check; the decision is unchanged.
+
 - **Date:** 2026-09-22
 - **Milestone:** M4: Model Deployment
 - **Activity / Topic:** ML System Design, Explainability
 - **Participants:** @lukas2510
 - **Decision:** The API computes FR-08's per-request explanation from the booster's own SHAP export, LightGBM's `predict(pred_contrib=True)`.
-  The `shap` package is reserved for offline analysis, is not yet a project dependency, and is never installed in the API image.
+  The `shap` package is a `pipeline`-group dependency for offline analysis and the tests, and is never installed in the API image.
   The project runs on Python 3.12, which `shap` requires.
 - **Alternatives considered:**
   - `shap.TreeExplainer` in the serving path: one implementation everywhere, but `shap` imports `numba` and `llvmlite` at load, and both would enter the image.
   - Stay on Python 3.11 without `shap`: the offline analysis, such as summary plots, still needs the package.
 - **Rationale:** The native export returns the same TreeSHAP values, so serving loses nothing and the image stays inside the size budget of NFR-04 with more headroom.
+  For LightGBM the equality holds by construction, because `shap.TreeExplainer` calls `pred_contrib` itself; the real check is local accuracy, each row's values adding up to the model's log price.
   CatBoost has an equivalent export, so the choice survives a change of model.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
@@ -264,7 +267,7 @@ How to add an entry:
   AI then built Docker images with and without `shap` and compared the two explanations.
   Lukas confirmed on that evidence.
 - **AI interaction evidence:** Claude Code session of 2026-09-22, review of PR #19; Lukas asked: "is this what we would want? or are there better options?".
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-08, [project brief](../docs/docs/project-brief.md) section 6, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-08, [project brief](../docs/docs/project-brief.md) section 6, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19), [PR #165](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/165).
 - **In LaTeX:** yes
 
 ### EDN-12: Retraining and promotion are started by a person, and a failing gate blocks the merge
