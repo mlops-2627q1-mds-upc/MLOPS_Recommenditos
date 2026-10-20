@@ -193,6 +193,33 @@ stages:
       - data/processed/supported_makes.json
 
   # ----------------------------------------------------------------------
+  # comparables: the index of listings `POST /v1/comparables` returns (FR-09).
+  #
+  # Built from the train and validation frames and from no other, so no `ES`
+  # (EDN-03), test or calibration listing reaches it; those two files are its
+  # only data dependencies, which is what makes that checkable here. It is a
+  # file under models/ because it ships in the API image beside the bundle
+  # (FR-12), and `/health` reports the md5 this file's lock records for it.
+  # `build_features.py` is a dependency for `age_years`, the one function age
+  # is computed by.
+  # ----------------------------------------------------------------------
+  comparables:
+    cmd: python3 -m recommenditos.data.build_comparables
+    deps:
+      - recommenditos/data/build_comparables.py
+      - recommenditos/data/build_features.py
+      - recommenditos/config.py
+      - recommenditos/schema.py
+      - recommenditos/pipeline.py
+      - data/processed/train.parquet
+      - data/processed/validation.parquet
+    params:
+      - reference_date
+      - split.holdout_country
+    outs:
+      - models/comparables.parquet
+
+  # ----------------------------------------------------------------------
   # features: one matrix per feature set, per split (#36).
   #
   # `foreach` over the mapping `features.sets`, so the stages are named

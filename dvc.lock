@@ -1137,3 +1137,43 @@ stages:
       hash: md5
       md5: 717b720e30bc208e77eb4277b1fc92e4
       size: 14935
+  comparables:
+    cmd: python3 -m recommenditos.data.build_comparables
+    deps:
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 7de471f48c1afa3f271d30e3f781cd58
+      size: 10301316
+    - path: data/processed/validation.parquet
+      hash: md5
+      md5: 3f3cdac8854fe9803d138619c1ac739d
+      size: 1545269
+    - path: recommenditos/config.py
+      hash: md5
+      md5: 2930e86c1b0156d9626ffb64ff0ee247
+      size: 1535
+    - path: recommenditos/data/build_comparables.py
+      hash: md5
+      md5: 15c2d422b7cef4bf1eacf7c05f9b16f0
+      size: 5741
+    - path: recommenditos/data/build_features.py
+      hash: md5
+      md5: 436def00e39115a838a025a196670d03
+      size: 38657
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: 1aeecabea6313a59af39005ae2827d8a
+      size: 2346
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 1bffdd65677fea913a993e957c3053e1
+      size: 36792
+    params:
+      params.yaml:
+        reference_date: '2025-11-08'
+        split.holdout_country: ES
+    outs:
+    - path: models/comparables.parquet
+      hash: md5
+      md5: 9993b933797d905b2b6271b03bac50ee
+      size: 1956112
