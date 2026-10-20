@@ -313,27 +313,26 @@ def test_the_metrics_artefacts_say_which_data_and_which_estimator_produced_them(
 
 @pytest.mark.req("NFR-01")
 def test_a_model_that_misses_the_criteria_does_not_pass_the_gate(pipeline):
-    # SC-05 has no measurement until the UC2 intervals exist, and a criterion that
-    # was not measured is never a pass, so nothing can be released yet whatever
-    # the fitted estimators score. NFR-01's word is "every", and this is what
-    # keeps it honest.
+    # On the 2,000-row fixture no variant meets every criterion that is not
+    # waived, and a criterion that was not measured is never a pass. NFR-01's
+    # word is "every", and this is what keeps it honest.
     #
     # That the gate discriminates rather than simply refusing everything is
     # asserted in tests/test_model.py::test_the_gate_flips_every_measured_criterion_together,
-    # which drives the same reference values through all five measurable criteria
-    # instead of the three this file used to cover.
+    # and that a waived miss passes while an unlisted one does not in
+    # tests/test_model.py::test_a_waived_failure_passes_the_gate_and_an_unlisted_failure_does_not.
     summary = json.loads(pipeline["summary"].read_text())
     assert summary["gate_passed"] is False
     assert summary["n_variants_passing"] == 0
     # Nothing is put forward for deployment while nothing passes.
     assert summary["deployable_variant"] is None
     # And the artefact says which criteria are outstanding, so a reader can tell
-    # "0 of 4" caused by the model from "0 of 4" caused by a missing measurement.
-    # Both here: SC-05 needs the UC2 intervals, and on 2,000 fixture rows no
-    # segment level reaches the 500-row bar SC-04 needs, so the criterion is not
-    # measured either. On a real run only SC-05 is outstanding; the test below
-    # lowers the bar so SC-04 produces a verdict on the fixture too.
-    assert summary["criteria_not_measured"] == "sc04,sc05"
+    # "0 of 4" caused by the model from "0 of 4" caused by a missing measurement:
+    # SC-05 for the variants without a price range. SC-04 is not measured on the
+    # fixture either (no segment level reaches 500 rows), but it is waived by
+    # EDN-62, so it is reported as waived and not as outstanding.
+    assert summary["criteria_not_measured"] == "sc05"
+    assert summary["waived_criteria"] == "sc04 (EDN-62)"
 
 
 @pytest.mark.req("NFR-01")

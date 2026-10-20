@@ -13,9 +13,9 @@ Three outputs:
 - `metrics.json`, the DVC `metrics` file: the gate verdict NFR-01 reads, plus
   the headline numbers of each variant. Deliberately narrow, because
   `dvc metrics show` flattens nested JSON into one column per leaf. This shape
-  has 37 leaves, 9 plus 7 per variant, of which it renders the ones that are not
-  null - 30 while no variant is deployable and one carries a price range, since
-  SC-05's two leaves are null for a variant without one - and that is past the width a
+  has 42 leaves, 10 plus 8 per variant, of which it renders the ones that are not
+  null - 36 while one variant carries a price range, since SC-05's two leaves are
+  null for a variant without one - and that is past the width a
   plain terminal table keeps, so read it with `dvc metrics show --md`. Anything
   more per variant belongs in the per-variant record below. `dvc metrics diff` is
   long-format and lists only the leaves that changed, which is what compares two
@@ -58,11 +58,14 @@ this stage's own provenance beside the fit's, `evaluate.git_commit`,
 run at the same commit (`recommenditos/provenance.py`).
 """
 
+from collections.abc import Mapping
 import csv
 from dataclasses import dataclass, replace
 from itertools import pairwise
 import json
 from pathlib import Path
+import re
+from types import MappingProxyType
 
 from loguru import logger
 import numpy as np
@@ -85,6 +88,13 @@ from recommenditos.tracking import resume_run
 #: Every criterion NFR-01 gates on. A variant is deployable only when all six
 #: pass, so a `None` here blocks the gate rather than being ignored.
 CRITERIA: tuple[str, ...] = ("sc01", "sc02", "sc03", "sc04", "sc05", "sc06")
+
+#: No criterion waived: the default of the gate functions, so a caller that
+#: passes no waiver gets NFR-01 as written.
+_NO_WAIVER: Mapping[str, str] = MappingProxyType({})
+
+#: What a waiver has to point at: an entry of the Engineering Decision Notebook.
+_EDN_ID = re.compile(r"EDN-\d+")
 
 #: The "close enough" bands problem-spec section 6 reports a share for.
 _CLOSE_ENOUGH_BANDS = {"within_10pct": 0.10, "within_20pct": 0.20}
@@ -807,24 +817,66 @@ def _check_every_criterion_is_decided(record: dict) -> None:
         )
 
 
-def gate_passed(record: dict) -> bool:
-    """Whether every criterion of NFR-01 was measured and met.
+def waived_criteria(params: dict) -> dict[str, str]:
+    """The criteria the team recorded as missed and accepted, each with its EDN entry.
+
+    NFR-01 lets an entry of the Engineering Decision Notebook waive a criterion,
+    and `evaluate.waived_criteria` in `params.yaml` is the one place that lists
+    them (SC-04: EDN-62). A key that is not a criterion, or a reference that is
+    not an EDN ID, is refused: a waiver nobody can trace to a decision is a
+    criterion quietly switched off.
+    """
+    block = params["evaluate"].get("waived_criteria") or {}
+    unknown = sorted(set(block) - set(CRITERIA))
+    untraced = sorted(
+        name for name, reference in block.items() if not _EDN_ID.fullmatch(str(reference))
+    )
+    if unknown or untraced:
+        raise ValueError(
+            f"evaluate.waived_criteria waives {', '.join(unknown) or 'nothing unknown'} that "
+            f"is not one of {', '.join(CRITERIA)}, and gives {', '.join(untraced) or 'none'} "
+            f"no EDN ID such as EDN-62. A criterion is waived only by the EDN entry that "
+            f"accepted its miss (NFR-01)."
+        )
+    return {name: block[name] for name in CRITERIA if name in block}
+
+
+def gate_passed(record: dict, waived: Mapping[str, str] = _NO_WAIVER) -> bool:
+    """Whether every criterion of NFR-01 that is not waived was measured and met.
 
     `all()` over a `None` is `False`, which is how an unmeasured criterion blocks.
     Written this way rather than as `not any(... is False ...)`, which would read
-    an unmeasured criterion as met.
+    an unmeasured criterion as met. A criterion in `waived` does not count either
+    way; `gate_waived` reports it beside the verdict.
     """
-    return all(record[f"{name}_passed"] for name in CRITERIA)
+    return all(record[f"{name}_passed"] for name in CRITERIA if name not in waived)
 
 
-def gate_blocked_by(record: dict) -> str:
+def gate_waived(record: dict, waived: Mapping[str, str] = _NO_WAIVER) -> str:
+    """Each waived criterion with its verdict, its measured value and its EDN entry.
+
+    A string for the same reason as `gate_blocked_by`: it is one `dvc metrics
+    diff` row, so a waiver is in plain sight next to the verdict it changed.
+    """
+    parts = []
+    for name, reference in waived.items():
+        verdict = {True: "passed", False: "failed", None: "unmeasured"}[record[f"{name}_passed"]]
+        measured = record.get(f"{name}_measured")
+        value = "" if measured is None else f" at {measured:.4f}"
+        parts.append(f"{name} {verdict}{value} ({reference})")
+    return "; ".join(parts)
+
+
+def gate_blocked_by(record: dict, waived: Mapping[str, str] = _NO_WAIVER) -> str:
     """The criteria that stop this variant, a miss told apart from a non-measurement.
 
     One string rather than two lists, because this is a `dvc metrics diff` row,
     and it is the most informative line a promotion reviewer reads (EDN-12).
+    A waived criterion stops nothing and is in `gate_waived` instead.
     """
-    failed = [name for name in CRITERIA if record[f"{name}_passed"] is False]
-    unmeasured = [name for name in CRITERIA if record[f"{name}_passed"] is None]
+    counted = [name for name in CRITERIA if name not in waived]
+    failed = [name for name in counted if record[f"{name}_passed"] is False]
+    unmeasured = [name for name in counted if record[f"{name}_passed"] is None]
     parts = []
     if failed:
         parts.append(f"{','.join(failed)} failed")
@@ -983,19 +1035,25 @@ def _segment_table(records: "dict[str, dict]", segments: "tuple[str, ...]") -> "
     )
 
 
-def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
+def gate_summary(
+    records: "dict[str, dict]", *, data_source: str, waived: Mapping[str, str] = _NO_WAIVER
+) -> dict:
     """`metrics.json`: the verdict NFR-01 reads, and the headline of each variant.
 
     Every leaf here is a column of `dvc metrics show` and a candidate row of
     `dvc metrics diff`, so the shape is the promotion reviewer's checklist under
-    EDN-12 rather than an arbitrary summary, and it is kept to 37 leaves.
+    EDN-12 rather than an arbitrary summary, and it is kept to 42 leaves.
     `dvc metrics show` omits a null leaf rather than showing it empty, so
     `deployable_variant` appears as a column only once a variant is deployable;
     `dvc metrics diff` renders it as `-` and shows the transition.
 
     `data_source` is required rather than defaulted, because a default would be
-    the one value that could silently misdescribe a run.
+    the one value that could silently misdescribe a run. `waived` is the criteria
+    an EDN entry accepted as missed (`waived_criteria`): they count towards no
+    verdict here, and `waived_criteria` and each variant's `gate_waived` say
+    which they are and what was measured, so a waiver is never invisible.
     """
+    counted = [each for each in CRITERIA if each not in waived]
     passing = [name for name, record in records.items() if record["gate_passed"]]
     # Variants where nothing that could be measured failed. The leaf that makes
     # this artefact useful while SC-05 is unmeasurable: `n_variants_passing` is 0
@@ -1006,13 +1064,13 @@ def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
     measurable = [
         name
         for name, record in records.items()
-        if not any(record[f"{each}_passed"] is False for each in CRITERIA)
+        if not any(record[f"{each}_passed"] is False for each in counted)
     ]
     outstanding = sorted(
         {
             each
             for record in records.values()
-            for each in CRITERIA
+            for each in counted
             if record[f"{each}_passed"] is None
         }
     )
@@ -1030,19 +1088,23 @@ def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
         "n_variants_passing": len(passing),
         "n_variants_passing_measurable": len(measurable),
         "criteria_not_measured": ",".join(outstanding),
+        # The criteria NFR-01 lets an EDN entry waive, with the entry, so the
+        # verdict above can be read for what it is.
+        "waived_criteria": ", ".join(f"{name} ({entry})" for name, entry in waived.items()),
         # Which data every number below was measured on, so `dvc metrics show`
         # alone tells a real result from one produced on the generated stand-in.
         "data_source": data_source,
         "deployable_variant": None if deployable is None else deployable["variant"],
         "best_variant": best["variant"],
         "best_mdape": best["mdape"],
-        # Seven leaves per variant, so `dvc metrics show --md` stays a table a
+        # Eight leaves per variant, so `dvc metrics show --md` stays a table a
         # person can read and every row of `dvc metrics diff` says something.
         # `estimator` is one of them for the same reason `data_source` is above:
         # the variant *name* says which rung of the ladder was meant, and only
         # this says which model answered for it. SC-05's coverage and verdict are
         # two more, because it is the one criterion only a variant with a price
-        # range can meet, and null for every other (EDN-85).
+        # range can meet, and null for every other (EDN-85). `gate_waived` is the
+        # last: the criteria an EDN entry waived, with what was measured.
         "variants": {
             name: {
                 "estimator": record["estimator"],
@@ -1052,6 +1114,7 @@ def gate_summary(records: "dict[str, dict]", *, data_source: str) -> dict:
                 "sc05_passed": record["sc05_passed"],
                 "gate_passed": record["gate_passed"],
                 "gate_blocked_by": record["gate_blocked_by"],
+                "gate_waived": record.get("gate_waived", ""),
             }
             for name, record in records.items()
         },
@@ -1083,6 +1146,7 @@ def _append_to_the_training_run(record: dict) -> None:
             {
                 "gate_passed": str(record["gate_passed"]),
                 "gate_blocked_by": record["gate_blocked_by"],
+                "gate_waived": record["gate_waived"],
                 "sc04_worst_segment": json.dumps(record["sc04_worst_segment"]),
                 "sc06_worst_field": str(record["sc06_worst_field"]),
             }
@@ -1099,6 +1163,9 @@ def main(
 ):
     params = load_params(params_path)
     criteria = params["evaluate"]["success_criteria"]
+    # Read before anything is measured, so an untraceable waiver fails the stage
+    # before it spends minutes on the variants.
+    waived = waived_criteria(params)
 
     records, inputs = {}, {}
     for variant in params["train"]["variants"]:
@@ -1112,8 +1179,9 @@ def main(
         record.update(
             evaluate_gate(replace(inputs[variant], baseline_mdape=baseline_mdape), criteria)
         )
-        record["gate_passed"] = gate_passed(record)
-        record["gate_blocked_by"] = gate_blocked_by(record)
+        record["gate_passed"] = gate_passed(record, waived)
+        record["gate_blocked_by"] = gate_blocked_by(record, waived)
+        record["gate_waived"] = gate_waived(record, waived)
         path = metrics_dir / f"{variant}.json"
         write_json(record, path)
         logger.info(
@@ -1132,7 +1200,7 @@ def main(
         [row for record in records.values() for row in record["masked_inputs"]],
         _MASKED_INPUT_FIELDS,
     )
-    summary = gate_summary(records, data_source=params["download"]["source"])
+    summary = gate_summary(records, data_source=params["download"]["source"], waived=waived)
     write_json(summary, summary_path)
     logger.success(
         f"Gate on {summary['data_source']} data: "

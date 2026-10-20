@@ -62,6 +62,7 @@ from recommenditos.modeling.evaluate import (
     gate_blocked_by,
     gate_passed,
     gate_summary,
+    gate_waived,
     input_field_columns,
     interval_metrics,
     masking_sweep,
@@ -72,6 +73,7 @@ from recommenditos.modeling.evaluate import (
     segment_level_column,
     segment_levels,
     segment_rows,
+    waived_criteria,
 )
 from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
@@ -2983,6 +2985,69 @@ def test_a_record_that_decides_nothing_for_a_criterion_is_refused():
     for name in CRITERIA:
         with pytest.raises(KeyError):
             gate_passed({key: value for key, value in decided.items() if key != f"{name}_passed"})
+
+
+@pytest.mark.req("NFR-01")
+def test_a_waived_failure_passes_the_gate_and_an_unlisted_failure_does_not():
+    # NFR-01 lets an EDN entry waive a criterion, which `params.yaml` lists. The
+    # waived miss stops nothing and is reported beside the verdict with its value
+    # and its entry; the same miss of a criterion nobody waived still blocks.
+    waiver = {"sc04": "EDN-62"}
+    missed_sc04 = {f"{name}_passed": True for name in CRITERIA} | {
+        "sc04_passed": False,
+        "sc04_measured": 0.168,
+    }
+    assert gate_passed(missed_sc04, waiver) is True
+    assert gate_blocked_by(missed_sc04, waiver) == ""
+    assert gate_waived(missed_sc04, waiver) == "sc04 failed at 0.1680 (EDN-62)"
+
+    missed_both = missed_sc04 | {"sc06_passed": False}
+    assert gate_passed(missed_both, waiver) is False
+    assert gate_blocked_by(missed_both, waiver) == "sc06 failed"
+
+    # Without the waiver, NFR-01 as written.
+    assert gate_passed(missed_sc04) is False
+    assert gate_blocked_by(missed_sc04) == "sc04 failed"
+    assert gate_waived(missed_sc04) == ""
+
+
+@pytest.mark.req("NFR-01")
+def test_the_metrics_file_names_the_waived_criteria_beside_the_verdict():
+    waiver = {"sc04": "EDN-62"}
+    records = {}
+    for name, verdicts in {
+        "lgbm-basic": {"sc04_passed": False},
+        "lgbm-extended": {"sc04_passed": False, "sc06_passed": False},
+    }.items():
+        record = _variant_record(name, 0.07, **verdicts) | {"sc04_measured": 0.17}
+        records[name] = record | {
+            "gate_passed": gate_passed(record, waiver),
+            "gate_blocked_by": gate_blocked_by(record, waiver),
+            "gate_waived": gate_waived(record, waiver),
+        }
+
+    summary = gate_summary(records, data_source="zenodo", waived=waiver)
+
+    assert summary["gate_passed"] is True
+    assert summary["deployable_variant"] == "lgbm-basic"
+    assert summary["waived_criteria"] == "sc04 (EDN-62)"
+    assert summary["variants"]["lgbm-basic"]["gate_waived"] == "sc04 failed at 0.1700 (EDN-62)"
+    assert summary["variants"]["lgbm-extended"]["gate_blocked_by"] == "sc06 failed"
+    assert summary["n_variants_passing_measurable"] == 1
+
+
+@pytest.mark.parametrize(
+    ("block", "message"),
+    [({"sc09": "EDN-62"}, "sc09"), ({"sc04": "accepted"}, "no EDN ID"), ({"sc04": None}, "sc04")],
+)
+def test_a_waiver_that_names_no_criterion_or_no_edn_entry_is_refused(block, message):
+    with pytest.raises(ValueError, match=message):
+        waived_criteria({"evaluate": {"waived_criteria": block}})
+
+
+def test_the_project_waives_only_sc04_and_by_edn_62():
+    # The one waiver the team decided (EDN-62); pinned so a new one is a reviewed change.
+    assert waived_criteria(project_params()) == {"sc04": "EDN-62"}
 
 
 @pytest.mark.req("NFR-01")

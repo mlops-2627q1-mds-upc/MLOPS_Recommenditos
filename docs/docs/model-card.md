@@ -22,8 +22,8 @@ Recommenditos estimates what a used passenger car would be **asked for** on a Eu
 Given a description of a car it returns a point estimate of the listing price (UC1), and for a partial description a price interval with comparable listings (UC2).
 It is the model behind the project's API.
 
-**Status: the four ladder variants train, all six success criteria are measured for the candidate, and nothing is released.**
-The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant, so NFR-01's gate blocks, and the serving sections (latency, image size, explanations) are still a plan.
+**Status: the four ladder variants train, all six success criteria are measured for the candidate, it passes NFR-01's gate with SC-04 waived, and nothing is released yet.**
+The training procedure, the point metrics, SC-01 to SC-06 and the UC2 price range below are measured; SC-04 fails for every variant and is waived by EDN-62, which accepted the miss, so the gate passes for `lgbm-basic` alone, and the serving sections (latency, image size, explanations) are still a plan.
 It follows the [Hugging Face annotated model card template](https://huggingface.co/docs/hub/model-card-annotated) and is a living document: the remaining placeholders are replaced as the `evaluate` stage's criteria and the API land.
 Sections that describe an intention rather than a fact carry the status markers **[decided]**, **[proposed]** and **[open]**, defined in the [project brief](project-brief.md).
 
@@ -57,7 +57,7 @@ The same trained booster serves the point estimate, its explanation and, through
 - **Version:** none yet.
   From the first release on, the served version is the one `dvc.lock` on `main` points to, reported by `GET /health` and verified in CI ([specification](specification.md) FR-12, EDN-08).
 - **Status:** `lgbm-basic` is the candidate, not released.
-  All four variants of the ladder fit, and five of the six success criteria are now measured: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 passes for the candidate, the one variant that carries the UC2 price range, and is not measured for the others. NFR-01's gate therefore blocks. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
+  All four variants of the ladder fit, and all six success criteria are measured for the candidate: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 passes for the candidate, the one variant that carries the UC2 price range, and is not measured for the others. NFR-01's gate, with SC-04 waived by EDN-62, therefore passes for the candidate alone. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
 
 ### Model Sources
 
@@ -149,7 +149,7 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
   Closing that gap, by raising the support threshold, lowering SC-04's segment size, or naming these makes as low-confidence in the response, is an open task for Milestone 3.
 - **Classic and old cars: an accepted limitation.**
   The candidate misses SC-04 for cars older than 20 years: its MdAPE there is 16.80 % over 784 test rows against the 15 % bound, and 18.2 % on average over 20 other splits (standard deviation 0.69 pp, range 17.10 % to 19.81 %), so the committed figure is the most favourable of 21 draws.
-  The team accepted the miss and reports the criterion as missed (EDN-62), because an upper age bound would pass SC-04 by removing the rows it fails on and a higher threshold would fit the criterion to its result: the 15 % bound, the scope and the age breakdown stay as they are, and NFR-01's gate stays closed on SC-04.
+  The team accepted the miss and reports the criterion as missed (EDN-62), because an upper age bound would pass SC-04 by removing the rows it fails on and a higher threshold would fit the criterion to its result: the 15 % bound, the scope and the age breakdown stay as they are, and NFR-01's gate reports SC-04 as missed and waived by EDN-62 (`gate_waived` in `metrics.json`) rather than blocking on it.
   The extended features make the segment worse (18.45 %), the hyperparameter search kept the committed values after 34 fits (EDN-73), and the segment is over the bound on 20 of 20 other splits (EDN-32).
   What a user must know: an estimate for a car older than 20 years is less reliable than for a younger one, with half of these estimates off by more than 16.80 % of the listing price against 6.73 % over all cars, and 56.0 % of them within 20 % of it against 90.0 %.
   The limitation is accepted for this model and this delivery, and a scope change of the kind EDN-04 made for price or a segment-specific model would be a new decision.
@@ -490,7 +490,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
   Definitions are in the [problem specification](problem-spec.md#6-metrics) and the [glossary](#glossary).
 
 Every criterion is measured once per candidate model on the test set, logged to MLflow, and asserted by the model tests from Milestone 3.
-A model is released only if it meets all six ([requirements](requirements.md#2-non-functional-requirements) NFR-01), which the gate in front of a promotion enforces (FR-15).
+A model is released only if it meets all six ([requirements](requirements.md#2-non-functional-requirements) NFR-01), except a criterion an EDN entry accepted as missed and `params.yaml` lists under `evaluate.waived_criteria`, which the gate reports as waived; the gate in front of a promotion enforces it (FR-15).
 
 ### How comparable the sets are, and how much a figure moves with the split
 
@@ -562,7 +562,7 @@ And whether the UC2 intervals cover each make equally, Mercedes-Benz above all s
 The criteria are defined in the [problem specification](problem-spec.md#8-success-criteria) (EDN-06, with SC-06 added by EDN-15).
 Both LightGBM variants are shown, because the choice between them is what the criteria decided: **`lgbm-basic` is the candidate this card puts forward** (EDN-62), not the variant with the lower pooled MdAPE.
 The numbers come from the pipeline run described under [the ladder](#the-experiment-ladder-as-measured), which is the one the committed `dvc.lock` records and the one the four MLflow runs hold.
-It is a **measured candidate, not a release**: the gate blocks, so nothing is promoted, and promotion is a human decision in any case (EDN-12).
+It is a **measured candidate, not a release**: the gate passes for it with SC-04 waived, and promotion is a human decision (EDN-12).
 
 | ID | Criterion | Target | `lgbm-basic` (the candidate) | `lgbm-extended` |
 |----|-----------|--------|------------------------------|-----------------|
@@ -577,8 +577,8 @@ These are the figures of the committed split: over 20 other splits the candidate
 
 `b0` and `b1` miss SC-01, SC-02 and SC-03 as well, and are baselines rather than candidates; their per-criterion numbers are in `reports/metrics/<variant>.json`.
 
-**No variant is deployable**, because SC-04 fails for all four, and the gate reports that rather than putting a model forward.
-The candidate above is a documented judgement about which model *would* be released, not a computed one: `metrics.json`'s `best_variant` stays the lowest MdAPE overall, because that field means what it says, and `deployable_variant` stays null while anything blocks.
+**`lgbm-basic` is the one deployable variant**: SC-04 fails for all four and is waived by EDN-62, `lgbm-extended` misses SC-06, `b0` and `b1` miss SC-01 to SC-03, and the three without a price range cannot meet SC-05.
+`metrics.json` names it as `deployable_variant`, lists the waiver as `waived_criteria: sc04 (EDN-62)` and gives each variant's `gate_waived` with the measured SC-04 value, so the waiver is read beside the verdict; `best_variant` stays the lowest MdAPE overall, because that field means what it says.
 The two failures are the interesting half of this card, and neither is a surprise:
 
 - **SC-04 fails on old cars, for every variant, and the extended features do not close it.**
@@ -677,7 +677,7 @@ So the honest statement about it is not that it is tuned to an optimum but that 
 Three risks going into the rest of Milestone 3, all three now measured rather than anticipated:
 
 - **SC-04 is missed on cars older than 20 years, and the miss is an accepted limitation, not open work (EDN-62).**
-  The candidate is at 16.80 % against the 15 % bound (18.2 % on average over 20 other splits), NFR-01's gate stays closed on it, and [Bias, Risks, and Limitations](#bias-risks-and-limitations) states it in full.
+  The candidate is at 16.80 % against the 15 % bound (18.2 % on average over 20 other splits), NFR-01's gate reports it as waived by EDN-62, and [Bias, Risks, and Limitations](#bias-risks-and-limitations) states it in full.
 - The low-support makes SC-04 cannot see at all, because they do not reach its 500-row minimum: `Honda` at 177 test rows down to `Ethanol` at 3, ten levels in all, reported in `reports/metrics/segments.csv` with the rule that excluded each one.
 - **SC-06 did genuinely fail, on `lgbm-extended`**, which is what settled the candidate. It cannot be demonstrated on the synthetic fixture, whose generator derives price from a formula that ignores the optional columns, so the test suite drives it with a constructed degrading model instead.
 

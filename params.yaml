@@ -452,6 +452,14 @@ evaluate:
     - model
     - registration_date
     - mileage_km_raw
+  # Criteria the team recorded as missed and accepted, each with the EDN entry
+  # that accepted it. NFR-01 lets only such an entry waive a criterion: a waived
+  # criterion counts towards no gate verdict, and metrics.json reports it beside
+  # the verdict with what was measured (`waived_criteria`, `gate_waived`).
+  # SC-04 misses on cars over 20 years for every variant, and EDN-62 keeps the
+  # 15 % bound and accepts the miss as a stated limitation.
+  waived_criteria:
+    sc04: EDN-62
   # SC-01 to SC-06 of problem-spec section 8, as numbers the `evaluate` stage
   # can check. NFR-01 gates deployment on all six, so each one is written to
   # metrics.json with its measured value and a pass or fail.
