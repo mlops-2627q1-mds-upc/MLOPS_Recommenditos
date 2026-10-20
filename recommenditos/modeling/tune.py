@@ -30,10 +30,12 @@ split is grouped by seller (EDN-14), with the same draws for every point. The
 intervals are simultaneous: the max-statistic bootstrap widens them until all
 of them hold together in 95 % of the draws, because the luckiest of eleven
 points no better than the reference clears a per-point interval in up to about
-one sweep in four. A point is adopted only when its simultaneous interval lies
-entirely below zero, and when several do, the one with the lowest validation
-L1. Validation MdAPE is reported beside it, through `evaluate`'s own
-`point_metrics` and `relative_error`, and decides nothing.
+one sweep in four. The k-th sweep on one validation split uses 1 - 0.05/k
+instead (`--sweeps-on-split`), for the same reason across sweeps. A point is
+adopted only when its simultaneous interval lies entirely below zero, and when
+several do, the one with the lowest validation L1. Validation MdAPE is reported
+beside it, through `evaluate`'s own `point_metrics` and `relative_error`, and
+decides nothing.
 
 **What it records (issue #88).** Every fit is measured by CodeCarbon exactly as
 `train` measures one, and logged as its own MLflow run in the experiment
@@ -381,6 +383,18 @@ class Protocol:
     draws: int = BOOTSTRAP_DRAWS
     confidence: float = CONFIDENCE
     experiment: str = TUNING_EXPERIMENT
+
+
+def family_confidence(sweeps_on_split: int) -> float:
+    """The joint coverage of one sweep among `sweeps_on_split` on one validation split.
+
+    Bonferroni across the sweeps: at this level k sweeps together adopt a lucky
+    point in at most 5 % of cases (EDN-73). One sweep keeps the 95 % the sweeps
+    before issue #117 used.
+    """
+    if sweeps_on_split < 1:
+        raise TuningError(f"sweeps_on_split must be at least 1, not {sweeps_on_split}.")
+    return 1 - (1 - CONFIDENCE) / sweeps_on_split
 
 
 def parse_assignments(values: Sequence[str], *, single: bool) -> dict[str, list]:
@@ -926,7 +940,7 @@ def _log_summary(context: _Context, document: dict) -> None:
 
 
 @app.command()
-def main(
+def main(  # noqa: PLR0913, PLR0917 (typer reads each command line option as a parameter)
     variant: Annotated[str, typer.Argument(help="a key of train.variants in params.yaml")],
     grid: Annotated[
         list[str],
@@ -938,6 +952,14 @@ def main(
         typer.Option("--fix", help="key=value set on every point, the reference included"),
     ] = None,
     ceiling: int = SEARCH_CEILING,
+    sweeps_on_split: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="sweeps decided on this validation split so far, this one included; "
+            "the family level is Bonferroni-corrected across them",
+        ),
+    ] = 1,
 ):
     """Run one sweep on the default paths, as `docs/docs/pipeline.md` describes."""
     try:
@@ -949,7 +971,7 @@ def main(
                 grid=parse_assignments(grid, single=False),
                 fixed={key: values[0] for key, values in fixed.items()},
             ),
-            protocol=Protocol(ceiling=ceiling),
+            protocol=Protocol(ceiling=ceiling, confidence=family_confidence(sweeps_on_split)),
         )
     except TuningError as error:
         # Logged rather than raised, for the reason `tracking.main` gives: a

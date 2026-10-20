@@ -900,30 +900,30 @@ How to add an entry:
 
 ### EDN-73: Hyperparameters change only under a written tuning protocol
 
-> **Absorbs EDN-70 and EDN-78** (2026-10-05, 2026-10-06): the tree ceiling, and the search over both LightGBM variants.
+> **Absorbs EDN-70 and EDN-78** (2026-10-05, 2026-10-06): the tree ceiling, and the search over both LightGBM variants. **Revised on 2026-10-20**: a correction across sweeps, set before issue #117's search.
 
 - **Date:** 2026-10-05
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Hyperparameter Tuning, Evaluation Protocol
-- **Participants:** @lukas2510; @kadameit decided the search over both variants (2026-10-06)
-- **Decision:** `learning_rate` 0.05 and `num_leaves` 63 stay, because no search found a point measurably better on the validation split.
-  A committed hyperparameter is replaced only under the protocol in the pipeline docs: selection on the validation split alone, by L1, and only when the simultaneous 95 % interval of the difference lies below zero.
+- **Participants:** @lukas2510; @kadameit decided the search over both variants (2026-10-06) and the correction (2026-10-20)
+- **Decision:** `learning_rate` 0.05, `num_leaves` 63, and `min_child_samples` 20 stay, because no search found a point measurably better on the validation split.
+  A committed value is replaced only under the protocol in the pipeline docs: selection on the validation split by L1, when a point's simultaneous interval of the difference lies below zero, at level 1 - 0.05/k for k sweeps decided on that split.
   `n_estimators` is a ceiling of 5,000 with early stopping after 50 rounds.
-  `tune.py` runs a search outside `dvc repro` and keeps its record in MLflow only.
-  NFR-10's 15 minutes cover the final fit; a search's energy is reported apart.
+  `tune.py` searches outside `dvc repro`, recorded in MLflow only.
 - **Alternatives considered:**
   - Adopt the point with the lowest validation L1: its gain lies inside the noise.
-  - Random or Optuna search with cross-validation: a new dependency and about five times the fits, for a region found flat.
-- **Rationale:** Across the twelve points of the first grid, no interval of the difference to the committed point lies below zero.
-  At 1,000 the ceiling ended both fits; at 5,000 the validation curve decides the tree count.
-  The search of 2026-10-06 covered both LightGBM variants and `min_child_samples`, reproduced the first grid, and kept every committed value.
+  - Optuna or seller-grouped cross-validation: about five times the fits and new code, for a region found flat.
+  - No correction across sweeps: with k sweeps, a lucky point is adopted in up to k times 5 % of cases.
+- **Rationale:** Across the twelve points of the first grid, no interval of the difference lies below zero.
+  At 5,000 the validation curve, not the ceiling, decides the tree count.
+  The validation split is unchanged since 2026-10-01, and the MLflow experiment holds seven sweeps on it before issue #117, so its two sweeps decide at k = 9.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
-- **Assessment of the AI contribution:** AI designed the first sweep and stopped for the decision instead of committing a tuned value.
-  An independent AI review corrected the protocol: its first rule used an interval per point, which is not safe across eleven comparisons.
-  For the search of 2026-10-06 AI recommended committing the sweep records beside MLflow; Kevin had it check the course demo, which keeps its emissions in MLflow only, and chose that.
-- **AI interaction evidence:** Claude Code sessions of 2026-10-05 (issue #64) and of 2026-10-06 and 2026-10-09 (issue #88).
-- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [`early_stopping_ceiling_results.txt`](analysis/early_stopping_ceiling_results.txt), [PR #77](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/77), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88).
+- **Assessment of the AI contribution:** AI designed the sweeps and stopped before each decision.
+  An independent AI review replaced a per-point interval, unsafe across eleven comparisons, with the simultaneous one.
+  AI counted k from MLflow and `dvc.lock`; Kevin chose Bonferroni over grouped cross-validation.
+- **AI interaction evidence:** Claude Code sessions on issues #64, #88, and #117.
+- **Other evidence:** "Tuning a hyperparameter" in [the pipeline docs](../docs/docs/pipeline.md), [`tuning_sweep_results.txt`](analysis/tuning_sweep_results.txt), [issue #88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/88), [issue #117](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/117).
 - **In LaTeX:** yes
 
 ### EDN-75: The test suite also runs on Windows in CI

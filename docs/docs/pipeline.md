@@ -267,7 +267,7 @@ A committed hyperparameter changes only through this protocol ([EDN-73](https://
 The protocol exists because a sweep chooses among many noisy comparisons, so the best-looking point is the one most likely to look better than it is, and because the test split must never take part in a choice it is later asked to judge.
 Its decision step is `recommenditos/modeling/tune.py`, which fits every point of a grid, measures and tracks each fit, and decides on the validation split; queued `dvc exp` runs can **screen** a wider set of candidates first, but they are optional.
 
-Four terms carry it:
+Five terms carry it:
 
 - **Sweep:** one search run for one variant over one small grid of hyperparameter values, for example `lgbm-extended` over `learning_rate` x `num_leaves`.
   It fits every point of the grid plus the *reference* (the values committed in `params.yaml`), compares each point with the reference on the validation split, and ends in one verdict: keep the reference, or adopt one point.
@@ -280,6 +280,9 @@ Four terms carry it:
   The 2,000 differences give a 95 % interval per point.
 - **Simultaneous interval:** with eleven points compared against one reference, one of them clears a single 95 % interval by chance in up to about one sweep in four (the winner's curse).
   The max-statistic bootstrap therefore widens all intervals, by a multiplier of about 2.8 instead of 1.96, until they hold together in 95 % of the draws.
+- **Sweeps on a split:** the same curse acts across sweeps, because every sweep decides on the same validation rows.
+  Since issue #117 the 5 % is therefore split between them (Bonferroni): the k-th sweep on a validation split holds its intervals together at the level 1 - 0.05/k, the level at which k sweeps together adopt a lucky point in at most 5 % of cases.
+  k counts every sweep that has decided on the current validation split, this one included, and starts again at 1 when the split changes.
 
 And these rules:
 
@@ -288,6 +291,7 @@ And these rules:
 - **The metric is `validation_l1_log_price`**, which `train` logs to MLflow and writes into `model.json`.
   It is what early stopping reads, and on this data its bootstrap intervals are about 2.5 times narrower than MdAPE's relative to the value, so it can resolve differences MdAPE cannot. Validation MdAPE is reported beside it and decides nothing.
 - **A value replaces the committed one only when the difference is resolved for the whole sweep at once.** A point is adopted only when its simultaneous interval of the validation L1 difference lies entirely below zero, and when several do, the one with the lowest validation L1.
+  The interval is at the sweep's family level, 1 - 0.05/k, which `--sweeps-on-split k` sets; its default of 1 keeps the 95 % the sweeps before issue #117 used.
   On this validation split that resolves a difference of about 1 % and nothing smaller: in the four sweeps of issue #88 the simultaneous half-widths ran from 0.0008 to 0.0015, which is 0.8 % to 1.6 % of the reference's validation L1 (0.100 for `lgbm-basic`, 0.097 for `lgbm-extended`), and the best point of any sweep was 0.4 % better.
 - **Every point is decided by early stopping.** The search fits every point at a ceiling of 20,000 trees, far past the curve, so the comparison is between early-stopped models (EDN-73); a point the ceiling still ended is flagged and never adopted.
   The search's validation figures are optimistic, because early stopping picks each point's tree count on the same validation rows that score it.
@@ -326,6 +330,18 @@ Since a sweep writes nothing into the working tree, sweeps can follow one anothe
 When the search ran on 2026-10-06, `lgbm-basic`'s first grid repeated EDN-73's twelve fits on the real snapshot: the same best rounds, validation metrics, intervals and verdict, with only the fit times differing because the machine did.
 A sweep of `lgbm-basic` run today fits it as the `train` stage does, with the blanked copies of EDN-82, so it would not repeat them.
 All four sweeps of issue #88 kept their reference, so the second grids ran without `--fix`; their records are in MLflow, each found with the filter `tags.sweep = "<id>"`, and the verdicts in the [model card](model-card.md#hyperparameters-as-trained) (EDN-73).
+
+Before a sweep, count k from the MLflow experiment `recommenditos-price-tuning`: every distinct `sweep` tag whose runs read today's validation split, which is the same as long as the `md5` of `data/processed/validation.parquet` in `dvc.lock` is.
+That file has been unchanged since 2026-10-01, and on it the experiment held seven sweeps before issue #117: the four of issue #88, `116-blanked-fields` (EDN-82), and `blanked-lgbm-basic-lr-leaves` and `blanked-lgbm-basic-min-child-samples` of 2026-10-17.
+Issue #117's two sweeps of `reg_lambda`, LightGBM's L2 penalty, optional in `params.yaml` at its default of 0.0, were the eighth and ninth and both decided at k = 9:
+
+```bash
+uv run python -m recommenditos.modeling.tune lgbm-basic   --grid reg_lambda=0,1,10,100 --sweeps-on-split 9 --sweep 117-lgbm-basic-reg-lambda
+uv run python -m recommenditos.modeling.tune lgbm-extended   --grid reg_lambda=0,1,10,100 --sweeps-on-split 9 --sweep 117-lgbm-extended-reg-lambda
+```
+
+The seven earlier sweeps decided at 95 %, but all kept their reference, and a stricter level can only turn an adoption into a keep, so at k = 9 their verdicts are the same and the nine sweeps hold the 5 % together.
+A sweep after them uses k = 10, and so on; should an earlier sweep have adopted a point, it would be rechecked at the new k.
 
 Screening, when a wider set of candidates is worth a look before the decision step, is one queued experiment per point, targeted at the variant's `train` stage:
 
