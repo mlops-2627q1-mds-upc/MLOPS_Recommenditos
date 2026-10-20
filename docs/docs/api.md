@@ -18,6 +18,8 @@ make api                   # uvicorn on http://127.0.0.1:8000
 The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
 A bundle the API cannot serve, for example one that consumes no column for a field FR-01 requires, stops the service at startup instead of failing on the first request.
 
+The deployed service runs the same app in a container behind nginx, on a laptop as on the VM: [Deployment](deployment.md) says how to build, start and check that stack.
+
 A valuation:
 
 ```bash

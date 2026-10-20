@@ -1075,7 +1075,27 @@ How to add an entry:
 
 ### EDN-86: Where the prediction log and the feedback are stored (#140)
 
-### EDN-87: How the API runs on the VM in Milestone 4 (#142)
+### EDN-87: The API runs on the VM as a Compose stack behind nginx from Milestone 4
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Containerization
+- **Participants:** @lukas2510 decided ([issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142))
+- **Decision:** From M4 on, the API runs on the VM as a Docker Compose stack: the API image, with the serving runtime and the model bundle, behind nginx, the only published container, which refuses `/feedback` and `/metrics`.
+  Until CD exists, the image is built on a laptop and copied with `docker save | ssh docker load`.
+- **Alternatives considered:**
+  - The course demo's recipe (`uv sync`, `dvc pull`, uvicorn under systemd, nginx): M5 replaces it with containers, so two deployments to build and document.
+  - Building the image on the VM: needs the repository, DVC and a DagsHub token on a shared machine.
+- **Rationale:** The report describes containers under M5 either way, so the demo's recipe builds something we plan to discard, while M5 adds CI/CD, the image scan and the hardening to this stack.
+  Measured locally, the image is 665 MB (NFR-04: 1 GB), and `/health` answers again 3 s after the API process is killed (NFR-05: 30 s).
+  nginx stays over Caddy and Traefik, whose main gain, automatic TLS, EDN-13 does not need.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out both options in the issue and recommended Compose, which @lukas2510 chose.
+  AI then built and measured the stack and chose to copy the image; nothing about the VM is verified yet.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
+- **Other evidence:** [Issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142), [deployment docs](../docs/docs/deployment.md), [`compose.yaml`](../deploy/compose.yaml), [`nginx.conf`](../deploy/nginx.conf).
+- **In LaTeX:** yes
 
 ### EDN-88: The latency, throughput and resource targets after the load test (#143)
 
