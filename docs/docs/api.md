@@ -97,7 +97,7 @@ Nothing in the explanation is rounded, so that the product reproduces the unroun
 When the model's estimate lies outside the price range of its training data, `price_eur` is that range's bound and `warnings` says so with the pointer `#`; the explanation then gives the estimate before the bound.
 No listing of the data reaches the bound with `lgbm-basic`.
 
-The explanation is the costliest step of a request, because TreeSHAP walks each of the 1,394 trees of `lgbm-basic` once per feature path.
+The explanation is the costliest step of a request, because TreeSHAP visits every leaf of each of the 1,394 trees of `lgbm-basic`, where a prediction follows one path per tree.
 Measured in-process with `TestClient` on a shared 4-core development laptop, over 394 requests built from test listings, it took p50 34 ms and p95 49 ms of a request that took p50 63 ms and p95 93 ms; a second run under heavier load from other processes gave 44 and 71 ms of 81 and 140 ms.
 Both are inside NFR-02's 200 ms for `/predict`, which the load test on the target VM checks.
 
