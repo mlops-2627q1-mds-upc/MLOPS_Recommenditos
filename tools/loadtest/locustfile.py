@@ -60,7 +60,9 @@ def _plan_the_mix(environment: Environment, **_: Any) -> None:
     options = _options(environment)
     lines = Path(options.bodies).read_text(encoding="utf-8").splitlines()
     bodies = [json.loads(line) for line in lines if line.strip()]
-    with urlopen(f"{str(environment.host).rstrip('/')}/openapi.json", timeout=10) as answer:
+    # The target the person running the test named with --host.
+    url = f"{str(environment.host).rstrip('/')}/openapi.json"
+    with urlopen(url, timeout=10) as answer:
         openapi = json.load(answer)
     plan = _state["plan"] = build_plan(openapi, bodies)
     for endpoint in plan.endpoints:

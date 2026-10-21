@@ -62,10 +62,12 @@ _SCRAPE = (
     "print(urllib.request.urlopen('http://127.0.0.1:8000/metrics', timeout=10).read().decode())"
 )
 #: Prints the log's highest sequence number, or the request IDs of the records
-#: above the one given; `-` when the container has no log.
-_READ_LOG = f"""
+#: above the one given; `-` when the container has no log. A plain string,
+#: not an f-string, so it is visibly no query built from input; the variable it
+#: reads is `PREDICTION_LOG_ENV_VAR`.
+_READ_LOG = """
 import os, sqlite3, sys
-path = os.environ.get("{PREDICTION_LOG_ENV_VAR}", "")
+path = os.environ.get("RECOMMENDITOS_PREDICTION_LOG", "")
 if not path or not os.path.exists(path):
     print("-")
     raise SystemExit
@@ -91,8 +93,13 @@ def seconds(duration: str) -> int:
 
 
 def docker(*args: str) -> str:
+    # Arguments this module builds itself; `docker` from PATH, as a user runs it.
     return subprocess.run(
-        ["docker", *args], capture_output=True, text=True, check=True, encoding="utf-8"
+        ["docker", *args],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     ).stdout
 
 
@@ -309,6 +316,7 @@ def run(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     environment = {**os.environ, "PYTHONPATH": str(ROOT)}
 
     def load() -> None:
+        # This interpreter running Locust with arguments built above.
         subprocess.run(command, cwd=ROOT, env=environment, check=True)
 
     if args.no_energy:
