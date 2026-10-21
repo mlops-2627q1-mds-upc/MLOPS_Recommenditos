@@ -159,9 +159,12 @@ Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits c
 Issue #117 swept `reg_lambda`, LightGBM's L2 penalty, at 0, 1, 10, and 100 for both variants on 2026-10-20, with the interval corrected across the nine sweeps on the validation split (EDN-73), and kept 0 for both.
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
-Price ranges (UC2): **Conformalized Quantile Regression** with MAPIE (1.x API) on top of quantile LightGBM models (e.g. 5 % / 95 %).
-Train with random masking of optional fields so the model produces wider intervals for partial inputs.
-The calibration set must use the same masking, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
+Price ranges (UC2), **implemented** ([EDN-85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), #137): **Conformalized Quantile Regression** with MAPIE 1.6 on quantile LightGBM models at 5 %, 95 % and 50 %, part of the `lgbm-basic` bundle.
+They are trained on the listings plus one copy of each with every field but `make` omitted (FR-02 requires `make` alone) and one with a random subset omitted, so a partial request gets a wider range.
+The calibration split gets the same copies, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
+MAPIE runs in training only; the bundle stores the boosters and the two conformity offsets, and serving adds them up.
+Measured on the test split, the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes, and its mean width is 0.46 times the median for a full input and 0.93 times for P1.
+The typical price of a request missing an FR-01 required field comes from the 50 % quantile model, because `lgbm-basic` has never seen a required field missing: on a make-only request its MdAPE is 98.5 % against 40.1 % for the 50 % model (FR-07, EDN-85) (calibration split, `reports/analysis/price_range_point_estimate_results.txt`).
 
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
 
@@ -185,7 +188,7 @@ SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps th
 Comparable listings: a filtered lookup over the processed listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
 The exact window is defined in the [specification](specification.md) FR-09.
 
-Explainability: SHAP (TreeExplainer) per prediction and globally.
+Explainability: TreeSHAP per prediction, from the booster's own export and summed per request field (FR-08), and globally with the `shap` package offline.
 
 Why gradient boosting: best-in-class on medium tabular data, native categoricals and missing values, trains in minutes on CPU, small artefacts, exact SHAP.
 Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical Bayes, LLM zero-shot.
@@ -237,7 +240,9 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
   It exits 0 whatever it finds, so `tools/notebook_lint.py` reads its JSON report and is the gate; the rules it enforces are the table in [Notebooks](notebooks.md#pynblint-rules).
 - **SHAP 0.52** requires Python 3.12+. **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): we bumped `requires-python` to `~=3.12.0` for this, checked against the full planned M2-M5 dependency set (`shap`, `mlflow`, `lightgbm`, `catboost`, `mapie`, `fastapi`, `great-expectations`, `dvc`, `pytest-cov`, `codecarbon`), which all resolve under 3.12 with no upper-bound conflicts.
   **[decided]**, [EDN-11](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `shap` itself is a training/notebook dependency only (global analysis, summary plots), never installed in the API image.
-  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), verified bit-identical to `shap.TreeExplainer`.
+  It unconditionally pulls in `numba` and `llvmlite` (measured 189 MB) just to import the module, which a real serving image does not need: the API computes per-request explanations from the trained booster's own SHAP export instead (see [specification](specification.md) FR-08), bit-identical to `shap.TreeExplainer`.
+  For a LightGBM booster `shap.TreeExplainer` calls that same export, and its own tree parser cannot read LightGBM's categorical splits, so the identity is by construction; `tests/test_model.py` also checks that each row's values add up to the model's log price.
+  `shap` sits in the `pipeline` group, which the test suite installs.
 - **Great Expectations 1.23.2** works on our pandas-3 frames for every expectation the suites use, each checked against a frame that satisfies it and one that breaks it ([EDN-68](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/gx_probe.py`).
   Two gaps: it compares only a column's scalar type, so it cannot tell a nullable, extension or `object` dtype from its counterpart (`datetime64[us]` passes `datetime64[ns]`, `boolean` passes `bool`, `Float64` passes `float64`, `object` and `string[python]` pass `str`), and `schema.py` alone checks the declared dtype; and it cannot bound a text date, so the raw suite sees `registration_date` parsed.
   It is a pipeline dependency, not part of the API image.
@@ -246,7 +251,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 - **Dependency groups** **[decided]**, [EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `[project] dependencies` in `pyproject.toml` is the serving runtime only, and the API image installs that alone (`uv sync --no-default-groups`).
   Everything else is in PEP 735 groups (`pipeline`, `notebook`, `docs`, `test`, `dev`), and `default-groups = "all"` keeps a plain `uv sync` installing the whole environment.
   Measured from `uv.lock` on 2026-10-05: the runtime is 23 distributions, the project itself included, and 421 MB of site-packages (519 MB with bytecode), against 248 distributions and 815 MB (1,054 MB) for the full environment; pyarrow alone is 157 MB of it.
-  FastAPI, uvicorn and pydantic join the runtime in M4; Great Expectations, CodeCarbon and `shap` go into groups.
+  FastAPI, uvicorn and pydantic joined the runtime with the API in M4 ([The API](api.md)); Great Expectations, CodeCarbon and `shap` go into groups.
   CI's `Serving runtime` job (`make test-serving`), a required check, runs the serving path from the runtime set and the test runner alone, so a training-only import in serving code fails the build.
 
 ## 7. Milestones
