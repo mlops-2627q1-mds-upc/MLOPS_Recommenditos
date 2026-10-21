@@ -48,7 +48,7 @@ What each part guarantees:
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
-- **Docker** keeps each container's log in at most five files of 10 MB, so the two logs take at most 200 MB of the VM's disk (NFR-04), about 120,000 requests of history each.
+- **Docker** keeps each container's log in at most five files of 10 MB, so the two logs take at most 100 MB of the VM's disk (NFR-04); the API's 50 MB hold about 120,000 requests of history.
 
 ## Run it locally
 

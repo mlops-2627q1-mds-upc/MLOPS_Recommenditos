@@ -13,8 +13,8 @@ name: recommenditos
 
 # Docker keeps a container's log in json-file without a limit by default. Each
 # service keeps at most 5 files of 10 MB, 100 MB in all, of the VM's 20 GB
-# (NFR-04): the API's healthcheck alone writes about 3.5 MB a day, and 100 MB
-# hold about 120,000 requests of history.
+# (NFR-04): the API's healthcheck alone writes about 3.5 MB a day, and each
+# service's 50 MB hold about 120,000 requests of history.
 x-logging: &logging
   driver: json-file
   options:
