@@ -34,7 +34,7 @@ flowchart TB
         dvc["<b>DVC pipeline</b> [dvc repro]<br/>download to evaluate"]
         dagshub[("<b>DagsHub</b><br/>DVC remote, MLflow tracking")]
         ci["<b>CI</b> [GitHub Actions]<br/>tests, Promotion gate,<br/>Integration (Compose stack)"]
-        cd["<b>CD</b> [GitHub Actions, GHCR]<br/>M5"]
+        cd["<b>CD</b> [GitHub Actions, GHCR]<br/>builds, pushes and deploys the image<br/>M5"]
     end
 
     client -->|"HTTP"| proxy
@@ -50,7 +50,6 @@ flowchart TB
     dvc -.->|"copied at image build"| comparables
     dvc -->|"dvc.lock, metrics.json<br/>in a pull request"| ci
     ci -.->|"merge to main"| cd
-    cd -.->|"deploys the image"| serving
 
     classDef m4 stroke:#1f6feb,stroke-width:2px,stroke-dasharray:6 4
     classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
@@ -79,7 +78,7 @@ The only state it writes is the prediction log, so a worker or the whole contain
 ## Physical view: deployment
 
 ```mermaid
-flowchart LR
+flowchart TB
     user["<b>Client</b>"]
 
     subgraph laptop["Team laptop, until CD exists"]
@@ -104,7 +103,8 @@ flowchart LR
     proxyc -->|"api:8000"| apic
     apic --- tmpfs
     apic -.- vol
-    m6 -.->|"/metrics, the log"| apic
+    m6 -.->|"scrape /metrics"| apic
+    m6 -.->|"read the log"| vol
     image -->|"docker save #124; ssh docker load"| apic
     ghcr -.->|"docker compose pull"| apic
 
