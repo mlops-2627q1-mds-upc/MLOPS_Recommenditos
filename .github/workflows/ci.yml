@@ -17,10 +17,16 @@ concurrency:
 permissions:
   contents: read
 
+# The Linux jobs name their image, ubuntu-24.04, rather than ubuntu-latest, which
+# GitHub moves to Ubuntu 26 from 2026-10-19 (actions/runner-images#14748). Every
+# run then uses the image the jobs were written and tested on, and moving to a new
+# image is a pull request of its own instead of a red run nobody caused. GitHub
+# supports the 24.04 image well past the course; the arm64 report job already
+# pins ubuntu-24.04-arm.
 jobs:
   changes:
     name: Detect changed areas
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       code: ${{ steps.filter.outputs.code }}
       serving: ${{ steps.filter.outputs.serving }}
@@ -98,7 +104,7 @@ jobs:
 
   pre-commit:
     name: Lint & format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -127,7 +133,7 @@ jobs:
   # seconds, with no project sync, no data and no credentials.
   notebook-lint:
     name: Notebook lint (Pynblint)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # It takes seconds; a hang would otherwise hold the runner for six hours.
     timeout-minutes: 10
     steps:
@@ -164,7 +170,7 @@ jobs:
   test:
     name: Tests
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.code == 'true'
@@ -229,7 +235,7 @@ jobs:
   serving:
     name: Serving runtime
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.serving == 'true'
@@ -274,7 +280,7 @@ jobs:
   integration:
     name: Integration (Compose stack)
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -331,7 +337,7 @@ jobs:
   # can silently make the evidence absent.
   traceability:
     name: Requirement matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.1.0
@@ -377,7 +383,7 @@ jobs:
   # since the branch was cut. A push to `main` has no gate to apply.
   promotion-gate:
     name: Promotion gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -423,7 +429,7 @@ jobs:
   # get no secrets (EDN-71). The binary is pinned by version and by checksum.
   secret-scan:
     name: Secret scan (gitleaks)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       # The `rev` of the gitleaks hook in .pre-commit-config.yaml; the first step
@@ -489,7 +495,7 @@ jobs:
   docs:
     name: Build docs
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.docs == 'true'
@@ -511,7 +517,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           # Apple Silicon and other ARM machines run the arm64 image.
           - arch: arm64
             runner: ubuntu-24.04-arm
@@ -583,7 +589,7 @@ jobs:
   pr-title:
     name: Conventional commit PR title
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: read
     steps:
