@@ -30,6 +30,7 @@ An endpoint the target does not serve is left out and named in the output, and e
 `--rate` requests per second are shared evenly by as many Locust users as the rate (20 users at 1 request per second each for NFR-03's 20 requests/s).
 A user waits for its answer before it sends the next request, so a target that cannot keep up gets fewer requests per second rather than a growing queue: the achieved rate is part of the result.
 At the end of the run, each user finishes the request it is waiting for.
+Locust's statistics leave out those last answers, up to one per user (1,184 of 1,200 in the dry run), while `/metrics` and the prediction-log check count them.
 
 **The measurements.**
 `tools/loadtest/run.py` takes them on the Docker host of the stack, around the Locust run:

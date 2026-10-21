@@ -209,7 +209,7 @@ def measure_energy(output_dir: Path, name: str, during: Any) -> dict[str, Any]:
 
 
 def load_average() -> list[float] | None:
-    return list(os.getloadavg()) if hasattr(os, "getloadavg") else None
+    return [round(load, 2) for load in os.getloadavg()] if hasattr(os, "getloadavg") else None
 
 
 class ContainerProbe:
