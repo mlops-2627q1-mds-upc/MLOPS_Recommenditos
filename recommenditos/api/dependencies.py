@@ -43,7 +43,8 @@ def api_metrics(request: Request) -> ApiMetrics:
 def comparables_index(request: Request) -> ComparablesIndex | None:
     """The comparables index `create_app` loaded, or None if it was started without one."""
     index = request.app.state.comparables
-    assert index is None or isinstance(index, ComparablesIndex)
+    if index is not None and not isinstance(index, ComparablesIndex):
+        raise TypeError(f"app.state.comparables is a {type(index).__name__}, not an index")
     return index
 
 
