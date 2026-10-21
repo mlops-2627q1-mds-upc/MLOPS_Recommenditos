@@ -13,6 +13,7 @@ A request body is validated strictly against its documented schema, because the 
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item An error envelope of our own: free to shape, but one more format for every client to learn and for us to document, and FastAPI's 422 needs rewriting for it too.
+\item Lax coercion of request values: forgiving to clients, but the server then accepts what the schema refuses, and \texttt{0} silently becomes \texttt{false}.
 \end{itemize}
 \par
 \emph{Why:} FR-16 requires one shape for validation errors, the scope check, the API key and the body-size limit, so FastAPI's default 422 had to be rewritten whichever shape we chose.

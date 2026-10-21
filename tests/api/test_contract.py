@@ -46,8 +46,9 @@ from schemathesis import GenerationMode
 from tests.api.conftest import API_KEY
 
 #: Random requests per operation in the fuzzing phase, valid and invalid
-#: together. About 11 s for the five operations on a laptop CPU.
-MAX_EXAMPLES = 100
+#: together. With the coverage phase, about 970 requests and 18 s for the six
+#: operations on a laptop CPU.
+MAX_EXAMPLES = 50
 
 
 def _this_month() -> str:

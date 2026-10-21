@@ -68,8 +68,10 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
 
     `model_dir` overrides the settings' `model_dir`. The prediction log is
     opened when the app starts serving (its lifespan), and its schema created
-    when the file has none, so a log that cannot be opened stops the service at
-    startup, like a bundle that cannot be served.
+    when the file has none, so a log that cannot be opened fails the startup,
+    like a bundle that cannot be served. With one worker, the image's default,
+    uvicorn then exits non-zero; with several, uvicorn 0.54's supervisor exits 0
+    although every worker failed its startup.
     """
     settings = settings or Settings()
     directory = Path(model_dir or settings.model_dir)

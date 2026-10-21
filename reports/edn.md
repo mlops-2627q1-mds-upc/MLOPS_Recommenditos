@@ -1073,6 +1073,7 @@ How to add an entry:
   A request body is validated strictly against its documented schema, because the Schemathesis contract tests found that lax coercion accepted `0` as a boolean and `"20500"` as a price.
 - **Alternatives considered:**
   - An error envelope of our own: free to shape, but one more format for every client to learn and for us to document, and FastAPI's 422 needs rewriting for it too.
+  - Lax coercion of request values: forgiving to clients, but the server then accepts what the schema refuses, and `0` silently becomes `false`.
 - **Rationale:** FR-16 requires one shape for validation errors, the scope check, the API key and the body-size limit, so FastAPI's default 422 had to be rewritten whichever shape we chose.
   Only the standard gives a client something it may already parse, which is what the rubric's "easy to adopt by others" asks for.
   Every error path, from a missing field to an unknown route, the 413 of NFR-09 and an unexpected failure, is tested to return the same shape.
