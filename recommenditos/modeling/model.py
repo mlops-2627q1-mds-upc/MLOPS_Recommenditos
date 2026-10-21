@@ -26,12 +26,16 @@ not describe them. `train` copies the `features` stage's own `feature_space.json
 into the model bundle, and `load_model` reads it back, which is how a served
 request is encoded exactly as a training row was (EDN-02).
 
-`predict_interval_eur` is deliberately **absent**: SC-05's conformalized
-quantile intervals are UC2 work and the `calibration` split is already held for
-them. `evaluate` hardcodes SC-05 as null today and reads nothing off this class;
-issue #39 replaces that with a capability check on this attribute, and a stub
-that raised would then make the criterion read as measurable. The absence is
-pinned by a test now, before the check that will depend on it exists.
+**UC2's price range is served from the same bundle (EDN-85).** A variant whose
+`params.yaml` block names `intervals` also carries three quantile boosters, at
+5 %, 95 % and 50 %, and the two conformity offsets MAPIE's conformalized
+quantile regression computed for them on the `calibration` split.
+`predict_interval_eur` adds them up: the lower booster minus the lower offset
+and the upper booster plus the upper offset, in log price. MAPIE itself is a
+`pipeline` package and is imported only by `intervals.py`, which the `train`
+stage runs; this module, which the API imports, needs LightGBM alone for it.
+`has_intervals` is what `evaluate` checks before it measures SC-05, so a bundle
+without the boosters reports the criterion as not measured rather than failing.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -62,6 +66,10 @@ from recommenditos.schema import FEATURE_SPACE_FILE, Schema
 #: with predictions says which column is which without a convention.
 PREDICTION_NAME = "predicted_price_eur"
 
+#: The column of `LightGBMModel.log_price_contributions` that holds the base
+#: value, the log price every row's contributions start from.
+BASE_LOG_PRICE = "base_log_price"
+
 #: The metadata record, and the only file `load_model` opens before it knows
 #: which estimator it is loading.
 MODEL_FILE = "model.json"
@@ -69,6 +77,19 @@ MODEL_FILE = "model.json"
 _BOOSTER_FILE = "booster.txt"
 _PIPELINE_FILE = "pipeline.joblib"
 _LOOKUP_FILE = "lookup.parquet"
+
+#: The three quantile boosters of UC2's price range (EDN-85), by the role MAPIE
+#: gives them: the lower and upper quantile it conformalizes, and the median it
+#: requires beside them. The order is MAPIE's order for a prefit estimator list.
+INTERVAL_QUANTILES: tuple[str, ...] = ("lower", "upper", "median")
+_INTERVAL_FILES: dict[str, str] = {name: f"interval_{name}.txt" for name in INTERVAL_QUANTILES}
+
+#: The columns `predict_interval_eur` returns, in euros.
+INTERVAL_COLUMNS: dict[str, str] = {
+    "lower": "lower_eur",
+    "upper": "upper_eur",
+    "median": "median_eur",
+}
 
 #: The level a Ridge one-hot encoder gets for an absent categorical value. A
 #: literal level rather than a dropped row, so absence is something the model
@@ -145,6 +166,10 @@ class RequestContract:
 
     required_fields: tuple[str, ...]
     field_to_feature: Mapping[str, str]
+    #: The input fields `/price-range` refuses a request without (FR-02): `make`
+    #: alone. Every other field of the feature set may be left out of a UC2
+    #: request, so it is what the interval models' copies omit and calibrate on.
+    price_range_required_fields: tuple[str, ...] = ()
 
     @classmethod
     def from_params(cls, params: Mapping) -> "RequestContract":
@@ -152,6 +177,7 @@ class RequestContract:
         return cls(
             required_fields=tuple(block["required_input_fields"]),
             field_to_feature=dict(block["input_field_to_feature"]),
+            price_range_required_fields=tuple(block.get("price_range_required_input_fields", ())),
         )
 
 
@@ -179,6 +205,10 @@ class TrainingData:
     validation: pd.DataFrame
     supported_makes: tuple[str, ...]
     request: RequestContract | None = None
+    #: The `calibration` split, for a variant with a price range alone (EDN-85):
+    #: `intervals.py` computes the conformity offsets on it, and nothing else in
+    #: a fit reads it. `None` for every other variant.
+    calibration: pd.DataFrame | None = None
 
 
 # --------------------------------------------------------------------------
@@ -512,6 +542,28 @@ class Model:
 
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
         raise NotImplementedError
+
+    @property
+    def has_intervals(self) -> bool:
+        """Whether this bundle carries calibrated UC2 intervals (EDN-85).
+
+        What `evaluate` checks before it measures SC-05: a bundle without them
+        reports the criterion as not measured, which blocks NFR-01's gate.
+        """
+        return False
+
+    def predict_interval_eur(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """The nominal 90 % price range of each row, in euros (FR-07).
+
+        One row per row of `frame`, with its index, and three float64 columns:
+        `lower_eur` and `upper_eur`, the conformalized bounds, and `median_eur`,
+        the 50 % quantile model MAPIE requires beside them. Only a bundle that
+        `has_intervals` implements it.
+        """
+        raise ModelError(
+            f"{self.variant!r} carries no price-range models. A LightGBM variant gains them "
+            f"when its params.yaml block names `intervals` (EDN-85)."
+        )
 
     def _align(self, frame: pd.DataFrame) -> pd.DataFrame:
         """`frame` as the matrix this model was fitted on, one row for one row.
@@ -1003,20 +1055,31 @@ class LightGBMModel(Model):
     #: The estimator the copies were measured on (EDN-82).
     supports_blanked_copies = True
 
-    def __init__(self, metadata: dict, space: FeatureSpace, booster: lightgbm.Booster | None):
+    def __init__(
+        self,
+        metadata: dict,
+        space: FeatureSpace,
+        booster: lightgbm.Booster | None,
+        intervals: Mapping[str, lightgbm.Booster] | None = None,
+    ):
         super().__init__(metadata, space)
         self.booster = booster
+        #: The three quantile boosters of UC2's price range, by `INTERVAL_QUANTILES`
+        #: role, or `None` for a variant that names no `intervals` (EDN-85).
+        self.intervals = None if intervals is None else dict(intervals)
 
-    @classmethod
-    def fit(
-        cls, metadata: dict, data: TrainingData, *, seed: int, num_threads: int
-    ) -> "LightGBMModel":
-        tuning = cls._tuning(metadata)
-        rounds = tuning.pop("early_stopping_rounds")
-        model = cls(metadata, data.space, None)
-        estimator = lightgbm.LGBMRegressor(
-            objective="regression",
-            metric="l1",
+    @staticmethod
+    def regressor(
+        tuning: Mapping, *, seed: int, num_threads: int, **objective
+    ) -> lightgbm.LGBMRegressor:
+        """The estimator every LightGBM fit here starts from, with `objective` on top.
+
+        One constructor for the point model and the quantile models, so the
+        settings below hold for all of them and the quantile models differ only
+        in what they are fitted to minimise.
+        """
+        return lightgbm.LGBMRegressor(
+            **objective,
             first_metric_only=True,
             # `deterministic` and `force_row_wise` together stop LightGBM from
             # choosing its histogram construction by data size and thread count.
@@ -1036,6 +1099,17 @@ class LightGBMModel(Model):
             # whoever ran `dvc repro` (NFR-06).
             n_jobs=num_threads,
             **tuning,
+        )
+
+    @classmethod
+    def fit(
+        cls, metadata: dict, data: TrainingData, *, seed: int, num_threads: int
+    ) -> "LightGBMModel":
+        tuning = cls._tuning(metadata)
+        rounds = tuning.pop("early_stopping_rounds")
+        model = cls(metadata, data.space, None)
+        estimator = cls.regressor(
+            tuning, seed=seed, num_threads=num_threads, objective="regression", metric="l1"
         )
         # `eval_X`/`eval_y` rather than `eval_set`, which lightgbm 4.7 deprecates.
         estimator.fit(
@@ -1080,6 +1154,24 @@ class LightGBMModel(Model):
         model.booster = estimator.booster_
         return model
 
+    def log_price_contributions(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """Each row's log price split into one SHAP value per feature (FR-08, EDN-11).
+
+        LightGBM's own TreeSHAP export, `predict(pred_contrib=True)`, rather than
+        the `shap` package, which stays out of the serving runtime. One column
+        per feature, in `features` order, and `BASE_LOG_PRICE`, the booster's
+        mean log price over its training rows; a categorical is one column, as it
+        reaches the booster as one native categorical feature. A row sums to the
+        booster's log price before `predict_eur` bounds it to the training range.
+        """
+        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        contributions = self.booster.predict(self._as_codes(self._align(frame)), pred_contrib=True)
+        return pd.DataFrame(
+            np.asarray(contributions, dtype="float64"),
+            index=frame.index,
+            columns=[*self.features, BASE_LOG_PRICE],
+        )
+
     def _as_codes(self, aligned: pd.DataFrame) -> pd.DataFrame:
         coded = aligned.copy()
         for name in self.categorical_columns:
@@ -1089,6 +1181,60 @@ class LightGBMModel(Model):
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
         assert self.booster is not None, "the booster exists after `fit` or `load`"
         return np.asarray(self.booster.predict(self._as_codes(aligned)), dtype="float64")
+
+    @property
+    def has_intervals(self) -> bool:
+        record = self.metadata.get("intervals") or {}
+        return self.intervals is not None and record.get("offsets") is not None
+
+    def predict_interval_eur(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """The lower booster minus its offset and the upper one plus its, in euros.
+
+        This is MAPIE's conformalized quantile regression at prediction time
+        (`ConformalizedQuantileRegressor.predict_interval` with its default
+        asymmetric correction), written out so that serving does not need MAPIE:
+        both offsets are constants of the calibration, computed by MAPIE in
+        `intervals.py` and stored in `model.json`. A test checks the two agree on
+        the same rows. Nothing is clipped or reordered, for the same reason: the
+        served bounds are MAPIE's bounds, and a bound clipped to the training
+        price range would change the coverage SC-05 measured.
+
+        `frame` goes through `_align`, like `predict_eur`, so a request with
+        fields left out is encoded the way the interval models' training and
+        calibration copies were (`Model.mask_absent`).
+        """
+        boosters = self.intervals
+        if boosters is None or not self.has_intervals:
+            return super().predict_interval_eur(frame)
+        aligned = self._align(frame)
+        if aligned.empty:
+            return pd.DataFrame(
+                {column: np.empty(0, dtype="float64") for column in INTERVAL_COLUMNS.values()},
+                index=frame.index,
+            )
+        coded = self._as_codes(aligned)
+        log_price = {
+            name: np.asarray(booster.predict(coded), dtype="float64")
+            for name, booster in boosters.items()
+        }
+        offsets = self.metadata["intervals"]["offsets"]
+        log_price["lower"] = log_price["lower"] - offsets["lower"]
+        log_price["upper"] = log_price["upper"] + offsets["upper"]
+        return pd.DataFrame(
+            {INTERVAL_COLUMNS[name]: np.exp(log_price[name]) for name in INTERVAL_QUANTILES},
+            index=frame.index,
+        )
+
+    def attach_intervals(self, boosters: Mapping[str, lightgbm.Booster], record: dict) -> None:
+        """Make the price-range boosters and their calibration record part of the bundle."""
+        missing = sorted(set(INTERVAL_QUANTILES) - set(boosters))
+        if missing:
+            raise ModelError(
+                f"the price range of {self.variant!r} needs the {', '.join(INTERVAL_QUANTILES)} "
+                f"boosters and was given none for {', '.join(missing)}."
+            )
+        self.intervals = {name: boosters[name] for name in INTERVAL_QUANTILES}
+        self.metadata["intervals"] = record
 
     def _save_payload(self, directory: Path) -> None:
         # LightGBM's own text format, not a pickle of the sklearn wrapper: it
@@ -1106,12 +1252,33 @@ class LightGBMModel(Model):
         self.booster.save_model(
             directory / _BOOSTER_FILE, num_iteration=self.metadata["training"]["best_iteration"]
         )
+        if self.intervals is not None:
+            iterations = self.metadata["intervals"]["best_iteration"]
+            for name, booster in self.intervals.items():
+                booster.save_model(
+                    directory / _INTERVAL_FILES[name], num_iteration=iterations[name]
+                )
 
     @classmethod
     def _load_payload(
         cls, directory: Path, metadata: dict, space: FeatureSpace
     ) -> "LightGBMModel":
-        return cls(metadata, space, lightgbm.Booster(model_file=str(directory / _BOOSTER_FILE)))
+        # A bundle without an `intervals` record is a point model only, as every
+        # bundle was before EDN-85, so `/predict` loads either.
+        intervals = (
+            {
+                name: lightgbm.Booster(model_file=str(directory / _INTERVAL_FILES[name]))
+                for name in INTERVAL_QUANTILES
+            }
+            if metadata.get("intervals")
+            else None
+        )
+        return cls(
+            metadata,
+            space,
+            lightgbm.Booster(model_file=str(directory / _BOOSTER_FILE)),
+            intervals,
+        )
 
 
 # --------------------------------------------------------------------------
@@ -1259,8 +1426,29 @@ def with_blanked_copies(
     "Omitted" is `Model.mask_absent`'s meaning of it, cell by cell, so a copy
     is a row the API could be sent. The rows of `frame` come first and are not
     changed; the index of the result is a fresh range.
+
+    The draws come from the project seed and the point model's own stream; the
+    interval models draw theirs through `with_blanked_copies_drawn`.
     """
-    rng = np.random.default_rng([seed, _BLANKING_STREAM])
+    return with_blanked_copies_drawn(
+        seam, frame, fields, copies=copies, rng=np.random.default_rng([seed, _BLANKING_STREAM])
+    )
+
+
+def with_blanked_copies_drawn(
+    seam: Model,
+    frame: pd.DataFrame,
+    fields: Sequence[str],
+    *,
+    copies: Mapping[str, int],
+    rng: np.random.Generator,
+) -> pd.DataFrame:
+    """`with_blanked_copies` with the random draws taken from `rng`.
+
+    For the copies of the interval models (EDN-85), which draw their training,
+    validation and calibration copies from streams of their own
+    (`INTERVAL_STREAMS`), so that no two sets of copies share a draw.
+    """
     fields = tuple(fields)
     n_rows, n_fields = len(frame), len(fields)
     frames = [frame]
@@ -1441,6 +1629,175 @@ def _with_blanked_copies(
     metadata["blanked_copies"]["fields"] = list(fields)
     metadata["training"]["n_fit_rows"] = len(train)
     return replace(data, train=train)
+
+
+# --------------------------------------------------------------------------
+# The quantile models of UC2's price range (EDN-85)
+#
+# Fitted here with LightGBM alone, so that serving and its check
+# (`tests/test_serving.py`) can build and read them without a pipeline package.
+# Their calibration needs MAPIE and lives in `intervals.py`, which only the
+# `train` stage imports.
+# --------------------------------------------------------------------------
+
+#: The keys of a variant's `intervals` block.
+INTERVAL_KEYS: tuple[str, ...] = ("confidence_level", "blanked_copies")
+
+#: The streams the interval models' copies are drawn from, one per split, so
+#: that the training, validation and calibration copies share no draw with each
+#: other or with the point model's copies.
+INTERVAL_STREAMS: Mapping[str, int] = MappingProxyType(
+    {"train": 1371, "validation": 1372, "calibration": 1373}
+)
+
+
+def interval_settings(variant: str, settings: Mapping) -> dict | None:
+    """A variant's `intervals` block, checked, or `None` when it names none.
+
+    `confidence_level` is the nominal coverage of the range (0.9 for SC-05), and
+    `blanked_copies` reads like the point model's block: how many copies of each
+    training, validation and calibration row carry every field but the ones
+    FR-02 requires left out (`all`) and how many a random subset (`random`).
+    """
+    block = settings.get("intervals")
+    if block is None:
+        return None
+    problems = []
+    if not isinstance(block, Mapping):
+        raise ModelError(f"the intervals block of variant {variant!r} is not a mapping: {block!r}")
+    unknown = sorted(set(block) - set(INTERVAL_KEYS), key=str)
+    missing = sorted(set(INTERVAL_KEYS) - set(block))
+    if unknown:
+        problems.append(f"sets {', '.join(map(str, unknown))}, which no fit reads")
+    if missing:
+        problems.append(f"does not set {', '.join(missing)}")
+    level = block.get("confidence_level")
+    if "confidence_level" in block and not (isinstance(level, float) and 0.0 < level < 1.0):
+        problems.append(f"sets confidence_level to {level!r}, which is not a share in (0, 1)")
+    if settings.get("estimator") != LightGBMModel.estimator_name:
+        problems.append(
+            f"belongs to estimator {settings.get('estimator')!r}, and only "
+            f"{LightGBMModel.estimator_name!r} fits the quantile models"
+        )
+    if problems:
+        raise ModelError(
+            f"the intervals block of variant {variant!r} {' and '.join(problems)}. It reads "
+            f"exactly: {', '.join(INTERVAL_KEYS)}."
+        )
+    copies = blanked_copy_counts(variant, {"blanked_copies": block["blanked_copies"]})
+    return {"confidence_level": level, "blanked_copies": copies}
+
+
+def interval_quantiles(confidence_level: float) -> dict[str, float]:
+    """The quantile each booster is fitted at, in the order MAPIE requires them."""
+    return {
+        "lower": (1 - confidence_level) / 2,
+        "upper": (1 + confidence_level) / 2,
+        "median": 0.5,
+    }
+
+
+def price_range_seam_fields(model: Model, request: RequestContract) -> tuple[str, ...]:
+    """Every input field a `/price-range` request may leave out, as `mask_absent` takes them.
+
+    All fields of the feature set except the ones FR-02 requires, which is `make`
+    alone: what the interval models' `all` copies omit, and what P1 and a
+    make-only request are drawn from.
+    """
+    fields = input_field_columns(model, request)
+    unknown = sorted(set(request.price_range_required_fields) - set(fields))
+    if unknown or not request.price_range_required_fields:
+        raise ModelError(
+            f"request.price_range_required_input_fields is "
+            f"{list(request.price_range_required_fields)}, and {model.variant!r} consumes "
+            f"{', '.join(fields)}. FR-02 requires `make`, so the list names at least one field "
+            f"and only fields of the feature set."
+        )
+    seam = seam_names(fields, request)
+    required = set(request.price_range_required_fields)
+    return tuple(seam[field] for field in fields if field not in required)
+
+
+def fit_quantile_estimators(
+    model: LightGBMModel,
+    data: TrainingData,
+    chosen: Mapping,
+    *,
+    seed: int,
+    num_threads: int,
+) -> tuple[dict[str, lightgbm.LGBMRegressor], dict]:
+    """The three quantile models of the price range, and the record of their fit.
+
+    `chosen` is the variant's `intervals` block as `interval_settings` reads it.
+
+    Fitted on the training rows plus their copies with fields left out, and
+    early-stopped on the validation rows plus copies drawn the same way, because
+    the validation rows have to look like the requests the models are for. The
+    hyperparameters are the point model's, and only the objective differs: the
+    pinball loss at each quantile, which is also what early stopping watches.
+
+    The calibration record (`offsets`) stays empty: MAPIE fills it in
+    `intervals.py`, and until it does the bundle `has_intervals` is false.
+    """
+    if data.request is None:
+        raise ModelError(
+            f"the price range of {model.variant!r} omits the fields FR-02 does not require, "
+            f"and which those are is the request contract's to say. Set `TrainingData.request`."
+        )
+    fields = price_range_seam_fields(model, data.request)
+    copies = chosen["blanked_copies"]
+    confidence_level = chosen["confidence_level"]
+    train, validation = (
+        with_blanked_copies_drawn(
+            model,
+            frame,
+            fields,
+            copies=copies,
+            rng=np.random.default_rng([seed, INTERVAL_STREAMS[split]]),
+        )
+        for split, frame in (("train", data.train), ("validation", data.validation))
+    )
+    tuning = LightGBMModel._tuning(model.metadata)
+    rounds = tuning.pop("early_stopping_rounds")
+    quantiles = interval_quantiles(confidence_level)
+    train_x = model._as_codes(model._align(train))
+    validation_x = model._as_codes(model._align(validation))
+    estimators = {}
+    for name, alpha in quantiles.items():
+        estimator = LightGBMModel.regressor(
+            tuning,
+            seed=seed,
+            num_threads=num_threads,
+            objective="quantile",
+            alpha=alpha,
+            metric="quantile",
+        )
+        estimator.fit(
+            train_x,
+            train["log_price"].to_numpy(dtype="float64"),
+            eval_X=validation_x,
+            eval_y=validation["log_price"].to_numpy(dtype="float64"),
+            eval_names=[_EVAL_NAME],
+            categorical_feature=list(model.categorical_columns),
+            callbacks=[lightgbm.early_stopping(rounds, first_metric_only=True, verbose=False)],
+        )
+        estimators[name] = estimator
+    record = {
+        "confidence_level": confidence_level,
+        "quantiles": quantiles,
+        "required_fields": list(data.request.price_range_required_fields),
+        "blanked_copies": {**copies, "fields": list(fields)},
+        "n_fit_rows": len(train),
+        "n_validation_rows": len(validation),
+        "best_iteration": {
+            name: int(each.best_iteration_ or each.booster_.num_trees())
+            for name, each in estimators.items()
+        },
+        # Filled by `intervals.conformalize`.
+        "offsets": None,
+        "calibration": None,
+    }
+    return estimators, record
 
 
 def _l1_log_price(model: Model, frame: pd.DataFrame) -> float:

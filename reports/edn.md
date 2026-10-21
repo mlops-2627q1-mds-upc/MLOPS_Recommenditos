@@ -245,17 +245,20 @@ How to add an entry:
 
 > **Absorbs EDN-09** (2026-09-22): the project moved to Python 3.12 so that `shap` runs for offline analysis.
 
+> **Revised on 2026-10-20**: `shap` became a `pipeline`-group dependency with FR-08's implementation (#136), and the rationale now says why the equality with `shap.TreeExplainer` is no independent check; the decision is unchanged.
+
 - **Date:** 2026-09-22
 - **Milestone:** M4: Model Deployment
 - **Activity / Topic:** ML System Design, Explainability
 - **Participants:** @lukas2510
 - **Decision:** The API computes FR-08's per-request explanation from the booster's own SHAP export, LightGBM's `predict(pred_contrib=True)`.
-  The `shap` package is reserved for offline analysis, is not yet a project dependency, and is never installed in the API image.
+  The `shap` package is a `pipeline`-group dependency for offline analysis and the tests, and is never installed in the API image.
   The project runs on Python 3.12, which `shap` requires.
 - **Alternatives considered:**
   - `shap.TreeExplainer` in the serving path: one implementation everywhere, but `shap` imports `numba` and `llvmlite` at load, and both would enter the image.
   - Stay on Python 3.11 without `shap`: the offline analysis, such as summary plots, still needs the package.
 - **Rationale:** The native export returns the same TreeSHAP values, so serving loses nothing and the image stays inside the size budget of NFR-04 with more headroom.
+  For LightGBM the equality holds by construction, because `shap.TreeExplainer` calls `pred_contrib` itself; the real check is local accuracy, each row's values adding up to the model's log price.
   CatBoost has an equivalent export, so the choice survives a change of model.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
@@ -264,31 +267,37 @@ How to add an entry:
   AI then built Docker images with and without `shap` and compared the two explanations.
   Lukas confirmed on that evidence.
 - **AI interaction evidence:** Claude Code session of 2026-09-22, review of PR #19; Lukas asked: "is this what we would want? or are there better options?".
-- **Other evidence:** [Specification](../docs/docs/specification.md) FR-08, [project brief](../docs/docs/project-brief.md) section 6, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Other evidence:** [Specification](../docs/docs/specification.md) FR-08, [project brief](../docs/docs/project-brief.md) section 6, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19), [PR #165](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/165).
 - **In LaTeX:** yes
 
-### EDN-12: Retraining and promotion are started by a person
+### EDN-12: Retraining and promotion are started by a person, and a failing gate blocks the merge
+
+> **Revised on 2026-10-20**: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.
 
 - **Date:** 2026-09-22
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** ML System Design, Model Performance
 - **Participants:** @lukas2510
 - **Decision:** When the drift job flags the `ES` replay, a team member retrains with `ES` included and opens the promotion pull request by hand.
-  The candidate must pass the NFR-01 gate before the merge.
   The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
-  FR-15 states this as a requirement.
+  A required CI check fails a pull request that changes `dvc.lock` unless the committed `metrics.json` has `gate_passed: true` and names the promoted model as `deployable_variant`.
+  A criterion waived in `params.yaml` does not count; EDN-62 records the SC-04 waiver.
+  FR-15 states this; the reviewer's approval stays on top.
 - **Alternatives considered:**
-  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to build and debug in the last weeks before the final presentation, with little slack if it breaks.
+  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
+  - The gate as a manual check only: one mistaken merge deploys a rejected model.
+  - A check in CD: it fails only after the merge.
 - **Rationale:** The `ES` holdout exists to show this loop closing (EDN-03).
-  A person reacting to the signal closes it as well, and is safer to demonstrate live.
-  Writing it down as a requirement keeps it from being dropped when M6 gets tight.
+  A person reacting to the signal closes it too, and is safer live.
+  From M5 every merge to `main` deploys (NFR-13), and only the CI check stops a rejected model before the merge.
+  It needs no data and reads `gate_passed`, so a new criterion changes nothing in it.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI noticed that the retrain-after-drift plan had never become a testable requirement.
-  It named the level of automation as the real choice and recommended the manual trigger because of the timeline.
-  Lukas confirmed.
-- **AI interaction evidence:** Claude Code session of 2026-09-22, review of PR #19.
-- **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-15, [specification](../docs/docs/specification.md) FR-14 and FR-15, [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
+- **Assessment of the AI contribution:** AI noticed that the retrain-after-drift plan had never become a testable requirement and recommended the manual trigger because of the timeline.
+  On 2026-10-20 it found that no check read the verdict, laid out the options and recommended the CI check.
+  Lukas decided.
+- **AI interaction evidence:** Claude Code sessions of 2026-09-22 (review of PR #19) and 2026-10-20 (issue #129).
+- **Other evidence:** [Requirements](../docs/docs/requirements.md) FR-15, [specification](../docs/docs/specification.md) FR-14 and FR-15, [issue #129](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/129), [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19).
 - **In LaTeX:** yes
 
 ### EDN-13: The feedback endpoint is reachable only inside the Compose network
@@ -816,30 +825,32 @@ How to add an entry:
 
 ### EDN-62: `lgbm-basic` is the candidate model
 
-> **Revised on 2026-10-13**: `lgbm-basic` is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.
+> **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since EDN-82 `lgbm-basic`'s ratio is 1.02, not 1.21.
 
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
 - **Participants:** @lukas2510
-- **Decision:** `lgbm-basic` is the candidate that the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
+- **Decision:** `lgbm-basic` is the candidate the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
   `lgbm-extended` fails SC-06.
   SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
+  The gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
 - **Alternatives considered:**
   - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
-  - One model for complete requests and the other for partial ones: two models and a routing rule; left open for the deployment milestone.
+  - Routing complete and partial requests to different models: two models and a rule; left open for deployment.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
-- **Rationale:** With every optional field masked, which is a request carrying only what FR-01 requires, the error of `lgbm-extended` rises to 1.65 times its full-input MdAPE and that of `lgbm-basic` to 1.02 times (1.21 when this was decided); the bound is 1.5.
-  On that request the ranking of the two reverses.
-  The extended features also make the over-20 segment worse, so they are no remedy for SC-04.
+  - Keeping the gate closed until a variant meets SC-04: blocks every promotion.
+- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.65 times its full-input MdAPE and `lgbm-basic` to 1.02; the bound is 1.5.
+  Then the ranking reverses.
+  The extended features worsen the over-20 segment and do not fix SC-04.
+  The waiver makes NFR-01, this entry and the M4 deployment consistent, and is versioned and reviewed like any change; every other criterion still gates.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed.
-  One noticed that the all-masked scenario is a request with only the required fields, on which the ranking reverses.
-  AI recommended this option and left the serving and scope questions to Lukas.
-  A failure it had predicted did not reproduce on real data, and it reported that.
-- **AI interaction evidence:** Claude Code sessions of 2026-09-30 on issues #37 and #39.
-- **Other evidence:** [Model card](../docs/docs/model-card.md) (Results), [`masked-inputs.csv`](metrics/masked-inputs.csv), [issue #39](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65).
+- **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that masking every optional field leaves a required-fields-only request.
+  A failure it had predicted did not reproduce, and it reported that.
+  AI recommended this option and left the serving and scope questions to Lukas; on 2026-10-20 it laid out the gate options and recommended the waiver, and Lukas decided.
+- **AI interaction evidence:** Claude Code sessions on issues #37 and #39 (2026-09-30) and #137 (2026-10-20).
+- **Other evidence:** [Model card](../docs/docs/model-card.md), [`masked-inputs.csv`](metrics/masked-inputs.csv), [PR #65](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65), [issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137), [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158).
 - **In LaTeX:** yes
 
 ### EDN-68: The Great Expectations store is generated and cached
@@ -1047,13 +1058,72 @@ How to add an entry:
 - **Other evidence:** [Issue #133](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133), [PR #149](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/149), [`[tool.mypy]`](../pyproject.toml).
 - **In LaTeX:** yes
 
-### EDN-84: The API's error shape (#135)
+### EDN-84: Every API error is an RFC 9457 Problem Details object
 
-### EDN-85: How serving applies the interval calibration (#137)
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** API Design
+- **Participants:** @lukas2510 decided ([issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135))
+- **Decision:** Every error response of the API is `application/problem+json` as RFC 9457 defines it: `type`, `title`, `status`, `detail`, `instance`, and for a 422 an `errors` list with one entry per invalid field, holding a JSON Pointer, a message and, for a field with a fixed set of values, the accepted ones.
+- **Alternatives considered:**
+  - An error envelope of our own: free to shape, but one more format for every client to learn and for us to document, and FastAPI's 422 needs rewriting for it too.
+- **Rationale:** FR-16 requires one shape for validation errors, the scope check, the API key and the body-size limit, so FastAPI's default 422 had to be rewritten whichever shape we chose.
+  Only the standard gives a client something it may already parse, which is what the rubric's "easy to adopt by others" asks for.
+  Every error path, from a missing field to an unknown route, the 413 of NFR-09 and an unexpected failure, is tested to return the same shape.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
+- **Other evidence:** [Issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135), [PR #151](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151), [API docs](../docs/docs/api.md), [`errors.py`](../recommenditos/api/errors.py), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457).
+- **In LaTeX:** yes
+
+### EDN-85: Serving adds MAPIE's offsets itself, and partial requests take the median's price
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Model Deployment
+- **Participants:** @lukas2510 decided ([issue #137](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137))
+- **Decision:** MAPIE's `ConformalizedQuantileRegressor` calibrates UC2's quantile LightGBM models in the `train` stage only.
+  The `lgbm-basic` bundle stores the three boosters and the two conformity offsets, and `predict_interval_eur` adds them up with LightGBM alone, so the API image carries no MAPIE.
+  `/price-range` takes its typical price from `lgbm-basic` when FR-01's required fields are all present, and otherwise from the 50 % quantile model (FR-07).
+- **Alternatives considered:**
+  - MAPIE in the serving runtime: the library computes every interval, but it adds a package to the image NFR-04 caps at 1 GB, for two predictions and an addition.
+  - Our own conformalized quantile regression without MAPIE: no dependency anywhere, but we would own the correctness of the calibration.
+  - Typical price always from `lgbm-basic`, or always from the 50 % model: the first is 98.5 % MdAPE off on a make-only request, the second 0.2 to 0.7 pp worse on complete ones.
+- **Rationale:** The pattern EDN-11 set for SHAP: the statistics stay in a maintained library, and serving replays a constant.
+  A test shows that the range served from a bundle on disk equals MAPIE's on the same rows to a relative 1e-12.
+  On the test split the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the options for both questions, measured the typical-price ones, and recommended these, which @lukas2510 took.
+  AI implemented it and checked that MAPIE 1.6 moves each bound by one constant before storing it.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #137: options, measurements, implementation.
+- **Other evidence:** [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158), [`lgbm-basic.json`](metrics/lgbm-basic.json), [Typical-price analysis](analysis/price_range_point_estimate_results.txt), MLflow run `train@lgbm-basic` in `recommenditos-price`.
+- **In LaTeX:** yes
 
 ### EDN-86: Where the prediction log and the feedback are stored (#140)
 
-### EDN-87: How the API runs on the VM in Milestone 4 (#142)
+### EDN-87: The API runs on the VM as a Compose stack behind nginx from Milestone 4
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** ML System Design, Containerization
+- **Participants:** @lukas2510 decided ([issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142))
+- **Decision:** From M4 on, the API runs on the VM as a Docker Compose stack: the API image, with the serving runtime and the model bundle, behind nginx, the only published container, which refuses `/feedback` and `/metrics`.
+  Until CD exists, the image is built on a laptop and copied with `docker save | ssh docker load`.
+- **Alternatives considered:**
+  - The course demo's recipe (`uv sync`, `dvc pull`, uvicorn under systemd, nginx): M5 replaces it with containers, so two deployments to build and document.
+  - Building the image on the VM: needs the repository, DVC and a DagsHub token on a shared machine.
+- **Rationale:** The report describes containers under M5 either way, so the demo's recipe builds something we plan to discard, while M5 adds CI/CD, the image scan and the hardening to this stack.
+  Measured locally, the image is 665 MB (NFR-04: 1 GB), and `/health` answers again 3 s after the API process is killed (NFR-05: 30 s).
+  nginx stays over Caddy and Traefik, whose main gain, automatic TLS, EDN-13 does not need.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out both options in the issue and recommended Compose, which @lukas2510 chose.
+  AI then built and measured the stack and chose to copy the image; nothing about the VM is verified yet.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
+- **Other evidence:** [Issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142), [PR #162](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/162), [deployment docs](../docs/docs/deployment.md), [`compose.yaml`](../deploy/compose.yaml), [`nginx.conf`](../deploy/nginx.conf).
+- **In LaTeX:** yes
 
 ### EDN-88: The latency, throughput and resource targets after the load test (#143)
 

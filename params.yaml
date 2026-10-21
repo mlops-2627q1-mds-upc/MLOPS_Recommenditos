@@ -256,6 +256,11 @@ request:
   # read from the vocabulary beside the matrices rather than from here.
   input_field_to_feature:
     registration_date: age_years
+  # The fields `/price-range` refuses a request without (FR-02): `make` alone.
+  # Every other input field of the feature set may be left out of a UC2 request,
+  # so it is what the interval models' copies omit (EDN-85).
+  price_range_required_input_fields:
+    - make
 
 train:
   # One MLflow experiment; each variant below is one run in it (#37).
@@ -354,6 +359,18 @@ train:
       blanked_copies:
         all: 1
         random: 1
+      # UC2's price range (FR-07, SC-05, EDN-85): quantile LightGBM models at 5 %,
+      # 95 % and 50 %, with this variant's hyperparameters, conformalized by MAPIE
+      # on the `calibration` split. Their training, validation and calibration
+      # rows each get one copy with every field but `make` omitted and one with a
+      # random subset omitted, so a partial request gets a wider range. Measured on
+      # the test split, coverage is in SC-05's band for full inputs and for P1
+      # (model card, "Price ranges").
+      intervals:
+        confidence_level: 0.9
+        blanked_copies:
+          all: 1
+          random: 1
       params:
         # Searched and kept, on evidence rather than by omission: a 12-point grid
         # of these two around their values is flat on the validation split, and no
@@ -435,6 +452,14 @@ evaluate:
     - model
     - registration_date
     - mileage_km_raw
+  # Criteria the team recorded as missed and accepted, each with the EDN entry
+  # that accepted it. NFR-01 lets only such an entry waive a criterion: a waived
+  # criterion counts towards no gate verdict, and metrics.json reports it beside
+  # the verdict with what was measured (`waived_criteria`, `gate_waived`).
+  # SC-04 misses on cars over 20 years for every variant, and EDN-62 keeps the
+  # 15 % bound and accepts the miss as a stated limitation.
+  waived_criteria:
+    sc04: EDN-62
   # SC-01 to SC-06 of problem-spec section 8, as numbers the `evaluate` stage
   # can check. NFR-01 gates deployment on all six, so each one is written to
   # metrics.json with its measured value and a pass or fail.
@@ -469,6 +494,10 @@ evaluate:
 report:
   # The variant whose error per segment level the report's figure shows: the
   # candidate put forward for release (EDN-62). `metrics.json` names a variant
-  # only once one passes the gate, and none does yet, so the choice is stated
-  # here and the `compare-segments` stage reads it.
+  # only once one passes the gate, so the choice is stated here, where it holds
+  # whatever a retrain's gate says, and the `compare-segments` stage reads it.
+  # `tools/promotion_gate.py` reads it too, as the model being promoted: a pull
+  # request that changes `dvc.lock` is blocked unless `metrics.json` names this
+  # variant as `deployable_variant`. Changing it for a figure changes what the
+  # promotion gate demands (EDN-12).
   candidate_variant: lgbm-basic

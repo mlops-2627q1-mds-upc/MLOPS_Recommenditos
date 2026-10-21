@@ -59,10 +59,12 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 
 ```
 ├── .env.template      <- The variables `.env` needs; `.env` itself is gitignored
+├── Dockerfile         <- The API image; see docs/docs/deployment.md
 ├── LICENSE            <- Open-source license
 ├── Makefile           <- Convenience commands like `make lint` or `make test`
 ├── README.md          <- This file
 ├── data               <- Raw, interim and processed data, versioned with DVC
+├── deploy             <- The serving stack (Compose, nginx) and the VM bootstrap
 ├── docs               <- MkDocs project with the project documentation
 ├── gx                 <- Great Expectations context, built by `configure_gx` (DVC output, not committed)
 ├── models             <- Trained and serialized models

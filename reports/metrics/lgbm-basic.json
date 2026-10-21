@@ -4,7 +4,7 @@
   "data_source": "zenodo",
   "feature_set": "basic",
   "n_test_rows": 19665,
-  "mlflow_run_id": "f9a5735d04b04cfdbd78520b66ceb64c",
+  "mlflow_run_id": "e48db296824243d48510b361d398ca67",
   "mdape": 0.06733805931326535,
   "within_10pct": 0.6661072972285786,
   "within_20pct": 0.8999237223493516,
@@ -674,18 +674,28 @@
     "mdape": 0.1680467365884049
   },
   "sc04_note": "",
-  "sc05_measured": null,
-  "sc05_passed": null,
-  "sc05_status": "not_measured",
+  "sc05_measured": 0.9101449275362319,
+  "sc05_passed": true,
+  "sc05_status": "measured",
   "sc05_capability_checked": "predict_interval_eur",
-  "sc05_reason": "no model exposes predict_interval_eur: the UC2 conformal intervals, and the calibration split held for them, are a later ticket, so interval coverage cannot be measured by any means",
-  "sc05_coverage": null,
-  "sc05_worst_scenario": null,
+  "sc05_reason": "",
+  "sc05_coverage": {
+    "full": {
+      "coverage": 0.9022629036359013,
+      "mean_relative_width": 0.4639985067607088
+    },
+    "(P1: make, model, registration date, mileage)": {
+      "coverage": 0.9101449275362319,
+      "mean_relative_width": 0.9330445211957313
+    }
+  },
+  "sc05_worst_scenario": "(P1: make, model, registration date, mileage)",
   "sc06_measured": 1.0184428700374604,
   "sc06_passed": true,
   "sc06_n_scenarios": 7,
   "sc06_worst_field": "(all optional fields)",
   "sc06_note": "",
-  "gate_passed": false,
-  "gate_blocked_by": "sc04 failed; sc05 unmeasured"
+  "gate_passed": true,
+  "gate_blocked_by": "",
+  "gate_waived": "sc04 failed at 0.1680 (EDN-62)"
 }

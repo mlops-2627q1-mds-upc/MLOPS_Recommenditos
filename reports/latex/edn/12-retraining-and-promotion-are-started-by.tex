@@ -2,28 +2,33 @@
 % Do not edit: change reports/edn.md and run `make edn`.
 \ednentry{
   id = {EDN-12},
-  title = {Retraining and promotion are started by a person},
+  title = {Retraining and promotion are started by a person, and a failing gate blocks the merge},
+  note = {\textbf{Revised on 2026-10-20}: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.},
   date = {2026-09-22},
   milestone = {M6: Monitoring},
   topic = {ML System Design, Model Performance},
   participants = {@lukas2510},
   decision = {When the drift job flags the \texttt{ES} replay, a team member retrains with \texttt{ES} included and opens the promotion pull request by hand.
-The candidate must pass the NFR-01 gate before the merge.
 The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
-FR-15 states this as a requirement.},
+A required CI check fails a pull request that changes \texttt{dvc.\allowbreak{}lock} unless the committed \texttt{metrics.\allowbreak{}json} has \texttt{gate\_\allowbreak{}passed: true} and names the promoted model as \texttt{deployable\_\allowbreak{}variant}.
+A criterion waived in \texttt{params.\allowbreak{}yaml} does not count; EDN-62 records the SC-04 waiver.
+FR-15 states this; the reviewer's approval stays on top.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to build and debug in the last weeks before the final presentation, with little slack if it breaks.
+\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
+\item The gate as a manual check only: one mistaken merge deploys a rejected model.
+\item A check in CD: it fails only after the merge.
 \end{itemize}
 \par
 \emph{Why:} The \texttt{ES} holdout exists to show this loop closing (EDN-03).
-A person reacting to the signal closes it as well, and is safer to demonstrate live.
-Writing it down as a requirement keeps it from being dropped when M6 gets tight.},
+A person reacting to the signal closes it too, and is safer live.
+From M5 every merge to \texttt{main} deploys (NFR-13), and only the CI check stops a rejected model before the merge.
+It needs no data and reads \texttt{gate\_\allowbreak{}passed}, so a new criterion changes nothing in it.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
-  assessment = {AI noticed that the retrain-after-drift plan had never become a testable requirement.
-It named the level of automation as the real choice and recommended the manual trigger because of the timeline.
-Lukas confirmed.},
-  aievidence = {Claude Code session of 2026-09-22, review of PR \#19.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{Requirements} FR-15, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{specification} FR-14 and FR-15, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}.},
+  assessment = {AI noticed that the retrain-after-drift plan had never become a testable requirement and recommended the manual trigger because of the timeline.
+On 2026-10-20 it found that no check read the verdict, laid out the options and recommended the CI check.
+Lukas decided.},
+  aievidence = {Claude Code sessions of 2026-09-22 (review of PR \#19) and 2026-10-20 (issue \#129).},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{Requirements} FR-15, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{specification} FR-14 and FR-15, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/129}{issue \#129}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}.},
 }

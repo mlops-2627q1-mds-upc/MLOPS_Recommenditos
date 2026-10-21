@@ -7,7 +7,7 @@ hyperparameters therefore retrains that variant alone.
 
 What this module does is everything around the fit: read the matrices and their
 contract, check that their rows are the makes the API serves, open one MLflow
-run, call `fit_variant`, write the bundle and log the run. The estimators
+run, call `fit_with_intervals`, write the bundle and log the run. The estimators
 themselves and the predict seam are in `model.py`, because `evaluate` depends on
 that file and must not depend on this one.
 
@@ -29,11 +29,16 @@ the energy and emissions of its fit and issue #39's test metrics and gate
 verdict.
 
 **Only the fit is measured (NFR-10, issue #38).** `energy.measure` wraps
-`fit_variant` and nothing else, and CodeCarbon's row for that fit is written to
+`fit_with_intervals` and nothing else, and CodeCarbon's row for that fit is written to
 `reports/emissions/<variant>.csv`. What the figure is - an estimate from the
 CPU's TDP and the process's CPU time, not a meter reading, on every machine we
 train on - is `recommenditos/modeling/energy.py`'s to say, and the model card says why
 it is measured the way it is.
+
+**The price range is fitted with its point model (EDN-85).** A variant whose
+block names `intervals` also fits UC2's quantile models and calibrates them with
+MAPIE on the `calibration` split (`intervals.py`), inside the same measured call
+and the same run, and `calibration` is read only for such a variant.
 
 **Training works with no credentials and no network.** `optional_run` degrades
 to a handle that logs nothing, because the test suite and a fresh clone have to
@@ -41,10 +46,12 @@ be able to train. `RECOMMENDITOS_REQUIRE_TRACKING=1` turns that into a failure
 for the runs whose numbers are cited.
 """
 
+from dataclasses import replace
 from pathlib import Path
 import shutil
 
 from loguru import logger
+import pandas as pd
 import typer
 
 from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
@@ -59,22 +66,23 @@ from recommenditos.modeling.energy import (
     FitMeasurement,
     measure,
 )
+from recommenditos.modeling.intervals import CALIBRATION_SPLIT, fit_with_intervals
 from recommenditos.modeling.model import (
     ESTIMATORS,
     Model,
     RequestContract,
     TrainingData,
     blanked_copy_counts,
-    fit_variant,
+    interval_settings,
     load_model,
 )
 from recommenditos.pipeline import load_params, read_frame
 from recommenditos.tracking import Run, optional_run
 
 #: The split a variant is fitted on, and the one early stopping watches. Named
-#: rather than inlined because the pair is the whole of what a fit may read: the
-#: `calibration` split is held for the conformal intervals of UC2 and `test` for
-#: `evaluate`, and a stage that reads either would invalidate both.
+#: rather than inlined because, with `calibration`, they are the whole of what a
+#: fit may read: `calibration` is read only to calibrate the conformal intervals
+#: of UC2 (`read_calibration`) and `test` is `evaluate`'s alone.
 TRAIN_SPLIT = "train"
 VALIDATION_SPLIT = "validation"
 
@@ -134,6 +142,20 @@ def read_matrices(
     )
 
 
+def read_calibration(
+    input_dir: Path, feature_set: str, supported_makes: tuple[str, ...]
+) -> pd.DataFrame:
+    """The `calibration` matrix, checked like the other two, for the interval calibration.
+
+    Its own function, called only for a variant that names `intervals`, so that
+    no point model and no early stopping can come to read it.
+    """
+    space = FeatureSpace.load(input_dir / feature_set, name=f"features-{feature_set}")
+    frame = read_frame(input_dir / feature_set / f"{CALIBRATION_SPLIT}.parquet", space.schema)
+    check_served_makes_only(frame, supported_makes, name=CALIBRATION_SPLIT)
+    return frame
+
+
 def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     """What MLflow records about how this run was configured (NFR-14).
 
@@ -187,6 +209,7 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
         # The request contract, under the keys `dvc.yaml` declares it by. It
         # decides which fields a blanked copy omits, so it can change the model.
         "request.required_input_fields": list(request.required_fields),
+        "request.price_range_required_input_fields": list(request.price_range_required_fields),
         **{
             f"request.input_field_to_feature.{field}": feature
             for field, feature in request.field_to_feature.items()
@@ -205,6 +228,49 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     }
 
 
+def interval_params(variant: str, params: dict) -> dict:
+    """The `intervals` block of a variant as MLflow parameters, empty when it names none.
+
+    Apart from `logged_params` because the hyperparameter search logs its fits
+    through that function too, and a search fit is the point model alone: it
+    fits no quantile model and must not carry the settings of one.
+    """
+    chosen = interval_settings(variant, params["train"]["variants"][variant])
+    if chosen is None:
+        return {}
+    return {
+        "intervals.confidence_level": chosen["confidence_level"],
+        **{
+            f"intervals.blanked_copies.{kind}": count
+            for kind, count in chosen["blanked_copies"].items()
+        },
+    }
+
+
+def interval_metrics(model: Model) -> dict:
+    """The calibration of the price range as MLflow metrics, empty without one.
+
+    The two offsets MAPIE computed, in log price, the trees each quantile model
+    kept, the calibration rows they were computed on, and the seconds the price
+    range took of the measured fit. `evaluate` adds the
+    test coverage to the same run.
+    """
+    record = model.metadata.get("intervals")
+    if not record:
+        return {}
+    return {
+        "interval_offset_lower": record["offsets"]["lower"],
+        "interval_offset_upper": record["offsets"]["upper"],
+        **{
+            f"interval_best_iteration_{name}": float(trees)
+            for name, trees in record["best_iteration"].items()
+        },
+        "n_calibration_listings": float(record["calibration"]["n_listings"]),
+        "n_calibration_rows": float(record["calibration"]["n_rows"]),
+        "interval_fit_seconds": record["seconds"],
+    }
+
+
 def _log_the_run(
     run: Run, model: Model, *, cost: FitMeasurement, params: dict, directory: Path
 ) -> None:
@@ -215,6 +281,9 @@ def _log_the_run(
     uploads none, because a point that is not adopted is never served.
     """
     log_fit(run, model, cost=cost, params=params, tags={"dvc_stage": f"train@{model.variant}"})
+    metrics = interval_metrics(model)
+    if metrics:
+        run.log_metrics(metrics)
     run.log_artifacts(directory, artifact_path=ARTIFACT_PATH)
 
 
@@ -288,16 +357,26 @@ def main(
         supported_makes,
         request=RequestContract.from_params(params),
     )
+    # Only a variant with a price range reads the calibration split (EDN-85).
+    if interval_settings(variant, settings) is not None:
+        data = replace(
+            data,
+            calibration=read_calibration(input_dir, settings["feature_set"], supported_makes),
+        )
 
     with optional_run(params["train"]["mlflow_experiment"], variant) as run:
-        # The measured section: the fit, and nothing else. `fit_variant` is the
-        # one call in this module that allocates compute worth measuring, which is
-        # what makes "only the fit is measured" true rather than approximate - the
+        # The measured section: the fit, and nothing else. `fit_with_intervals` is
+        # the one call in this module that allocates compute worth measuring: the
+        # point model, and for a variant with a price range its quantile models and
+        # their calibration. That is what makes "only the fit is measured" true
+        # rather than approximate - the
         # matrices are read above, and the MLflow round trips and the bundle are
         # written below, all outside the tracker. One expression, so nothing can
         # drift into the measured section by being written on the next line.
         model, cost = measure(
-            lambda: fit_variant(variant, settings, data, seed=seed, num_threads=num_threads),
+            lambda: fit_with_intervals(
+                variant, settings, data, seed=seed, num_threads=num_threads
+            ),
             name=variant,
             settings=energy,
             output_file=energy_dir / f"{variant}.csv",
@@ -323,7 +402,11 @@ def main(
         directory = output_dir / variant
         _replace_directory(directory)
         model.save(directory)
-        logged = {**logged_params(variant, data, params), **cost.params()}
+        logged = {
+            **logged_params(variant, data, params),
+            **interval_params(variant, params),
+            **cost.params(),
+        }
         _log_the_run(run, model, cost=cost, params=logged, directory=directory)
 
     training = model.metadata["training"]
