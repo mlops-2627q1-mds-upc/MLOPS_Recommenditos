@@ -34,7 +34,7 @@ What each part guarantees:
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
-  It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers, and `/metrics` adds up their figures ([API docs](api.md#metrics)).
+  It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
 - **Compose** publishes only the proxy's port.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
@@ -71,7 +71,7 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 | What | Measured | Target |
 |------|----------|--------|
 | Image size (`docker image inspect`, uncompressed) | 665 MB | at most 1 GB (NFR-04) |
-| API container memory, idle after the smoke check (`docker stats`) | 157 MiB (nginx: 10 MiB) | below 1 GB under load (NFR-04, load test in #143) |
+| API container memory, idle after the smoke check (`docker stats`) | 157 MiB (nginx: 10 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
 
@@ -211,6 +211,9 @@ At the lab session on 2026-10-27, whoever gets access records the answers in #13
 **3. Deploy and check.**
 Run the [bootstrap](#first-time-bootstrap-a-fresh-vm) and the [first deploy](#every-deploy), then the smoke check from outside the UPC network.
 Finally check NFR-05's reboot case: `sudo reboot`, and time until `curl http://<vm-host>:<port>/health` answers 200 again; the 30 s count from when the VM is up, which `uptime -s` tells afterwards.
+
+**4. Load test.**
+Run the [load test on the VM](load-testing.md#run-it-on-the-vm): its results settle the targets of NFR-02 to NFR-04.
 
 ## Without sudo or without Docker
 

@@ -194,9 +194,15 @@ dev = [
     "pip",
     "pre-commit",
     "ruff",
+    "types-psutil>=7.2.2.20260906",
     "types-pyyaml>=6.0.12.20260906",
     "types-requests>=2.33.0.20261006",
     "types-tqdm>=4.70.0.20260906",
+]
+loadtest = [
+    "codecarbon>=3.3.1,<4",
+    "locust>=2.46.7",
+    "psutil>=7.2.2",
 ]
 
 [tool.uv]

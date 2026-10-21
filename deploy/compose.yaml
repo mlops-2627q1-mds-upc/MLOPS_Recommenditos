@@ -44,6 +44,9 @@ services:
       # FR-10's key for /v1/feedback, from `.env` beside this file. Empty, the
       # endpoint refuses every request and the rest of the API works (NFR-15).
       RECOMMENDITOS_API_KEY: ${RECOMMENDITOS_API_KEY:-}
+      # The number of uvicorn worker processes; the load test runs with 2 to
+      # check NFR-03's exactly-once logging (docs/docs/load-testing.md).
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
     volumes:
       # The prediction log and the feedback, one SQLite file (EDN-86). A named
       # volume, so it survives a new image and M6's drift job can mount it.

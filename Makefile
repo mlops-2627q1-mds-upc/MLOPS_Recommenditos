@@ -151,6 +151,26 @@ test-integration:
 	RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
 		--no-cov --junitxml=reports/junit-integration.xml
 
+# The load test of docs/docs/load-testing.md (issue #143): Locust against a base
+# URL, with the measurements taken on the Docker host of the stack it targets.
+# `make loadtest-bodies` first, which needs `dvc pull data/processed/test.parquet`.
+LOADTEST_URL ?= http://localhost:8080
+LOADTEST_RATE ?= 20
+LOADTEST_DURATION ?= 5m
+LOADTEST_OUT ?= reports/loadtest/local
+LOADTEST_ARGS ?=
+
+## Write the load test's request bodies from held-out listings into data/interim/loadtest/
+.PHONY: loadtest-bodies
+loadtest-bodies:
+	uv run python -m tools.loadtest.bodies
+
+## Load test a stack and measure it: make loadtest [LOADTEST_URL=... LOADTEST_RATE=20 LOADTEST_DURATION=5m LOADTEST_OUT=...]
+.PHONY: loadtest
+loadtest:
+	uv run python -m tools.loadtest.run --host $(LOADTEST_URL) --rate $(LOADTEST_RATE) \
+		--duration $(LOADTEST_DURATION) --out $(LOADTEST_OUT) $(LOADTEST_ARGS)
+
 ## Check a deployed stack through its proxy: make smoke [SMOKE_URL=http://<vm>:<port>]
 .PHONY: smoke
 smoke:
