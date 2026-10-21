@@ -20,6 +20,7 @@ from recommenditos.api.errors import (
     problem_response,
     too_large_detail,
 )
+from recommenditos.api.metrics import route_template
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -35,12 +36,12 @@ class RequestIdMiddleware:
     one request of this service. `/predict` returns it in its body (FR-06) and
     every problem names it in `instance`. Every log line written while the request
     is answered carries it as `request_id` (`recommenditos.api.logs`), and the
-    last one says how the request was answered: its method, path, status and
-    duration. That line replaces uvicorn's access log, so the service log holds
-    no client address (NFR-08); nginx's access log, which names the client, joins
-    it by the `X-Request-ID` header. `request.state.request_started` is the
-    `time.perf_counter()` at which the request arrived, which the prediction log
-    measures the latency from (FR-13).
+    last one says how the request was answered: its method, route template,
+    status and duration. That line replaces uvicorn's access log, so the service
+    log holds no client address and no path the client chose (NFR-08); nginx's
+    access log, which names the client, joins it by the `X-Request-ID` header.
+    `request.state.request_started` is the `time.perf_counter()` at which the
+    request arrived, which the prediction log measures the latency from (FR-13).
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -68,11 +69,13 @@ class RequestIdMiddleware:
             try:
                 await self.app(scope, receive, send_with_id)
             finally:
-                # The path without its query string, which could hold anything.
+                # The route template, as the metrics count it, never the raw path
+                # or its query string, which the client chooses and could hold
+                # anything, an email address included (NFR-08).
                 logger.info(
                     "{method} {path} {status} {duration_ms} ms",
                     method=scope["method"],
-                    path=scope["path"],
+                    path=route_template(scope),
                     status=status,
                     duration_ms=round((time.perf_counter() - started) * 1000, 1),
                 )

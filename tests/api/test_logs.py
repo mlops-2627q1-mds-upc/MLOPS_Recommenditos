@@ -26,6 +26,7 @@ import pytest
 from tests.api.helpers import free_port, stop_service
 
 from recommenditos.api.logs import LOG_FORMAT_ENV_VAR, json_sink, log_format, text_format
+from recommenditos.api.metrics import UNMATCHED_PATH
 from recommenditos.api.middleware import REQUEST_ID_HEADER
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import MODEL_DIR_ENV_VAR
@@ -90,19 +91,26 @@ def test_fr11_every_line_of_a_request_carries_its_request_id(
 
 @pytest.mark.req("FR-11", "NFR-08")
 @pytest.mark.parametrize(
-    "case", [("POST", PREDICT, 200), ("GET", "/health", 200), ("GET", "/nowhere", 404)]
+    "case",
+    [
+        ("POST", PREDICT, PREDICT, 200),
+        ("GET", "/health", "/health", 200),
+        ("GET", "/nowhere/alice@example.com", UNMATCHED_PATH, 404),
+    ],
+    ids=["predict", "health", "unmatched"],
 )
 def test_fr11_a_request_ends_with_one_line_of_how_it_was_answered_and_nothing_personal(
     client: TestClient,
     listing: dict,
     json_log: Callable[[], list[dict[str, Any]]],
-    case: tuple[str, str, int],
+    case: tuple[str, str, str, int],
 ):
-    method, path, status = case
+    """The path is the route template, never the one the client sent (NFR-08)."""
+    method, sent, path, status = case
     body = listing if method == "POST" else None
     response = client.request(
         method,
-        f"{path}?owner=someone",
+        f"{sent}?owner=someone",
         json=body,
         headers={"X-Forwarded-For": CLIENT_ADDRESS, "User-Agent": "test-agent"},
     )
@@ -118,7 +126,15 @@ def test_fr11_a_request_ends_with_one_line_of_how_it_was_answered_and_nothing_pe
     assert answer["level"] == "INFO"
     assert answer["message"] == f"{method} {path} {status} {answer['duration_ms']} ms"
     text = json.dumps(answer)
-    for personal in (CLIENT_ADDRESS, "testclient", "test-agent", "someone", listing["make"]):
+    personal_values = (
+        CLIENT_ADDRESS,
+        "testclient",
+        "test-agent",
+        "someone",
+        "alice",
+        listing["make"],
+    )
+    for personal in personal_values:
         assert personal not in text
 
 
@@ -195,10 +211,14 @@ def test_fr11_the_service_logs_one_json_object_per_line(
     raw = [line for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
     lines = [json.loads(line) for line in raw]
     assert any(line["logger"].startswith("uvicorn") for line in lines), "uvicorn's lines"
-    answers = {line["request_id"]: line for line in lines if "request_id" in line}
     for request_id, (method, path) in sent.items():
-        assert (answers[request_id]["method"], answers[request_id]["path"]) == (method, path)
-        assert answers[request_id]["status"] == 200
+        answers = [line for line in lines if line.get("request_id") == request_id]
+        assert len(answers) == 1, answers
+        assert (answers[0]["method"], answers[0]["path"], answers[0]["status"]) == (
+            method,
+            path,
+            200,
+        )
     for line in lines:
         if "request_id" in line:
             assert "127.0.0.1" not in json.dumps(line)

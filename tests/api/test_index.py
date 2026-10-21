@@ -20,6 +20,7 @@ def test_fr16_the_root_names_the_service_and_links_its_documentation(
         assert client.get(body[link]).status_code == 200, link
 
 
+@pytest.mark.req("FR-16")
 def test_the_root_answers_head_for_uptime_monitors(client: TestClient):
     head = client.head("/")
 

@@ -6,7 +6,7 @@ carries that request's server-generated ID, which `RequestIdMiddleware` puts
 into loguru's context; the JSON form has it as `request_id`, beside the
 fields the line was logged with. A line holds no client address and no
 request body (NFR-08): the middleware writes one line per request with its
-method, path, status and duration, in place of uvicorn's access log, which
+method, route template, status and duration, in place of uvicorn's access log, which
 names the client.
 
 uvicorn configures the standard library's logging in every process it starts,
@@ -60,7 +60,9 @@ def configure(fmt: str | None = None, stream: TextIO | None = None) -> None:
     if fmt == "json":
         logger.add(json_sink(stream), level=0, filter=_at_uvicorn_level, format="{message}")
     else:
-        logger.add(stream, level=0, filter=_at_uvicorn_level, format=text_format)
+        # `diagnose=False`: a traceback names no variable's value, which could be
+        # a request's content.
+        logger.add(stream, level=0, filter=_at_uvicorn_level, format=text_format, diagnose=False)
 
 
 def json_sink(stream: TextIO) -> Callable[["Message"], None]:

@@ -229,7 +229,7 @@ When the record cannot be written, the client gets a 503 instead of the answer, 
 An answer the log does not hold would break exactly-once silently, and the load test counts a 503 as an error, so a failing log is visible at once.
 
 Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 200 ms NFR-02 gives `/predict`.
-A record takes about 750 bytes, so the 2 GB of NFR-04 hold about 2.7 million answers.
+A record takes about 940 bytes, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold about 2.1 million answers, fewer when requests fill more optional fields.
 
 ### Feedback
 
@@ -270,7 +270,7 @@ The last line of a request says how it was answered:
 ```
 
 That line replaces uvicorn's access log, which names the client's address and port.
-No line of the service log holds the client's address, a header or the request body; `path` is the path without its query string.
+No line of the service log holds the client's address, a header, the request body or the path the client sent: `path` is the route template, as in the [metrics](#metrics), and `<unmatched>` for a path that matches no route.
 uvicorn's own lines, such as its startup and shutdown, and warnings from the libraries go to the same log in the same format, in the supervising process as in every worker, because `python -m recommenditos.api` starts uvicorn with `recommenditos/api/log_config.json`.
 uvicorn's `--log-level` sets the level of the whole log: `--log-level warning` leaves out the lines of answered requests.
 
@@ -285,6 +285,7 @@ docker compose exec api python -c 'import os, sqlite3, sys; print(sqlite3.connec
 ```
 
 The client's address is only in nginx's log, which stays on the VM (NFR-08).
+A 403, 413 or 503 that nginx answers itself never reached the API: its `X-Request-ID` is nginx's own, 32 hex digits, and only nginx's log names it.
 The last command prints the [prediction-log record](#what-a-record-holds) of a valuation, or `None` for a request that is not one; a problem names the ID in `instance`, so a client that reports an error quotes the ID that finds it.
 
 ## Errors
