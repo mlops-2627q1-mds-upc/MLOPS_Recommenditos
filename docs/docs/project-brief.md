@@ -156,6 +156,7 @@ Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tu
 Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-73).
 The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so the search changed neither `params.yaml` nor the committed metrics.
 Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
+Issue #117 swept `reg_lambda`, LightGBM's L2 penalty, at 0, 1, 10, and 100 for both variants on 2026-10-20, with the interval corrected across the nine sweeps on the validation split (EDN-73), and kept 0 for both.
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
 Price ranges (UC2), **implemented** ([EDN-85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), #137): **Conformalized Quantile Regression** with MAPIE 1.6 on quantile LightGBM models at 5 %, 95 % and 50 %, part of the `lgbm-basic` bundle.

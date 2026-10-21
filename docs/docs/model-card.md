@@ -321,9 +321,9 @@ All of these live in `params.yaml`, so a change reruns exactly the variant it af
 | `lgbm-basic` | 3 | LightGBM | basic | `learning_rate: 0.05`, `num_leaves: 63`, `n_estimators: 5000`, `early_stopping_rounds: 50`; `blanked_copies` with `all: 1` and `random: 1` (EDN-82) |
 | `lgbm-extended` | 4 | LightGBM | extended | as `lgbm-basic`, without `blanked_copies` |
 
-Both LightGBM variants also fit with `min_child_samples: 20`, the fewest training rows a leaf may hold, which is LightGBM's own default and which `params.yaml` does not name: the key is optional, so leaving it out fits exactly the booster that setting it to 20 fits, and it appears in `params.yaml` only if a search adopts another value (EDN-73).
-The search of issue #88 adopted none, so every hyperparameter in the table is the one the models were first fitted with, now measured against its neighbours on the validation split rather than assumed (see "How the values were found" below).
-Both searches fitted `lgbm-basic` on its training rows without the blanked copies, and its values were not searched again with them (EDN-73, EDN-82).
+Both LightGBM variants also fit with `min_child_samples: 20`, the fewest training rows a leaf may hold, and `reg_lambda: 0.0`, no L2 penalty on the leaf values, which are LightGBM's own defaults and which `params.yaml` does not name: the keys are optional, so leaving one out fits exactly the booster that setting it to its default fits, and it appears in `params.yaml` only if a search adopts another value (EDN-73).
+The searches of issues #88 and #117 adopted none, so every hyperparameter in the table is the one the models were first fitted with, now measured against its neighbours on the validation split rather than assumed (see "How the values were found" below).
+The searches of issues #64 and #88 fitted `lgbm-basic` on its training rows without the blanked copies. Two sweeps of 2026-10-17, `blanked-lgbm-basic-lr-leaves` and `blanked-lgbm-basic-min-child-samples`, searched it again with them and kept every value, and the `reg_lambda` sweep of issue #117 also fitted it with them, as `train` does (EDN-73, EDN-82).
 
 The settings that are **not** parameters are modelling choices rather than knobs a sweep should touch, and they are the same for both LightGBM variants: `objective="regression"` (squared error on log price, because the log transform already handles the multiplicative error structure) and `metric="l1"` with `first_metric_only=True` for early stopping.
 The absolute error in log space *is* the symmetric relative error, so the stopping point lines up with MdAPE, the metric the gate reads, rather than with a squared error nothing reports.
@@ -362,6 +362,16 @@ Each sweep's record - the results, the readable table and CodeCarbon's row for e
   The best-looking of eleven noisy comparisons looks better than it is, which is the winner's curse.
 - **`lgbm-extended`, `min_child_samples`: keep 20** (sweep `88-lgbm-extended-min-child-samples`).
   20 has the lowest validation L1 of the five values, no other value is resolved either way, and validation MdAPE spans 6.45 % to 6.49 %.
+
+**L2 regularisation (issue #117, EDN-73).**
+`reg_lambda` shrinks a leaf of n training rows towards zero by about n / (n + lambda), so it damps the predictions that rest on few listings, where the errors concentrate.
+It was swept at 0, 1, 10, and 100 for each variant on 2026-10-20, under the same rule with one change: the interval is corrected across all sweeps decided on this validation split (Bonferroni), and these were the eighth and ninth, so each held at 1 - 0.05/9, about 99.4 %.
+Its 8 fits took 339 s and 2.25 Wh, and the test split was not read.
+
+- **`lgbm-basic`, `reg_lambda`: keep 0** (sweep `117-lgbm-basic-reg-lambda`).
+  The lowest validation L1 is 1, 0.00001 below 0 with a simultaneous interval of -0.00089 to +0.00086. 10 and 100 are worse but not measurably, and validation MdAPE spans 7.00 % to 7.05 %.
+- **`lgbm-extended`, `reg_lambda`: keep 0** (sweep `117-lgbm-extended-reg-lambda`).
+  0 has the lowest validation L1, 1 is 0.00014 above it with a simultaneous interval of -0.00090 to +0.00118, and validation MdAPE spans 6.44 % to 6.52 %.
 
 So no neighbour of the committed values is measurably better, for either variant, and these values are the search's result, not a default nobody checked.
 
@@ -472,7 +482,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 | Property | Target | Measured |
 |---|---|---|
 | Training time, chosen configuration, hyperparameter search not included | at most 15 minutes on a laptop CPU (NFR-10) | **176.8 s** for the candidate `lgbm-basic` in the tracked run of 2026-10-20, of which 158.6 s are UC2's price range (three quantile models over 181,134 rows and MAPIE's calibration, `interval_fit_seconds` in MLflow) and the rest the point model; 26.5 s for `lgbm-extended` and 205.3 s for the whole four-variant ladder, at `num_threads: 1` on the real snapshot. Before the price range, the tracked run of 2026-10-13 fitted the point model alone in 19.0 s (1,444 boosting rounds over 181,134 rows, the listings and their blanked copies), `lgbm-extended` in 30.5 s (1,697 rounds) and the ladder in 51.6 s, on a laptop that other work kept busy. Read as an order of magnitude and not a benchmark: fits of the identical `lgbm-extended` between 2026-10-05 and 2026-10-13 took 27.1 s to 58.5 s, depending on what else held a core, which is the size of the effect. The worst case the `n_estimators: 5000` ceiling allows is about 80 s for `lgbm-extended` at the rate measured for the archived entry EDN-70, and about 90 s at this run's |
-| Hyperparameter search | no budget: run once per tuning decision, outside `dvc repro`, and reported apart from the final fit (NFR-10, EDN-73) | **391.3 s** of fitting and 3.6071 Wh for the 34 fits of issue #88's search: 112.3 s and 1.0864 Wh over 17 fits for `lgbm-basic`, 279.1 s and 2.5207 Wh over 17 fits for `lgbm-extended`, at `num_threads: 1` on an i7-1360P laptop, so its fit times are not comparable with the i5-10210U figures above (the `results/` record of each sweep's summary run in MLflow) |
+| Hyperparameter search | no budget: run once per tuning decision, outside `dvc repro`, and reported apart from the final fit (NFR-10, EDN-73) | **391.3 s** of fitting and 3.6071 Wh for the 34 fits of issue #88's search: 112.3 s and 1.0864 Wh over 17 fits for `lgbm-basic`, 279.1 s and 2.5207 Wh over 17 fits for `lgbm-extended`, at `num_threads: 1` on an i7-1360P laptop, so its fit times are not comparable with the i5-10210U figures above. Issue #117's `reg_lambda` search added 339.4 s and 2.2468 Wh over 8 fits on the same laptop (the `results/` record of each sweep's summary run in MLflow) |
 | Model artefact on disk | no target | 8.7 MB (`booster.txt`, 1,394 trees) for the candidate's point model, plus 36.4 MB for its three quantile boosters (4.1, 3.8 and 28.5 MB for 612, 578 and 4,774 trees), 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
@@ -755,6 +765,15 @@ It ran on 2026-10-06 on another laptop, a 13th Gen Intel Core i7-1360P (16 logic
 On its own machine the search for `lgbm-basic` cost about 20 times one fit of the configuration it searched, which had no blanked copies (0.0549 Wh), and the search for `lgbm-extended` about 16 times one of its own (0.1584 Wh).
 Set against the ladder's 0.191 Wh above, the whole search is about 19 times the final ladder, but that ratio crosses two machines, one of them busy with other work, so it is an order of magnitude and nothing finer: the same fit is charged differently on each, and the search's reference fit of `lgbm-extended` took 16.0 s against the ladder's 30.53 s.
 Either way it is a one-off cost of choosing the values, paid once per tuning decision, while each retraining of the product pays only the final fit.
+
+The `reg_lambda` search of issue #117 ran on 2026-10-20 on the same i7-1360P, measured and recorded the same way.
+The laptop had little free memory, and its reference fit of `lgbm-extended` took 84.0 s against 16.0 s on 2026-10-06, so its fit times say more about the machine's load than about the fits.
+
+| Sweep | Fits | Fit time | Energy | Emissions |
+|---|---|---|---|---|
+| `117-lgbm-basic-reg-lambda` | 4 | 77.3 s | 0.6248 Wh | 108.75 mg CO2eq |
+| `117-lgbm-extended-reg-lambda` | 4 | 262.1 s | 1.6220 Wh | 282.30 mg CO2eq |
+| **Search, total** | **8** | **339.4 s** | **2.2468 Wh** | **391.05 mg CO2eq** |
 
 | | |
 |---|---|

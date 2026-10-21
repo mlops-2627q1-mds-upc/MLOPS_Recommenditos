@@ -1050,8 +1050,11 @@ class LightGBMModel(Model):
     #: LightGBM's own default of 20, so a params block that leaves it out fits
     #: exactly the trees it fitted before the key existed - `booster.txt` records
     #: `min_data_in_leaf: 20` either way - and `params.yaml` names it only once a
-    #: search has adopted another value.
-    optional_hyperparameters = MappingProxyType({"min_child_samples": 20})
+    #: search has adopted another value. `reg_lambda`, the L2 penalty that shrinks
+    #: a leaf of n rows by about n / (n + lambda), is optional the same way at
+    #: LightGBM's 0.0 for the search of issue #117. `booster.txt` records it as
+    #: `lambda_l2`, an alias never set here, because LightGBM warns when both are.
+    optional_hyperparameters = MappingProxyType({"min_child_samples": 20, "reg_lambda": 0.0})
     #: The estimator the copies were measured on (EDN-82).
     supports_blanked_copies = True
 
