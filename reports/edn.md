@@ -1132,6 +1132,8 @@ How to add an entry:
 
 ### EDN-87: The API runs on the VM as a Compose stack behind nginx from Milestone 4
 
+> **Revised on 2026-10-21**: the image size measured again with the interval boosters of #158; the decision is unchanged.
+>
 - **Date:** 2026-10-20
 - **Milestone:** M4: Model Deployment
 - **Activity / Topic:** ML System Design, Containerization
@@ -1142,7 +1144,7 @@ How to add an entry:
   - The course demo's recipe (`uv sync`, `dvc pull`, uvicorn under systemd, nginx): M5 replaces it with containers, so two deployments to build and document.
   - Building the image on the VM: needs the repository, DVC and a DagsHub token on a shared machine.
 - **Rationale:** The report describes containers under M5 either way, so the demo's recipe builds something we plan to discard, while M5 adds CI/CD, the image scan and the hardening to this stack.
-  Measured locally, the image is 665 MB (NFR-04: 1 GB), and `/health` answers again 3 s after the API process is killed (NFR-05: 30 s).
+  Measured locally, the image is 702 MB (NFR-04: 1 GB), and `/health` answers again 3 s after the API process is killed (NFR-05: 30 s).
   nginx stays over Caddy and Traefik, whose main gain, automatic TLS, EDN-13 does not need.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted

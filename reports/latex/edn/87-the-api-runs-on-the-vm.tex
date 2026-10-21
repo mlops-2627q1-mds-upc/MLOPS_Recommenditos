@@ -3,6 +3,7 @@
 \ednentry{
   id = {EDN-87},
   title = {The API runs on the VM as a Compose stack behind nginx from Milestone 4},
+  note = {\textbf{Revised on 2026-10-21}: the image size measured again with the interval boosters of \#158; the decision is unchanged.},
   date = {2026-10-20},
   milestone = {M4: Model Deployment},
   topic = {ML System Design, Containerization},
@@ -16,7 +17,7 @@ Until CD exists, the image is built on a laptop and copied with \texttt{docker s
 \end{itemize}
 \par
 \emph{Why:} The report describes containers under M5 either way, so the demo's recipe builds something we plan to discard, while M5 adds CI/CD, the image scan and the hardening to this stack.
-Measured locally, the image is 665 MB (NFR-04: 1 GB), and \texttt{/\allowbreak{}health} answers again 3 s after the API process is killed (NFR-05: 30 s).
+Measured locally, the image is 702 MB (NFR-04: 1 GB), and \texttt{/\allowbreak{}health} answers again 3 s after the API process is killed (NFR-05: 30 s).
 nginx stays over Caddy and Traefik, whose main gain, automatic TLS, EDN-13 does not need.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
