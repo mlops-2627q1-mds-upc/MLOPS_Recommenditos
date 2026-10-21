@@ -1,0 +1,20 @@
+index on disk: 1,956,112 bytes (1.9 MiB)
+app RSS with the index:    338.8, 338.7, 338.6 MiB
+app RSS without the index: 272.9, 272.8, 272.9 MiB
+the index costs a worker:  65.9 MiB
+
+[32m2026-10-20 21:26:30.320[0m | [1mINFO    [0m | [36mrecommenditos.api.app[0m:[36mcreate_app[0m:[36m65[0m - [1mserving lgbm-basic version 0ca148009ee921faeec098156800b4ba from /home/lukas/Documents/Studium/Master/UPC/MLOps/MLOPS_Recommenditos/.claude/worktrees/comparables-138/models/lgbm-basic[0m
+[32m2026-10-20 21:26:30.367[0m | [1mINFO    [0m | [36mrecommenditos.api.app[0m:[36m_comparables_index[0m:[36m106[0m - [1mserving the comparables index version 9993b933797d905b2b6271b03bac50ee from /home/lukas/Documents/Studium/Master/UPC/MLOps/MLOPS_Recommenditos/.claude/worktrees/comparables-138/models/comparables.parquet[0m
+index 9993b933797d905b2b6271b03bac50ee, 70,172 listings; lgbm-basic 0ca148009ee921faeec098156800b4ba
+in process, 8 logical CPUs
+load average before: 3.59, 2.11, 1.96
+load average after:  3.38, 2.09, 1.96
+
+shape        requests   p50 ms   p95 ms   max ms  empty  mean listings
+make only         300      4.1      4.3      5.0   0.0%            5.0
+make+model        300      4.0      4.2      4.9   0.0%            5.0
+P1                300      5.4      5.7      7.1   2.7%            4.7
+P1, k 20          300      5.7      6.0      6.9   2.7%           17.1
+all              1200      5.0      5.9      7.1   1.3%            7.9
+
+NFR-02: p95 at most 300 ms for /comparables on the target VM.
