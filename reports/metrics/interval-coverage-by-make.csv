@@ -1,0 +1,25 @@
+variant,scenario,make,n,coverage,std_error,mean_relative_width,judgement
+lgbm-basic,full,(pooled),19665,0.9022629036359013,0.0021393127492027905,0.4639985067607088,in_band
+lgbm-basic,full,BMW,7219,0.9027566144895415,0.003530878177800678,0.46179439107609604,in_band
+lgbm-basic,full,Porsche,4510,0.907760532150776,0.004467175181476048,0.437245200511824,in_band
+lgbm-basic,full,Audi,2431,0.9041546688605512,0.006084554357361275,0.38024987513920766,in_band
+lgbm-basic,full,Mercedes-Benz,2220,0.9076576576576577,0.006367145399670132,0.34699312738815596,in_band
+lgbm-basic,full,Alfa Romeo,1300,0.9123076923076923,0.008320502943378437,0.5896992980646228,in_band
+lgbm-basic,full,Suzuki,824,0.8592233009708737,0.010450995214374264,0.5940306760225526,outside_band
+lgbm-basic,full,Volvo,714,0.9019607843137255,0.011227217828476795,0.7980726275464781,in_band
+lgbm-basic,full,Honda,177,0.847457627118644,0.022549380840084864,0.6229599120687535,not_judged_too_few_rows
+lgbm-basic,full,Hyundai,105,0.8571428571428571,0.029277002188455994,0.621136866767571,not_judged_too_few_rows
+lgbm-basic,full,Aston Martin,84,0.8690476190476191,0.032732683535398856,0.7588218123039752,not_judged_too_few_rows
+lgbm-basic,full,Volkswagen,81,0.8395061728395061,0.03333333333333333,0.7285228941046642,not_judged_too_few_rows
+lgbm-basic,"(P1: make, model, registration date, mileage)",(pooled),19665,0.9101449275362319,0.0021393127492027905,0.9330445211957313,in_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",BMW,7219,0.9117606316664358,0.003530878177800678,0.9186547865439799,in_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Porsche,4510,0.9017738359201773,0.004467175181476048,0.9037628243278887,in_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Audi,2431,0.9539284245166598,0.006084554357361275,0.861535370068069,outside_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Mercedes-Benz,2220,0.9387387387387387,0.006367145399670132,0.9153180047052347,outside_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Alfa Romeo,1300,0.9046153846153846,0.008320502943378437,1.0956777058012606,in_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Suzuki,824,0.816747572815534,0.010450995214374264,0.8679771449241046,outside_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Volvo,714,0.8711484593837535,0.011227217828476795,1.100153781688451,outside_band
+lgbm-basic,"(P1: make, model, registration date, mileage)",Honda,177,0.8870056497175142,0.022549380840084864,0.9613715374849177,not_judged_too_few_rows
+lgbm-basic,"(P1: make, model, registration date, mileage)",Hyundai,105,0.8571428571428571,0.029277002188455994,2.0236070096831376,not_judged_too_few_rows
+lgbm-basic,"(P1: make, model, registration date, mileage)",Aston Martin,84,0.7976190476190477,0.032732683535398856,1.3291660207787575,not_judged_too_few_rows
+lgbm-basic,"(P1: make, model, registration date, mileage)",Volkswagen,81,0.7530864197530864,0.03333333333333333,1.1702146107600144,not_judged_too_few_rows

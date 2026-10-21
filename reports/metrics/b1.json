@@ -656,6 +656,7 @@
       "passed": null
     }
   ],
+  "interval_by_make": [],
   "sc01_measured": 0.0951563754861866,
   "sc01_passed": false,
   "sc02_measured": 0.8029494024917366,

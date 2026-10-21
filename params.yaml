@@ -482,6 +482,10 @@ evaluate:
     # band, for full inputs and for the partial-input scenario P1.
     sc05_coverage_min: 0.88
     sc05_coverage_max: 0.92
+    # Not a pass criterion: the per-make interval table (#108) reports every
+    # make and judges only those with at least this many test rows, because the
+    # binomial standard error of a coverage over fewer is wider than the band.
+    sc05_min_make_rows: 500
     # SC-06: with each optional input masked on its own, and with all of them
     # masked at once, MdAPE stays at or below this multiple of the full-input
     # value. The optional fields are the input fields of the evaluated variant's

@@ -153,6 +153,17 @@ INTERVAL_METHOD = "predict_interval_eur"
 #: The two tables the report cites, one file across all variants each.
 SEGMENTS_FILE = "segments.csv"
 MASKED_INPUTS_FILE = "masked-inputs.csv"
+INTERVAL_COVERAGE_FILE = "interval-coverage-by-make.csv"
+
+#: The row of the per-make interval table that pools every make, which is the
+#: figure SC-05 gates on. Parenthesised like the scenario names, so it cannot
+#: collide with a make.
+POOLED_MAKE = "(pooled)"
+
+#: What the per-make interval table says about one row (`interval_make_rows`).
+IN_BAND = "in_band"
+OUTSIDE_BAND = "outside_band"
+NOT_JUDGED = "not_judged_too_few_rows"
 
 #: Their columns, in the order the files carry them. A fixed header rather than
 #: whatever the row dicts happen to hold, for two different reasons: a row
@@ -173,6 +184,16 @@ _SEGMENT_FIELDS: tuple[str, ...] = (
     "mape",
     "counts_toward_sc04",
     "excluded_because",
+)
+_INTERVAL_COVERAGE_FIELDS: tuple[str, ...] = (
+    "variant",
+    "scenario",
+    "make",
+    "n",
+    "coverage",
+    "std_error",
+    "mean_relative_width",
+    "judgement",
 )
 _MASKED_INPUT_FIELDS: tuple[str, ...] = (
     "variant",
@@ -634,32 +655,106 @@ def evaluate_sc04(rows: "list[dict]", criteria: dict, *, segments: "tuple[str, .
     }
 
 
-def interval_metrics(model: Model, frames: "dict[str, pd.DataFrame]") -> "dict | None":
-    """Each scenario's interval coverage and mean relative width, or `None`.
+def interval_outcomes(
+    model: Model, frames: "dict[str, pd.DataFrame]"
+) -> "dict[str, pd.DataFrame] | None":
+    """Per row and scenario, whether the price fell inside the interval, and its width.
 
     `None` when the bundle carries no calibrated price range (`has_intervals`),
-    so a variant without one reports SC-05 as not measured.
-
-    Coverage is the share of rows whose price falls inside the interval. The mean
-    relative width is the width over the interval's own median model, and it is
-    reported and not a pass criterion: `params.yaml` sets no threshold for it,
-    because there is no reference value for how wide a useful interval is. The
-    median rather than the point model, because the point model has never seen
-    a required field missing, so on P1 it is not a price to divide by (EDN-85).
+    so a variant without one reports SC-05 as not measured. Each frame has the
+    index of the scenario's input and two columns: `inside`, and `relative_width`,
+    the width over the interval's own median model. The median rather than the
+    point model, because the point model has never seen a required field missing,
+    so on P1 it is not a price to divide by (EDN-85).
     """
     if not model.has_intervals:
         return None
-    measured = {}
+    outcomes = {}
     for name, frame in frames.items():
         interval = model.predict_interval_eur(frame)
         price = frame["price"]
-        inside = (interval["lower_eur"] <= price) & (price <= interval["upper_eur"])
-        width = (interval["upper_eur"] - interval["lower_eur"]) / interval["median_eur"]
-        measured[name] = {
-            "coverage": float(inside.mean()),
-            "mean_relative_width": float(width.mean()),
+        outcomes[name] = pd.DataFrame(
+            {
+                "inside": (interval["lower_eur"] <= price) & (price <= interval["upper_eur"]),
+                "relative_width": (interval["upper_eur"] - interval["lower_eur"])
+                / interval["median_eur"],
+            }
+        )
+    return outcomes
+
+
+def interval_metrics(model: Model, frames: "dict[str, pd.DataFrame]") -> "dict | None":
+    """Each scenario's interval coverage and mean relative width, or `None`.
+
+    Coverage is the share of rows whose price falls inside the interval. The mean
+    relative width is reported and not a pass criterion: `params.yaml` sets no
+    threshold for it, because there is no reference value for how wide a useful
+    interval is.
+    """
+    outcomes = interval_outcomes(model, frames)
+    return None if outcomes is None else summarise_intervals(outcomes)
+
+
+def summarise_intervals(outcomes: "dict[str, pd.DataFrame]") -> dict:
+    """The pooled coverage and mean relative width of each scenario."""
+    return {
+        name: {
+            "coverage": float(each["inside"].mean()),
+            "mean_relative_width": float(each["relative_width"].mean()),
         }
-    return measured
+        for name, each in outcomes.items()
+    }
+
+
+def interval_make_rows(
+    outcomes: "dict[str, pd.DataFrame]",
+    makes: pd.Series,
+    *,
+    variant: str,
+    criteria: dict,
+) -> "list[dict]":
+    """Coverage and mean relative width per make and scenario, beside the pooled row.
+
+    SC-05 gates the pooled coverage only; a make can sit outside the band while
+    the pool is inside it, which is what a calibration set with a different make
+    mix than the test set (EDN-32) risks. Nothing here gates and nothing is
+    dropped: every make is a row with its `n`.
+
+    A make below `sc05_min_make_rows` is reported and not judged. The reason is
+    the binomial noise: `std_error` is the standard error of a coverage estimate
+    over `n` rows at the middle of the band, `sqrt(c * (1 - c) / n)`, which is
+    1.3 points at 500 rows against a band of plus or minus 2 points. A make
+    judged `outside_band` is outside by the point estimate, so a reader compares
+    the distance with `std_error` before reading it as a miscalibration.
+    """
+    low, high = criteria["sc05_coverage_min"], criteria["sc05_coverage_max"]
+    centre = (low + high) / 2
+    min_rows = criteria["sc05_min_make_rows"]
+    rows = []
+    for scenario, outcome in outcomes.items():
+        by_make = sorted(
+            ((str(make), each) for make, each in outcome.groupby(makes.loc[outcome.index])),
+            key=lambda pair: -len(pair[1]),
+        )
+        for make, each in [(POOLED_MAKE, outcome), *by_make]:
+            n, coverage = len(each), float(each["inside"].mean())
+            if n < min_rows:
+                judgement = NOT_JUDGED
+            else:
+                judgement = IN_BAND if low <= coverage <= high else OUTSIDE_BAND
+            rows.append(
+                {
+                    "variant": variant,
+                    "scenario": scenario,
+                    "make": make,
+                    "n": n,
+                    "coverage": coverage,
+                    "std_error": float(np.sqrt(centre * (1 - centre) / n)),
+                    "mean_relative_width": float(each["relative_width"].mean()),
+                    "judgement": judgement,
+                }
+            )
+    return rows
 
 
 def evaluate_sc05(intervals: "dict | None", criteria: dict) -> dict:
@@ -951,6 +1046,13 @@ def _evaluate_variant(
     )
     p1 = sc05_scenarios(fields, params)
     partial = masking_sweep(model, test, p1, full_mdape=metrics["mdape"])
+    # Both scenarios SC-05 names, because the criterion asks for the coverage
+    # of a full request and of P1. The frame is masked by the same helper the
+    # sweep above uses, so the two halves of SC-05 describe one request.
+    outcomes = interval_outcomes(
+        model,
+        {FULL_SCENARIO: test, P1_SCENARIO: model.mask_absent(test, p1[0].fields)},
+    )
     record = {
         "variant": variant,
         # What actually produced these numbers, so a committed metrics file
@@ -967,6 +1069,16 @@ def _evaluate_variant(
         "optional_input_fields": list(optional),
         "segments": reported,
         "masked_inputs": masked_input_rows([*sweep, *partial], criteria),
+        # Empty for a variant without a price range. Reported beside SC-05's
+        # pooled figure and never an input of the gate.
+        "interval_by_make": []
+        if outcomes is None
+        else interval_make_rows(
+            outcomes,
+            segment_level_column(test, MAKE_SEGMENT, params),
+            variant=variant,
+            criteria=criteria,
+        ),
     }
     gate_input = GateInput(
         metrics=metrics,
@@ -974,16 +1086,7 @@ def _evaluate_variant(
         segments=rows,
         criterion_segments=segments,
         sweep=sweep,
-        # Both scenarios SC-05 names, because the criterion asks for the coverage
-        # of a full request and of P1. The frame is masked by the same helper the
-        # sweep above uses, so the two halves of SC-05 describe one request.
-        intervals=interval_metrics(
-            model,
-            {
-                FULL_SCENARIO: test,
-                P1_SCENARIO: model.mask_absent(test, p1[0].fields),
-            },
-        ),
+        intervals=None if outcomes is None else summarise_intervals(outcomes),
     )
     return record, gate_input
 
@@ -1194,6 +1297,11 @@ def main(
         metrics_dir / SEGMENTS_FILE,
         _segment_table(records, criterion_segments(params)),
         _SEGMENT_FIELDS,
+    )
+    _write_table(
+        metrics_dir / INTERVAL_COVERAGE_FILE,
+        [row for record in records.values() for row in record["interval_by_make"]],
+        _INTERVAL_COVERAGE_FIELDS,
     )
     _write_table(
         metrics_dir / MASKED_INPUTS_FILE,

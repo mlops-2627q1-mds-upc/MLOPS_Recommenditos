@@ -19,9 +19,15 @@ from tests.conftest import project_params, train_variants
 from recommenditos.config import PARAMS_FILE
 from recommenditos.modeling import intervals, train
 from recommenditos.modeling.evaluate import (
+    IN_BAND,
+    NOT_JUDGED,
+    OUTSIDE_BAND,
     P1_SCENARIO,
+    POOLED_MAKE,
     input_field_columns,
+    interval_make_rows,
     interval_metrics,
+    interval_outcomes,
     sc05_scenarios,
 )
 from recommenditos.modeling.model import (
@@ -185,6 +191,91 @@ def test_sc05_measures_both_scenarios_for_the_range(trained: dict, test_frames: 
     for entry in measured.values():
         assert 0.0 <= entry["coverage"] <= 1.0
         assert entry["mean_relative_width"] > 0
+
+
+def _outcome(coverage: float, n: int, *, width: float = 0.5) -> pd.DataFrame:
+    """`n` rows of which the first `coverage * n` fall inside their interval."""
+    covered = round(coverage * n)
+    return pd.DataFrame(
+        {"inside": [True] * covered + [False] * (n - covered), "relative_width": [width] * n}
+    )
+
+
+@pytest.mark.req("FR-07")
+def test_the_per_make_table_reports_every_make_and_judges_only_the_large_ones():
+    criteria = {"sc05_coverage_min": 0.88, "sc05_coverage_max": 0.92, "sc05_min_make_rows": 500}
+    parts = {
+        "A": _outcome(0.90, 1000),
+        "B": _outcome(0.80, 1000),
+        "C": _outcome(0.50, 10),
+        "D": _outcome(0.50, 500),
+        "E": _outcome(0.50, 499),
+    }
+    outcome = pd.concat(parts, ignore_index=True)
+    makes = pd.Series([name for name, part in parts.items() for _ in range(len(part))])
+
+    rows = interval_make_rows({"full": outcome}, makes, variant="v", criteria=criteria)
+
+    assert [row["make"] for row in rows] == [POOLED_MAKE, "A", "B", "D", "E", "C"]
+    by_make = {row["make"]: row for row in rows}
+    assert by_make[POOLED_MAKE]["n"] == 3009
+    assert by_make[POOLED_MAKE]["coverage"] == pytest.approx((900 + 800 + 5 + 250 + 250) / 3009)
+    assert by_make["A"]["judgement"] == IN_BAND
+    assert by_make["B"]["judgement"] == OUTSIDE_BAND
+    # Reported with its count and not judged: ten rows cannot tell 50 % from 90 %.
+    assert by_make["C"]["judgement"] == NOT_JUDGED
+    # The boundary: exactly `sc05_min_make_rows` rows are judged, one fewer are not.
+    assert by_make["D"]["judgement"] == OUTSIDE_BAND
+    assert by_make["E"]["judgement"] == NOT_JUDGED
+    assert by_make["C"]["n"] == 10
+    assert by_make["C"]["coverage"] == 0.5
+    # The standard error of a coverage at the middle of the band shrinks with n.
+    # At the middle of the band, not at the make's own coverage: B is at 0.80.
+    assert by_make["A"]["std_error"] == pytest.approx((0.9 * 0.1 / 1000) ** 0.5)
+    assert by_make["B"]["std_error"] == by_make["A"]["std_error"]
+    assert by_make["C"]["std_error"] > 10 * by_make["A"]["std_error"]
+    assert sum(row["n"] for row in rows if row["make"] != POOLED_MAKE) == 3009
+
+
+@pytest.mark.req("FR-07")
+def test_the_per_make_table_cuts_each_scenario_by_the_makes_it_is_given():
+    criteria = {"sc05_coverage_min": 0.88, "sc05_coverage_max": 0.92, "sc05_min_make_rows": 5}
+    makes = pd.Series(["A"] * 10 + ["B"] * 10, index=range(20))
+    outcomes = {
+        "full": _outcome(0.9, 20, width=0.4),
+        P1_SCENARIO: pd.concat([_outcome(1.0, 10, width=1.0), _outcome(0.5, 10, width=2.0)]),
+    }
+    outcomes[P1_SCENARIO].index = range(20)
+
+    rows = interval_make_rows(outcomes, makes, variant="v", criteria=criteria)
+
+    p1 = {r["make"]: r for r in rows if r["scenario"] == P1_SCENARIO}
+    assert p1["A"]["coverage"] == 1.0 and p1["A"]["mean_relative_width"] == 1.0
+    assert p1["B"]["coverage"] == 0.5 and p1["B"]["mean_relative_width"] == 2.0
+    assert p1[POOLED_MAKE]["mean_relative_width"] == 1.5
+    assert {r["scenario"] for r in rows} == {"full", P1_SCENARIO}
+
+
+@pytest.mark.req("FR-07")
+def test_the_pooled_row_of_the_per_make_table_is_the_figure_sc05_gates_on(
+    trained: dict, test_frames: dict
+):
+    model = trained["models"][INTERVAL_VARIANT]
+    test = test_frames[model.feature_set]
+    frames = {"full": test, P1_SCENARIO: test}
+    criteria = {"sc05_coverage_min": 0.88, "sc05_coverage_max": 0.92, "sc05_min_make_rows": 5}
+
+    outcomes = interval_outcomes(model, frames)
+    rows = interval_make_rows(outcomes, test["make"].astype("str"), variant="v", criteria=criteria)
+
+    measured = interval_metrics(model, frames)
+    for row in rows:
+        if row["make"] == POOLED_MAKE:
+            assert row["coverage"] == measured[row["scenario"]]["coverage"]
+            assert row["mean_relative_width"] == measured[row["scenario"]]["mean_relative_width"]
+            assert row["n"] == len(test)
+    bare = next(each for each in trained["models"].values() if not each.has_intervals)
+    assert interval_outcomes(bare, frames) is None
 
 
 @pytest.mark.parametrize(
