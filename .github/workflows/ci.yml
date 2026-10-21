@@ -298,8 +298,12 @@ jobs:
         if: needs.changes.outputs.stack == 'true'
         # A fresh key per run, never committed (NFR-15): Compose hands it to the
         # api service, and tests/integration/test_deployed_feedback.py reads it
-        # back from the container.
-        run: echo "RECOMMENDITOS_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> "$GITHUB_ENV"
+        # back from the container. Masked first, because GitHub prints every
+        # $GITHUB_ENV value in the env header of each later step.
+        run: |
+          key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+          echo "::add-mask::$key"
+          echo "RECOMMENDITOS_API_KEY=$key" >> "$GITHUB_ENV"
       - name: Build the image and start the stack
         if: needs.changes.outputs.stack == 'true'
         run: docker compose -f deploy/compose.yaml up -d --build --wait
