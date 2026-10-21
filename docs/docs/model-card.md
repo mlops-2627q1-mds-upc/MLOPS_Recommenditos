@@ -471,7 +471,8 @@ With no `MLFLOW_TRACKING_URI` the stage logs one line, writes the model normally
   That measurement is one validation split and one fit per configuration.
   @lukas2510, the repository owner, adopted this on 2026-10-13 on that measurement, and the test split was read once, for the adopted configuration ([Results](#results)).
   SC-06 bounds the outcome, and NFR-01's gate enforces it.
-- **Comparables:** a filtered lookup over the processed listings, matching make and model within 2 years of age and 25 % of mileage, **not** a learned nearest-neighbour model.
+- **Comparables:** a filtered lookup over the processed training and validation listings, matching make and model within 2 years of age and 25 % of mileage, **not** a learned nearest-neighbour model.
+  The `comparables` stage writes the index, 70,172 listings in 1.9 MB, and the API image carries it beside the bundle ([API docs](api.md#comparables)).
   The filters are never relaxed to fill the list ([specification](specification.md) FR-09).
 
 #### Speeds, Sizes, Times

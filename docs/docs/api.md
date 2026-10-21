@@ -1,7 +1,7 @@
 The API
 =======
 
-The HTTP API serves the price model: it estimates the asking price of a used car (UC1) and the price range of a car described in part (UC2) with the model bundle the service was started with.
+The HTTP API serves the price model: it estimates the asking price of a used car (UC1) and the price range of a car described in part (UC2) with the model bundle the service was started with, and returns real listings comparable to that car (UC2) from the comparables index beside the bundle.
 This page says how to run it, what it offers and how its errors are shaped, and how to add an endpoint.
 The field-by-field reference is the generated OpenAPI document, served by the API itself at `/docs` (Swagger UI), `/redoc` (ReDoc) and `/openapi.json`; this page does not repeat it.
 What each endpoint must do is in the [specification](specification.md) (FR-01 to FR-16, NFR-03, NFR-04, NFR-08, NFR-09).
@@ -9,7 +9,7 @@ What each endpoint must do is in the [specification](specification.md) (FR-01 to
 ## Running it
 
 ```bash
-uv run dvc pull train      # the model bundles, into models/
+uv run dvc pull train comparables   # the model bundles and the comparables index, into models/
 make api                   # uvicorn on http://127.0.0.1:8000
 ```
 
@@ -27,7 +27,7 @@ The service reads its settings from environment variables (`recommenditos/api/se
 | `RECOMMENDITOS_LOG_FORMAT` | `text` | `json` for one JSON object per log line, as the image sets it ([Logs](#logs)); read by `recommenditos/api/logs.py`, because uvicorn configures the log before the app and its settings exist |
 
 The API key is a secret (NFR-15): `.env.template` lists it without a value, and the settings hold it as a `SecretStr`, which a repr or a log line shows as `**********`.
-The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
+The bundle and the comparables index beside it, `models/comparables.parquet`, are loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
 A bundle the API cannot serve stops the service at startup instead of failing on the first request: one that consumes no column for a field FR-01 requires, and one without a SHAP export to explain a valuation with (FR-08), which today means every bundle but a LightGBM one (`b0` and `b1` are refused).
 
 `make api` runs `python -m recommenditos.api`, which passes its options on to uvicorn: `python -m recommenditos.api --workers 2`, or `WEB_CONCURRENCY=2 make api`, starts two worker processes.
@@ -55,8 +55,9 @@ The operational endpoints are not part of that contract and stay at the root, wh
 |----------|---------|--------------|
 | `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08, FR-13 |
 | `POST /v1/price-range` | The typical price and the nominal 90 % price range in EUR for a car described by any fields that include its make, the model, a request ID and warnings | FR-02 to FR-05, FR-07, FR-13 |
+| `POST /v1/comparables` | Up to `k` real listings with their price and key features, comparable to a car described as for `/v1/price-range`, the index and the model, a request ID and warnings | FR-02 to FR-04, FR-09, FR-13 |
 | `POST /v1/feedback` | Stores the observed price of an answered listing against its request ID; internal, requires the API key | FR-10 |
-| `GET /health` | `ok`, the served model (its variant, version and training time), and `price_range`, whether the bundle can answer `/v1/price-range` | FR-11, FR-12 |
+| `GET /health` | `ok`, the served model (its variant, version and training time), `price_range`, whether the bundle can answer `/v1/price-range`, and `comparables`, the index's version and size | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
 | `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
 
@@ -149,6 +150,25 @@ That is inside NFR-02's 300 ms, which the load test on the target VM checks.
 
 A bundle without interval models, such as `lgbm-extended`, serves `/v1/predict` and answers `/v1/price-range` with a 503 problem; `/health` then reports `"price_range": false`.
 
+### Comparables
+
+`POST /v1/comparables` takes the body of `/v1/price-range` plus `k`, how many listings to return: 5 when left out, at most 20, and a `k` outside 1 to 20 is a 422 like any other invalid field.
+It answers with listings of the training and validation data, never of `ES` (EDN-03) or the test and calibration splits, each with its price in EUR and its key features, and none with a PII column (NFR-08).
+A listing is comparable when it has the request's `make` and `model`, its age differs by at most 2 years from the car's and its mileage by at most 25 % of the car's (FR-09).
+The listing's age is its age on the snapshot date, the age its price was asked at; the car's is its age today, as the model computes it.
+The closest mileage comes first, then the closest age, then the index's own order, so the same request always gets the same listings.
+A field the request leaves out sets no filter and adds no distance: a request with only `make` gets listings of every model of the make, one without a mileage is ordered by age alone.
+No filter is relaxed, so a car outside every window gets an empty list; a `model` of which the index holds no listing for the make gets one too, with a warning that says so.
+Fields other than these four are checked like everywhere else and do not change which listings come back.
+
+The answer names the index it searched, `index.version` and `index.listings`, as `/health` does: the version is the md5 `dvc.lock` records for `models/comparables.parquet`, which the `comparables` stage writes ([pipeline](pipeline.md#stages)).
+A service started without the index, such as one around a bundle copied elsewhere, values listings, answers `/v1/comparables` with a 503 problem and reports `"comparables": null` on `/health`.
+
+The real index holds 70,172 listings and takes 1.9 MB on disk, which is what it adds to the image.
+A process that has built the app around `lgbm-basic` holds 339 MB resident with the index and 273 MB without it, so the index costs every uvicorn worker about 66 MB of NFR-04's 1 GB container cap; it is read on one thread, because Arrow's thread pool added about 40 MB more.
+Measured in-process with `TestClient` on the shared development laptop under a load average of about 3.5, over 1,200 requests built from test listings, 300 each make only, make and model, P1, and P1 with `k` 20, a request took p50 5.0 ms and p95 5.9 ms, with no shape above p95 6.0 ms; 2.7 % of the P1 requests got an empty list (`reports/analysis/comparables_footprint.py`).
+That is inside NFR-02's 300 ms, which the load test on the target VM checks.
+
 ### Model version and request ID
 
 The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
@@ -170,6 +190,8 @@ In the deployment only Prometheus reads it, inside the Compose network: nginx re
 | `recommenditos_price_range_price_eur` | histogram | - | The typical prices `/v1/price-range` answered |
 | `recommenditos_price_range_relative_width` | histogram | - | The width of each answered range over its typical price, which falls the more fields a client sends |
 | `recommenditos_price_range_warnings_total` | counter | `field` | `/v1/price-range` warnings, by the field they point at (FR-05) |
+| `recommenditos_comparables_listings` | histogram | - | How many listings each `/v1/comparables` answer held, 0 when none lay in every window |
+| `recommenditos_comparables_warnings_total` | counter | `field` | `/v1/comparables` warnings, by the field they point at |
 | `recommenditos_model_info` | gauge | `variant`, `version` | 1 for the served model; the version is the one `/health` reports |
 
 `path` is the route template, such as `/v1/predict`, never the raw path, so a client cannot grow the label set; a request that matches no route is counted under `<unmatched>`.
