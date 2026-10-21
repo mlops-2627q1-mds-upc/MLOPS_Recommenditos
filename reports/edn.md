@@ -1149,6 +1149,25 @@ How to add an entry:
 
 ### EDN-89: How the UC2 intervals handle makes whose coverage misses the band (#108)
 
+- **Date:** 2026-10-21
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** Model Evaluation, ML System Design
+- **Participants:** @lukas2510 decided ([issue #108](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/108))
+- **Decision:** The UC2 intervals keep the single pooled calibration of EDN-85.
+  `evaluate` reports their coverage and width per make beside the pooled SC-05 figure, and the model card names the judged makes outside 88 % to 92 %.
+  Makes under 500 test rows are reported and not judged.
+- **Alternatives considered:**
+  - Mondrian calibration, one offset pair per make: it fixes Mercedes-Benz on P1 (93.9 % to 91.7 %) and mostly Suzuki (85.9 % to 90.4 % full), but moves Alfa Romeo and Volvo out of the band and lowers Audi to 88.9 % on full inputs; four makes have too few rows to calibrate.
+  - A larger calibration split: reopens the split of EDN-32 and needs a full retrain.
+- **Rationale:** The pooled figures pass SC-05 (90.2 % full, 91.0 % P1). Mercedes-Benz is in the band on full inputs (90.8 %) and over-covered on P1 (93.9 %), the safe direction. Suzuki is the real miss (85.9 % and 81.7 %). Calibrating per make on 1,000 to 3,000 rows only trades misses between makes.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI built the per-make table, simulated Mondrian offsets offline on the calibration split and scored them on test, and recommended this option.
+  @lukas2510 chose it after the numbers were laid out.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #108: measurement, offline Mondrian simulation, recommendation.
+- **Other evidence:** [PR #169](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/169), [per-make coverage table](metrics/interval-coverage-by-make.csv), [split analysis](analysis/split_strategy_results.txt), EDN-32 and EDN-85.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
