@@ -48,11 +48,11 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
 
 ## Performance
 
-A request is scored on one thread: `ServedModel.load` sets LightGBM's `num_threads` to 1 for every prediction of the served model (`PREDICTION_THREADS` in `recommenditos/api/serving.py`).
+A request is scored on one thread: `python -m recommenditos.api`, and so the image, sets `OMP_NUM_THREADS=1` for its workers unless the environment sets it already.
 LightGBM's default is one OpenMP thread per core, and `Booster.predict` ignores the `num_threads` that `booster.txt` records.
 For one row that parallelism only adds threads that wait: a valuation took 73 ms and 339 ms of CPU with the default, and 50 ms and 51 ms of CPU on one thread with the explanation summed in NumPy, and under concurrent requests the threads of every request and every worker competed for the same cores (issue #179).
 The answers are the same either way; the FR-06 parity test compares the API's prices with the pipeline's, which predicts with the default.
-Batch scoring in the pipeline keeps the default.
+Batch scoring in the pipeline keeps the default, and so does an app started another way, such as the tests' `TestClient`.
 
 What is left of a valuation's 50 ms is about 18 ms to build the one-row matrix (`build_matrix` and the schema's casts, the code the pipeline uses too), about 20 ms for LightGBM's SHAP export behind the explanation, and the price itself.
 Most of it is Python and holds the GIL, so a worker process scores one request at a time (`ServedModel` holds a lock while it scores): concurrent requests in uvicorn's thread pool otherwise took turns at the GIL every few milliseconds, which cost about 40 % more CPU per request and stretched every request's latency to that of all of them.

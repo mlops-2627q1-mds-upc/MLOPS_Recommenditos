@@ -71,13 +71,6 @@ REQUEST_CONTRACT = RequestContract(
 #: How many fields FR-08's explanation lists by name.
 TOP_FEATURES = 5
 
-#: The OpenMP threads LightGBM may use for one request. Its default, one per
-#: core, parallelises a one-row prediction over threads that mostly wait: in
-#: the measurement of issue #179 a valuation cost 4.6 times its wall time in CPU,
-#: and concurrent requests and uvicorn workers then compete for the same cores.
-#: The API gets its parallelism from requests and workers instead.
-PREDICTION_THREADS = 1
-
 
 class ServingError(ModelError):
     """The bundle cannot be served by this API."""
@@ -178,7 +171,6 @@ class ServedModel:
                 f"{model.variant!r} is a {model.estimator!r} model, which has no SHAP export, so "
                 "no valuation could be explained (FR-08). The API serves LightGBM bundles."
             )
-        model.prediction_threads = PREDICTION_THREADS
         fields = input_field_columns(model, REQUEST_CONTRACT)
         undefined = sorted(set(fields) - set(ValuationRequest.model_fields))
         if undefined:
