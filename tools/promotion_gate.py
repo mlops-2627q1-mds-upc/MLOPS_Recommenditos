@@ -125,8 +125,8 @@ def not_the_candidate(metrics: dict, variant: str) -> str:
     if isinstance(record, dict) and record.get("gate_passed") is True:
         return (
             f"{head}. The candidate passes the gate, but {named} passes it with the "
-            "lower MdAPE: change report.candidate_variant (an EDN decision) "
-            "or keep the candidate and say why"
+            "lower MdAPE: change report.candidate_variant (an EDN decision); the gate "
+            "cannot pass while another variant is deployable"
         )
     return f"{head}, and the candidate itself fails the gate"
 

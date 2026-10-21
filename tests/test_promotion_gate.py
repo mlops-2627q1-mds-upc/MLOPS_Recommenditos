@@ -129,8 +129,8 @@ def test_a_passing_candidate_beaten_by_another_variant_is_told_what_to_decide(re
         in message
     )
     assert (
-        "change report.candidate_variant (an EDN decision) or keep the candidate and say why"
-        in (message)
+        "change report.candidate_variant (an EDN decision); the gate cannot pass while "
+        "another variant is deployable" in message
     )
 
 
