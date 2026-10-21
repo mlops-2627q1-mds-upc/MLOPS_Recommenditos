@@ -341,8 +341,14 @@ def explain(
     Nothing is rounded, so that the product reproduces the unrounded estimate
     to float precision and `price_eur`, its rounding, to the cent.
     """
+    # Summed on the NumPy array rather than through pandas, whose label lookup
+    # per field cost about a fifth of a valuation's CPU time (issue #179); the
+    # same values in the same order give the same sums.
+    values = contributions.to_numpy(dtype="float64")
+    position = {column: index for index, column in enumerate(contributions.index)}
     by_field = {
-        name: float(contributions[list(columns)].sum()) for name, columns in fields.items()
+        name: float(values[[position[column] for column in columns]].sum())
+        for name, columns in fields.items()
     }
     ranked = sorted(by_field, key=lambda name: abs(by_field[name]), reverse=True)
     others = ranked[top:]
