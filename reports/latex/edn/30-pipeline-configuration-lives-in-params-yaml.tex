@@ -7,11 +7,11 @@
   milestone = {M2: Reproducibility},
   topic = {Project Structure, Reproducibility},
   participants = {@lukas2510},
-  decision = {Everything configurable about the pipeline lives in \texttt{params.\allowbreak{}yaml} and is declared per stage under \texttt{params:} in \texttt{dvc.\allowbreak{}yaml}: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the model variants and the thresholds of the success criteria.
+  decision = {Everything configurable about the pipeline lives in \texttt{params.\allowbreak{}yaml} and is declared per stage under \texttt{params:} in \texttt{dvc.\allowbreak{}yaml}: the seed, the reference date, the scope bounds, the split ratios, the feature sets, the model variants, and the thresholds of the success criteria.
 Paths stay in \texttt{recommenditos/\allowbreak{}config.\allowbreak{}py}.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item Python constants in \texttt{config.\allowbreak{}py}, as the course demo does: DVC cannot see a constant, so a changed hyperparameter reruns nothing and \texttt{dvc repro} reports the pipeline as up to date.
+\item Python constants, as the course demo keeps in \texttt{train.\allowbreak{}py}: DVC sees a constant only through the hash of its module, so a changed hyperparameter retrains every variant, and \texttt{dvc params diff} and \texttt{dvc exp} cannot see it.
 \item \texttt{config.\allowbreak{}py} reading \texttt{params.\allowbreak{}yaml}: hides which stage reads which key.
 \end{itemize}
 \par

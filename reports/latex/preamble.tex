@@ -20,6 +20,9 @@
 % `--` inside \texttt stays two hyphens instead of the en dash the T1 ligature makes,
 % so command-line options such as `ruff format --check` print as typed.
 \DisableLigatures[-]{encoding=T1,family=tt*}
+% Typewriter text gets no extra space after a colon or a full stop, so `push: false`
+% prints with one space as typed and not two.
+\AddToHook{ttfamily}{\frenchspacing}
 \usepackage[a4paper, margin=2.5cm, headheight=14pt]{geometry}
 \usepackage{graphicx}
 \graphicspath{{figures/}{../figures/}}

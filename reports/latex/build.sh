@@ -5,6 +5,8 @@
 #   ./build.sh [draft]   drafts with guidance: report.pdf, report-final.pdf, edn.pdf
 #   ./build.sh initial   submission: MLOps_Recommenditos_Initial_report.pdf + EDN
 #   ./build.sh final     submission: MLOps_Recommenditos_Final_report.pdf + EDN
+#
+# The EDN is built first, because each report appends it (report.tex, \EdnJob).
 set -eu
 
 cd "$(dirname "$0")"
@@ -19,7 +21,8 @@ summary() {
 	pages=$(sed -n 's/^Output written on .*(\([0-9]*\) pages\{0,1\}.*/\1/p' "build/$1.log")
 	tbd=$(grep 'Unfilled placeholder' "build/$1.log" | sort -u | wc -l | tr -d ' ')
 	spare=$(sed -n 's/^Report: space left on the last page: //p' "build/$1.log")
-	echo ">>> reports/latex/build/$1.pdf: $pages pages, $tbd distinct unfilled placeholders${spare:+, $spare left on the last page}"
+	body=$(sed -n 's/^Report: pages before the appendix: //p' "build/$1.log")
+	echo ">>> reports/latex/build/$1.pdf: $pages pages${body:+ ($body before the EDN appendix)}, $tbd distinct unfilled placeholders${spare:+, $spare left on the last page}"
 }
 
 # Intermediate files from another TeX Live version (e.g. Docker vs. a local
@@ -34,7 +37,8 @@ fi
 deliverable=${1:-draft}
 case "$deliverable" in
 	draft)
-		latexmk_run report.tex edn.tex
+		latexmk_run edn.tex
+		latexmk_run report.tex
 		latexmk_run -usepretex='\def\ReportFinal{}' -jobname=report-final report.tex
 		jobs="report report-final edn"
 		;;
@@ -44,8 +48,8 @@ case "$deliverable" in
 		else
 			name=Final limit=30 pretex='\def\ReportSubmission{}\def\ReportFinal{}'
 		fi
-		latexmk_run -usepretex="$pretex" -jobname="MLOps_Recommenditos_${name}_report" report.tex
 		latexmk_run -usepretex='\def\ReportSubmission{}' -jobname=MLOps_Recommenditos_EDN edn.tex
+		latexmk_run -usepretex="$pretex\def\EdnJob{MLOps_Recommenditos_EDN}" -jobname="MLOps_Recommenditos_${name}_report" report.tex
 		jobs="MLOps_Recommenditos_${name}_report MLOps_Recommenditos_EDN"
 		;;
 	*)

@@ -380,7 +380,7 @@ def _trim(lines: list[str]) -> list[str]:
 
 def _is_given(body: list[str] | None) -> bool:
     """Whether a field says something: not absent, not empty, not the template's "-"."""
-    return bool(body) and "\n".join(body).strip() not in ("", "-")
+    return body is not None and "\n".join(body).strip() not in ("", "-")
 
 
 # --- Markdown blocks ---------------------------------------------------------
@@ -935,12 +935,13 @@ def transfer(edn_md: Path = EDN_MD, latex_dir: Path = LATEX_EDN_DIR) -> Transfer
     to_write, to_remove, notebook_changes = _differences(edn_md, latex_dir, target)
 
     latex_dir.mkdir(parents=True, exist_ok=True)
+    # LF, so a Windows run does not show every written file as changed.
     for path in to_write:
-        path.write_text(target.files[path.name], encoding="utf-8")
+        path.write_text(target.files[path.name], encoding="utf-8", newline="\n")
     for path in to_remove:
         path.unlink()
     if notebook_changes:
-        edn_md.write_text(target.notebook, encoding="utf-8")
+        edn_md.write_text(target.notebook, encoding="utf-8", newline="\n")
 
     return TransferResult(
         transferred=target.transferred,

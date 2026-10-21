@@ -28,9 +28,14 @@ clean:
 
 ## Lint using ruff (use `make format` to do formatting)
 .PHONY: lint
-lint:
+lint: typecheck
 	uv run ruff format --check
 	uv run ruff check
+
+## Type-check recommenditos/ and tools/ with mypy (configured in pyproject.toml)
+.PHONY: typecheck
+typecheck:
+	uv run mypy
 
 ## Format source code with ruff
 .PHONY: format
@@ -94,6 +99,59 @@ fixture:
 .PHONY: metrics
 metrics:
 	uv run dvc metrics show
+
+# The API on the bundle in models/lgbm-basic (after `dvc pull`), or the one
+# RECOMMENDITOS_MODEL_DIR names. Swagger UI at /docs, ReDoc at /redoc.
+API_HOST ?= 127.0.0.1
+API_PORT ?= 8000
+
+## Run the API locally with uvicorn on http://127.0.0.1:8000 (docs at /docs)
+.PHONY: api
+api:
+	uv run python -m recommenditos.api --host $(API_HOST) --port $(API_PORT)
+
+# The serving stack of docs/docs/deployment.md (EDN-87): the API image with the
+# pulled model, behind nginx, on http://localhost:8080. Needs Docker and `dvc pull`.
+COMPOSE = docker compose -f deploy/compose.yaml
+# The tag a deployment ships: the commit the image is built from.
+IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
+SMOKE_URL ?= http://localhost:8080
+
+## Build the API image recommenditos-api:<commit> for a deployment (docs/docs/deployment.md)
+.PHONY: image
+image:
+	docker build -t recommenditos-api:$(IMAGE_TAG) .
+
+## Build and start the API behind nginx on http://localhost:8080, waiting until healthy
+.PHONY: stack
+stack:
+	$(COMPOSE) up -d --build --wait
+
+## Stop the local stack and remove its containers
+.PHONY: stack-down
+stack-down:
+	$(COMPOSE) down
+
+# The integration suite of tests/integration/ against a running stack, through
+# its proxy. Without coverage, which measures this process and not the API's, and
+# with a JUnit file of its own, so the full suite's is kept. Against a remote URL
+# the tests that need the Docker host are skipped. `make smoke`, the
+# post-deployment check, always deselects them: a smoke run on the VM itself or
+# through an SSH tunnel would otherwise kill the production API or inspect the
+# containers of the machine it runs on.
+STACK_URL ?= http://localhost:8080
+INTEGRATION_MARKERS ?= integration
+
+## Run the integration suite against a running stack: make test-integration [STACK_URL=...]
+.PHONY: test-integration
+test-integration:
+	RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
+		--no-cov --junitxml=reports/junit-integration.xml
+
+## Check a deployed stack through its proxy: make smoke [SMOKE_URL=http://<vm>:<port>]
+.PHONY: smoke
+smoke:
+	$(MAKE) test-integration STACK_URL=$(SMOKE_URL) INTEGRATION_MARKERS="integration and not docker_host"
 
 ## Lint every notebook with Pynblint, in its own locked environment (tools/pynblint-env)
 .PHONY: notebook-lint

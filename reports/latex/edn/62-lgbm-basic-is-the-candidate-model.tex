@@ -3,30 +3,32 @@
 \ednentry{
   id = {EDN-62},
   title = {\texorpdfstring{\texttt{lgbm-\allowbreak{}basic}}{lgbm-basic} is the candidate model},
-  note = {\textbf{Revised on 2026-10-13}: \texttt{lgbm-\allowbreak{}basic} is trained on blanked copies of its listings since EDN-82, so its error now rises to 1.02 times and not 1.21; the decision is unchanged.},
+  note = {\textbf{Revised on 2026-10-20}: adds the gate's SC-04 waiver; since EDN-82 \texttt{lgbm-\allowbreak{}basic}'s ratio is 1.02, not 1.21.},
   date = {2026-09-30},
   milestone = {M3: Quality Assurance},
   topic = {Modelling Approach, Model Evaluation},
   participants = {@lukas2510},
-  decision = {\texttt{lgbm-\allowbreak{}basic} is the candidate that the model card and the report put forward, although \texttt{lgbm-\allowbreak{}extended} has the lower pooled MdAPE.
+  decision = {\texttt{lgbm-\allowbreak{}basic} is the candidate the model card and the report put forward, although \texttt{lgbm-\allowbreak{}extended} has the lower pooled MdAPE.
 \texttt{lgbm-\allowbreak{}extended} fails SC-06.
-SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.},
+SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
+The gate waives it through \texttt{params.\allowbreak{}yaml}, citing this entry; \texttt{metrics.\allowbreak{}json} still reports it.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item \texttt{lgbm-\allowbreak{}extended} as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
-\item One model for complete requests and the other for partial ones: two models and a routing rule; left open for the deployment milestone.
+\item Routing complete and partial requests to different models: two models and a rule; left open for deployment.
 \item An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
+\item Keeping the gate closed until a variant meets SC-04: blocks every promotion.
 \end{itemize}
 \par
-\emph{Why:} With every optional field masked, which is a request carrying only what FR-01 requires, the error of \texttt{lgbm-\allowbreak{}extended} rises to 1.65 times its full-input MdAPE and that of \texttt{lgbm-\allowbreak{}basic} to 1.02 times (1.21 when this was decided); the bound is 1.5.
-On that request the ranking of the two reverses.
-The extended features also make the over-20 segment worse, so they are no remedy for SC-04.},
+\emph{Why:} With only the fields FR-01 requires, \texttt{lgbm-\allowbreak{}extended} rises to 1.65 times its full-input MdAPE and \texttt{lgbm-\allowbreak{}basic} to 1.02; the bound is 1.5.
+Then the ranking reverses.
+The extended features worsen the over-20 segment and do not fix SC-04.
+The waiver makes NFR-01, this entry and the M4 deployment consistent, and is versioned and reviewed like any change; every other criterion still gates.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
-  assessment = {Two AI sessions measured SC-06 independently and agreed.
-One noticed that the all-masked scenario is a request with only the required fields, on which the ranking reverses.
-AI recommended this option and left the serving and scope questions to Lukas.
-A failure it had predicted did not reproduce on real data, and it reported that.},
-  aievidence = {Claude Code sessions of 2026-09-30 on issues \#37 and \#39.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{Model card} (Results), \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/metrics/masked-inputs.csv}{\texttt{masked-\allowbreak{}inputs.\allowbreak{}csv}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/39}{issue \#39}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65}{PR \#65}.},
+  assessment = {Two AI sessions measured SC-06 independently and agreed; one saw that masking every optional field leaves a required-fields-only request.
+A failure it had predicted did not reproduce, and it reported that.
+AI recommended this option and left the serving and scope questions to Lukas; on 2026-10-20 it laid out the gate options and recommended the waiver, and Lukas decided.},
+  aievidence = {Claude Code sessions on issues \#37 and \#39 (2026-09-30) and \#137 (2026-10-20).},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/model-card.md}{Model card}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/metrics/masked-inputs.csv}{\texttt{masked-\allowbreak{}inputs.\allowbreak{}csv}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/65}{PR \#65}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/137}{issue \#137}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158}{PR \#158}.},
 }

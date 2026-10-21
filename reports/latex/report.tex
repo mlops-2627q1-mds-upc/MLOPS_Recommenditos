@@ -14,6 +14,48 @@
 
 \setcounter{tocdepth}{2}
 
+% The EDN is appended as built (Atenea takes one PDF). build.sh builds it first
+% and names its job here; a plain compile in an editor takes the draft.
+\usepackage{pdfpages}
+\providecommand{\EdnJob}{edn}
+
+% \appendixpdf{title}{file}{label} appends a PDF as the next appendix: it takes
+% the next letter, gets a line in the contents and a bookmark, and is listed on
+% the divider page, which \appendixdivider prints from the .apx file, the way
+% \tableofcontents prints from the .toc file.
+\makeatletter
+\newcounter{apxpageoffset}
+\newcommand{\appendixpdf}[3]{%
+  \IfFileExists{#2}{%
+    % The appended PDF prints its own page numbers from 1, so its pages count
+    % as A-1, A-2, ... and the contents and the viewer show that, not the
+    % report's page counter.
+    \clearpage
+    \setcounter{apxpageoffset}{\value{page}}%
+    \addtocounter{apxpageoffset}{-1}%
+    \renewcommand{\thepage}{\thesection-\the\numexpr\value{page}-\value{apxpageoffset}\relax}%
+    \includepdf[pages=-, addtotoc={1, section, 1, {#1}, #3}]{#2}%
+  }{%
+    \clearpage
+    \section{#1}\label{#3}
+    \tbd{#1: the PDF was not found. Build with build.sh, which builds it first.}%
+  }%
+  \immediate\write\@auxout{\string\@writefile{apx}{\string\appendixline{\thesection}{\unexpanded{#1}}}}%
+}
+\newcommand{\appendixline}[2]{{\Large #1\quad #2\par}\medskip}
+\newcommand{\appendixdivider}{%
+  \clearpage
+  \vspace*{\fill}
+  \begin{center}
+    {\Huge\bfseries Appendix\par}
+    \vspace{1.5em}
+    \@starttoc{apx}
+  \end{center}
+  \vspace*{\fill}
+  \clearpage
+}
+\makeatother
+
 \begin{document}
 
 \input{sections/cover}
@@ -41,7 +83,7 @@
   \input{sections/3-retrospective}
 \fi
 
-\printbibliography[heading=bibintoc]
+{\small\setlength{\bibitemsep}{0pt}\printbibliography[heading=bibintoc]}
 
 % Logged for build.sh: the room left on the last page, which is how much the
 % sections can still grow before the report gains a page.
@@ -49,5 +91,13 @@
 \typeout{Report: space left on the last page:
   \the\dimexpr\pagegoal-\pagetotal\relax\space
   (about \the\numexpr\dimexpr\pagegoal-\pagetotal\relax/\baselineskip\relax\space lines)}
+% The page limit counts the report, not the appendix.
+\clearpage
+\typeout{Report: pages before the appendix: \the\ReadonlyShipoutCounter}
+
+\appendix
+% A divider page, so the reader sees where the report ends and the appendices begin.
+\appendixdivider
+\appendixpdf{Engineering Decision Notebook}{build/\EdnJob.pdf}{app:edn}
 
 \end{document}

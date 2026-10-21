@@ -3,13 +3,14 @@
 \ednentry{
   id = {EDN-11},
   title = {Serving explains predictions without the \texorpdfstring{\texttt{shap}}{shap} package},
-  note = {\textbf{Absorbs EDN-09} (2026-09-22): the project moved to Python 3.12 so that \texttt{shap} runs for offline analysis.},
+  note = {\textbf{Absorbs EDN-09} (2026-09-22): the project moved to Python 3.12 so that \texttt{shap} runs for offline analysis.
+\textbf{Revised on 2026-10-20}: \texttt{shap} became a \texttt{pipeline}-group dependency with FR-08's implementation (\#136), and the rationale now says why the equality with \texttt{shap.\allowbreak{}TreeExplainer} is no independent check; the decision is unchanged.},
   date = {2026-09-22},
   milestone = {M4: Model Deployment},
   topic = {ML System Design, Explainability},
   participants = {@lukas2510},
   decision = {The API computes FR-08's per-request explanation from the booster's own SHAP export, LightGBM's \texttt{predict(pred\_\allowbreak{}contrib=\allowbreak{}True)}.
-The \texttt{shap} package is used for offline analysis only and is never installed in the API image.
+The \texttt{shap} package is a \texttt{pipeline}-group dependency for offline analysis and the tests, and is never installed in the API image.
 The project runs on Python 3.12, which \texttt{shap} requires.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
@@ -18,6 +19,7 @@ The project runs on Python 3.12, which \texttt{shap} requires.},
 \end{itemize}
 \par
 \emph{Why:} The native export returns the same TreeSHAP values, so serving loses nothing and the image stays inside the size budget of NFR-04 with more headroom.
+For LightGBM the equality holds by construction, because \texttt{shap.\allowbreak{}TreeExplainer} calls \texttt{pred\_\allowbreak{}contrib} itself; the real check is local accuracy, each row's values adding up to the model's log price.
 CatBoost has an equivalent export, so the choice survives a change of model.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
@@ -26,5 +28,5 @@ Lukas asked it to check a version bump instead, and a scratch resolve and instal
 AI then built Docker images with and without \texttt{shap} and compared the two explanations.
 Lukas confirmed on that evidence.},
   aievidence = {Claude Code session of 2026-09-22, review of PR \#19; Lukas asked: ``is this what we would want? or are there better options?''.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{Specification} FR-08, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/project-brief.md}{project brief} section 6, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{Specification} FR-08, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/project-brief.md}{project brief} section 6, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/165}{PR \#165}.},
 }

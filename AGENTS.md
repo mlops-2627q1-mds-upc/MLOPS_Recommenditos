@@ -6,6 +6,8 @@ The course language is English, so everything we produce is in English, always.
 That covers commit messages, branch names, PR titles, descriptions and comments, issues and issue comments, code, identifiers, code comments, docstrings, documentation, the report and the EDN.
 Chat with the team may happen in any language, but nothing written into the repo or onto GitHub does.
 
+The report and the EDN use the Oxford comma in every list of three or more items ("make, model, and age band"), as the course's report template does; see the Writing section of [reports/latex/README.md](reports/latex/README.md).
+
 ## Git workflow
 
 Full workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md) - read it before opening a PR.
@@ -15,6 +17,14 @@ Key point for agents: branch protection blocks direct pushes to `main`, and squa
 
 `[project] dependencies` in `pyproject.toml` is the serving runtime the API image is built from, not a list of everything the project uses.
 Before adding or moving a dependency, read the Dependencies section of [CONTRIBUTING.md](CONTRIBUTING.md): almost every new package belongs in a group (`uv add --group pipeline <package>`), and `make test-serving` checks that serving code imports nothing from one.
+
+## Type checking
+
+mypy checks `recommenditos/` and `tools/` in pre-commit and in the required `Lint & format` CI job (`make typecheck`, or `make lint`).
+Fix a finding in the code with an explicit check or an `assert`, not with `cast` or `# type: ignore`; an unavoidable ignore names its error code and says why.
+An untyped third-party import gets a per-module override in `pyproject.toml`, never a global `ignore_missing_imports`, and `pandas-stubs` stays out.
+mypy cannot see pandas, so it says nothing on column names or dtypes.
+Details: the Type checking section of [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project brief
 

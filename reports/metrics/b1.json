@@ -4,7 +4,7 @@
   "data_source": "zenodo",
   "feature_set": "basic",
   "n_test_rows": 19665,
-  "mlflow_run_id": "d2986ad3550d4c09a56f450a39600bc7",
+  "mlflow_run_id": "2764ae9dc8214146be4e4d7cea38cd40",
   "mdape": 0.0951563754861866,
   "within_10pct": 0.5200610221205186,
   "within_20pct": 0.8029494024917366,
@@ -678,7 +678,7 @@
   "sc05_passed": null,
   "sc05_status": "not_measured",
   "sc05_capability_checked": "predict_interval_eur",
-  "sc05_reason": "no model exposes predict_interval_eur: the UC2 conformal intervals, and the calibration split held for them, are a later ticket, so interval coverage cannot be measured by any means",
+  "sc05_reason": "this bundle carries no calibrated price range, so it does not serve predict_interval_eur and its interval coverage cannot be measured; a variant gains one by naming `intervals` in params.yaml (EDN-85)",
   "sc05_coverage": null,
   "sc05_worst_scenario": null,
   "sc06_measured": 1.1591411878952507,
@@ -687,5 +687,6 @@
   "sc06_worst_field": "nr_doors",
   "sc06_note": "",
   "gate_passed": false,
-  "gate_blocked_by": "sc01,sc02,sc03,sc04 failed; sc05 unmeasured"
+  "gate_blocked_by": "sc01,sc02,sc03 failed; sc05 unmeasured",
+  "gate_waived": "sc04 failed at 0.2935 (EDN-62)"
 }

@@ -3,7 +3,7 @@
 \label{sec:m3}
 \guidance{
   \textbf{Template:} Describe how the different software engineering practices and tools have been applied.\\
-  The testing strategy for code, data and model is a typical M3 EDN entry.
+  The testing strategy for code, data, and model is a typical M3 EDN entry.
 }
 
 \subsubsection{Energy efficiency awareness}
@@ -20,10 +20,13 @@ The tracker wraps the fit call only.
 Its result goes to the MLflow run of that fit and to \texttt{reports/\allowbreak emissions/}, so the energy and the accuracy of a variant are always read together.
 The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from these files.
 
-The figures are estimates.
+The energy values are estimates.
 On our laptops a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
-We checked the estimate once against the counter: it was about 70\,\% of the counter's reading for \texttt{b1}, \texttt{lgbm-basic} and \texttt{lgbm-extended}, and both gave the same ratio of 2.97 between the two LightGBM variants, before \texttt{lgbm-basic} got its copies (EDN-82); the fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
-We therefore use the figures to compare variants and not as absolute values.
+We checked the estimate once against the real energy counter, before \texttt{lgbm-basic} got its copies (EDN-82).
+For \texttt{b1}, \texttt{lgbm-basic}, and \texttt{lgbm-extended} the estimate was about 70\,\% of the counter's reading.
+The fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
+The ratio between the two LightGBM variants was 2.97 for both the estimate and the counter; it is 1.7 in \cref{tab:energy}, because \texttt{lgbm-basic} is now fitted on three times the rows.
+We therefore use the energy values to compare variants and not as absolute values.
 The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
 \begin{table}[ht]
@@ -41,7 +44,7 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
     Hyperparameter search, 34 fits, on another laptop & 391\,s & 3.61\,Wh & 628\,mg \\
     \bottomrule
   \end{tabular}
-  \caption{Energy and emissions of training, as CodeCarbon estimates them (\texttt{reports/figures/energy-vs-error.csv}; the search from its MLflow runs, EDN-73). The ladder is the run of 2026-10-13, one measurement per fit on a shared laptop, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82).}
+  \caption{Energy and emissions of training, as CodeCarbon estimates them. The ladder rows are from \texttt{reports/figures/energy-vs-error.csv}, the hyperparameter search from its 34 MLflow runs (EDN-73). The ladder is the run of 2026-10-13, one measurement per fit on a shared laptop, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82).}
   \label{tab:energy}
 \end{table}
 
@@ -54,21 +57,22 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 \end{figure}
 
 \paragraph{Feature sets.}
-\texttt{lgbm-extended} needs 1.7 times the energy of \texttt{lgbm-basic} for 0.48 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given (\cref{fig:energy}).
+\cref{fig:energy} shows that \texttt{lgbm-extended} needs 1.7 times the energy of \texttt{lgbm-basic} for 0.48 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given.
 The extended features therefore do not earn their energy, which together with SC-06 is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
-The whole ladder takes 52 seconds of fitting and 0.191\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
+According to \cref{tab:energy}, the whole ladder takes 52 seconds of fitting and 0.191\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
 By CodeCarbon's estimate the most expensive fit uses about 0.11\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-73).
-When we measured this, the candidate ran 1.3 times the boosting rounds for 0.02 percentage points of test MdAPE, and the fit time grows linearly with the rounds.
-We accepted this so that the validation split, and not a fixed ceiling, decides the size of the model.
+When we measured this, the candidate needed 1.3 times as many boosting rounds, and with them 1.3 times the fit time and 1.3 times the estimated energy, for a gain of 0.02 percentage points of test MdAPE.
+We accepted this cost so that the validation split, and not a fixed ceiling, decides the size of the model.
 
 \paragraph{Hyperparameter search.}
 The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-73).
-That is about 19 times the whole ladder; the two were measured on different machines, so the ratio is only an order of magnitude.
+That is about 19 times the whole ladder.
+The two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
 
@@ -81,29 +85,33 @@ We will report it in Milestone~4 as an average per answer over the load test, be
 \guidance{
   \textbf{Template:} e.g.\ pylint.\\
   \textbf{Rubric (10 pts, shared with model and data testing):} To what degree does our linting contribute to the overall quality and consistency of the codebase?\\
-  The lab lists Pynblint (notebook and repository QA), Pylint or flake8.
+  The lab lists Pynblint (notebook and repository QA), Pylint, or flake8.
   We run ruff through pre-commit and CI; the demo additionally enables Pylint rules in ruff (\texttt{PL}), which our config does too.
 }
 
 We use ruff as linter and formatter for all Python code, including the code cells of notebooks.
-The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import order and the Pylint rules.
+The one-off scripts under \texttt{reports/analysis/} are excluded: they are evidence of a measurement, kept as they were run.
+The rule set is \texttt{E, F, UP, B, SIM, I, PL}: pycodestyle errors, Pyflakes, pyupgrade, bugbear, simplify, import order, and the Pylint rules.
 The configuration is in \texttt{pyproject.toml}.
 
-The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint} and a required CI job.
+The same check runs on the same files in three places: the pre-commit hook, \texttt{make lint}, and a required CI job.
 On \texttt{main}, \texttt{ruff check} reports no findings and \texttt{ruff format --check} reports all 81 files as formatted.
 
 The Pylint rules found five magic values in the command-line stubs of the template, which we removed.
-We also found that \texttt{make lint} covered only \texttt{recommenditos/}, while CI linted \texttt{tests/} and \texttt{notebooks/} as well; all three now lint the same files.
+We also found that \texttt{make lint} covered only \texttt{recommenditos/}, while CI linted \texttt{tests/} and \texttt{notebooks/} as well. All three now lint the same files.
 Each configured exception has its reason next to it, for example the magic-value rule in \texttt{tests/}, where an assertion compares against a literal.
 
 \paragraph{Notebooks.}
 Our notebook is the exploratory analysis behind the dataset card.
-It recomputes the figures of the card from the source file and fails when one does not reproduce.
+It recomputes every number the card states from the source file and fails when one does not match.
 
 Ruff checks the code in its cells, and \texttt{nbstripout} removes the outputs before every commit, which also keeps rows of the dataset with personal data out of Git.
 Pynblint \cite{quaranta2022pynblint} checks the structure, for example the length of a cell and the share of Markdown cells.
 We enforce 13 of its 22 rules.
-The other 9 are excluded with a written reason: three read execution counts, which \texttt{nbstripout} removes, five check the repository for things CI already enforces, and one is switched off in Pynblint itself.
+The other 9 are excluded with a written reason.
+Three read execution counts, which \texttt{nbstripout} removes.
+Five check the repository for things our own setup already enforces, through CI, branch protection, the pre-commit hooks, or our rule on where a notebook lives.
+One is switched off in Pynblint itself.
 
 Pynblint exits with 0 whatever it finds, so we wrote a wrapper, \texttt{tools/notebook\_lint.py}, that reads its report and fails on any finding.
 CI runs it as a required check.
@@ -119,7 +127,7 @@ The first run found five code cells over the limit of 30 lines, which we split; 
 }
 
 The test suite uses Pytest and runs in CI on Linux and on Windows (EDN-75).
-In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}; NFR-07 requires 80\,\%.
+In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,\% of the statements and branches of \texttt{recommenditos/}, while NFR-07 requires 80\,\%.
 \Cref{tab:tests} shows what the tests cover.
 
 \begin{table}[ht]
@@ -130,13 +138,13 @@ In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,
     \midrule
     Pipeline stages & Every stage runs on a generated dataset in a temporary directory, without network or credentials (EDN-33). Each output satisfies its contract, the split loses no row, no seller is in two sets, and the holdout contains all Spanish listings and no others. \\
     \addlinespace[2pt]
-    Edge cases & The generated dataset always contains the cases the pipeline rules exist for, such as a duplicate, a registration after the snapshot date, an unsupported make and prices outside the training range. A test of a rule therefore always finds its case in the data. \\
+    Edge cases & The generated dataset always contains the cases the pipeline rules exist for, such as a duplicate, a registration after the snapshot date, an unsupported make, and prices outside the training range. A test of a rule therefore always finds its case in the data. \\
     \addlinespace[2pt]
     Release gate & 21 tests drive the gate with constructed models and records (NFR-01): a criterion passes and fails at its bound, and a criterion that cannot be measured blocks the gate. \\
     \addlinespace[2pt]
     Prediction & A single row gets the same prediction as the same row in a batch, and every prediction lies inside the training price range. \\
     \addlinespace[2pt]
-    Tooling & The requirement matrix, the notebook lint wrapper and the EDN generator have tests of their own. \\
+    Tooling & The requirement matrix, the notebook lint wrapper, and the EDN generator have tests of their own. \\
     \bottomrule
   \end{tabularx}
   \caption{What the test suite covers.}
@@ -144,7 +152,8 @@ In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,
 \end{table}
 
 The gate tests check the logic of the gate, not the accuracy of the model.
-The accuracy is measured by the \texttt{evaluate} stage on the real test split, and on every run under different conditions: in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
+The accuracy is measured by the \texttt{evaluate} stage on the real test split.
+Every run also measures it in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
 
 Behavioural tests check the trained models, with one test class for each of the three types (\cref{tab:behavioural-tests}).
 
@@ -165,14 +174,16 @@ Behavioural tests check the trained models, with one test class for each of the 
   \label{tab:behavioural-tests}
 \end{table}
 
-Of the 64 cases, 42 run in CI on models trained from the synthetic data; the other 22 need the real models and their 8,859 validation rows and are skipped in CI.
+The behavioural tests run 64 cases.
+42 of them run in CI on models trained from the synthetic data, and the other 22 need the real models and the 8,859 validation rows, so CI skips them.
 
 \paragraph{Traceability.}
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).
 The job fails when a requirement that is due by the current milestone has no evidence (EDN-44).
 Today 67 tests carry a marker.
 Of the 31 requirements, 3 are verified by a test (NFR-01, NFR-08, NFR-14), 3 are named by a test while the evidence they promise is a manual drill (NFR-06, NFR-07, NFR-10), 9 have a manual check with named evidence, and 16 have no evidence yet.
-Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~3 are NFR-01, 06, 07, 08, 14 and 15, and each has its evidence.
+Those 16 are all due in Milestone~4 or later.
+Of the six due by Milestone~3, NFR-01, 08, and 14 are verified by a test, and NFR-06, 07, and 15 name a manual check, which the gate sees named but cannot see run.
 
 \subsubsection{Data testing}
 \label{sec:m3-data-testing}
@@ -185,7 +196,7 @@ Those 16 are all due in Milestone~4 or later; the requirements due by Milestone~
 We validate the data in two layers, because they catch different problems (EDN-31).
 
 \paragraph{Structure.}
-\texttt{recommenditos/schema.py} fixes the column names, types and nullability of the raw, cleaned and processed data.
+\texttt{recommenditos/schema.py} fixes the column names, types, and nullability of the raw, cleaned, and processed data.
 Every stage validates its input after reading and its output before writing, and it writes only the columns the contract names, which keeps the seven personal-data columns out of the processed data (NFR-08).
 A violation is a bug in our code, so it fails the stage that caused it.
 We wrote the contract by hand and did not use Pandera, because the contract fixes the unit of every datetime column and Pandera does not check it.
@@ -202,9 +213,9 @@ Great Expectations checks the values in two DVC stages (EDN-68).
     \toprule
     Suite & Rows & Expectations & Result & What it found \\
     \midrule
-    Raw & 118,382 & 103 & passed & 164 registration dates after the snapshot date (0.14\,\%, tolerated up to 1\,\%) and 3 mileage values above 1,000,000\,km (tolerated up to 0.1\,\%) \\
+    Raw & 118,382 & 103 & passed & 164 registrations after the snapshot date (0.14\,\%, limit 1\,\%), 3 mileages over 1,000,000\,km (limit 0.1\,\%) \\
     \addlinespace[2pt]
-    Cleaned & 105,405 & 57 & passed & No registration date after the snapshot date and no personal-data column \\
+    Cleaned & 105,405 & 57 & passed & No registration after the snapshot, no personal-data column \\
     \bottomrule
   \end{tabularx}
   \caption{Data validation on the real snapshot (\texttt{reports/data-validation/summary.json}).}
@@ -214,10 +225,10 @@ Great Expectations checks the values in two DVC stages (EDN-68).
 The validation is built to stop a problem before training:
 
 \begin{itemize}
-  \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so nothing is trained on data that did not pass.
-  \item \textbf{Reviewable result.} The stage writes \texttt{summary.json}, which Git tracks, so a pull request that changes the data shows what changed in the validation. It also writes the Data Docs.
+  \item \textbf{Blocking.} A failed expectation fails \texttt{validate-data}, and \texttt{split} depends on its output, so \texttt{dvc repro} stops before anything is trained on data that did not pass.
+  \item \textbf{Reviewable result.} The stage writes \texttt{summary.json}, which Git tracks, so a pull request that changes the data shows what changed in the validation. It also writes Great Expectations' HTML report (Data Docs).
   \item \textbf{Tolerances.} A registration date after the snapshot date is tolerated in up to 1\,\% of the raw rows and forbidden in the cleaned data. A new scrape with many such rows fails the raw suite and is noticed, where preprocessing alone would remove them silently.
-  \item \textbf{Fill rates.} Both suites require the six columns that the published file fills in every row to stay filled in 99.9\,\% of the rows (EDN-68), so a column that turns empty in a new scrape fails the validation.
+  \item \textbf{Fill rates.} Both suites require the six columns the published file always fills to stay filled in 99.9\,\% of the rows (EDN-68), so a column that turns empty in a new scrape fails.
 \end{itemize}
 
 We dropped one planned rule after measuring it: a rule that \texttt{is\_used} and \texttt{offer\_type} agree fails for 18,108 rows of the published file, although these rows are valid (EDN-23).

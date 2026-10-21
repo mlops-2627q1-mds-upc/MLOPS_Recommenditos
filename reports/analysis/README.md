@@ -248,3 +248,9 @@ Its three lines are appended to the results file under their own heading.
 Since the measurement was adopted, `lgbm-basic` adds these copies in the pipeline itself (`blanked_copies` in `params.yaml`), and a fit of it needs the request contract: `read_matrices(..., request=RequestContract.from_params(params))`.
 `blanked_fields.py` and the scripts here that refit `lgbm-basic` as committed without passing it (`tuning_sweep.py`, `early_stopping_ceiling.py`, `codecarbon_validity.py`, `rapl_validation.py`) therefore reproduce their results files at the commits they ran on, and stop with a `ModelError` that names the argument when run on a later one.
 `split_strategy.py` passes it, because the pipeline docs ask for that script to be re-run when the candidate changes.
+
+## The typical price of a partial price-range request (#137, EDN-85)
+
+`price_range_point_estimate.py` measures, on the calibration split, where the typical price of a `/price-range` answer should come from: `lgbm-basic`'s point estimate, which FR-07 names today, or the 50 % quantile model the price range carries beside its bounds.
+It compares the two by MdAPE, with a paired bootstrap over seller groups, for full inputs, for the ten fields FR-01 requires, for P1 and for a make-only request, and reports how often each lies outside the conformal interval.
+`price_range_point_estimate_results.txt` is its output (2026-10-20).

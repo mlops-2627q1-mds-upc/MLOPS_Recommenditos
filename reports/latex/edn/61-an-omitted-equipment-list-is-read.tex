@@ -8,7 +8,7 @@
   topic = {Feature Encoding, API Design, Evaluation Protocol},
   participants = {@lukas2510},
   decision = {A request that omits one of the four equipment lists is read as an empty list, so every column that list produces reaches the model as \texttt{False} and not as missing.
-\texttt{Model.\allowbreak{}mask\_\allowbreak{}absent} is the single implementation of what an omitted field is, for the API, for SC-06's masking sweep and for the tests.},
+\texttt{Model.\allowbreak{}mask\_\allowbreak{}absent} is the single implementation of what an omitted field is, for the API, for SC-06's masking sweep, and for the tests.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Omitted means absent, with missing values across the list's columns: what EDN-15 asks for in general, but no listing has a null list, so the model would score a state it was never fitted on.
@@ -22,7 +22,7 @@ An API model that passes the field on as \texttt{None} would choose the other re
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Rejected},
   assessment = {A first AI review of PR \#62 found the contradiction and recommended the empty list.
-A second AI pass argued from the contract's wording for missing values, recommended that and implemented it.
+A second AI pass argued from the contract's wording for missing values, recommended that, and implemented it.
 Lukas overruled the second pass on a ground neither had weighed: the training data has no null list.
 A figure the second pass gave for its option came from an error in its own probe.
 The shared helper is AI's and stayed.},

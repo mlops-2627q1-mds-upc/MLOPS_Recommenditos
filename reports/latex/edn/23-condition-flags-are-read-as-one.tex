@@ -7,7 +7,7 @@
   milestone = {M3: Quality Assurance},
   topic = {Feature Encoding and Data Validation},
   participants = {@lukas2510},
-  decision = {\texttt{has\_\allowbreak{}full\_\allowbreak{}service\_\allowbreak{}history}, \texttt{non\_\allowbreak{}smoking} and \texttt{is\_\allowbreak{}rental} stay plain booleans.
+  decision = {\texttt{has\_\allowbreak{}full\_\allowbreak{}service\_\allowbreak{}history}, \texttt{non\_\allowbreak{}smoking}, and \texttt{is\_\allowbreak{}rental} stay plain booleans.
 They mean ``the seller asserted this'' or ``the seller did not assert this'', never ``yes'' or ``no''.
 No three-valued encoding is built.
 \texttt{is\_\allowbreak{}used} is not a feature, because \texttt{offer\_\allowbreak{}type} carries the same information reliably.},
@@ -20,7 +20,7 @@ No three-valued encoding is built.
 \par
 \emph{Why:} A listing form offers a checkbox, so a tick is evidence and an empty box is the absence of evidence.
 No encoding can separate ``no'' from ``not stated''.
-The risk is a reader who takes \texttt{False} as a denial, so the fix belongs in the problem specification, the dataset card and the model card.},
+The risk is a reader who takes \texttt{False} as a denial, so the fix belongs in the problem specification, the dataset card, and the model card.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
   assessment = {The three-valued encoding was AI's own earlier proposal in issue \#25.
