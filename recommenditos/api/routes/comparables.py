@@ -28,7 +28,9 @@ router = APIRouter(tags=["valuation"])
         HTTPStatus.SERVICE_UNAVAILABLE,
     ),
 )
-def comparables(
+# Every parameter but the body is a dependency FastAPI injects, one per object
+# the route needs, so the count says nothing about the route's complexity.
+def comparables(  # noqa: PLR0913, PLR0917
     car: ComparablesRequest,
     served: Served,
     index: Index,
