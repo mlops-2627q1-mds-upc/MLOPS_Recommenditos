@@ -50,7 +50,7 @@ With Go 1.21 or newer, run `GOTOOLCHAIN=auto uv run pre-commit install-hooks` on
 `pyproject.toml` splits the dependencies in two, because the API image is built from one half only and NFR-04 caps that image at 1 GB ([EDN-47](reports/edn.md)):
 
 - `[project] dependencies` is the **serving runtime**: what it takes to load a bundle from `models/<variant>/` and price a listing, and the API around it (FastAPI, uvicorn, pydantic).
-- `[dependency-groups]` is everything else, by who needs it: `pipeline` (the DVC stages and experiment tracking, so also data validation and energy measurement), `notebook`, `docs`, `test` and `dev`.
+- `[dependency-groups]` is everything else, by who needs it: `pipeline` (the DVC stages and experiment tracking, so also data validation and energy measurement), `notebook`, `docs`, `test`, `loadtest` (Locust and CodeCarbon for the [load test](docs/docs/load-testing.md), installable alone on the VM) and `dev`.
 
 `[tool.uv] default-groups = "all"` is why a plain `uv sync` and `uv run` still install both halves.
 Only the image, and `make test-serving` below, opt out with `--no-default-groups`.

@@ -270,6 +270,10 @@ def locust_command(args: argparse.Namespace, users: int, ids_file: Path) -> list
         *("-t", f"{seconds(args.duration)}s", "--rate", str(args.rate)),
         *("--bodies", str(args.bodies), "--request-ids", str(ids_file)),
         *("--csv", f"{args.out}-locust", "--only-summary", "--exit-code-on-error", "0"),
+        # At the end of the run, a user finishes the request it is waiting for
+        # instead of abandoning it, so that every answer the API logged reached
+        # the client and the prediction-log check compares like with like.
+        *("--stop-timeout", "30"),
     ]
 
 
@@ -409,9 +413,12 @@ def _resources(result: dict[str, Any]) -> list[str]:
         if "energy_idle" in result:
             i = result["energy_idle"]
             above = result.get("energy_per_request_above_idle_j", math.nan)
+            # Below zero when the rest of the machine was busier during the
+            # baseline than during the run, as on a shared laptop.
+            above_text = f"{above:.3f} J" if above >= 0 else "not measurable"
             lines.append(
                 f"- Idle baseline: {i['energy_j'] / i['seconds']:.1f} W over {i['seconds']:.0f} s;"
-                f" above it, {above:.3f} J per request."
+                f" above it, {above_text} per request."
             )
         lines.append("")
     return lines
