@@ -27,6 +27,10 @@ can state. The schema's pattern states the lower bound, 1900-01; a generated
 valid request with a later month than the current one is moved to the current
 month, so it is not counted as a valid request the API refused. The upper bound
 is tested by hand in `test_predict.py`.
+
+Known limitation: a generated `/v1/feedback` request names a random request ID
+the prediction log does not hold, so it is answered 404 or 422, and the 201, 200
+and 409 of a stored price are tested by hand in `test_feedback.py`.
 """
 
 from datetime import UTC, datetime
@@ -35,9 +39,10 @@ from fastapi import FastAPI
 import pytest
 import schemathesis
 from schemathesis import GenerationMode
+from tests.api.conftest import API_KEY
 
 #: Random requests per operation in the fuzzing phase, valid and invalid
-#: together. About 11 s for the whole module on a laptop CPU.
+#: together. About 11 s for the five operations on a laptop CPU.
 MAX_EXAMPLES = 100
 
 
@@ -48,9 +53,22 @@ def _this_month() -> str:
 
 @pytest.fixture(scope="session")
 def api_schema(app: FastAPI) -> schemathesis.BaseSchema:
-    """The app's OpenAPI document, loaded through the app itself."""
+    """The app's OpenAPI document, loaded through the app itself.
+
+    Every API-key scheme the document declares gets the key the test app was
+    started with, so an operation behind one, such as `/v1/feedback` (FR-10), is
+    tested past its 401; Schemathesis' `ignored_auth` check still sends requests
+    without the key and expects them refused.
+    """
+    schemes = app.openapi().get("components", {}).get("securitySchemes", {})
+    keys = {
+        name: {"api_key": API_KEY}
+        for name, scheme in schemes.items()
+        if scheme["type"] == "apiKey"
+    }
     config = schemathesis.Config.from_dict(
         {
+            **({"auth": {"openapi": keys}} if keys else {}),
             "generation": {
                 "mode": "all",
                 "max-examples": MAX_EXAMPLES,

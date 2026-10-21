@@ -373,8 +373,10 @@ A module the API comes to import has to stay within the serving runtime; [Contri
 `tests/api/test_contract.py` runs with every `make test` and in CI, against the app in process, with no server and no network.
 Schemathesis reads `/openapi.json` and sends each operation the boundary and invalid values its coverage phase derives from the schema (about 370 requests for `/v1/predict`), 100 random valid and invalid requests, and the documented example.
 Generation is deterministic, so every run sends the same requests, and a failure prints a `curl` line that reproduces it.
-The whole module takes about 11 seconds on a laptop CPU.
+For the five operations so far that is about 1,000 requests in about 11 seconds on a laptop CPU.
+An operation behind an API key, such as `/v1/feedback`, gets the test app's key, and Schemathesis also checks that it refuses a request without it.
 
 The OpenAPI document is what a client codes against, so the API keeps to it as written: a listing body is strict, and `0` is not a boolean nor `"45000"` a number, while a whole float such as `4.0` is an integer, as JSON Schema defines one.
 A constraint the schema cannot state needs a hook in the test module.
 The one so far is that `registration_date` must not lie after the current month (FR-03): the pattern states the lower bound, 1900-01, and the upper bound moves with the calendar.
+A generated feedback names a request ID the prediction log does not hold, so the stored, repeated and conflicting prices of `/v1/feedback` are left to `tests/api/test_feedback.py`.
