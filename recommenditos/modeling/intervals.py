@@ -132,9 +132,12 @@ def conformalize(
     features = model._as_codes(model._align(rows))
     cqr = conformalizer(estimators, record["confidence_level"])
     with warnings.catch_warnings():
-        # MAPIE hands the estimators a NumPy array of the same columns in the
-        # same order, and scikit-learn warns that it carries no column names.
-        warnings.filterwarnings("ignore", message="X does not have valid feature names")
+        # MAPIE's check that a prefit estimator is fitted predicts on a NumPy
+        # array of zeros (mapie.utils.check_sklearn_user_model_is_fitted), and
+        # scikit-learn warns that it carries no column names.
+        warnings.filterwarnings(
+            "ignore", message="X does not have valid feature names", category=UserWarning
+        )
         cqr.conformalize(features, rows["log_price"].to_numpy(dtype="float64"))
         _, bounds = cqr.predict_interval(features)
     lower_shift = estimators["lower"].predict(features) - bounds[:, 0, 0]
