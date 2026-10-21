@@ -198,20 +198,21 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 The [architecture page](architecture.md) draws this as a C4 container view and a deployment view, and names the patterns and the decisions behind them.
 
 ```
-client --> reverse proxy --> FastAPI (model + SHAP + intervals)
-                               |-- /predict       (UC1)
-                               |-- /price-range   (UC2)
-                               |-- /comparables
-                               |-- /health, /metrics (Prometheus)
-                               '-- /feedback      (internal only: the proxy refuses it
-                                                   from outside; reported prices, no real
-                                                   users, so replayed from the ES holdout)
+client --> nginx (gateway) --> FastAPI (model bundle: LightGBM boosters, which give
+                                         FR-08's SHAP values themselves, and interval offsets)
+                                 |-- /v1/predict      (UC1)
+                                 |-- /v1/price-range  (UC2)
+                                 |-- /v1/comparables
+                                 |-- /v1/feedback     (internal only: the proxy refuses it
+                                 |                     from outside; reported prices, no real
+                                 |                     users, so replayed from the ES holdout)
+                                 '-- /, /health, /metrics (Prometheus; /metrics internal only)
 
          SQLite file in WAL mode on a shared volume: prediction log, feedback
          MLflow experiment tracking (DagsHub), not called by the API
-         Prometheus + Grafana (resources, latency, errors)
-         Better Uptime (external availability check, presentation windows)
-         Alibi Detect job (input drift on logged requests, interval coverage)
+         Prometheus + Grafana (resources, latency, errors)                      M6
+         Better Uptime (external availability check, presentation windows)    M6, proposed
+         Alibi Detect job (input drift on logged requests, interval coverage)   M6
 ```
 
 Everything runs via Docker Compose.
@@ -225,10 +226,7 @@ Nobody has access yet; if that is still true at the M4a lab on 2026-10-27, we ra
 Prediction log and feedback storage **[decided]**, [EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): one SQLite file in WAL mode on a volume the API's workers and the drift job's container share, behind a store interface so that PostgreSQL stays a local change.
 The drift job reads it with SQL and joins the two by request ID (FR-14); a database server would cost a service, a secret and memory on the 4 GB VM for a multi-host setup we do not have.
 How it is written exactly once and rotated is in the [API docs](api.md#the-prediction-log-and-the-feedback).
-
-Open points:
-
-- MLflow hosting: DagsHub (as in the course demo) or self-hosted.
+Experiment tracking is the MLflow server DagsHub hosts beside the DVC remote, as in the course demo.
 
 ## 6. Tooling constraints
 
