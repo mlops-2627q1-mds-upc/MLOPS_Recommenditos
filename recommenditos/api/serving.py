@@ -131,7 +131,7 @@ def bundle_version(directory: Path) -> str:
     entries = sorted(
         (
             {
-                "md5": hashlib.md5(path.read_bytes()).hexdigest(),
+                "md5": hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest(),
                 "relpath": path.relative_to(directory).as_posix(),
             }
             for path in directory.rglob("*")
@@ -139,7 +139,9 @@ def bundle_version(directory: Path) -> str:
         ),
         key=lambda entry: entry["relpath"],
     )
-    return hashlib.md5(json.dumps(entries, sort_keys=True).encode()).hexdigest()
+    return hashlib.md5(
+        json.dumps(entries, sort_keys=True).encode(), usedforsecurity=False
+    ).hexdigest()
 
 
 @dataclass(frozen=True)

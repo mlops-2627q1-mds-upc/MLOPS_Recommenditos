@@ -121,6 +121,13 @@ make notebook-lint  # Pynblint over every notebook, in its own environment
 
 `make lint` runs the same ruff rules and the same mypy check as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
 
+### Security rules
+
+ruff also runs flake8-bandit's security rules (`S`), its implementation of Bandit.
+Fix a finding in the code: a timeout on every network call, an argument list instead of `shell=True`, `tempfile` instead of a hand-made temporary path, `usedforsecurity=False` on a hash that only identifies content.
+Where the code is right as it is, ignore the finding on its line with the rule code and give the reason in a comment, as `tools/secret_scan.py` does for the git it starts from `PATH`.
+Tests ignore `S101` (assert), `S603`, `S607` and `S310` for the whole folder; `pyproject.toml` says why.
+
 ### Type checking
 
 mypy (default mode plus `check_untyped_defs`, no `strict`) checks `recommenditos/` and `tools/` against the installed packages, so run it through `uv run` (`make typecheck`).
@@ -129,7 +136,7 @@ It keeps the annotations true and finds a forgotten `None` or a wrong attribute 
 It cannot see pandas, which ships no type information: every DataFrame is `Any` to it, so column names and dtypes stay with `recommenditos/schema.py` and the tests.
 `tests/` is not checked yet.
 
-Fix a finding in the code: make it show why the value is there, with an explicit check, or an `assert` where it is an invariant.
+Fix a finding in the code: make it show why the value is there, with an explicit check that raises, also where it is an invariant, because `python -O` strips an `assert` (ruff's `S101`).
 Do not use `cast` or `# type: ignore`; where an ignore is unavoidable, name its error code and say why in a comment.
 An untyped third-party package gets a `[[tool.mypy.overrides]]` entry in `pyproject.toml`, one module at a time, never a global `ignore_missing_imports`; a package with accurate stubs (`types-PyYAML`, `types-requests`, `types-tqdm`) goes into the `dev` group instead.
 Do not add `pandas-stubs`: its false positives on everyday indexing invite an `ignore` each (EDN-83).

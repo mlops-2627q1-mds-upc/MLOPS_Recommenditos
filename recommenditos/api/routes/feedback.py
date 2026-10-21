@@ -57,7 +57,8 @@ def feedback(body: FeedbackRequest, store: Store, response: Response) -> Feedbac
             HTTPStatus.NOT_FOUND,
             f"No answer with request ID {body.request_id} is in the prediction log.",
         )
-    assert result.stored is not None
+    if result.stored is None:
+        raise RuntimeError(f"a {result.outcome.name} feedback outcome carries no stored price")
     if result.outcome is FeedbackOutcome.CONFLICT:
         raise ProblemError(
             HTTPStatus.CONFLICT,

@@ -936,7 +936,8 @@ class RidgeModel(Model):
         return model
 
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
-        assert self.pipeline is not None, "the pipeline exists after `fit` or `load`"
+        if self.pipeline is None:
+            raise RuntimeError("the pipeline exists after `fit` or `load`")
         return np.asarray(self.pipeline.predict(aligned), dtype="float64")
 
     def _save_payload(self, directory: Path) -> None:
@@ -1167,7 +1168,8 @@ class LightGBMModel(Model):
         reaches the booster as one native categorical feature. A row sums to the
         booster's log price before `predict_eur` bounds it to the training range.
         """
-        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        if self.booster is None:
+            raise RuntimeError("the booster exists after `fit` or `load`")
         contributions = self.booster.predict(self._as_codes(self._align(frame)), pred_contrib=True)
         return pd.DataFrame(
             np.asarray(contributions, dtype="float64"),
@@ -1182,7 +1184,8 @@ class LightGBMModel(Model):
         return coded
 
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
-        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        if self.booster is None:
+            raise RuntimeError("the booster exists after `fit` or `load`")
         return np.asarray(self.booster.predict(self._as_codes(aligned)), dtype="float64")
 
     @property
@@ -1251,7 +1254,8 @@ class LightGBMModel(Model):
         # the property the API depends on is that the file *is* the early-stopped
         # model and needs no iteration argument at predict time, and that should
         # not rest on a truncation nothing here asked for.
-        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        if self.booster is None:
+            raise RuntimeError("the booster exists after `fit` or `load`")
         self.booster.save_model(
             directory / _BOOSTER_FILE, num_iteration=self.metadata["training"]["best_iteration"]
         )

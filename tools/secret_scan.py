@@ -162,7 +162,8 @@ def gitleaks_git(gitleaks: str, source: Path, *extra: str) -> list[str]:
 
 
 def _require_git() -> None:
-    version = subprocess.run(["git", "--version"], check=True, capture_output=True, text=True)
+    # S607: git from PATH, as every developer tool here.
+    version = subprocess.run(["git", "--version"], check=True, capture_output=True, text=True)  # noqa: S607
     found = tuple(int(part) for part in re.findall(r"\d+", version.stdout)[:2])
     if found < MINIMUM_GIT:
         sys.exit(
@@ -199,8 +200,10 @@ class _Repository:
         self.commit_file("README.md", "A history planted for the secret scan's canary.\n", "base")
 
     def git(self, *args: str) -> str:
-        result = subprocess.run(
-            ["git", "-C", str(self.root), "-c", "commit.gpgsign=false", *args],
+        # S603, S607: git from PATH, as every developer tool here, with an argument list
+        # this module builds and no shell.
+        result = subprocess.run(  # noqa: S603
+            ["git", "-C", str(self.root), "-c", "commit.gpgsign=false", *args],  # noqa: S607
             check=False,
             capture_output=True,
             text=True,
@@ -226,7 +229,8 @@ class _Repository:
 
 def plant(root: Path) -> dict[tuple[str, str, str], str]:
     """Write the canary's history below `root`, keyed by (commit, file, token)."""
-    rng = random.Random(SEED)
+    # S311: seeded, so the canary's fake tokens are the same in every run.
+    rng = random.Random(SEED)  # noqa: S311
     repository = _Repository(root)
     planted = {}
     for place, (path, content) in PLACES.items():
@@ -276,7 +280,8 @@ def canary(gitleaks: str) -> int:
         # Not --redact, because the check is that the whole planted token was
         # found; every token here is fake. --exit-code 0, because findings are the
         # point and the report, not the exit code, says which.
-        subprocess.run(
+        # S603: gitleaks with an argument list this module builds, no shell.
+        subprocess.run(  # noqa: S603
             gitleaks_git(
                 gitleaks,
                 root,
@@ -328,7 +333,8 @@ def history(gitleaks: str) -> int:
     _require_git()
     command = gitleaks_git(gitleaks, PROJ_ROOT, "--redact", "--verbose")
     # check=False: a finding is exit code 1, which is the scan's answer, not an error.
-    return subprocess.run(command, check=False).returncode
+    # S603: gitleaks with an argument list this module builds, no shell.
+    return subprocess.run(command, check=False).returncode  # noqa: S603
 
 
 def main(argv: list[str] | None = None) -> int:

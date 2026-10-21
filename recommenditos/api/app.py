@@ -148,7 +148,8 @@ def _complete_listing_errors(
     if listing is None:
         return errors
     served = request.app.state.served
-    assert isinstance(served, ServedModel)
+    if not isinstance(served, ServedModel):
+        raise TypeError(f"app.state.served is a {type(served).__name__}, not a ServedModel")
     reported = {_field_of(error) for error in errors}
     errors = errors + [fault for fault in served.faults(body) if _field_of(fault) not in reported]
     order = {name: position for position, name in enumerate(listing.model_fields)}

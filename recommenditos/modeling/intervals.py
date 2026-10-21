@@ -71,7 +71,8 @@ def fit_with_intervals(
             f"variant {variant!r} names `intervals`, and their calibration needs the "
             f"{CALIBRATION_SPLIT!r} split, which the fit was not given."
         )
-    assert isinstance(model, LightGBMModel)  # interval_settings refuses anything else
+    if not isinstance(model, LightGBMModel):  # interval_settings refuses anything else
+        raise TypeError(f"{variant!r} is a {type(model).__name__}, not a LightGBMModel")
     # Timed apart from the point model, so the share of the measured fit the price
     # range takes can be stated; CodeCarbon's figure covers both together.
     started = time.perf_counter()
