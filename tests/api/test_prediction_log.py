@@ -150,9 +150,9 @@ def test_fr13_every_valuation_endpoint_records_each_answer_once(
     assert [record["endpoint"] for record in records] == [path]
 
 
-def test_the_valuation_endpoints_include_predict():
-    """Guards the test above against passing on no endpoint at all."""
-    assert PREDICT in _valuation_paths()
+def test_the_valuation_endpoints_include_predict_and_price_range():
+    """Guards the test above against passing on no endpoint, or on fewer than there are."""
+    assert {PREDICT, "/v1/price-range"} <= set(_valuation_paths())
 
 
 @pytest.mark.req("FR-13")

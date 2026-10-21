@@ -1,4 +1,4 @@
-"""The hyperparameter search of issue #88 (EDN-73), and the optional `min_child_samples`.
+"""The hyperparameter search of issue #88 (EDN-73), and the optional LightGBM keys.
 
 Two halves. The statistics - the paired bootstrap by seller group and the
 max-statistic simultaneous intervals - are checked on per-row errors built by
@@ -551,6 +551,28 @@ def test_an_unknown_variant_is_refused_by_name(tmp_path: Path):
         )
 
 
+def test_the_family_level_is_bonferroni_corrected_across_the_sweeps_on_a_split():
+    assert tune.family_confidence(1) == tune.CONFIDENCE
+    assert tune.family_confidence(9) == pytest.approx(1 - 0.05 / 9)
+    with pytest.raises(TuningError, match="at least 1"):
+        tune.family_confidence(0)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"), [([], 0.95), (["--sweeps-on-split", "4"], 0.9875)]
+)
+def test_the_command_line_passes_the_family_level_to_the_sweep(monkeypatch, arguments, expected):
+    seen = {}
+    monkeypatch.setattr(tune, "search", lambda sweep, protocol: seen.update(protocol=protocol))
+
+    result = CliRunner().invoke(
+        tune.app, ["lgbm-basic", "--grid", "reg_lambda=0,1", "--sweep", "s", *arguments]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen["protocol"].confidence == pytest.approx(expected)
+
+
 def test_the_command_line_reports_a_refused_sweep_and_exits_1():
     result = CliRunner().invoke(
         tune.app, ["lgbm-basic", "--grid", "n_estimators=10,20", "--sweep", "refused"]
@@ -560,7 +582,7 @@ def test_the_command_line_reports_a_refused_sweep_and_exits_1():
 
 
 # --------------------------------------------------------------------------
-# `min_child_samples`, optional at LightGBM's default
+# `min_child_samples` and `reg_lambda`, optional at LightGBM's defaults
 # --------------------------------------------------------------------------
 
 
@@ -600,8 +622,27 @@ def test_a_min_child_samples_value_reaches_the_booster(basic_data):
     assert model.metadata["params"]["min_child_samples"] == 5
 
 
-def test_an_unknown_lightgbm_key_is_still_refused_and_the_optional_one_is_named(basic_data):
-    with pytest.raises(ModelError, match="optionally min_child_samples"):
+def test_leaving_reg_lambda_out_fits_exactly_the_trees_its_default_fits(basic_data):
+    implicit = fit_variant("lgbm-basic", _lightgbm(), basic_data, seed=1, num_threads=1)
+    explicit = fit_variant(
+        "lgbm-basic", _lightgbm(reg_lambda=0.0), basic_data, seed=1, num_threads=1
+    )
+
+    assert "reg_lambda" not in implicit.metadata["params"]
+    assert implicit.booster.model_to_string() == explicit.booster.model_to_string()
+    assert "[lambda_l2: 0]" in implicit.booster.model_to_string()
+
+
+def test_a_reg_lambda_value_reaches_the_booster(basic_data):
+    model = fit_variant(
+        "lgbm-basic", _lightgbm(reg_lambda=10.0), basic_data, seed=1, num_threads=1
+    )
+
+    assert "[lambda_l2: 10]" in model.booster.model_to_string()
+
+
+def test_an_unknown_lightgbm_key_is_still_refused_and_the_optional_ones_are_named(basic_data):
+    with pytest.raises(ModelError, match="optionally min_child_samples, reg_lambda"):
         fit_variant("lgbm-basic", _lightgbm(min_leaf=5), basic_data, seed=1, num_threads=1)
 
 
@@ -610,5 +651,5 @@ def test_only_lightgbm_has_an_optional_key():
     assert {name: dict(cls.optional_hyperparameters) for name, cls in ESTIMATORS.items()} == {
         "median_baseline": {},
         "ridge": {},
-        LightGBMModel.estimator_name: {"min_child_samples": 20},
+        LightGBMModel.estimator_name: {"min_child_samples": 20, "reg_lambda": 0.0},
     }

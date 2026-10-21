@@ -360,7 +360,8 @@ class Schema:
 
 def _level_problems(column: Column, actual: pd.CategoricalDtype) -> list[str]:
     """How `actual`'s levels differ from the declared ones, if they do."""
-    assert column.levels is not None, "only a category column has levels to compare"
+    if column.levels is None:
+        raise RuntimeError("only a category column has levels to compare")
     observed = tuple(str(level) for level in actual.categories)
     if observed == column.levels:
         return []

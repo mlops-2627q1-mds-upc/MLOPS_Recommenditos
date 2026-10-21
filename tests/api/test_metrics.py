@@ -154,6 +154,26 @@ def test_fr11_metrics_hold_the_predicted_prices_the_warnings_and_the_model(
     )
 
 
+@pytest.mark.req("FR-11", "FR-07")
+def test_fr11_price_ranges_have_metrics_of_their_own(fresh: TestClient, listing: dict):
+    make = {"make": listing["make"]}
+    answers = [fresh.post("/v1/price-range", json=make).json() for _ in range(2)]
+    answers.append(fresh.post("/v1/price-range", json={**make, "country_code": "ES"}).json())
+
+    samples = scrape(fresh)
+
+    assert value(samples, "recommenditos_price_range_price_eur_count") == 3
+    assert value(samples, "recommenditos_price_range_price_eur_sum") == pytest.approx(
+        sum(answer["price_eur"] for answer in answers)
+    )
+    widths = [(a["upper_eur"] - a["lower_eur"]) / a["price_eur"] for a in answers]
+    assert value(samples, "recommenditos_price_range_relative_width_sum") == pytest.approx(
+        sum(widths)
+    )
+    assert value(samples, "recommenditos_price_range_warnings_total", field="country_code") == 1
+    assert value(samples, "recommenditos_predicted_price_eur_count") == 0
+
+
 @pytest.mark.req("FR-11")
 def test_fr11_metrics_are_served_in_prometheus_text_format(fresh: TestClient):
     response = fresh.get("/metrics")

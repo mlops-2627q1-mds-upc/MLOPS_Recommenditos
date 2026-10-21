@@ -15,6 +15,7 @@ How the pipeline is laid out and what each stage promises the next: [The DVC pip
 How data and models are versioned: [Data versioning](data-versioning.md).
 How to run the API, its endpoints and its error shape: [The API](api.md).
 How the API runs in Docker behind nginx, locally and on the VM: [Deployment](deployment.md).
+How the system is put together, the patterns it uses and the decisions behind them: [Architecture](architecture.md).
 Where notebooks live, how they are run and which checks they pass: [Notebooks](notebooks.md).
 
 ## Commands

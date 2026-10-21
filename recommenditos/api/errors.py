@@ -175,12 +175,14 @@ def request_id_of(request: Request) -> str:
 
 
 async def _problem_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, ProblemError)
+    if not isinstance(error, ProblemError):
+        raise TypeError(f"{type(error).__name__} reached the ProblemError handler")
     return problem_response(request_id_of(request), error)
 
 
 async def _http_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, StarletteHTTPException)
+    if not isinstance(error, StarletteHTTPException):
+        raise TypeError(f"{type(error).__name__} reached the StarletteHTTPException handler")
     type_ = (
         PAYLOAD_TOO_LARGE if error.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE else BLANK
     )
@@ -205,7 +207,8 @@ def install_handlers(app: FastAPI, complete: ErrorCompleter) -> None:
     """
 
     async def _validation_error(request: Request, error: Exception) -> JSONResponse:
-        assert isinstance(error, RequestValidationError)
+        if not isinstance(error, RequestValidationError):
+            raise TypeError(f"{type(error).__name__} reached the RequestValidationError handler")
         errors = complete(request, error.body, field_errors(error.errors()))
         return await _problem_error(request, validation_problem(errors))
 
@@ -279,8 +282,9 @@ _DESCRIPTIONS: dict[int, str] = {
     HTTPStatus.UNAUTHORIZED: "The `X-API-Key` header is missing or wrong (FR-10).",
     HTTPStatus.NOT_FOUND: "The prediction log holds no answer with this request ID.",
     HTTPStatus.CONFLICT: "Another price is stored for this request ID.",
-    HTTPStatus.SERVICE_UNAVAILABLE: "The prediction log cannot be written; nothing was "
-    "answered or stored (NFR-03).",
+    HTTPStatus.SERVICE_UNAVAILABLE: "The service cannot answer: the prediction log cannot be "
+    "written, so nothing was answered or stored (NFR-03), or `/v1/price-range` was asked of a "
+    "bundle without interval models (EDN-85).",
     HTTPStatus.UNPROCESSABLE_ENTITY: "The request is invalid; `errors` lists every invalid field.",
     HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "The body is larger than 10 KB (NFR-09).",
 }

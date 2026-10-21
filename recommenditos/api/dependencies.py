@@ -26,14 +26,16 @@ API_KEY_HEADER = "X-API-Key"
 def served_model(request: Request) -> ServedModel:
     """The model `create_app` loaded, from the app's state."""
     served = request.app.state.served
-    assert isinstance(served, ServedModel)
+    if not isinstance(served, ServedModel):
+        raise TypeError(f"app.state.served is a {type(served).__name__}, not a ServedModel")
     return served
 
 
 def api_metrics(request: Request) -> ApiMetrics:
     """The metrics `create_app` registered, from the app's state."""
     metrics = request.app.state.metrics
-    assert isinstance(metrics, ApiMetrics)
+    if not isinstance(metrics, ApiMetrics):
+        raise TypeError(f"app.state.metrics is a {type(metrics).__name__}, not an ApiMetrics")
     return metrics
 
 
@@ -76,7 +78,8 @@ def require_api_key(
     service started without a key refuses every request.
     """
     settings = request.app.state.settings
-    assert isinstance(settings, Settings)
+    if not isinstance(settings, Settings):
+        raise TypeError(f"app.state.settings is a {type(settings).__name__}, not a Settings")
     expected = settings.api_key
     if (
         expected is None

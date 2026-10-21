@@ -8,6 +8,9 @@ ARG TL_REPO=https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlne
 
 FROM debian:trixie-slim AS texlive
 ARG TL_REPO
+# Not pinned to a version: Debian replaces a package version in its archive with
+# every security update, so a pin would break the build instead of patching it.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl perl xz-utils \
     && rm -rf /var/lib/apt/lists/*
@@ -15,6 +18,8 @@ RUN apt-get update \
 # package download, so every step that reads from it is tried up to five times.
 # install-tl and tlmgr exit 0 after a failed download, which leaves an image
 # without its formats, so a step also counts as failed when it says so.
+# The single quotes write `$@`, `$rc` and `$i` into the script unexpanded.
+# hadolint ignore=SC2016
 RUN printf '%s\n' \
         '#!/bin/sh' \
         'for i in 1 2 3 4 5; do' \
@@ -26,7 +31,7 @@ RUN printf '%s\n' \
         > /usr/local/bin/retry \
     && chmod +x /usr/local/bin/retry
 WORKDIR /tmp/install-tl
-RUN retry sh -c 'curl -fsSL "$TL_REPO/install-tl-unx.tar.gz" | tar -xz --strip-components=1'
+RUN retry sh -c "curl -fsSL '$TL_REPO/install-tl-unx.tar.gz' | tar -xz --strip-components=1"
 RUN printf '%s\n' \
         'selected_scheme scheme-infraonly' \
         'TEXDIR /opt/texlive' \
@@ -42,24 +47,26 @@ RUN printf '%s\n' \
     && ln -s "$(ls -d /opt/texlive/bin/*-linux)" /opt/texlive/bin/linux
 ENV PATH=/opt/texlive/bin/linux:$PATH
 # Packages used by preamble.tex, report.tex and edn.tex. Add new ones here.
+# The formats are built while the packages install, and without them every
+# compilation fails, so fail the image build here and not in the report job.
 RUN retry tlmgr install \
         collection-latex latexmk biber biblatex biblatex-ieee \
         babel-english lm microtype xcolor booktabs tools enumitem etoolbox \
         fancyhdr listings tcolorbox pgf environ tikzfill pdfcol listingsutf8 \
-        csquotes cleveref url pdfpages eso-pic pdflscape
-# The formats are built while the packages install, and without them every
-# compilation fails, so fail the image build here and not in the report job.
-RUN test -f /opt/texlive/texmf-var/web2c/pdftex/pdflatex.fmt
+        csquotes cleveref url pdfpages eso-pic pdflscape \
+    && test -f /opt/texlive/texmf-var/web2c/pdftex/pdflatex.fmt
 # We only compile with pdfLaTeX. Drop what it never reads to keep the image
 # slim: LuaTeX binaries and formats, font sources and metrics pdfTeX does not
 # use, and the tlmgr database (packages are installed above, never at run time).
-RUN cd /opt/texlive \
-    && rm -rf tlpkg install-tl* texmf-var/web2c/*.log \
+WORKDIR /opt/texlive
+RUN rm -rf tlpkg install-tl* texmf-var/web2c/*.log \
         bin/linux/luatex bin/linux/luahbtex texmf-var/web2c/luatex texmf-var/web2c/luahbtex \
         texmf-dist/fonts/afm texmf-dist/fonts/opentype texmf-dist/fonts/source
 
 FROM debian:trixie-slim
 # latexmk needs Perl modules beyond the perl-base shipped in the slim image.
+# Not pinned to a version, for the reason the first stage gives.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends perl \
     && rm -rf /var/lib/apt/lists/*

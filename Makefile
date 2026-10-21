@@ -26,11 +26,12 @@ clean:
 	find . -type d -name "__pycache__" -delete
 
 
-## Lint using ruff (use `make format` to do formatting)
+## Lint using ruff and hadolint (use `make format` to do formatting)
 .PHONY: lint
 lint: typecheck
 	uv run ruff format --check
 	uv run ruff check
+	uv run pre-commit run hadolint --all-files
 
 ## Type-check recommenditos/ and tools/ with mypy (configured in pyproject.toml)
 .PHONY: typecheck
@@ -38,9 +39,11 @@ typecheck:
 	uv run mypy
 
 ## Format source code with ruff
+# `--exit-zero`, so a finding `--fix` cannot fix still prints but does not stop
+# make before `ruff format` runs; `make lint` is the check that fails on it.
 .PHONY: format
 format:
-	uv run ruff check --fix
+	uv run ruff check --fix --exit-zero
 	uv run ruff format
 
 

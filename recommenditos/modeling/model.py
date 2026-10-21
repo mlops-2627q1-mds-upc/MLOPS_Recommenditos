@@ -936,7 +936,8 @@ class RidgeModel(Model):
         return model
 
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
-        assert self.pipeline is not None, "the pipeline exists after `fit` or `load`"
+        if self.pipeline is None:
+            raise RuntimeError("the pipeline exists after `fit` or `load`")
         return np.asarray(self.pipeline.predict(aligned), dtype="float64")
 
     def _save_payload(self, directory: Path) -> None:
@@ -1050,8 +1051,11 @@ class LightGBMModel(Model):
     #: LightGBM's own default of 20, so a params block that leaves it out fits
     #: exactly the trees it fitted before the key existed - `booster.txt` records
     #: `min_data_in_leaf: 20` either way - and `params.yaml` names it only once a
-    #: search has adopted another value.
-    optional_hyperparameters = MappingProxyType({"min_child_samples": 20})
+    #: search has adopted another value. `reg_lambda`, the L2 penalty that shrinks
+    #: a leaf of n rows by about n / (n + lambda), is optional the same way at
+    #: LightGBM's 0.0 for the search of issue #117. `booster.txt` records it as
+    #: `lambda_l2`, an alias never set here, because LightGBM warns when both are.
+    optional_hyperparameters = MappingProxyType({"min_child_samples": 20, "reg_lambda": 0.0})
     #: The estimator the copies were measured on (EDN-82).
     supports_blanked_copies = True
 
@@ -1164,7 +1168,8 @@ class LightGBMModel(Model):
         reaches the booster as one native categorical feature. A row sums to the
         booster's log price before `predict_eur` bounds it to the training range.
         """
-        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        if self.booster is None:
+            raise RuntimeError("the booster exists after `fit` or `load`")
         contributions = self.booster.predict(self._as_codes(self._align(frame)), pred_contrib=True)
         return pd.DataFrame(
             np.asarray(contributions, dtype="float64"),
@@ -1179,7 +1184,8 @@ class LightGBMModel(Model):
         return coded
 
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
-        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        if self.booster is None:
+            raise RuntimeError("the booster exists after `fit` or `load`")
         return np.asarray(self.booster.predict(self._as_codes(aligned)), dtype="float64")
 
     @property
@@ -1248,7 +1254,8 @@ class LightGBMModel(Model):
         # the property the API depends on is that the file *is* the early-stopped
         # model and needs no iteration argument at predict time, and that should
         # not rest on a truncation nothing here asked for.
-        assert self.booster is not None, "the booster exists after `fit` or `load`"
+        if self.booster is None:
+            raise RuntimeError("the booster exists after `fit` or `load`")
         self.booster.save_model(
             directory / _BOOSTER_FILE, num_iteration=self.metadata["training"]["best_iteration"]
         )

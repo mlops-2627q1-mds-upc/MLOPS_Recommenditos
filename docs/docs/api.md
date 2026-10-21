@@ -1,7 +1,7 @@
 The API
 =======
 
-The HTTP API serves the price model: it estimates the asking price of a used car (UC1) with the model bundle the service was started with.
+The HTTP API serves the price model: it estimates the asking price of a used car (UC1) and the price range of a car described in part (UC2) with the model bundle the service was started with.
 This page says how to run it, what it offers and how its errors are shaped, and how to add an endpoint.
 The field-by-field reference is the generated OpenAPI document, served by the API itself at `/docs` (Swagger UI), `/redoc` (ReDoc) and `/openapi.json`; this page does not repeat it.
 What each endpoint must do is in the [specification](specification.md) (FR-01 to FR-16, NFR-03, NFR-04, NFR-08, NFR-09).
@@ -52,8 +52,9 @@ The operational endpoints are not part of that contract and stay at the root, wh
 | Endpoint | Purpose | Requirements |
 |----------|---------|--------------|
 | `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08, FR-13 |
+| `POST /v1/price-range` | The typical price and the nominal 90 % price range in EUR for a car described by any fields that include its make, the model, a request ID and warnings | FR-02 to FR-05, FR-07, FR-13 |
 | `POST /v1/feedback` | Stores the observed price of an answered listing against its request ID; internal, requires the API key | FR-10 |
-| `GET /health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
+| `GET /health` | `ok`, the served model (its variant, version and training time), and `price_range`, whether the bundle can answer `/v1/price-range` | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
 | `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
 
@@ -114,10 +115,42 @@ Measured in-process with `TestClient` on a shared 4-core development laptop, ove
 Both are inside NFR-02's 200 ms for `/predict`, which the load test on the target VM checks.
 `lgbm-extended`, with 162 columns in 33 fields, is close to that limit or over it: under a load average of 2.7 to 5.7 one run gave a whole request of p50 181 ms and p95 195 ms (explanation 78 and 83 ms) and another p50 250 ms and p95 357 ms (explanation 106 and 148 ms), where `lgbm-basic` took p50 65 ms and p95 78 ms in the first run.
 
+### The price range
+
+`/v1/price-range` answers UC2, a buyer asking what a car should cost: only `make` is required (FR-02), and any other field of `/v1/predict`'s request may be added.
+A field that is given is checked by the same rules as in `/v1/predict` (FR-03, FR-04), and an unseen `model` or country is answered with a warning (FR-05); a field left out, or sent as `null`, reaches the model as absent.
+The request body is `PartialListing` in `schemas/partial_listing.py`, which `/v1/comparables` will take as well.
+
+```json
+{"price_eur": 15606.57, "lower_eur": 12790.57, "upper_eur": 27480.29, "confidence_level": 0.9,
+ "model": {"variant": "lgbm-basic", "version": "...", "trained_at": "..."},
+ "request_id": "3f1bad86-3ff2-489c-8ce8-a764efd6841b", "warnings": []}
+```
+
+That is the answer for a 2019 Volkswagen Golf with 45,000 km, scenario P1 of SC-05.
+`lower_eur` and `upper_eur` are the conformalized bounds of the three quantile boosters the bundle carries ([EDN-85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); `confidence_level` is their nominal coverage.
+`price_eur`, the typical price, is the one `/v1/predict` gives when the request carries all ten fields `/v1/predict` requires, and the median of the price range otherwise, because the point model has never seen a required field missing (FR-07).
+The bounds are widened where the typical price falls outside them, so `lower_eur <= price_eur <= upper_eur` holds in every answer; on the test split that moves a bound for at most 1 % of the requests.
+
+The range narrows as the request says more.
+On the 19,665 listings of the test split, with the fields left out as a client would leave them out (`reports/analysis/price_range_widths.py`), the mean width `(upper_eur - lower_eur) / price_eur` is:
+
+| Request | Typical price | Mean width | Median width | Coverage |
+|---------|---------------|------------|--------------|----------|
+| make only | median | 2.30 | 2.47 | 90.7 % |
+| P1: make, model, registration date, mileage | median | 0.93 | 0.81 | 91.0 % |
+| the ten fields `/v1/predict` requires | point model | 0.51 | 0.42 | 90.9 % |
+| full | point model | 0.47 | 0.38 | 90.3 % |
+
+Measured in-process with `TestClient` on the shared 4-core development laptop under a load average of 4 to 6, over 900 requests built from test listings, 300 each make-only, P1 and full, a request took p50 38 ms and p95 47 ms, with no shape above p95 49 ms (`reports/analysis/price_range_latency.py`).
+That is inside NFR-02's 300 ms, which the load test on the target VM checks.
+
+A bundle without interval models, such as `lgbm-extended`, serves `/v1/predict` and answers `/v1/price-range` with a 503 problem; `/health` then reports `"price_range": false`.
+
 ### Model version and request ID
 
 The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
-Every response carries an `X-Request-ID` header; `/predict` repeats it as `request_id`, and a problem names it in `instance`.
+Every response carries an `X-Request-ID` header; `/predict` and `/price-range` repeat it as `request_id`, and a problem names it in `instance`.
 
 ## Metrics
 
@@ -131,6 +164,9 @@ In the deployment only Prometheus reads it, inside the Compose network: nginx re
 | `http_request_errors_total` | counter | `method`, `path`, `status` | Answers with a status of 400 or above |
 | `recommenditos_predicted_price_eur` | histogram | - | The prices `/v1/predict` answered, for drift monitoring (M6) |
 | `recommenditos_prediction_warnings_total` | counter | `field` | `/v1/predict` warnings, by the field they point at (FR-05) |
+| `recommenditos_price_range_price_eur` | histogram | - | The typical prices `/v1/price-range` answered |
+| `recommenditos_price_range_relative_width` | histogram | - | The width of each answered range over its typical price, which falls the more fields a client sends |
+| `recommenditos_price_range_warnings_total` | counter | `field` | `/v1/price-range` warnings, by the field they point at (FR-05) |
 | `recommenditos_model_info` | gauge | `variant`, `version` | 1 for the served model; the version is the one `/health` reports |
 
 `path` is the route template, such as `/v1/predict`, never the raw path, so a client cannot grow the label set; a request that matches no route is counted under `<unmatched>`.
@@ -219,7 +255,7 @@ Setting the variable and the volume on the VM is part of the deployment (NFR-04)
 ## Errors
 
 Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details object with the media type `application/problem+json` ([EDN-84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-That holds for every error path: a request that fails validation, an unsupported make, a body over the size limit, an unknown route, a wrong method, and an unexpected failure.
+That holds for every error path: a request that fails validation, an unsupported make, a body over the size limit, an unknown route, a wrong method, a price range from a bundle without interval models (503), and an unexpected failure.
 
 ```json
 {

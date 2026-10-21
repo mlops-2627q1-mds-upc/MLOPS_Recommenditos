@@ -26,6 +26,7 @@ def test_fr11_health_returns_the_status_and_the_loaded_model(
             "version": bundle_version(bundle),
             "trained_at": served.model.metadata["trained_at"],
         },
+        "price_range": True,
     }
 
 

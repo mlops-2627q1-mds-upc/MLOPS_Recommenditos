@@ -4,7 +4,10 @@ Per endpoint, method and status code: the request count, the latency and the
 error count. The endpoint is the route template (`/v1/predict`), never the raw
 path, so the label set stays bounded whatever a client sends. Beside them, the
 signals M6's drift monitoring reads: the distribution of the predicted price,
-the warnings by field (FR-05), and the version of the served model.
+the warnings by field (FR-05), and the version of the served model. The price
+ranges of `/v1/price-range` have metrics of their own, because a typical price
+from a request that names little more than the make is not an asking price of
+`/v1/predict`'s, and the width of the range says how much the clients tell.
 
 The figures are correct for any number of uvicorn worker processes when
 `PROMETHEUS_MULTIPROC_DIR` names a directory: every worker then writes its
@@ -73,6 +76,11 @@ PRICE_BUCKETS = (
     150_000,
     250_000,
 )
+
+#: Relative width bucket bounds, `(upper - lower) / typical price`. Measured on the
+#: test split, the mean is 0.47 for a full request, 0.93 for P1 and 2.30 for a
+#: make-only one (`reports/analysis/price_range_widths_results.txt`).
+WIDTH_BUCKETS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 5.0)
 
 #: The `path` label of a request that matches no route, a 404 for any path.
 UNMATCHED_PATH = "<unmatched>"
@@ -157,6 +165,24 @@ class ApiMetrics:
             ("field",),
             registry=self.registry,
         )
+        self.range_price = Histogram(
+            "recommenditos_price_range_price_eur",
+            "Typical prices answered by /v1/price-range, in EUR.",
+            buckets=PRICE_BUCKETS,
+            registry=self.registry,
+        )
+        self.range_width = Histogram(
+            "recommenditos_price_range_relative_width",
+            "Widths of the ranges answered by /v1/price-range, relative to their typical price.",
+            buckets=WIDTH_BUCKETS,
+            registry=self.registry,
+        )
+        self.range_warnings = Counter(
+            "recommenditos_price_range_warnings",
+            "Warnings in /v1/price-range answers, by the request field they point at (FR-05).",
+            ("field",),
+            registry=self.registry,
+        )
         self.model = Gauge(
             "recommenditos_model_info",
             "The served model: 1, labelled with its variant and its DVC version (FR-12).",
@@ -177,7 +203,16 @@ class ApiMetrics:
         """Record one answered valuation: its price and its warnings."""
         self.predicted_price.observe(price_eur)
         for warning in warnings:
-            self.warnings.labels(field=warning.pointer.removeprefix("#/").split("/")[0]).inc()
+            self.warnings.labels(field=_field(warning)).inc()
+
+    def observe_price_range(
+        self, price_eur: float, lower_eur: float, upper_eur: float, warnings: "list[FieldWarning]"
+    ) -> None:
+        """Record one answered price range: its typical price, its width and its warnings."""
+        self.range_price.observe(price_eur)
+        self.range_width.observe((upper_eur - lower_eur) / price_eur)
+        for warning in warnings:
+            self.range_warnings.labels(field=_field(warning)).inc()
 
     def exposition(self) -> bytes:
         """The metrics in the text exposition format, summed over the workers if several."""
@@ -240,3 +275,8 @@ def route_template(scope: Scope) -> str:
         if match == Match.PARTIAL and partial is None:
             partial = str(route.path)
     return partial or UNMATCHED_PATH
+
+
+def _field(warning: "FieldWarning") -> str:
+    """The top-level request field a warning points at."""
+    return warning.pointer.removeprefix("#/").split("/")[0]

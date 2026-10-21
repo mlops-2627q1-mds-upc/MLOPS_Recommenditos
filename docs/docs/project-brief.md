@@ -156,6 +156,7 @@ Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tu
 Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-73).
 The search ran on 2026-10-06 and kept every value: in all four sweeps, `learning_rate` x `num_leaves` and then `min_child_samples` for each variant, no point's simultaneous interval of the validation L1 difference lies below zero, so the search changed neither `params.yaml` nor the committed metrics.
 Its `lgbm-basic` grid reproduces EDN-73's twelve fits exactly, and its 34 fits cost 391.3 s of fitting and 3.6 Wh, recorded in the MLflow experiment `recommenditos-price-tuning` apart from the final fit ([model card](model-card.md#environmental-impact)).
+Issue #117 swept `reg_lambda`, LightGBM's L2 penalty, at 0, 1, 10, and 100 for both variants on 2026-10-20, with the interval corrected across the nine sweeps on the validation split (EDN-73), and kept 0 for both.
 Step 5, CatBoost, adds an `estimator` to the same mapping and a branch in `recommenditos/modeling/model.py`; nothing else has to change.
 
 Price ranges (UC2), **implemented** ([EDN-85](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), #137): **Conformalized Quantile Regression** with MAPIE 1.6 on quantile LightGBM models at 5 %, 95 % and 50 %, part of the `lgbm-basic` bundle.
@@ -194,21 +195,24 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 
 ## 5. Target architecture
 
+The [architecture page](architecture.md) draws this as a C4 container view and a deployment view, and names the patterns and the decisions behind them.
+
 ```
-client --> reverse proxy --> FastAPI (model + SHAP + intervals)
-                               |-- /predict       (UC1)
-                               |-- /price-range   (UC2)
-                               |-- /comparables
-                               |-- /health, /metrics (Prometheus)
-                               '-- /feedback      (internal only: the proxy refuses it
-                                                   from outside; reported prices, no real
-                                                   users, so replayed from the ES holdout)
+client --> nginx (gateway) --> FastAPI (model bundle: LightGBM boosters, which give
+                                         FR-08's SHAP values themselves, and interval offsets)
+                                 |-- /v1/predict      (UC1)
+                                 |-- /v1/price-range  (UC2)
+                                 |-- /v1/comparables
+                                 |-- /v1/feedback     (internal only: the proxy refuses it
+                                 |                     from outside; reported prices, no real
+                                 |                     users, so replayed from the ES holdout)
+                                 '-- /, /health, /metrics (Prometheus; /metrics internal only)
 
          SQLite file in WAL mode on a shared volume: prediction log, feedback
          MLflow experiment tracking (DagsHub), not called by the API
-         Prometheus + Grafana (resources, latency, errors)
-         Better Uptime (external availability check, presentation windows)
-         Alibi Detect job (input drift on logged requests, interval coverage)
+         Prometheus + Grafana (resources, latency, errors)                      M6
+         Better Uptime (external availability check, presentation windows)    M6, proposed
+         Alibi Detect job (input drift on logged requests, interval coverage)   M6
 ```
 
 Everything runs via Docker Compose.
@@ -222,10 +226,7 @@ Nobody has access yet; if that is still true at the M4a lab on 2026-10-27, we ra
 Prediction log and feedback storage **[decided]**, [EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): one SQLite file in WAL mode on a volume the API's workers and the drift job's container share, behind a store interface so that PostgreSQL stays a local change.
 The drift job reads it with SQL and joins the two by request ID (FR-14); a database server would cost a service, a secret and memory on the 4 GB VM for a multi-host setup we do not have.
 How it is written exactly once and rotated is in the [API docs](api.md#the-prediction-log-and-the-feedback).
-
-Open points:
-
-- MLflow hosting: DagsHub (as in the course demo) or self-hosted.
+Experiment tracking is the MLflow server DagsHub hosts beside the DVC remote, as in the course demo.
 
 ## 6. Tooling constraints
 
