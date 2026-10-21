@@ -18,11 +18,12 @@ grouped by request field, so a bundle that has none cannot be served.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
+import threading
 from typing import Any
 
 import numpy as np
@@ -161,6 +162,13 @@ class ServedModel:
     allowed: Mapping[str, tuple[str, ...]]
     #: Per input field the model reads, the matrix columns it became.
     fields: Mapping[str, tuple[str, ...]]
+    #: Held while the model scores a request, so one request at a time is scored
+    #: per process. Concurrent requests in uvicorn's thread pool otherwise take
+    #: turns at the GIL every few milliseconds, and each one's latency grows to
+    #: that of all of them (issue #179); waiting on a lock costs no CPU.
+    _scoring: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def load(cls, directory: Path) -> "ServedModel":
@@ -246,6 +254,10 @@ class ServedModel:
 
     def value(self, request: ValuationRequest) -> Estimate:
         """The price of `request` in EUR, its explanation, and the warnings for it."""
+        with self._scoring:
+            return self._value(request)
+
+    def _value(self, request: ValuationRequest) -> Estimate:
         matrix = self.matrix(request)
         price = float(self.model.predict_eur(matrix).iloc[0])
         contributions = self.model.log_price_contributions(matrix).iloc[0]
@@ -278,6 +290,12 @@ class ServedModel:
         self, request: PartialListing
     ) -> tuple[PriceRangeEstimate, list[tuple[str, str]]]:
         """The price range of `request` (FR-07), and the fields it reported as unseen."""
+        with self._scoring:
+            return self._price_range(request)
+
+    def _price_range(
+        self, request: PartialListing
+    ) -> tuple[PriceRangeEstimate, list[tuple[str, str]]]:
         matrix = self.matrix(request)
         sent = sent_fields(request)
         complete = all(name in sent for name in REQUEST_CONTRACT.required_fields)

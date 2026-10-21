@@ -6,6 +6,7 @@ import json
 import math
 from pathlib import Path
 import shutil
+import threading
 
 from fastapi.testclient import TestClient
 from hypothesis import HealthCheck, given, settings
@@ -699,3 +700,16 @@ def test_nfr02_every_booster_call_of_a_valuation_runs_on_one_thread(
     assert PREDICTION_THREADS == 1
     assert len(calls) == 2  # the price and its explanation
     assert all(call.get("num_threads") == PREDICTION_THREADS for call in calls)
+
+
+@pytest.mark.req("NFR-02", "NFR-03")
+def test_nfr02_a_process_scores_one_request_at_a_time(served: ServedModel, listing: dict):
+    """A valuation waits while another holds the model, instead of taking turns at the GIL."""
+    request = ValuationRequest(**listing)
+    finished = threading.Event()
+    worker = threading.Thread(target=lambda: (served.value(request), finished.set()))
+    with served._scoring:
+        worker.start()
+        assert not finished.wait(timeout=0.5)
+    worker.join(timeout=30)
+    assert finished.is_set()

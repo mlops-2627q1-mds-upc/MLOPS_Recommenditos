@@ -46,6 +46,19 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
   "seller_type": "Dealer"}'
 ```
 
+## Performance
+
+A request is scored on one thread: `ServedModel.load` sets LightGBM's `num_threads` to 1 for every prediction of the served model (`PREDICTION_THREADS` in `recommenditos/api/serving.py`).
+LightGBM's default is one OpenMP thread per core, and `Booster.predict` ignores the `num_threads` that `booster.txt` records.
+For one row that parallelism only adds threads that wait: a valuation took 73 ms and 339 ms of CPU with the default, and 50 ms and 51 ms of CPU on one thread with the explanation summed in NumPy, and under concurrent requests the threads of every request and every worker competed for the same cores (issue #179).
+The answers are the same either way; the FR-06 parity test compares the API's prices with the pipeline's, which predicts with the default.
+Batch scoring in the pipeline keeps the default.
+
+What is left of a valuation's 50 ms is about 18 ms to build the one-row matrix (`build_matrix` and the schema's casts, the code the pipeline uses too), about 20 ms for LightGBM's SHAP export behind the explanation, and the price itself.
+Most of it is Python and holds the GIL, so a worker process scores one request at a time (`ServedModel` holds a lock while it scores): concurrent requests in uvicorn's thread pool otherwise took turns at the GIL every few milliseconds, which cost about 40 % more CPU per request and stretched every request's latency to that of all of them.
+In the laptop measurement of issue #179, one worker saturated at about 20 requests per second of the load test's mix, at one core; more throughput needs more workers (`WEB_CONCURRENCY`), each with about 240 MiB of memory.
+[Load testing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143) measures what the VM sustains.
+
 ## Endpoints
 
 The client contract is versioned under `/v1`, so an incompatible change can ship as `/v2` beside it.
