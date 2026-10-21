@@ -1150,6 +1150,8 @@ How to add an entry:
 
 ### EDN-88: The latency, throughput and resource targets after the load test (#143)
 
+### EDN-89: How the UC2 intervals handle makes whose coverage misses the band (#108)
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
