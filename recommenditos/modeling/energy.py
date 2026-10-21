@@ -4,7 +4,7 @@
 figure covers the fit and not the reading of the matrices, the MLflow round trips
 or the writing of the bundle. The course demo does the same; what this module
 adds is everything the demo leaves to chance, each of which was measured on our
-machines before it was written down (EDN-69, `reports/analysis/codecarbon_validity.py`).
+machines before it was written down (`reports/analysis/codecarbon_validity.py`, model card).
 
 **What the number is.** CodeCarbon prefers a hardware energy counter, and on
 Linux that is RAPL. Since kernel 5.10 RAPL is readable by root only, because

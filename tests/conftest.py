@@ -20,6 +20,7 @@ from tests.fixtures.synthetic_bundle import FIXTURE_ROWS, build_matrices, train_
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
 import yaml
 
+from recommenditos.api.settings import API_KEY_ENV_VAR, PREDICTION_LOG_ENV_VAR
 from recommenditos.config import (
     FIGURES_DIR,
     METRICS_FILE,
@@ -42,6 +43,21 @@ from recommenditos.pipeline import load_params
 # The variable is read on every call, so setting it here, before any test opens a
 # run, is enough. `setdefault`, so a contributor who wants it can still turn it on.
 os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _prediction_log_outside_the_repository(tmp_path_factory: pytest.TempPathFactory):
+    """Point an app a test builds without settings at a temporary prediction log.
+
+    `create_app` reads its settings from the environment, and the log's default
+    is `logs/` in the repository, where a test must not write. A test that
+    passes its own `Settings` is unaffected.
+    """
+    with pytest.MonkeyPatch.context() as environment:
+        directory = tmp_path_factory.mktemp("default-prediction-log")
+        environment.setenv(PREDICTION_LOG_ENV_VAR, str(directory / "prediction-log.sqlite3"))
+        environment.delenv(API_KEY_ENV_VAR, raising=False)
+        yield
 
 
 #: The columns problem-spec section 4 excludes as PII. No processed artefact,

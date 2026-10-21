@@ -63,6 +63,9 @@ dependencies = [
     # The request and response bodies of the API. FastAPI requires it anyway, but
     # `recommenditos/api/schemas/` imports it directly, so it is declared.
     "pydantic>=2.13.5",
+    # The API's settings (`recommenditos/api/settings.py`), read from the
+    # environment, with the API key as a `SecretStr` (#140).
+    "pydantic-settings>=2.15.0",
     # `recommenditos/config.py` loads `<repo>/.env` when it is imported, and every
     # module imports it. A missing file is not an error, so the image needs the
     # package but no `.env`.

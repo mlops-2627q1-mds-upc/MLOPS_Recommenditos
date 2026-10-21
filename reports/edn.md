@@ -1104,7 +1104,27 @@ How to add an entry:
 - **Other evidence:** [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158), [`lgbm-basic.json`](metrics/lgbm-basic.json), [Typical-price analysis](analysis/price_range_point_estimate_results.txt), MLflow run `train@lgbm-basic` in `recommenditos-price`.
 - **In LaTeX:** yes
 
-### EDN-86: Where the prediction log and the feedback are stored (#140)
+### EDN-86: The prediction log and the feedback are one SQLite file in WAL mode
+
+- **Date:** 2026-10-20
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** API Design, Monitoring
+- **Participants:** @lukas2510 decided ([issue #140](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/140))
+- **Decision:** Every answer is one row of `predictions` and every observed price one row of `feedback`, in one SQLite file in WAL mode on a volume the API's workers and the drift job share.
+  A small store interface keeps PostgreSQL a local change.
+- **Alternatives considered:**
+  - PostgreSQL in its own container: works across hosts, but costs a service, a secret and memory on the 4 GB VM for a multi-host setup we do not have.
+  - JSON Lines, one file per worker: simplest to write, but exactly-once, the join and the rotation would be ours to build.
+- **Rationale:** NFR-03 wants one record per answer whatever the worker count, FR-14 joins log and feedback by request ID, and NFR-04 caps both at 2 GB on one VM.
+  SQLite serialises the workers with its file lock, a unique request ID refuses a second record, and the join is plain SQL.
+  Two uvicorn workers recorded each of 200 concurrent answers once, and a write takes 0.15 ms at the median of the 200 ms that NFR-02 gives `/predict`.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the three options in the issue and recommended SQLite, which @lukas2510 chose.
+  AI then built the store, the rotation and the tests, one with two worker processes, and measured the cost of a write.
+- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's three options and recommendation.
+- **Other evidence:** [Issue #140](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/140), [PR #166](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/166), [API docs](../docs/docs/api.md#the-prediction-log-and-the-feedback), [`prediction_log.py`](../recommenditos/api/prediction_log.py), [project brief](../docs/docs/project-brief.md) section 5.
+- **In LaTeX:** yes
 
 ### EDN-87: The API runs on the VM as a Compose stack behind nginx from Milestone 4
 

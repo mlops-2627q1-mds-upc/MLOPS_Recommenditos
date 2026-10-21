@@ -66,7 +66,7 @@ What the suites check, and where each rule of issue #25 lives:
 - **The interim column list is the PII guarantee.** It names neither a column
   NFR-08 forbids nor `is_used`, which EDN-23 excludes as a feature, so a frame
   carrying either fails it.
-- **`registration_date` at or before `reference_date` (EDN-22).** Hard on the
+- **`registration_date` at or before `reference_date`.** Hard on the
   interim frame, because preprocessing has dropped the later ones by then. On
   the raw frame with `validate.raw_mostly`, so a future scrape carrying many
   such rows is flagged instead of silently cleaned. Great Expectations cannot
@@ -107,7 +107,7 @@ What the suites check, and where each rule of issue #25 lives:
 Not here, although issue #25 lists it: **the supported-make list.** `split`
 computes it after this stage has run, and the processed sets deliberately still
 contain every make, because `split` is a lossless partition and `features` is
-the stage that applies the list (EDN-48, EDN-67). No frame this stage can see is
+the stage that applies the list (EDN-05). No frame this stage can see is
 supposed to satisfy it. The guarantee is enforced where the list is applied, and
 checked by `train` and `evaluate` (docs/docs/pipeline.md, "The supported makes").
 """
@@ -226,7 +226,7 @@ def _registered_by_the_reference_date(params: dict[str, Any], *, mostly: float) 
         max_value=pd.Timestamp(params["reference_date"]).to_pydatetime(),
         mostly=mostly,
         notes=(
-            "EDN-22: age is the reference date minus the registration date, so a later "
+            "Age is the reference date minus the registration date, so a later "
             "date makes it negative. Preprocessing drops these listings; the raw suite "
             "tolerates them up to `validate.raw_mostly`, so that a scrape carrying many "
             "is flagged rather than silently cleaned."

@@ -12,6 +12,7 @@ in parallel do not touch the same line.
 """
 
 from recommenditos.api.routes import (
+    feedback,
     health,
     index,
     metrics,
@@ -19,6 +20,7 @@ from recommenditos.api.routes import (
 )
 
 V1_ROUTERS = [
+    feedback.router,
     predict.router,
 ]
 

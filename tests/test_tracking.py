@@ -33,6 +33,7 @@ import pytest
 from tests.conftest import commit_all, git_in
 from typer.testing import CliRunner
 
+from recommenditos.api.settings import API_KEY_ENV_VAR
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.pipeline import load_params
 from recommenditos.provenance import (
@@ -452,9 +453,12 @@ def test_the_template_documents_every_variable_the_project_reads():
     """Rename a variable in the code and this fails until the template follows.
 
     Exactly, not merely: a template that lists a variable nothing reads is how a
-    contributor comes to believe that filling it in configures something.
+    contributor comes to believe that filling it in configures something. The
+    tracking credentials and the API key (NFR-15) are the variables a
+    contributor has to fill in; the API's other settings have defaults and are
+    listed in docs/docs/api.md.
     """
-    assert set(_template_assignments()) == set(REQUIRED_ENV_VARS)
+    assert set(_template_assignments()) == set(REQUIRED_ENV_VARS) | {API_KEY_ENV_VAR}
 
 
 def test_the_template_carries_no_credential():

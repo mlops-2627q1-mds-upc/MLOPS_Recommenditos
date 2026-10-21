@@ -4,7 +4,7 @@ The API
 The HTTP API serves the price model: it estimates the asking price of a used car (UC1) with the model bundle the service was started with.
 This page says how to run it, what it offers and how its errors are shaped, and how to add an endpoint.
 The field-by-field reference is the generated OpenAPI document, served by the API itself at `/docs` (Swagger UI), `/redoc` (ReDoc) and `/openapi.json`; this page does not repeat it.
-What each endpoint must do is in the [specification](specification.md) (FR-01 to FR-16, NFR-09).
+What each endpoint must do is in the [specification](specification.md) (FR-01 to FR-16, NFR-03, NFR-04, NFR-08, NFR-09).
 
 ## Running it
 
@@ -15,6 +15,17 @@ make api                   # uvicorn on http://127.0.0.1:8000
 
 `make api` serves `models/lgbm-basic`.
 `RECOMMENDITOS_MODEL_DIR=models/lgbm-extended make api` serves another bundle, and `make api API_PORT=8080` another port.
+
+The service reads its settings from environment variables (`recommenditos/api/settings.py`, with pydantic-settings); locally, the repository's `.env` is loaded into the environment first.
+
+| Variable | Default | What it sets |
+|----------|---------|--------------|
+| `RECOMMENDITOS_MODEL_DIR` | `models/lgbm-basic` | The bundle to serve |
+| `RECOMMENDITOS_API_KEY` | none | The key `/v1/feedback` requires; at least 16 characters. Unset or empty, the endpoint refuses every request |
+| `RECOMMENDITOS_PREDICTION_LOG` | `logs/prediction-log.sqlite3` | The SQLite file of the prediction log and the feedback |
+| `RECOMMENDITOS_PREDICTION_LOG_MAX_BYTES` | `2000000000` | The size the log and the feedback are pruned to (NFR-04) |
+
+The API key is a secret (NFR-15): `.env.template` lists it without a value, and the settings hold it as a `SecretStr`, which a repr or a log line shows as `**********`.
 The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
 A bundle the API cannot serve stops the service at startup instead of failing on the first request: one that consumes no column for a field FR-01 requires, and one without a SHAP export to explain a valuation with (FR-08), which today means every bundle but a LightGBM one (`b0` and `b1` are refused).
 
@@ -40,7 +51,8 @@ The operational endpoints are not part of that contract and stay at the root, wh
 
 | Endpoint | Purpose | Requirements |
 |----------|---------|--------------|
-| `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08 |
+| `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08, FR-13 |
+| `POST /v1/feedback` | Stores the observed price of an answered listing against its request ID; internal, requires the API key | FR-10 |
 | `GET /health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
 | `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
@@ -133,6 +145,77 @@ Each worker then writes its values to its own files there, and a scrape, answere
 Without the variable, as in the tests and a plain `make api`, each process reports its own figures, which is right only for one worker.
 Multiprocess mode supports neither custom collectors nor Info metrics, so the model is a gauge labelled with its version rather than an Info metric.
 
+## The prediction log and the feedback
+
+Every answer of a valuation endpoint is one record of the prediction log (FR-13), and `POST /v1/feedback` stores an observed price against the answer's request ID (FR-10).
+M6's drift job joins the two by request ID to report the real error and the interval coverage (FR-14).
+Both are tables of one SQLite file in WAL mode, on a volume the drift job's container mounts as well ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+The API reaches them through the interface `PredictionStore` in `recommenditos/api/prediction_log.py`, so a PostgreSQL store would be a second implementation of it and a change in `create_app`.
+
+### What a record holds
+
+| Column | Content |
+|--------|---------|
+| `request_id` | The ID the answer carries in `request_id` and `X-Request-ID`; unique |
+| `endpoint` | The route, such as `/v1/predict` |
+| `answered_at` | When the answer was recorded, ISO 8601 in UTC |
+| `latency_ms` | From the arrival of the request to the record: validation and the model, without the serialisation of the response |
+| `model_variant`, `model_version` | The model that answered, as in the answer's `model` |
+| `inputs` | The validated request body as JSON, omitted optional fields left out |
+| `outputs` | The answer as JSON, without `model`, `request_id` and `warnings`, which have their own columns |
+| `warnings` | The answer's `warnings` as JSON |
+
+The request bodies have no PII field, and no column holds the caller's address (NFR-08).
+A refused request (422, 413) is not an answer and has no record; it shows in the access log and the metrics.
+`feedback` holds `request_id`, `observed_price_eur` and `received_at`, and the view `labelled_predictions` is the join of the two tables.
+A reader opens the file with SQLite in the same way the API does; it needs write access to the directory for WAL's shared-memory file, even when it only reads.
+
+### Exactly once
+
+A route records its answer right before it returns it, with one call:
+
+```python
+def predict(
+    listing: ValuationRequest, served: Served, request_id: RequestId, log: Log
+) -> Valuation:
+    ...
+    log.record(listing, valuation)
+    return valuation
+```
+
+The client gets no answer the log does not hold, and the log holds no answer twice (NFR-03).
+`request_id` is unique in the table, and `log.record` fails when a route calls it twice.
+Several worker processes write the same file: SQLite serialises the writers with a file lock, and a writer that finds it held waits up to 5 s.
+When the record cannot be written, the client gets a 503 instead of the answer, and the cause goes to the service log.
+An answer the log does not hold would break exactly-once silently, and the load test counts a 503 as an error, so a failing log is visible at once.
+
+Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 200 ms NFR-02 gives `/predict`.
+A record takes about 750 bytes, so the 2 GB of NFR-04 hold about 2.7 million answers.
+
+### Feedback
+
+`POST /v1/feedback` takes `{"request_id": ..., "observed_price_eur": ...}` with the key in `X-API-Key`.
+It is internal: the reverse proxy refuses it from outside, and the key is a second layer ([EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+The key is compared with `secrets.compare_digest`, so the comparison takes the same time however much of it matches.
+
+| Case | Answer |
+|------|--------|
+| A new price for an answer in the log | 201 and the stored price |
+| The same price again | 200 and the stored price; nothing changes, so the replay job can retry |
+| Another price for the same answer | 409; the stored price is kept |
+| A request ID the log does not hold, or no longer holds after rotation | 404; nothing is stored, because a price nothing joins is no label |
+| A missing or wrong key | 401, checked before the body is validated; malformed JSON is a 422 and a body over 10 KB a 413 either way |
+
+### Rotation
+
+NFR-04 caps the prediction log and the feedback together at 2 GB, oldest first.
+Every 1,000 records, and at startup, a background thread of each worker process compares the pages the data occupies with `RECOMMENDITOS_PREDICTION_LOG_MAX_BYTES`.
+Over the cap, it deletes the oldest answers, with their feedback, in batches of 1,000 until the data fits 90 % of the cap.
+It takes the lock per batch and pauses 50 ms between batches, so a request waits for one batch at most, and no request runs the pruning itself.
+A batch of 1,000 held the lock for 2 ms at the median and 26 ms at most, measured on a 47 MB log of 150,000 records on a development laptop.
+SQLite reuses the freed pages for new records instead of growing the file, so the file stays at about the cap without a `VACUUM`, and the WAL file is truncated to 64 MB after each checkpoint.
+Setting the variable and the volume on the VM is part of the deployment (NFR-04).
+
 ## Errors
 
 Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details object with the media type `application/problem+json` ([EDN-84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
@@ -155,6 +238,7 @@ That holds for every error path: a request that fails validation, an unsupported
 
 `type` identifies the kind of problem, and a client branches on it.
 The kinds the API defines are below; any other error has the type `about:blank`, which RFC 9457 reserves for a problem that means no more than its HTTP status, such as 404 or 405.
+That includes `/v1/feedback`'s 401, 404 and 409 and the 503 of a prediction log that cannot be written, described [above](#the-prediction-log-and-the-feedback).
 
 ### validation-error
 
@@ -186,13 +270,16 @@ The code is in `recommenditos/api/`:
 | `schemas/<group>.py` | The request and response bodies of one route group, named after its module in `routes/` |
 | `errors.py` | The problem shape, the handlers, and `problem_responses` for a route's documentation |
 | `serving.py` | `ServedModel`: the loaded bundle, what it accepts, and the valuation |
-| `dependencies.py` | `Served`, `Metrics` and `RequestId`, which a route takes as parameters |
-| `middleware.py` | The request ID, the last-resort 500, and the body-size limit |
+| `settings.py` | `Settings`: the environment variables the service reads |
+| `prediction_log.py` | `PredictionStore` and its SQLite implementation, and `PredictionLog`, which records an answer |
+| `dependencies.py` | `Served`, `Metrics`, `RequestId`, `Log` and `Store`, which a route takes as parameters, and `RequireApiKey` |
+| `middleware.py` | The request ID and arrival time, the last-resort 500, and the body-size limit |
 | `metrics.py` | The Prometheus metrics, the middleware that counts and times every request, and the multiprocess directory |
 | `__main__.py` | `python -m recommenditos.api`: prepares the multiprocess directory, then starts uvicorn |
 
 1. Add `routes/<group>.py` with `router = APIRouter(tags=[...])` and its operations.
    Take `served: Served` for the model and `request_id: RequestId` for the request ID.
+   An endpoint that answers a valuation takes `log: Log` and calls `log.record(body, answer)` right before it returns, and lists `HTTPStatus.SERVICE_UNAVAILABLE` among its errors; an internal endpoint adds `dependencies=[RequireApiKey]`.
 2. In `routes/__init__.py`, add the module to the import and its router to `V1_ROUTERS` if it is part of the client contract, or to `OPERATIONAL_ROUTERS` if it is for operating the service.
    Both are one entry per line with a trailing comma, in alphabetical order, so that endpoints added in parallel touch different lines.
 3. Put its bodies in `schemas/<group>.py`, built from the field types in `schemas/common.py`.
@@ -202,6 +289,7 @@ The code is in `recommenditos/api/`:
 5. Add `tests/api/test_<group>.py`.
    The fixtures in `tests/api/conftest.py` give an app on a synthetic bundle (`client`, `served`) and a valid listing (`listing`), and `tests/api/helpers.py` checks the problem shape.
    `tests/api/test_openapi.py` walks every operation, so it fails until the new one has a request and a response example and documents its errors as problems (FR-16).
+   `tests/api/test_prediction_log.py` posts a listing to every operation tagged `valuation` and fails until it records its answer once.
 6. Add `tests/integration/test_deployed_<group>.py` with one valid request through the proxy and the documented shape of its answer; `test_deployed_predict.py` is the example ([Deployment](deployment.md#integration-tests)).
 
 A module the API comes to import has to stay within the serving runtime; [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies) explains the check.
