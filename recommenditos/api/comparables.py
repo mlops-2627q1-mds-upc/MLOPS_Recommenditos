@@ -49,7 +49,7 @@ MAX_K = 20
 
 def file_md5(path: Path) -> str:
     """The md5 of the file's bytes, which is what `dvc.lock` records for a file output."""
-    digest = hashlib.md5()
+    digest = hashlib.md5(usedforsecurity=False)
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
             digest.update(chunk)
