@@ -197,30 +197,41 @@ def _outcome(coverage: float, n: int, *, width: float = 0.5) -> pd.DataFrame:
 @pytest.mark.req("FR-07")
 def test_the_per_make_table_reports_every_make_and_judges_only_the_large_ones():
     criteria = {"sc05_coverage_min": 0.88, "sc05_coverage_max": 0.92, "sc05_min_make_rows": 500}
-    parts = {"A": _outcome(0.90, 1000), "B": _outcome(0.80, 1000), "C": _outcome(0.50, 10)}
+    parts = {
+        "A": _outcome(0.90, 1000),
+        "B": _outcome(0.80, 1000),
+        "C": _outcome(0.50, 10),
+        "D": _outcome(0.50, 500),
+        "E": _outcome(0.50, 499),
+    }
     outcome = pd.concat(parts, ignore_index=True)
     makes = pd.Series([name for name, part in parts.items() for _ in range(len(part))])
 
     rows = interval_make_rows({"full": outcome}, makes, variant="v", criteria=criteria)
 
-    assert [row["make"] for row in rows] == [POOLED_MAKE, "A", "B", "C"]
+    assert [row["make"] for row in rows] == [POOLED_MAKE, "A", "B", "D", "E", "C"]
     by_make = {row["make"]: row for row in rows}
-    assert by_make[POOLED_MAKE]["n"] == 2010
-    assert by_make[POOLED_MAKE]["coverage"] == pytest.approx((900 + 800 + 5) / 2010)
+    assert by_make[POOLED_MAKE]["n"] == 3009
+    assert by_make[POOLED_MAKE]["coverage"] == pytest.approx((900 + 800 + 5 + 250 + 250) / 3009)
     assert by_make["A"]["judgement"] == IN_BAND
     assert by_make["B"]["judgement"] == OUTSIDE_BAND
     # Reported with its count and not judged: ten rows cannot tell 50 % from 90 %.
     assert by_make["C"]["judgement"] == NOT_JUDGED
+    # The boundary: exactly `sc05_min_make_rows` rows are judged, one fewer are not.
+    assert by_make["D"]["judgement"] == OUTSIDE_BAND
+    assert by_make["E"]["judgement"] == NOT_JUDGED
     assert by_make["C"]["n"] == 10
     assert by_make["C"]["coverage"] == 0.5
     # The standard error of a coverage at the middle of the band shrinks with n.
+    # At the middle of the band, not at the make's own coverage: B is at 0.80.
     assert by_make["A"]["std_error"] == pytest.approx((0.9 * 0.1 / 1000) ** 0.5)
+    assert by_make["B"]["std_error"] == by_make["A"]["std_error"]
     assert by_make["C"]["std_error"] > 10 * by_make["A"]["std_error"]
-    assert sum(row["n"] for row in rows if row["make"] != POOLED_MAKE) == 2010
+    assert sum(row["n"] for row in rows if row["make"] != POOLED_MAKE) == 3009
 
 
 @pytest.mark.req("FR-07")
-def test_the_per_make_table_cuts_each_scenario_by_the_unmasked_make():
+def test_the_per_make_table_cuts_each_scenario_by_the_makes_it_is_given():
     criteria = {"sc05_coverage_min": 0.88, "sc05_coverage_max": 0.92, "sc05_min_make_rows": 5}
     makes = pd.Series(["A"] * 10 + ["B"] * 10, index=range(20))
     outcomes = {

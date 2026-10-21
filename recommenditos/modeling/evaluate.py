@@ -717,7 +717,7 @@ def interval_make_rows(
 
     SC-05 gates the pooled coverage only; a make can sit outside the band while
     the pool is inside it, which is what a calibration set with a different make
-    mix than the test set (EDN-79) risks. Nothing here gates and nothing is
+    mix than the test set (EDN-32) risks. Nothing here gates and nothing is
     dropped: every make is a row with its `n`.
 
     A make below `sc05_min_make_rows` is reported and not judged. The reason is

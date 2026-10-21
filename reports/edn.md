@@ -1159,7 +1159,7 @@ How to add an entry:
 - **Alternatives considered:**
   - Mondrian calibration, one offset pair per make: it fixes Mercedes-Benz on P1 (93.9 % to 91.7 %) and mostly Suzuki (85.9 % to 90.4 % full), but moves Alfa Romeo and Volvo out of the band and lowers Audi to 88.9 % on full inputs; four makes have too few rows to calibrate.
   - A larger calibration split: reopens the split of EDN-32 and needs a full retrain.
-- **Rationale:** The pooled figures pass SC-05 (90.2 % full, 91.0 % P1). Mercedes-Benz is in the band on full inputs (90.8 %) and over-covered on P1 (93.9 %), the safe direction. Suzuki is the real miss (85.9 % and 81.7 %). Calibrating per make on 1,000 to 3,000 rows only trades misses between makes.
+- **Rationale:** The pooled figures pass SC-05 (90.2 % full, 91.0 % P1). Mercedes-Benz is in the band on full inputs (90.8 %) and over-covered on P1 (93.9 %), the safe direction. Suzuki is the real miss (85.9 % and 81.7 %). Calibrating per make on 329 to 3,453 calibration listings each only trades misses between makes.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI built the per-make table, simulated Mondrian offsets offline on the calibration split and scored them on test, and recommended this option.

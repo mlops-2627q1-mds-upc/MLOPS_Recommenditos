@@ -632,12 +632,12 @@ Five judged cells are outside the band, Suzuki in both scenarios and Audi, Merce
 
 - **Mercedes-Benz** is inside the band for full inputs (90.8 %, 0.8 points above nominal, 1.2 standard errors) and outside it for P1: 93.9 %, 3.9 points above nominal, 6.1 standard errors.
   The range is too wide for this make when little is known about the car, which is the safe direction for a buyer using it as a sanity check, and its mean width on P1 (0.92) is the pool's (0.93), so it is not a narrower range that was paid for with the extra coverage.
-  The calibration set holds 8.67 % Mercedes-Benz against 11.11 % in test ([the split analysis](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)); this table shows the effect is a coverage that is high rather than low.
+  Among the supported makes the calibration listings hold 8.85 % Mercedes-Benz against 11.29 % of the test rows ([the split analysis](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split) has the pool-wide shares); this table shows the effect is a coverage that is high rather than low.
   It does not show that the make's share in calibration is the cause: Audi, with 12.0 % of the calibration listings against 12.4 % of the test rows among the supported makes, deviates further in the same direction.
 - **Suzuki** is the make the pooled figure hides: 4.1 points below nominal for full inputs and 8.3 points below on P1, with 824 test rows, so the shortfall is well outside the noise.
 - The pooled P1 figure of 91.0 % is the weighted result of over-coverage for Audi and Mercedes-Benz and under-coverage for Suzuki and Volvo.
-  Whether to calibrate per make is not decided; issue #108 holds the options.
-  Until it is, the range is calibrated on the pooled calibration set, and a reader of a Suzuki or Mercedes-Benz range on partial input should read the table above rather than the nominal 90 %.
+  The pooled calibration stays as a stated limitation (EDN-89): per-make calibration was weighed and rejected.
+  The range is calibrated on the pooled calibration set, and a reader of a Suzuki or Mercedes-Benz range on partial input should read the table above rather than the nominal 90 %.
 
 #### The per-segment breakdown, and the fairness reading
 
