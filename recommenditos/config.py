@@ -5,7 +5,6 @@ from loguru import logger
 
 # Paths
 PROJ_ROOT = Path(__file__).resolve().parents[1]
-logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
 
 # This repository's own `.env`, named rather than searched for. A bare
 # `load_dotenv()` walks up the directory tree until it finds a file, so a clone

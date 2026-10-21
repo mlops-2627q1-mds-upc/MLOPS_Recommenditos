@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "handlers": {
+    "loguru": {
+      "()": "recommenditos.api.logs.uvicorn_handler"
+    }
+  },
+  "loggers": {
+    "uvicorn": {
+      "handlers": ["loguru"],
+      "level": "INFO",
+      "propagate": false
+    },
+    "uvicorn.access": {
+      "handlers": [],
+      "propagate": false
+    }
+  },
+  "root": {
+    "handlers": ["loguru"],
+    "level": "WARNING"
+  }
+}

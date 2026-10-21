@@ -42,3 +42,14 @@ def test_fr12_the_model_version_is_the_hash_dvc_records_for_the_bundle(bundle: P
         _, _, tree = build(HashFileDB(fs, cache), str(bundle), fs, "md5")
 
     assert f"{bundle_version(bundle)}.dir" == tree.hash_info.value
+
+
+@pytest.mark.req("FR-11")
+def test_fr11_health_answers_head_for_uptime_monitors(client: TestClient):
+    get = client.get("/health")
+    head = client.head("/health")
+
+    assert head.status_code == 200
+    assert head.content == b""
+    assert head.headers["content-type"] == get.headers["content-type"]
+    assert head.headers["content-length"] == get.headers["content-length"]

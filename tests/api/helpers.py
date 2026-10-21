@@ -1,7 +1,11 @@
-"""Assertions and records the API tests share."""
+"""Assertions, records and service helpers the API tests share."""
 
 from datetime import UTC, datetime
 from pathlib import Path
+import signal
+import socket
+import subprocess
+import sys
 from typing import Any
 
 from httpx2 import Response
@@ -68,3 +72,28 @@ def write_records(log_file: Path, prefix: str, count: int, start: Any) -> None:
             store.record_answer(answer_record(f"{prefix}-{index}"))
     finally:
         store.close()
+
+
+def free_port() -> int:
+    """A TCP port on the loopback interface that nothing listens on right now."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def stop_service(process: subprocess.Popen) -> None:
+    """Stop a service started with `python -m recommenditos.api`, and its workers.
+
+    SIGTERM lets uvicorn stop its workers itself. Windows has no such signal for
+    a process without a console of its own, and a console event would reach the
+    test runner too, so there the whole process tree is killed.
+    """
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], check=False)
+    else:
+        process.send_signal(signal.SIGTERM)
+    try:
+        process.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
