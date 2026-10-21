@@ -4,6 +4,7 @@ The API
 The HTTP API serves the price model: it estimates the asking price of a used car (UC1) and the price range of a car described in part (UC2) with the model bundle the service was started with, and returns real listings comparable to that car (UC2) from the comparables index the service was started with.
 This page says how to run it, what it offers and how its errors are shaped, and how to add an endpoint.
 The field-by-field reference is the generated OpenAPI document, served by the API itself at `/docs` (Swagger UI), `/redoc` (ReDoc) and `/openapi.json`; this page does not repeat it.
+A copy of it is committed as `docs/docs/openapi.json` and rendered on the [API reference](api-reference.md) page, so the contract can be read without running the service.
 What each endpoint must do is in the [specification](specification.md) (FR-01 to FR-16, NFR-03, NFR-04, NFR-08, NFR-09).
 
 ## Running it
@@ -381,7 +382,7 @@ The code is in `recommenditos/api/`:
 
 | Module | What it holds |
 |--------|---------------|
-| `app.py` | `create_app`: loads the bundle, wires middlewares and error handlers, mounts the routers, finishes the OpenAPI document |
+| `app.py` | `create_app`: loads the bundle, wires middlewares and error handlers, mounts the routers, finishes the OpenAPI document; `openapi_contract`: the document without a bundle |
 | `routes/` | One module per route group, each with a `router` |
 | `schemas/common.py` | What every body shares: the field types, `ListingFields`, the model description, warnings and the error shape |
 | `schemas/<group>.py` | The request and response bodies of one route group, named after its module in `routes/` |
@@ -410,6 +411,9 @@ The code is in `recommenditos/api/`:
    `tests/api/test_prediction_log.py` posts a listing to every operation tagged `valuation` and fails until it records its answer once.
    `tests/api/test_contract.py` covers the new operation without a change: Schemathesis generates valid and invalid requests from the OpenAPI document and fails on a 5xx, an undocumented status code, a response that does not match its schema, a valid request refused or an invalid one accepted ([Contract tests](#contract-tests)).
 6. Add `tests/integration/test_deployed_<group>.py` with one valid request through the proxy and the documented shape of its answer; `test_deployed_predict.py` is the example ([Deployment](deployment.md#integration-tests)).
+7. Run `make openapi` and commit the regenerated `docs/docs/openapi.json`.
+   `tests/api/test_openapi.py` fails while the committed document differs from the one the app serves, so every change to the contract shows in its pull request.
+   The file leaves out the values a checked listing field accepts, which come from the served bundle, so a retrain does not change it.
 
 A module the API comes to import has to stay within the serving runtime; [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies) explains the check.
 

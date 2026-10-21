@@ -21,6 +21,7 @@ from typing import Any, get_type_hints
 from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 from loguru import logger
+from starlette.types import Lifespan
 
 from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.errors import (
@@ -99,15 +100,7 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
         finally:
             store.close()
 
-    app = FastAPI(
-        title="Recommenditos used-car price API",
-        version=API_VERSION,
-        description=_DESCRIPTION,
-        openapi_tags=_TAGS,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        lifespan=lifespan,
-    )
+    app = _application(lifespan)
     app.state.served = served
     app.state.comparables = index
     app.state.metrics = ApiMetrics(served.info)
@@ -121,11 +114,36 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
     app.add_middleware(MetricsMiddleware, metrics=app.state.metrics)
     install_handlers(app, _complete_listing_errors)
     app.add_exception_handler(StoreError, _store_unavailable)
+    app.openapi = _openapi(app, served)  # type: ignore[method-assign]
+    return app
+
+
+def openapi_contract() -> dict[str, Any]:
+    """The OpenAPI document every bundle's API shares, built without loading one.
+
+    It is the document `/openapi.json` serves minus the `enum`s of the checked
+    listing fields, which list what the loaded bundle accepts and so change with
+    a retrain. `docs/docs/openapi.json` is a copy of it, written by
+    `make openapi`, and a test fails when the two differ.
+    """
+    return _contract(_application())
+
+
+def _application(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
+    """The app's metadata and routes: everything its OpenAPI document is built from."""
+    app = FastAPI(
+        title="Recommenditos used-car price API",
+        version=API_VERSION,
+        description=_DESCRIPTION,
+        openapi_tags=_TAGS,
+        docs_url="/docs",
+        redoc_url="/redoc",
+        lifespan=lifespan,
+    )
     for router in V1_ROUTERS:
         app.include_router(router, prefix="/v1")
     for router in OPERATIONAL_ROUTERS:
         app.include_router(router)
-    app.openapi = _openapi(app, served)  # type: ignore[method-assign]
     return app
 
 
@@ -203,19 +221,25 @@ def _openapi(app: FastAPI, served: ServedModel) -> Callable[[], dict[str, Any]]:
 
     def openapi() -> dict[str, Any]:
         if app.openapi_schema is None:
-            document = get_openapi(
-                title=app.title,
-                version=app.version,
-                description=app.description,
-                routes=app.routes,
-                tags=app.openapi_tags,
-            )
-            _problems_as_problem_json(document)
+            document = _contract(app)
             _allowed_values_as_enums(document, served)
             app.openapi_schema = document
         return app.openapi_schema
 
     return openapi
+
+
+def _contract(app: FastAPI) -> dict[str, Any]:
+    """The OpenAPI document of `app`'s routes, with problems as `application/problem+json`."""
+    document = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+    _problems_as_problem_json(document)
+    return document
 
 
 def _problems_as_problem_json(document: dict[str, Any]) -> None:
