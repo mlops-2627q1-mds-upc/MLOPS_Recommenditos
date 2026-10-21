@@ -198,6 +198,10 @@ dev = [
     "types-requests>=2.33.0.20261006",
     "types-tqdm>=4.70.0.20260906",
 ]
+loadtest = [
+    "codecarbon>=3.3.1,<4",
+    "locust>=2.46.7",
+]
 
 [tool.uv]
 # Every group, so that `uv sync` and `uv run` still give the whole environment.
