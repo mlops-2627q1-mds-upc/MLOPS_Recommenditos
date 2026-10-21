@@ -1,0 +1,11 @@
+lgbm-basic, test split, 19,665 rows
+
+scenario            typical price  mean width  median width  coverage  widened
+make only                  median       2.298         2.466    90.66%    0.00%
+P1 (SC-05)                 median       0.933         0.814    91.03%    0.41%
+required (FR-01)            point       0.506         0.416    90.90%    1.00%
+full                        point       0.465         0.381    90.34%    0.87%
+
+typical price: FR-07's option C, the point model's with every FR-01 field, else the median.
+width: (upper - lower) / typical price of the served range, widening included.
+coverage: share of test prices inside the served range; widened: rows whose bounds moved.

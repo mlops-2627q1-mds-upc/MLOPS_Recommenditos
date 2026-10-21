@@ -45,6 +45,7 @@ def test_fr16_the_app_has_operations_to_check(app: FastAPI):
     """Guards the tests below against passing on an empty document."""
     assert {(method, path) for method, path, _ in _operations(app)} >= {
         ("POST", "/v1/predict"),
+        ("POST", "/v1/price-range"),
         ("GET", "/health"),
         ("GET", "/"),
     }

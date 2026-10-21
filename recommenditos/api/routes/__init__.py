@@ -17,11 +17,13 @@ from recommenditos.api.routes import (
     index,
     metrics,
     predict,
+    price_range,
 )
 
 V1_ROUTERS = [
     feedback.router,
     predict.router,
+    price_range.router,
 ]
 
 OPERATIONAL_ROUTERS = [

@@ -10,6 +10,8 @@ A request reaches the model the way a training row did: as a `processed`-shaped
 row that the bundle's own feature space turns into a matrix, with every optional
 field the client left out set by `Model.mask_absent`, the one implementation of
 "the caller did not send this" that SC-06 and the blanked copies use too.
+`/v1/predict` and `/v1/price-range` build that row by the same code, so a field
+means the same to both; they differ only in which fields a request must carry.
 
 Every valuation is explained by the booster's own SHAP export (FR-08, EDN-11),
 grouped by request field, so a bundle that has none cannot be served.
@@ -28,11 +30,14 @@ import pandas as pd
 
 from recommenditos.api.errors import pointer
 from recommenditos.api.schemas.common import FieldError, FieldWarning, ListingFields, ModelInfo
+from recommenditos.api.schemas.partial_listing import PartialListing
 from recommenditos.api.schemas.predict import Explanation, FeatureEffect, ValuationRequest
 from recommenditos.data.build_features import build_matrix
 from recommenditos.modeling.model import (
     BASE_LOG_PRICE,
+    INTERVAL_COLUMNS,
     LightGBMModel,
+    Model,
     ModelError,
     RequestContract,
     input_field_columns,
@@ -46,8 +51,9 @@ from recommenditos.modeling.model import (
 COUNTRIES: tuple[str, ...] = ("AT", "BE", "DE", "ES", "FR", "IT", "LU", "NL")
 
 #: The request contract the API enforces, in the form the serving seam reads it.
-#: The required fields are `ValuationRequest`'s own; the rename is the one input
-#: field the matrix carries under another name. `tests/api/test_predict.py`
+#: The required fields are `ValuationRequest`'s own, those of a price range
+#: `PartialListing`'s; the rename is the one input field the matrix carries under
+#: another name. `tests/api/test_predict.py`
 #: checks both against `params.yaml`'s `request` block, which the pipeline reads,
 #: so the image needs no `params.yaml` and the two cannot drift apart unnoticed.
 REQUEST_CONTRACT = RequestContract(
@@ -55,6 +61,9 @@ REQUEST_CONTRACT = RequestContract(
         name for name, field in ValuationRequest.model_fields.items() if field.is_required()
     ),
     field_to_feature={"registration_date": "age_years"},
+    price_range_required_fields=tuple(
+        name for name, field in PartialListing.model_fields.items() if field.is_required()
+    ),
 )
 
 
@@ -73,6 +82,43 @@ class Estimate:
     price_eur: float
     explanation: Explanation
     warnings: list[FieldWarning]
+
+
+@dataclass(frozen=True)
+class PriceRangeEstimate:
+    """A price range in EUR (FR-07): the typical price and the bounds that contain it."""
+
+    price_eur: float
+    lower_eur: float
+    upper_eur: float
+    confidence_level: float
+
+
+def price_range(model: Model, matrix: pd.DataFrame, *, complete: bool) -> pd.DataFrame:
+    """The price range of every row of `matrix`: `price_eur`, `lower_eur`, `upper_eur`.
+
+    The typical price is FR-07's: the point model's when the rows carry every
+    field FR-01 requires (`complete`), otherwise the 50 % quantile model's
+    (`median_eur`), because the point model has never seen a required field
+    missing (EDN-85). The bounds are the conformalized ones, widened where the
+    typical price lies outside them, so `lower_eur <= price_eur <= upper_eur` in
+    every row; widening only raises coverage. One function for the endpoint and
+    for the measurement of its widths, so the two cannot disagree.
+    """
+    interval = model.predict_interval_eur(matrix)
+    typical = (
+        model.predict_eur(matrix).to_numpy()
+        if complete
+        else interval[INTERVAL_COLUMNS["median"]].to_numpy()
+    )
+    return pd.DataFrame(
+        {
+            "price_eur": typical,
+            "lower_eur": np.minimum(interval[INTERVAL_COLUMNS["lower"]].to_numpy(), typical),
+            "upper_eur": np.maximum(interval[INTERVAL_COLUMNS["upper"]].to_numpy(), typical),
+        },
+        index=matrix.index,
+    )
 
 
 def bundle_version(directory: Path) -> str:
@@ -213,14 +259,36 @@ class ServedModel:
             warnings=warnings,
         )
 
-    def matrix(self, request: ValuationRequest) -> pd.DataFrame:
+    @property
+    def has_price_range(self) -> bool:
+        """Whether the bundle carries the interval models a price range needs (EDN-85)."""
+        return self.model.has_intervals
+
+    def price_range(
+        self, request: PartialListing
+    ) -> tuple[PriceRangeEstimate, list[tuple[str, str]]]:
+        """The price range of `request` (FR-07), and the fields it reported as unseen."""
+        matrix = self.matrix(request)
+        sent = sent_fields(request)
+        complete = all(name in sent for name in REQUEST_CONTRACT.required_fields)
+        row = price_range(self.model, matrix, complete=complete).iloc[0]
+        estimate = PriceRangeEstimate(
+            price_eur=float(row["price_eur"]),
+            lower_eur=float(row["lower_eur"]),
+            upper_eur=float(row["upper_eur"]),
+            confidence_level=float(self.model.metadata["intervals"]["confidence_level"]),
+        )
+        return estimate, self._unseen(request, matrix)
+
+    def matrix(self, request: ListingFields) -> pd.DataFrame:
         """`request` as the one-row matrix the model scores.
 
         Built against the model's input contract rather than `space.matrix`,
         whose contract includes the price columns a request does not carry, at
-        the request date (problem specification section 4). Every optional field
-        the model reads and the client did not send is then omitted through
-        `mask_absent`.
+        the request date (problem specification section 4). Every field the
+        model reads and the client did not send is then omitted through
+        `mask_absent`: an optional one of `/predict`, or any but `make` of a
+        price range.
         """
         matrix = build_matrix(
             _processed_row(request),
@@ -228,18 +296,14 @@ class ServedModel:
             self.model.space.vocabulary,
             reference_date=datetime.now(UTC).date().isoformat(),
         )
-        sent = _sent(request)
-        omitted = [
-            name
-            for name in self.fields
-            if name not in REQUEST_CONTRACT.required_fields and name not in sent
-        ]
+        sent = sent_fields(request)
+        omitted = [name for name in self.fields if name not in sent]
         seam = seam_names(self.fields, REQUEST_CONTRACT)
         return self.model.mask_absent(matrix, [seam[name] for name in omitted])
 
-    def _unseen(self, request: ValuationRequest, matrix: pd.DataFrame) -> list[tuple[str, str]]:
+    def _unseen(self, request: ListingFields, matrix: pd.DataFrame) -> list[tuple[str, str]]:
         """The categorical fields that were sent and reached the model as unknown (FR-05)."""
-        sent = _sent(request)
+        sent = sent_fields(request)
         unseen = []
         for name, columns in self.fields.items():
             column = columns[0]
@@ -287,21 +351,24 @@ def _effect_pct(log_contribution: float) -> float:
     return float(np.expm1(log_contribution) * 100)
 
 
-def _sent(request: ValuationRequest) -> set[str]:
+def sent_fields(request: ListingFields) -> set[str]:
     """The fields the client sent with a value; a field sent as null was not sent."""
     return {name for name in request.model_fields_set if getattr(request, name) is not None}
 
 
-def _processed_row(request: ValuationRequest) -> pd.DataFrame:
+def _processed_row(request: ListingFields) -> pd.DataFrame:
     """`request` as one row of the `processed` frame, the shape the feature space reads.
 
     The equipment lists become the Python-repr strings the raw data stores, the
     kerb weight the text form the `features` stage parses, and the registration
-    month the first of that month.
+    month the first of that month, or no date where a price range left it out.
     """
     row: dict[str, Any] = request.model_dump()
-    year, month = (int(part) for part in request.registration_date.split("-"))
-    row["registration_date"] = pd.Timestamp(year=year, month=month, day=1)
+    if row["registration_date"] is None:
+        row["registration_date"] = pd.NaT
+    else:
+        year, month = (int(part) for part in row["registration_date"].split("-"))
+        row["registration_date"] = pd.Timestamp(year=year, month=month, day=1)
     for name in (
         "equipment_comfort",
         "equipment_entertainment",
