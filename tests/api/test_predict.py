@@ -20,6 +20,7 @@ from recommenditos.api.app import create_app
 from recommenditos.api.schemas.predict import Valuation, ValuationRequest
 from recommenditos.api.serving import (
     COUNTRIES,
+    PREDICTION_THREADS,
     REQUEST_CONTRACT,
     TOP_FEATURES,
     ServedModel,
@@ -671,3 +672,30 @@ def test_fr08_the_documented_example_reproduces_its_estimate():
     example = Valuation.model_config["json_schema_extra"]["examples"][0]  # type: ignore[index]
 
     _assert_reproduces(example)
+
+
+@pytest.mark.req("NFR-02", "NFR-03")
+def test_nfr02_every_booster_call_of_a_valuation_runs_on_one_thread(
+    served: ServedModel, listing: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """The API asks LightGBM for `PREDICTION_THREADS` threads in each prediction.
+
+    LightGBM's default is one OpenMP thread per core, and `Booster.predict` does
+    not read the `num_threads` of `booster.txt`. With the default, a one-row
+    valuation cost 4.6 times its wall time in CPU, and concurrent requests and
+    workers competed for the cores (issue #179).
+    """
+    booster = served.model.booster
+    assert booster is not None
+    calls: list[dict] = []
+    predict = booster.predict
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs)
+        return predict(*args, **kwargs)
+
+    monkeypatch.setattr(booster, "predict", spy)
+    served.value(ValuationRequest(**listing))
+    assert PREDICTION_THREADS == 1
+    assert len(calls) == 2  # the price and its explanation
+    assert all(call.get("num_threads") == PREDICTION_THREADS for call in calls)
