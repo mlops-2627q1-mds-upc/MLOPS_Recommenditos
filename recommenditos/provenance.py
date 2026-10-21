@@ -13,7 +13,7 @@ tracks instead (`metrics.json`, `reports/metrics/`, the validation summary).
 Counting them made every stage after the first of a clean `dvc repro` report a
 dirty tree, for a change that was the run itself: three of the four `train`
 runs of one ladder were tagged dirty only because `dvc.lock` had changed under
-them (issue #79, EDN-74). Every other change still counts, an untracked file
+them (issue #79). Every other change still counts, an untracked file
 included, because an untracked module the code imports makes a run as
 unreproducible from its commit as an edited tracked file does; the noise that is
 not that belongs in `.gitignore`.

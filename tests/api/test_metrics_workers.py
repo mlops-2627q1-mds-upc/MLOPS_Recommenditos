@@ -22,8 +22,8 @@ import urllib.request
 from prometheus_client.parser import text_string_to_metric_families
 import pytest
 
-from recommenditos.api.app import MODEL_DIR_ENV_VAR
 from recommenditos.api.metrics import MULTIPROC_DIR_ENV_VAR
+from recommenditos.api.settings import MODEL_DIR_ENV_VAR
 
 WORKERS = 2
 STARTUP_SECONDS = 120

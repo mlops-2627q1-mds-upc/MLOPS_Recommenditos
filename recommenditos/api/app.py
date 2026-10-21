@@ -1,7 +1,8 @@
 """The FastAPI application: one served model, versioned routes, one error shape.
 
-`create_app` loads the bundle once, before the first request (FR-12: the bundle
-ships in the image and the API never calls MLflow), wires the middlewares and
+`create_app` reads the settings from the environment (`settings.py`), loads the
+bundle once, before the first request (FR-12: the bundle ships in the image and
+the API never calls MLflow), opens the prediction log, wires the middlewares and
 the error handlers, mounts the routers of `recommenditos.api.routes` (the client
 contract under `/v1`, the operational endpoints at the root), and finishes the
 OpenAPI document that `/docs` and `/redoc` render.
@@ -10,33 +11,35 @@ uvicorn calls it as a factory in every worker process, through
 `python -m recommenditos.api` (`make api`, the image).
 """
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from http import HTTPStatus
-import os
 from pathlib import Path
 from typing import Any, get_type_hints
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 from loguru import logger
 
-from recommenditos.api.errors import PROBLEM_MEDIA_TYPE, install_handlers
+from recommenditos.api.errors import (
+    PROBLEM_MEDIA_TYPE,
+    STORE_UNAVAILABLE_DETAIL,
+    ProblemError,
+    install_handlers,
+    problem_response,
+    request_id_of,
+)
 from recommenditos.api.metrics import ApiMetrics, MetricsMiddleware
 from recommenditos.api.middleware import (
     BodySizeLimitMiddleware,
     RequestIdMiddleware,
     UnexpectedErrorMiddleware,
 )
+from recommenditos.api.prediction_log import SqliteStore, StoreError
 from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
 from recommenditos.api.schemas.common import FieldError, ListingFields
 from recommenditos.api.serving import ServedModel
-from recommenditos.config import MODELS_DIR
-
-#: The environment variable that names the bundle to serve.
-MODEL_DIR_ENV_VAR = "RECOMMENDITOS_MODEL_DIR"
-
-#: The bundle served when the variable is not set (EDN-08, FR-12).
-DEFAULT_MODEL_DIR = MODELS_DIR / "lgbm-basic"
+from recommenditos.api.settings import API_KEY_ENV_VAR, Settings
 
 API_VERSION = "1.0.0"
 
@@ -51,15 +54,35 @@ repository for how to run the service and how errors are shaped.
 
 _TAGS = [
     {"name": "valuation", "description": "Price estimates for a listing."},
+    {
+        "name": "feedback",
+        "description": "Observed prices for the drift job. Internal: refused from outside the "
+        "service's network, and requires the API key (FR-10).",
+    },
     {"name": "operations", "description": "Service status, for monitoring."},
 ]
 
 
-def create_app(model_dir: Path | None = None) -> FastAPI:
-    """The API around the bundle in `model_dir`, or `$RECOMMENDITOS_MODEL_DIR`, or lgbm-basic."""
-    directory = Path(model_dir or os.environ.get(MODEL_DIR_ENV_VAR) or DEFAULT_MODEL_DIR)
+def create_app(model_dir: Path | None = None, settings: Settings | None = None) -> FastAPI:
+    """The API configured by `settings`, or the environment, around the bundle in `model_dir`.
+
+    `model_dir` overrides the settings' `model_dir`. The prediction log's schema
+    is created when the file has none, so a log that cannot be opened stops the
+    service at startup, like a bundle that cannot be served.
+    """
+    settings = settings or Settings()
+    directory = Path(model_dir or settings.model_dir)
     served = ServedModel.load(directory)
     logger.info(f"serving {served.info.variant} version {served.info.version} from {directory}")
+    store = SqliteStore(settings.prediction_log, max_bytes=settings.prediction_log_max_bytes)
+    logger.info(f"recording answers in {settings.prediction_log}")
+    if settings.api_key is None:
+        logger.warning(f"{API_KEY_ENV_VAR} is not set: /v1/feedback refuses every request")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        store.close()
 
     app = FastAPI(
         title="Recommenditos used-car price API",
@@ -68,9 +91,12 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
         openapi_tags=_TAGS,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
     app.state.served = served
     app.state.metrics = ApiMetrics(served.info)
+    app.state.settings = settings
+    app.state.store = store
     # The last middleware added is the outermost: every response, a refused body
     # and an unexpected failure included, carries the request ID.
     app.add_middleware(BodySizeLimitMiddleware)
@@ -79,12 +105,22 @@ def create_app(model_dir: Path | None = None) -> FastAPI:
     # Outermost, so the metrics count and time the answer the client gets (FR-11).
     app.add_middleware(MetricsMiddleware, metrics=app.state.metrics)
     install_handlers(app, _complete_listing_errors)
+    app.add_exception_handler(StoreError, _store_unavailable)
     for router in V1_ROUTERS:
         app.include_router(router, prefix="/v1")
     for router in OPERATIONAL_ROUTERS:
         app.include_router(router)
     app.openapi = _openapi(app, served)  # type: ignore[method-assign]
     return app
+
+
+async def _store_unavailable(request: Request, error: Exception) -> Response:
+    """A 503 instead of an answer the prediction log does not hold (NFR-03)."""
+    logger.opt(exception=error).error(f"request {request_id_of(request)}: {error}")
+    return problem_response(
+        request_id_of(request),
+        ProblemError(HTTPStatus.SERVICE_UNAVAILABLE, STORE_UNAVAILABLE_DETAIL),
+    )
 
 
 def _complete_listing_errors(

@@ -13,9 +13,9 @@ that file and must not depend on this one.
 
 Four properties are deliberate and each is tested.
 
-**The rows are the served population (EDN-48).** `split` stays a lossless
+**The rows are the served population (EDN-05).** `split` stays a lossless
 partition and records which makes cleared EDN-05's threshold; `features` applies
-that list to every frame before it builds the vocabulary (EDN-67), so no make
+that list to every frame before it builds the vocabulary, so no make
 the API answers with a 422 is in the model's training data or in the encoding
 it is fitted in. This stage checks that property on what it reads rather than
 filtering again, which would only ever matter on matrices from another run and
@@ -32,7 +32,7 @@ verdict.
 `fit_with_intervals` and nothing else, and CodeCarbon's row for that fit is written to
 `reports/emissions/<variant>.csv`. What the figure is - an estimate from the
 CPU's TDP and the process's CPU time, not a meter reading, on every machine we
-train on - is `recommenditos/modeling/energy.py`'s to say, and EDN-69 records why
+train on - is `recommenditos/modeling/energy.py`'s to say, and the model card says why
 it is measured the way it is.
 
 **The price range is fitted with its point model (EDN-85).** A variant whose
@@ -111,8 +111,8 @@ def read_matrices(
     are whatever the training rows decided, so a contract rebuilt from
     params.yaml would not describe the file it is validating.
 
-    Why the model is fitted on the supported makes at all (FR-04, EDN-05,
-    EDN-48): fitting on a make the product will not serve does not inflate a
+    Why the model is fitted on the supported makes at all (FR-04, EDN-05):
+    fitting on a make the product will not serve does not inflate a
     metric - rare makes are harder, so a pooled figure over them is if anything
     pessimistic - but it makes the reported population a different one from the
     served population, and a number about cars nobody can ask about is not a
@@ -123,7 +123,7 @@ def read_matrices(
     the model card reads the agreement with it as a cross-check, not as a
     like-for-like comparison.
 
-    `features` applies the list (EDN-67); this function only checks it, for both
+    `features` applies the list; this function only checks it, for both
     frames, because early stopping watches the validation split and a validation
     set holding makes the API refuses would stop the fit on one population and
     report a number about another.
@@ -173,7 +173,7 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
     the rows its estimator saw are `n_fit_rows` in `model.json`.
 
     `num_threads` is logged although the trees do not depend on it, because
-    LightGBM writes it into `booster.txt` (EDN-53), so it changes the artefact
+    LightGBM writes it into `booster.txt`, so it changes the artefact
     and DVC reruns the stage for it. `train.energy` is logged as `energy.*`, as it
     stands in params.yaml, because it decides what the run's energy figure means.
 
@@ -216,7 +216,7 @@ def logged_params(variant: str, data: TrainingData, params: dict) -> dict:
         },
         # The optional keys at the value the fit used, so a run whose params block
         # leaves `min_child_samples` out still records the 20 it was fitted with,
-        # and a pipeline run lines up column for column with a search run (EDN-78).
+        # and a pipeline run lines up column for column with a search run (EDN-73).
         **{
             f"{settings['estimator']}.{key}": value
             for key, value in {
@@ -382,7 +382,7 @@ def main(
             output_file=energy_dir / f"{variant}.csv",
         )
         # What only this stage knows about the fit, kept with the model the way
-        # the MLflow run id is (EDN-56). The run id is the key into the emissions
+        # the MLflow run id is. The run id is the key into the emissions
         # CSV, which is how the energy comparison joins a figure to the model it
         # was measured on instead of trusting that the two files are from one run.
         model.metadata["fit"] = {

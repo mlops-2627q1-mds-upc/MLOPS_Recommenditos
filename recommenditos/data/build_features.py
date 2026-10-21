@@ -7,8 +7,8 @@ This stage has no equivalent in the course demo, whose text model needs no
 feature engineering; it is our addition and the report says so.
 
 Every frame is first restricted to the makes the API serves. `split` records
-them in `supported_makes.json` and leaves every row in its frames (EDN-48);
-this stage is the one place the list is applied (EDN-67), to all five frames -
+them in `supported_makes.json` and leaves every row in its frames (EDN-05);
+this stage is the one place the list is applied, to all five frames -
 the `ES` holdout included - and before anything is decided from the rows,
 because that is the only point at which the restriction still shapes the
 feature space. Applied any later, it would leave the model encoded in make
@@ -570,7 +570,7 @@ def read_supported_makes(directory: Path) -> tuple[str, ...]:
 
 
 def served_rows(frame: pd.DataFrame, supported: "tuple[str, ...]", *, name: str) -> pd.DataFrame:
-    """`frame` without the rows of a make the API refuses (FR-04, EDN-48, EDN-67).
+    """`frame` without the rows of a make the API refuses (FR-04, EDN-05).
 
     The one place the supported-make list is applied. Called on every frame this
     stage reads, the `ES` holdout included, and on the training split before
@@ -584,7 +584,7 @@ def served_rows(frame: pd.DataFrame, supported: "tuple[str, ...]", *, name: str)
     population the API would pass to the model, 5,979 of the 6,079 rows on the
     real snapshot and the count EDN-14 measured NFR-11 on. It is not what M6
     replays. A request cannot be rebuilt from a matrix: `country_code` is empty
-    in every holdout row (EDN-42) and `registration_date` has become
+    in every holdout row (EDN-18) and `registration_date` has become
     `age_years`, both of them fields FR-01 requires. The replay reads
     `data/processed/holdout_es.parquet`, which `split` writes with every `ES`
     row, and has to either filter to the supported makes itself or count the
@@ -644,8 +644,8 @@ def check_served_makes_only(
 
     - The `make` levels are the vocabulary. A level outside the list means the
       feature space was decided over rows the API refuses even when every row
-      left is served, which is exactly what these matrices were before EDN-67,
-      when `train` filtered its rows and the encoding kept 25 levels.
+      left is served, which is exactly what these matrices were before `features` applied the
+      list, when `train` filtered its rows and the encoding kept 25 levels.
     - The rows are the population. A row whose make is not in the list is a
       request the API answers with a 422. A row with no make level at all is
       refused too: `make` is a required field, `served_rows` removes every
@@ -682,7 +682,7 @@ def check_served_makes_only(
         raise ValueError(
             f"{name}: " + "; ".join(problems) + f". The supported makes are "
             f"{', '.join(supported)}. `features` restricts every frame to them before it "
-            f"builds anything (EDN-67), so this matrix and the make list come from different "
+            f"builds anything (EDN-05), so this matrix and the make list come from different "
             f"runs; rebuild the matrices with `dvc repro features` rather than filtering here."
         )
 
@@ -774,7 +774,7 @@ def main(
 
     supported = read_supported_makes(input_dir)
     # Restricted before the vocabulary, because that is the only point at which
-    # the restriction still decides the feature space (EDN-48, EDN-67).
+    # the restriction still decides the feature space (EDN-05).
     training = served_rows(
         read_frame(input_dir / f"{VOCABULARY_SPLIT}.parquet", PROCESSED_SCHEMA),
         supported,

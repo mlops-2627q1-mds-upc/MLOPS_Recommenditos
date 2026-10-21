@@ -149,7 +149,7 @@ This is the change the [working agreements](working-agreements.md) now describe,
 
 ## Sprint 2 review (2026-10-06)
 
-Written from the merged pull requests and the closed issues, to be confirmed by the team in the laboratory session.
+Written from the merged pull requests and the closed issues, confirmed by the team at the laboratory session of 2026-10-13.
 
 **Done and merged:**
 
@@ -212,7 +212,7 @@ The first report is due on 2026-10-19 at 23:59 and the M1-M3 presentation is on 
 
 ## Sprint 3 review (2026-10-13)
 
-Written on 2026-10-17 from the merged pull requests and the closed issues, to be confirmed by the team in the laboratory session.
+Written on 2026-10-17 from the merged pull requests and the closed issues, and confirmed by the team at the laboratory session of 2026-10-13.
 
 **Done and merged:**
 
@@ -236,7 +236,12 @@ Written on 2026-10-17 from the merged pull requests and the closed issues, to be
 
 **Risks from planning.**
 The proposed cut-off for pipeline work on 2026-10-13 held for the numbers: #121 changed the candidate on that day, and nothing merged since changes a metric.
-Access to the FIB Virtech VM and the date of the M4a session are still not recorded as resolved.
+Access to the FIB Virtech VM is still not recorded as resolved.
+
+**Questions from [PR #97](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/97), answered by the team:**
+
+- The M4a session is on 2026-10-27.
+- The sprint 1 and 2 plannings and the sprint 1 review were held in the laboratory session itself.
 
 ## Sprint 4 planning notes (2026-10-13)
 
@@ -298,7 +303,7 @@ Recorded on day 5 of the sprint from the merged and open pull requests.
 
 ### Sprint 1
 
-Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be confirmed by the team in the laboratory session.
+Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, confirmed by the team at the laboratory session of 2026-10-13.
 
 - **What went well:**
     - The scope was locked before any code was written: dataset, modelling family, supported makes
@@ -345,7 +350,7 @@ Drafted from the sprint's record on 2026-09-29 and extended on 2026-09-30, to be
 
 ### Sprint 2
 
-Drafted from the sprint's record on 2026-10-06, to be confirmed by the team in the laboratory session.
+Drafted from the sprint's record on 2026-10-06, confirmed by the team at the laboratory session of 2026-10-13.
 
 - **What went well:**
     - The contract-first cut worked: once #32 landed, every stage was built against the schema and the fixture, and the pipeline ran on the real snapshot the next day.
@@ -366,7 +371,7 @@ Drafted from the sprint's record on 2026-10-06, to be confirmed by the team in t
 
 ### Sprint 3
 
-Drafted from the sprint's record on 2026-10-17, to be confirmed by the team in the laboratory session.
+Drafted from the sprint's record on 2026-10-17, and confirmed by the team at the laboratory session of 2026-10-13.
 
 - **What went well:**
     - The changes that move the report's numbers landed before the cut-off, as the sprint 2 retrospective asked: the search and the split review merged on 2026-10-12.

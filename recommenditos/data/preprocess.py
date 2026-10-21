@@ -2,22 +2,21 @@
 
 The rules run in the order issue #34 fixes, and that order is load-bearing.
 Every rule sees only what the rule above it left, so moving one changes what
-the others remove: EDN-22 measured 27 future registrations when deduplication
-runs after it and 26 when it runs before, and deduplication itself only counts
-duplicates among listings that are actually in scope. The order is therefore
+the others remove, and deduplication itself only counts duplicates among
+listings that are actually in scope. The order is therefore
 expressed once, as `ROW_RULES`, and the stage reports one row count per rule so
 the report can cite the funnel rather than a single before-and-after pair.
 
 The supported-make filter is deliberately not here: EDN-05 counts support after
 the `ES` holdout, and the holdout happens in `split`. `split` does not apply the
-filter either, only compute the list (EDN-48); the stages that build model input
+filter either, only compute the list (EDN-05); the stages that build model input
 do.
 
 `hash_seller_group` lives here rather than in `split` because its input is
 `seller_company_name`, which no later stage can see: the interim contract does
 not name it. `split` then groups by the hash alone (`split.group_key`). It is
 the split's grouping key and not an anonymisation measure; the function's own
-docstring says what it protects and what it does not (EDN-37).
+docstring says what it protects and what it does not (EDN-20).
 """
 
 from collections.abc import Callable, Iterable
@@ -76,7 +75,7 @@ def hash_seller_group(frame: pd.DataFrame) -> pd.Series:
     own columns. A dictionary built from that file inverts all 17,141 dealer ids
     and all 13,576 private-seller ids in about 50 ms, and for a private seller
     that recovers `zip` and `city`, two of the columns `preprocess.pii_columns`
-    removes. EDN-37 keeps the hash unsalted and discloses that instead: a pepper
+    removes. EDN-20 keeps the hash unsalted and discloses that instead: a pepper
     would make the split irreproducible on a clean clone without the secret, and
     the dealer behind a listing is recoverable from the public file regardless by
     joining on make, model, price, mileage and registration date, which we do
@@ -128,7 +127,7 @@ def _is_a_used_passenger_car(frame: pd.DataFrame, params: dict[str, Any]) -> pd.
     "new" (EDN-23), so it is not a usable negative. `is_preregistered` has the
     same weakness and is used anyway, because it is the only signal there is;
     the residue of unmarked pre-registered listings is a documented limitation
-    rather than something this stage can filter (EDN-24).
+    rather than something this stage can filter (EDN-04).
     """
     rules = params["preprocess"]
     return (
@@ -139,7 +138,7 @@ def _is_a_used_passenger_car(frame: pd.DataFrame, params: dict[str, Any]) -> pd.
 
 
 def _is_registered_by_the_reference_date(frame: pd.DataFrame, params: dict[str, Any]) -> pd.Series:
-    """EDN-22: age is the reference date minus the registration date, so it may not be negative.
+    """Age is the reference date minus the registration date, so it may not be negative.
 
     A missing date is kept. It makes age missing, which the feature stage and
     the model handle, while a date after the snapshot would make age negative,

@@ -4,7 +4,9 @@ The bundle is the `lgbm-basic` variant that `tests/conftest.py`'s `trained`
 fixture fits on the synthetic fixture, because CI cannot `dvc pull` the real one
 (see `tests/test_serving.py`). A test of a new endpoint takes `client` and
 `listing` and needs nothing else; `assert_problem` in `tests/api/helpers.py`
-checks the error shape every error response shares (FR-16).
+checks the error shape every error response shares (FR-16). The app writes its
+prediction log to `log_file`, in a temporary directory, and its `/v1/feedback`
+takes `API_KEY`.
 """
 
 from collections.abc import Iterator
@@ -12,13 +14,18 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 import pytest
 
 from recommenditos.api.app import create_app
 from recommenditos.api.serving import ServedModel
+from recommenditos.api.settings import Settings
 
 #: The variant the API serves by default (FR-12).
 SERVED_VARIANT = "lgbm-basic"
+
+#: The key the test app's `/v1/feedback` requires; a test value, not a secret.
+API_KEY = "test" + "-key" * 5
 
 
 @pytest.fixture(scope="session")
@@ -28,8 +35,14 @@ def bundle(trained: dict) -> Path:
 
 
 @pytest.fixture(scope="session")
-def app(bundle: Path) -> FastAPI:
-    return create_app(bundle)
+def log_file(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The SQLite file the session's app records its answers and the feedback in."""
+    return tmp_path_factory.mktemp("prediction-log") / "prediction-log.sqlite3"
+
+
+@pytest.fixture(scope="session")
+def app(bundle: Path, log_file: Path) -> FastAPI:
+    return create_app(bundle, Settings(prediction_log=log_file, api_key=SecretStr(API_KEY)))
 
 
 @pytest.fixture(scope="session")
