@@ -190,7 +190,7 @@ class TrainingData:
 
     `supported_makes` is here rather than beside the parameters because it is a
     property of these rows: `features` restricts both frames to the makes the API
-    serves and `train` checks that it did (EDN-48, EDN-67), and the list has to
+    serves and `train` checks that it did (EDN-05), and the list has to
     reach the model bundle so that the API answers FR-04's scope check from the
     model it is serving.
 
@@ -594,7 +594,7 @@ class Model:
         one that `check_array` has already made float64.
 
         So this is insurance of the same kind as `deterministic=True` and
-        `solver="lsqr"` (EDN-53), kept because a property a future estimator will
+        `solver="lsqr"`, kept because a property a future estimator will
         depend on should not rest on two libraries independently choosing to be
         tolerant - not because anything here would fail without it.
         """
@@ -872,10 +872,10 @@ class RidgeModel(Model):
     """Ladder step 2: the interpretable depreciation baseline, on log price.
 
     A `ColumnTransformer` in front of `Ridge`, fitted on `log_price`. Two
-    encoding decisions are recorded in the EDN because both look, at a glance,
+    encoding choices are explained here because both look, at a glance,
     like a rule of this project being broken.
 
-    **One-hot, confined to B1 (EDN-50).** EDN-02's "no one-hot" is a statement
+    **One-hot, confined to B1.** EDN-02's "no one-hot" is a statement
     about the tree family and the reason it was chosen. Ridge is linear: it has
     no native categorical handling, and the alternatives were target encoding,
     which leaks the target without cross-fitting, or dropping the categoricals,
@@ -884,12 +884,12 @@ class RidgeModel(Model):
     unseen level an answer rather than an error (EDN-18): it sends the level to the
     infrequent group where `min_frequency` produced one, and encodes it as all
     zeros where it did not. On the real snapshot that is 2 of the 8 categoricals
-    with a group and six without, so both branches are live and both answer
-    (EDN-50). `min_category_rows` is an absolute row count rather than a share
+    with a group and six without, so both branches are live and both answer.
+    `min_category_rows` is an absolute row count rather than a share
     because a share changes what it means as the training set grows.
 
-    **Mean fill plus a per-feature indicator, which is not imputation
-    (EDN-51).** Ridge cannot consume NaN, so the numeric branch is a union of a
+    **Mean fill plus a per-feature indicator, which is not imputation.**
+    Ridge cannot consume NaN, so the numeric branch is a union of a
     mean-filled, scaled copy and `MissingIndicator(features="all")`. With an
     indicator for every feature the encoding is information-preserving: a masked
     row contributes `beta * mean + gamma`, and `gamma` absorbs the offset, so the
@@ -901,7 +901,7 @@ class RidgeModel(Model):
     imputation. It is insurance rather than a measured fix as configured, because
     none of `basic`'s 8 numeric features is complete on the real snapshot - but 136
     of `extended`'s 147 are, so a Ridge on `extended` would lose 136 indicators to
-    the default (EDN-51).
+    the default.
     """
 
     estimator_name = "ridge"
@@ -1045,7 +1045,7 @@ class LightGBMModel(Model):
     libraries = ("numpy", "pandas", "lightgbm")
     hyperparameters = ("learning_rate", "num_leaves", "n_estimators", "early_stopping_rounds")
     #: `min_child_samples`, the fewest training rows a leaf may hold, is a knob of
-    #: the search of issue #88 (EDN-78), because many `model` values occur only
+    #: the search of issue #88 (EDN-73), because many `model` values occur only
     #: once and a leaf that small can fit a single listing. Optional, at
     #: LightGBM's own default of 20, so a params block that leaves it out fits
     #: exactly the trees it fitted before the key existed - `booster.txt` records
@@ -1089,7 +1089,7 @@ class LightGBMModel(Model):
             # thread-independent here. They do change which trees are built, so
             # they are not free of consequence; they are kept because they are
             # what LightGBM documents for this purpose and what would hold if
-            # `num_threads` were raised on data where it does matter (EDN-53).
+            # `num_threads` were raised on data where it does matter.
             deterministic=True,
             force_row_wise=True,
             verbose=-1,

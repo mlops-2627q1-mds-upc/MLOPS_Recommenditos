@@ -26,14 +26,14 @@ count, so a stage ticket can assert against it rather than hope for it:
 ===========================  ===============================================
 Edge case                    The rule it exercises
 ===========================  ===============================================
-Registered after the snapshot  EDN-22, negative age
-Registered on the snapshot     EDN-22, the bound is inclusive
+Registered after the snapshot  negative age, dropped by preprocess
+Registered on the snapshot     the bound is inclusive
 Duplicate on the dedup key     preprocess step 6, 7-column key
 An `ES` listing                EDN-03, the drift holdout
 A make far below support       EDN-05, the 300-listing threshold
 Price below and above range    the params price range
 `offer_type = N`               EDN-04, used cars only
-`is_preregistered = True`      EDN-24
+`is_preregistered = True`      EDN-04
 `vehicle_type = Transporter`   EDN-04, passenger cars only
 `is_used = False` under `U`    EDN-23, the one-sided flags
 A null registration date       age is missing, not zero
@@ -489,7 +489,7 @@ def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
         # Never the holdout country unless the row is the holdout case.
         row["country_code"] = "DE"
 
-    # 1. Registered after the snapshot: age would be negative (EDN-22).
+    # 1. Registered after the snapshot: age would be negative.
     rows[0]["registration_date"] = "2026-01-01"
     # 2. The one intended duplicate: identical to a plain body listing on all
     #    seven columns of the deduplication key, different outside it, which is
@@ -519,7 +519,7 @@ def _edge_cases(body: pd.DataFrame) -> pd.DataFrame:
     rows[6]["is_new"] = True
     rows[6]["is_used"] = False
     # 8. Pre-registered, dropped by the scope even though the flag is
-    #    unreliable (EDN-24).
+    #    unreliable (EDN-04).
     rows[7]["is_preregistered"] = True
     # 9. Not a passenger car (EDN-04).
     rows[8]["vehicle_type"] = "Transporter"

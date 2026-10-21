@@ -2,8 +2,8 @@
 
 Issue #38 assumes CodeCarbon *measures* the energy of a fit. This script tests that
 assumption on the machine the ladder is trained on before any number is quoted,
-and it is the evidence behind the archived EDN-69 and the settings in `params.yaml`'s
-`train.energy`. Six questions:
+and it is the evidence behind the energy section of the model card and the settings in
+`params.yaml`'s `train.energy`. Six questions:
 
 1. Which CPU power method and TDP does CodeCarbon pick when RAPL is root-only, as it
    is on every Linux kernel since 5.10 (Platypus, CVE-2020-8694), and what does it
