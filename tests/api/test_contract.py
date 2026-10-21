@@ -7,7 +7,7 @@ no network) and, for every operation in it, sends:
 
 - the boundary and invalid values its coverage phase derives from the schema,
   a finite set fixed by the schema (about 370 requests for `/v1/predict`);
-- `MAX_EXAMPLES` random requests of its fuzzing phase, valid and invalid ones;
+- up to `MAX_EXAMPLES` random requests of its fuzzing phase, valid and invalid;
 - the documented example.
 
 Every response goes through all of Schemathesis' built-in checks, among them:
@@ -34,12 +34,17 @@ and 409 of a stored price are tested by hand in `test_feedback.py`.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI
+from pydantic import SecretStr
 import pytest
 import schemathesis
 from schemathesis import GenerationMode
 from tests.api.conftest import API_KEY
+
+from recommenditos.api.app import create_app
+from recommenditos.api.settings import Settings
 
 #: Random requests per operation in the fuzzing phase, valid and invalid
 #: together. About 11 s for the five operations on a laptop CPU.
@@ -51,8 +56,20 @@ def _this_month() -> str:
     return f"{now.year:04d}-{now.month:02d}"
 
 
-@pytest.fixture(scope="session")
-def api_schema(app: FastAPI) -> schemathesis.BaseSchema:
+@pytest.fixture
+def contract_app(bundle: Path, tmp_path: Path) -> FastAPI:
+    """An app of its own, not the session's `app`.
+
+    Schemathesis runs the app's lifespan and ends it after the test, which
+    closes the app's prediction log; the session's app would then answer every
+    later test with a 503.
+    """
+    settings = Settings(prediction_log=tmp_path / "log.sqlite3", api_key=SecretStr(API_KEY))
+    return create_app(bundle, settings)
+
+
+@pytest.fixture
+def api_schema(contract_app: FastAPI) -> schemathesis.BaseSchema:
     """The app's OpenAPI document, loaded through the app itself.
 
     Every API-key scheme the document declares gets the key the test app was
@@ -60,7 +77,7 @@ def api_schema(app: FastAPI) -> schemathesis.BaseSchema:
     tested past its 401; Schemathesis' `ignored_auth` check still sends requests
     without the key and expects them refused.
     """
-    schemes = app.openapi().get("components", {}).get("securitySchemes", {})
+    schemes = contract_app.openapi().get("components", {}).get("securitySchemes", {})
     keys = {
         name: {"api_key": API_KEY}
         for name, scheme in schemes.items()
@@ -77,7 +94,7 @@ def api_schema(app: FastAPI) -> schemathesis.BaseSchema:
             },
         }
     )
-    loaded = schemathesis.openapi.from_asgi("/openapi.json", app, config=config)
+    loaded = schemathesis.openapi.from_asgi("/openapi.json", contract_app, config=config)
 
     @loaded.hook
     def map_case(context: schemathesis.HookContext, case: schemathesis.Case) -> schemathesis.Case:
