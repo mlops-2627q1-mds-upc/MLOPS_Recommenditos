@@ -1071,6 +1071,12 @@ class LightGBMModel(Model):
         #: The three quantile boosters of UC2's price range, by `INTERVAL_QUANTILES`
         #: role, or `None` for a variant that names no `intervals` (EDN-85).
         self.intervals = None if intervals is None else dict(intervals)
+        #: The OpenMP threads each prediction may use; LightGBM's `0` is one per
+        #: core. `booster.txt` records the training's `num_threads`, but
+        #: `Booster.predict` reads only its own arguments, so the setting lives
+        #: here. Batch scoring keeps the default; the API sets 1
+        #: (`recommenditos.api.serving.PREDICTION_THREADS`).
+        self.prediction_threads = 0
 
     @staticmethod
     def regressor(
@@ -1170,7 +1176,11 @@ class LightGBMModel(Model):
         """
         if self.booster is None:
             raise RuntimeError("the booster exists after `fit` or `load`")
-        contributions = self.booster.predict(self._as_codes(self._align(frame)), pred_contrib=True)
+        contributions = self.booster.predict(
+            self._as_codes(self._align(frame)),
+            pred_contrib=True,
+            num_threads=self.prediction_threads,
+        )
         return pd.DataFrame(
             np.asarray(contributions, dtype="float64"),
             index=frame.index,
@@ -1186,7 +1196,10 @@ class LightGBMModel(Model):
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
         if self.booster is None:
             raise RuntimeError("the booster exists after `fit` or `load`")
-        return np.asarray(self.booster.predict(self._as_codes(aligned)), dtype="float64")
+        return np.asarray(
+            self.booster.predict(self._as_codes(aligned), num_threads=self.prediction_threads),
+            dtype="float64",
+        )
 
     @property
     def has_intervals(self) -> bool:
@@ -1220,7 +1233,9 @@ class LightGBMModel(Model):
             )
         coded = self._as_codes(aligned)
         log_price = {
-            name: np.asarray(booster.predict(coded), dtype="float64")
+            name: np.asarray(
+                booster.predict(coded, num_threads=self.prediction_threads), dtype="float64"
+            )
             for name, booster in boosters.items()
         }
         offsets = self.metadata["intervals"]["offsets"]
