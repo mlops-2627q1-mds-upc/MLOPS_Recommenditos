@@ -5,7 +5,10 @@ cases here check that the same rules apply with only `make` required, not every
 rule again; `tests/api/test_predict.py` holds those.
 """
 
+from contextlib import closing
+import json
 from pathlib import Path
+import sqlite3
 
 from fastapi.testclient import TestClient
 from hypothesis import HealthCheck, given, settings
@@ -322,6 +325,28 @@ def test_fr07_a_bundle_without_interval_models_answers_503(trained: dict, listin
         problem = assert_problem(extended.post(PRICE_RANGE, json={"make": listing["make"]}), 503)
 
     assert "lgbm-extended" in problem["detail"]
+
+
+@pytest.mark.req("FR-13", "FR-02")
+def test_fr13_a_price_range_is_one_record_with_the_fields_the_client_sent(
+    client: TestClient, p1: dict, log_file: Path
+):
+    response = client.post(PRICE_RANGE, json=p1)
+    body = response.json()
+
+    assert response.status_code == 200, response.text
+    with closing(sqlite3.connect(log_file)) as connection:
+        ((endpoint, inputs, outputs),) = connection.execute(
+            "SELECT endpoint, inputs, outputs FROM predictions WHERE request_id = ?",
+            (body["request_id"],),
+        ).fetchall()
+    assert endpoint == PRICE_RANGE
+    sent = {**p1, "equipment_comfort": [], "equipment_entertainment": [], "equipment_extra": []}
+    sent |= {"equipment_safety": [], "has_full_service_history": False, "non_smoking": False}
+    assert json.loads(inputs) == {**sent, "is_rental": False}
+    assert json.loads(outputs) == {
+        key: body[key] for key in ("price_eur", "lower_eur", "upper_eur", "confidence_level")
+    }
 
 
 # --------------------------------------------------------------------------

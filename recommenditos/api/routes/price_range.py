@@ -4,7 +4,7 @@ from http import HTTPStatus
 
 from fastapi import APIRouter
 
-from recommenditos.api.dependencies import Metrics, RequestId, Served
+from recommenditos.api.dependencies import Log, Metrics, RequestId, Served
 from recommenditos.api.errors import (
     ProblemError,
     pointer,
@@ -28,7 +28,11 @@ router = APIRouter(tags=["valuation"])
     ),
 )
 def price_range(
-    car: PartialListing, served: Served, metrics: Metrics, request_id: RequestId
+    car: PartialListing,
+    served: Served,
+    metrics: Metrics,
+    request_id: RequestId,
+    log: Log,
 ) -> PriceRange:
     """The nominal 90 % price range of a car, and its typical price (FR-07).
 
@@ -39,6 +43,8 @@ def price_range(
     the one `/v1/predict` gives when the request carries all of its required
     fields, and the range's median otherwise; the bounds always contain it. A
     bundle without interval models, such as `lgbm-extended`, answers 503.
+    Every answer is one record of the prediction log (FR-13); when it cannot
+    be written, the answer is a 503 too.
     """
     faults = served.faults(car)
     if faults:
@@ -58,6 +64,7 @@ def price_range(
         request_id=request_id,
         warnings=[FieldWarning(pointer=pointer([name]), detail=detail) for name, detail in unseen],
     )
+    log.record(car, answer)
     metrics.observe_price_range(
         answer.price_eur, answer.lower_eur, answer.upper_eur, answer.warnings
     )
