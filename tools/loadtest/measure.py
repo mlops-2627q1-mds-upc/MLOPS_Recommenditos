@@ -105,6 +105,9 @@ def percentile(histogram: Mapping[int, int], share: float) -> float:
     """The smallest response time that `share` of the requests did not exceed.
 
     `histogram` maps a response time in ms, as Locust rounds it, to its count.
+    This is the nearest-rank percentile (rank `ceil(share * N)`); Locust's own
+    printout uses rank `floor(share * N) + 1`, so the two can differ by one rank
+    when `share * N` is a whole number.
     """
     total = sum(histogram.values())
     if not total:

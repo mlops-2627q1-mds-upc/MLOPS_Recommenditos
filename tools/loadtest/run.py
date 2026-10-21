@@ -493,8 +493,11 @@ def _resources(result: dict[str, Any]) -> list[str]:
 
 def _log(result: dict[str, Any]) -> list[str]:
     log = result.get("prediction_log")
-    if not log or not (log["answered"] or log["logged"]):
+    if not log:
         return ["## Prediction log (NFR-03)", "", "- Not checked: the API has no prediction log."]
+    if not (log["answered"] or log["logged"]):
+        reason = "the run got no successful answer, and the log gained no record"
+        return ["## Prediction log (NFR-03)", "", f"- Not checked: {reason}."]
     verdict = "yes" if log["exactly_once"] else "no"
     return [
         "## Prediction log (NFR-03)",
