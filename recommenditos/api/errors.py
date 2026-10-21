@@ -175,12 +175,14 @@ def request_id_of(request: Request) -> str:
 
 
 async def _problem_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, ProblemError)
+    if not isinstance(error, ProblemError):
+        raise TypeError(f"{type(error).__name__} reached the ProblemError handler")
     return problem_response(request_id_of(request), error)
 
 
 async def _http_error(request: Request, error: Exception) -> JSONResponse:
-    assert isinstance(error, StarletteHTTPException)
+    if not isinstance(error, StarletteHTTPException):
+        raise TypeError(f"{type(error).__name__} reached the StarletteHTTPException handler")
     type_ = (
         PAYLOAD_TOO_LARGE if error.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE else BLANK
     )
@@ -205,7 +207,8 @@ def install_handlers(app: FastAPI, complete: ErrorCompleter) -> None:
     """
 
     async def _validation_error(request: Request, error: Exception) -> JSONResponse:
-        assert isinstance(error, RequestValidationError)
+        if not isinstance(error, RequestValidationError):
+            raise TypeError(f"{type(error).__name__} reached the RequestValidationError handler")
         errors = complete(request, error.body, field_errors(error.errors()))
         return await _problem_error(request, validation_problem(errors))
 

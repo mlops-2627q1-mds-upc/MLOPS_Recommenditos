@@ -71,7 +71,8 @@ def fit_with_intervals(
             f"variant {variant!r} names `intervals`, and their calibration needs the "
             f"{CALIBRATION_SPLIT!r} split, which the fit was not given."
         )
-    assert isinstance(model, LightGBMModel)  # interval_settings refuses anything else
+    if not isinstance(model, LightGBMModel):  # interval_settings refuses anything else
+        raise TypeError(f"{variant!r} is a {type(model).__name__}, not a LightGBMModel")
     # Timed apart from the point model, so the share of the measured fit the price
     # range takes can be stated; CodeCarbon's figure covers both together.
     started = time.perf_counter()
@@ -131,9 +132,12 @@ def conformalize(
     features = model._as_codes(model._align(rows))
     cqr = conformalizer(estimators, record["confidence_level"])
     with warnings.catch_warnings():
-        # MAPIE hands the estimators a NumPy array of the same columns in the
-        # same order, and scikit-learn warns that it carries no column names.
-        warnings.filterwarnings("ignore", message="X does not have valid feature names")
+        # MAPIE's check that a prefit estimator is fitted predicts on a NumPy
+        # array of zeros (mapie.utils.check_sklearn_user_model_is_fitted), and
+        # scikit-learn warns that it carries no column names.
+        warnings.filterwarnings(
+            "ignore", message="X does not have valid feature names", category=UserWarning
+        )
         cqr.conformalize(features, rows["log_price"].to_numpy(dtype="float64"))
         _, bounds = cqr.predict_interval(features)
     lower_shift = estimators["lower"].predict(features) - bounds[:, 0, 0]

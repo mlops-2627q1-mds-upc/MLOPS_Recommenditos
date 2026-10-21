@@ -51,8 +51,10 @@ def lock_changed(base: str, root: Path) -> bool:
     git failing (an unknown ref, a shallow clone without the base), which must
     not read as "no change" and let a promotion through.
     """
-    result = subprocess.run(
-        ["git", "diff", "--quiet", base, "HEAD", "--", LOCK],
+    # S603, S607: git from PATH, as every developer tool here, with an argument list
+    # this module builds and no shell.
+    result = subprocess.run(  # noqa: S603
+        ["git", "diff", "--quiet", base, "HEAD", "--", LOCK],  # noqa: S607
         cwd=root,
         capture_output=True,
         text=True,
@@ -123,8 +125,8 @@ def not_the_candidate(metrics: dict, variant: str) -> str:
     if isinstance(record, dict) and record.get("gate_passed") is True:
         return (
             f"{head}. The candidate passes the gate, but {named} passes it with the "
-            "lower MdAPE: change report.candidate_variant (an EDN decision) "
-            "or keep the candidate and say why"
+            "lower MdAPE: change report.candidate_variant (an EDN decision); the gate "
+            "cannot pass while another variant is deployable"
         )
     return f"{head}, and the candidate itself fails the gate"
 

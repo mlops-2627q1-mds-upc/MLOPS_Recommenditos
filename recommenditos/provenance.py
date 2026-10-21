@@ -287,8 +287,10 @@ def _git(root: Path, *args: str) -> str | None:
     for `git status` it is the one that says the tree is clean.
     """
     try:
-        completed = subprocess.run(
-            ["git", "-C", str(root), *args],
+        # S603, S607: git from PATH, as every developer tool here, with an argument list
+        # this module builds and no shell.
+        completed = subprocess.run(  # noqa: S603
+            ["git", "-C", str(root), *args],  # noqa: S607
             capture_output=True,
             text=True,
             check=True,

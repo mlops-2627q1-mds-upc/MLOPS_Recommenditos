@@ -9,6 +9,7 @@ price range still loads and says it has none.
 """
 
 from pathlib import Path
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -86,7 +87,13 @@ def test_the_served_range_equals_mapies_on_the_same_rows(
     )
     rows = intervals.calibration_rows(served, calibration, record, seed=params["seed"])
     mapie = intervals.conformalizer(estimators, record["confidence_level"])
-    mapie.conformalize(served._as_codes(served._align(rows)), rows["log_price"].to_numpy())
+    with warnings.catch_warnings():
+        # The warning `intervals.conformalize` filters for the same reason: MAPIE's
+        # fitted-check predicts on a NumPy array of zeros, which has no column names.
+        warnings.filterwarnings(
+            "ignore", message="X does not have valid feature names", category=UserWarning
+        )
+        mapie.conformalize(served._as_codes(served._align(rows)), rows["log_price"].to_numpy())
 
     test = pd.read_parquet(matrices["features"] / settings["feature_set"] / "test.parquet")
     if masked:

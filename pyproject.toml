@@ -278,8 +278,10 @@ extend-exclude = ["reports/analysis"]
 [tool.ruff.lint]
 # The course demo's set: pycodestyle errors, Pyflakes, pyupgrade, bugbear,
 # simplify, import sorting and Pylint. NFR-07 requires the Pylint rules in
-# particular.
-extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL"]
+# particular. `S` adds flake8-bandit's security rules, ruff's implementation of
+# Bandit from the course's static-analysis tools (#155). A finding is fixed in
+# the code or ignored on its line with the rule code and the reason.
+extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL", "S"]
 
 [tool.ruff.lint.per-file-ignores]
 # `recommenditos/tracking.py` sets MLFLOW_DISABLE_AGENT_HINT before `import
@@ -289,7 +291,17 @@ extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL"]
 # A test asserts against literal expected values - that is what an assertion is.
 # PLR2004 earns its place in `recommenditos/`, where a bare threshold should get
 # a name, but not on `assert response.status_code == 422`.
-"tests/**/*.py" = ["PLR2004"]
+#
+# S101: a test's `assert` is the test, and pytest rewrites it; `python -O`, the
+# reason the rule exists, never runs the suite. S603, S607 and S310: tests start
+# git, taskkill, docker and the project's own Python with argument lists they
+# build themselves, and open http://127.0.0.1 URLs of servers they started. None
+# of it takes outside input, and a `noqa` on each of those lines would repeat
+# this sentence.
+"tests/**/*.py" = ["PLR2004", "S101", "S310", "S603", "S607"]
+# A notebook's `assert` is its check that a figure still reproduces, run cell by
+# cell and never under `python -O`.
+"notebooks/*.ipynb" = ["S101"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["recommenditos"]
