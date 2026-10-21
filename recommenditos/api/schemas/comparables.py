@@ -30,13 +30,13 @@ class ComparablesRequest(PartialListing):
         json_schema_extra={
             "examples": [
                 {
-                    "make": "Volkswagen",
-                    "model": "Golf",
+                    "make": "BMW",
+                    "model": "320",
                     "registration_date": "2019-06",
-                    "mileage_km_raw": 45000,
+                    "mileage_km_raw": 60000,
                     "k": 3,
                 },
-                {"make": "Volkswagen", "model": "Golf"},
+                {"make": "BMW", "model": "320"},
             ]
         },
     )
@@ -100,18 +100,18 @@ class Comparables(BaseModel):
                 {
                     "listings": [
                         {
-                            "make": "Volkswagen",
-                            "model": "Golf",
-                            "model_version": "1.5 TSI ACT Comfortline",
-                            "registration_date": "2019-03",
-                            "mileage_km_raw": 46100,
-                            "power_kw": 110,
-                            "fuel_category": "Gasoline",
-                            "transmission": "Manual",
-                            "body_type": "Compact",
+                            "make": "BMW",
+                            "model": "320",
+                            "model_version": "320 Gran Turismo d KEYLESS,HUD,KAMERA,PANO,AHK",
+                            "registration_date": "2018-02",
+                            "mileage_km_raw": 60000.0,
+                            "power_kw": 140.0,
+                            "fuel_category": "Diesel",
+                            "transmission": "Automatic",
+                            "body_type": "Sedan",
                             "seller_type": "Dealer",
                             "country_code": "DE",
-                            "price_eur": 17490.0,
+                            "price_eur": 22880.0,
                         }
                     ],
                     "index": INDEX_EXAMPLE,

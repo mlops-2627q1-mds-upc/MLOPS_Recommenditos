@@ -120,7 +120,7 @@ On the machines we train on, the figure is CodeCarbon's estimate from the CPU's 
 It reads the `train` and `validation` frames and no other, so no `ES` (EDN-03), test or calibration listing can reach it, and it refuses a row of the holdout country should a changed `split` ever let one through.
 Its contract, `COMPARABLES_SCHEMA` in the stage's module, selects the key features and the price, so no PII column (NFR-08) and not the `seller_group_id` pseudonym reaches the index; it is kept out of `recommenditos/schema.py` because every stage depends on that module, and a contract added there would rerun the whole pipeline.
 `age_years` is each listing's age on the snapshot date, from the function the `features` stage uses, and the rows are sorted by make, model, age, mileage and price, so a rerun writes the same bytes and the API breaks a tie the same way every time.
-Measured on the real snapshot (2026-10-20): 70,172 listings of 25 makes and 596 make-model pairs, 1.9 MB on disk; how much memory the API spends on it is in the [API docs](api.md#comparables).
+Measured on the real snapshot (2026-10-20): 70,172 listings of 25 makes and 596 make-model pairs, 1.87 MiB on disk; how much memory the API spends on it is in the [API docs](api.md#comparables).
 The stage tracks nothing to MLflow, like every stage but `train` and `evaluate`.
 
 Three stages draw the figures the report prints, so that each is built from the artefact it shows and `dvc repro` redraws it when that artefact changes.

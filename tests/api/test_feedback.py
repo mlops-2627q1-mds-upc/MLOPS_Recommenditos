@@ -163,6 +163,29 @@ def test_fr10_another_price_for_the_same_answer_is_refused(client: TestClient, l
     assert "18000.0" in problem["detail"]
 
 
+@pytest.mark.req("FR-10", "FR-09")
+def test_fr10_a_price_for_an_answer_without_one_is_refused(
+    client: TestClient, listing: dict, log_file: Path
+):
+    """A comparables answer priced nothing, so FR-14 has no estimate to join a price to."""
+    answer = client.post("/v1/comparables", json={"make": listing["make"]})
+    assert answer.status_code == 200, answer.text
+    request_id = answer.json()["request_id"]
+
+    response = client.post(FEEDBACK, json=_feedback(request_id, 18000.0), headers=KEY)
+
+    problem = assert_problem(response, 409)
+    assert "gave no price" in problem["detail"]
+    connection = sqlite3.connect(log_file)
+    try:
+        stored = connection.execute(
+            "SELECT count(*) FROM feedback WHERE request_id = ?", (request_id,)
+        ).fetchone()
+    finally:
+        connection.close()
+    assert stored == (0,)
+
+
 @pytest.mark.req("FR-10")
 def test_fr10_a_price_for_an_unknown_request_id_is_not_stored(client: TestClient, log_file: Path):
     request_id = str(uuid.uuid4())

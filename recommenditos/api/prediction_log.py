@@ -134,6 +134,13 @@ class FeedbackOutcome(enum.Enum):
     CONFLICT = "conflict"
     #: No answer with this request ID is in the log; nothing is stored.
     UNKNOWN_REQUEST = "unknown_request"
+    #: The answer with this request ID priced nothing, such as a `/v1/comparables`
+    #: answer, so an observed price has no estimate to be compared with (FR-14).
+    UNPRICED_ANSWER = "unpriced_answer"
+
+
+#: The endpoints whose answers carry a price, the ones feedback can refer to (FR-10).
+PRICED_ENDPOINTS = frozenset({"/v1/predict", "/v1/price-range"})
 
 
 @dataclass(frozen=True)
@@ -151,7 +158,7 @@ class PredictionStore(Protocol):
         ...
 
     def record_feedback(self, feedback: Feedback) -> FeedbackResult:
-        """Store an observed price unless the request is unknown or already has one."""
+        """Store an observed price unless the request is unknown, unpriced or already has one."""
         ...
 
     def close(self) -> None: ...
@@ -261,10 +268,12 @@ class SqliteStore:
         try:
             with self._lock, self._transaction() as connection:
                 known = connection.execute(
-                    "SELECT 1 FROM predictions WHERE request_id = ?", (feedback.request_id,)
+                    "SELECT endpoint FROM predictions WHERE request_id = ?", (feedback.request_id,)
                 ).fetchone()
                 if known is None:
                     return FeedbackResult(FeedbackOutcome.UNKNOWN_REQUEST, None)
+                if known[0] not in PRICED_ENDPOINTS:
+                    return FeedbackResult(FeedbackOutcome.UNPRICED_ANSWER, None)
                 row = connection.execute(
                     "SELECT observed_price_eur, received_at FROM feedback WHERE request_id = ?",
                     (feedback.request_id,),

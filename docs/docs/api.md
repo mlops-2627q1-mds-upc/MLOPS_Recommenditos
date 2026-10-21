@@ -156,6 +156,7 @@ A bundle without interval models, such as `lgbm-extended`, serves `/v1/predict` 
 It answers with listings of the training and validation data, never of `ES` (EDN-03) or the test and calibration splits, each with its price in EUR and its key features, and none with a PII column (NFR-08).
 A listing is comparable when it has the request's `make` and `model`, its age differs by at most 2 years from the car's and its mileage by at most 25 % of the car's (FR-09).
 The listing's age is its age on the snapshot date, the age its price was asked at; the car's is its age today, as the model computes it.
+The snapshot is from 2025-11-08, so the window today lies about a year earlier in registration date than the car's own: a car registered in 2020 matches listings registered from about 2017 to 2021.
 The closest mileage comes first, then the closest age, then the index's own order, so the same request always gets the same listings.
 A field the request leaves out sets no filter and adds no distance: a request with only `make` gets listings of every model of the make, one without a mileage is ordered by age alone.
 No filter is relaxed, so a car outside every window gets an empty list; a `model` of which the index holds no listing for the make gets one too, with a warning that says so.
@@ -164,8 +165,8 @@ Fields other than these four are checked like everywhere else and do not change 
 The answer names the index it searched, `index.version` and `index.listings`, as `/health` does: the version is the md5 `dvc.lock` records for `models/comparables.parquet`, which the `comparables` stage writes ([pipeline](pipeline.md#stages)).
 A service started without the index, such as one around a bundle copied elsewhere, values listings, answers `/v1/comparables` with a 503 problem and reports `"comparables": null` on `/health`.
 
-The real index holds 70,172 listings and takes 1.9 MB on disk, which is what it adds to the image.
-A process that has built the app around `lgbm-basic` holds 339 MB resident with the index and 273 MB without it, so the index costs every uvicorn worker about 66 MB of NFR-04's 1 GB container cap; it is read on one thread, because Arrow's thread pool added about 40 MB more.
+The real index holds 70,172 listings and takes 1.87 MiB on disk, which is what it adds to the image.
+A process that has built the app around `lgbm-basic` holds 338.7 MiB resident with the index and 272.9 MiB without it, so the index costs every uvicorn worker about 65.9 MiB of NFR-04's 1 GB container cap; it is read on one thread, because Arrow's thread pool added about 40 MiB more.
 Measured in-process with `TestClient` on the shared development laptop under a load average of about 3.5, over 1,200 requests built from test listings, 300 each make only, make and model, P1, and P1 with `k` 20, a request took p50 5.0 ms and p95 5.9 ms, with no shape above p95 6.0 ms; 2.7 % of the P1 requests got an empty list (`reports/analysis/comparables_footprint.py`).
 That is inside NFR-02's 300 ms, which the load test on the target VM checks.
 
@@ -264,6 +265,7 @@ The key is compared with `secrets.compare_digest`, so the comparison takes the s
 | A new price for an answer in the log | 201 and the stored price |
 | The same price again | 200 and the stored price; nothing changes, so the replay job can retry |
 | Another price for the same answer | 409; the stored price is kept |
+| An answer that gave no price, such as one of `/v1/comparables` | 409; nothing is stored, because FR-14 has no estimate to compare the price with |
 | A request ID the log does not hold, or no longer holds after rotation | 404; nothing is stored, because a price nothing joins is no label |
 | A missing or wrong key | 401, checked before the body is validated; malformed JSON is a 422 and a body over 10 KB a 413 either way |
 
