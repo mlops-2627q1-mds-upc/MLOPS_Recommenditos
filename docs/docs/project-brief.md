@@ -195,6 +195,8 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 
 ## 5. Target architecture
 
+The [architecture page](architecture.md) draws this as a C4 container view and a deployment view, and names the patterns and the decisions behind them.
+
 ```
 client --> reverse proxy --> FastAPI (model + SHAP + intervals)
                                |-- /predict       (UC1)
