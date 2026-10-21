@@ -1,23 +1,23 @@
 {
   "label": "laptop-dry-run-2026-10-21",
   "note": "**Dry run on a shared development laptop, not a measurement of the VM.** The stack ran on the same 4-core laptop as Locust, an IDE and other development sessions, so latency, throughput and energy here say nothing about NFR-02 to NFR-04 on the VM; the run checks that the load test and its measurements work end to end. 60 s instead of NFR-03's 5 minutes, to keep the shared machine usable.",
-  "started_at": "2026-10-21T09:36:32+00:00",
+  "started_at": "2026-10-21T15:44:36+00:00",
   "host": "http://localhost:8080",
   "rate_per_s": 20.0,
   "duration_s": 60,
-  "users": 20,
+  "users": 80,
   "machine": {
     "hostname": "lukas-NBLB-WAX9N",
     "cpus": 8,
     "load_average_before": [
-      2.05,
-      1.66,
-      1.64
+      3.74,
+      2.82,
+      2.41
     ],
     "load_average_after": [
-      2.07,
-      1.7,
-      1.65
+      3.96,
+      3.03,
+      2.52
     ]
   },
   "container": {
@@ -26,47 +26,65 @@
     "prediction_log": "/var/lib/recommenditos/prediction-log.sqlite3"
   },
   "energy_idle": {
-    "seconds": 30.000290493990178,
-    "energy_j": 345.6150423063971,
-    "cpu_energy_j": 45.111755926280026,
-    "ram_energy_j": 300.50328638011706,
+    "seconds": 30.000598229991738,
+    "energy_j": 498.5575359606382,
+    "cpu_energy_j": 48.04416674050373,
+    "ram_energy_j": 450.51336922013434,
     "cpu_power_method": "cpu_load, Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz, TDP 15.0 W"
   },
+  "locust_process": {
+    "cpu_mean_percent": 4.359375,
+    "cpu_max_percent": 43.0
+  },
   "energy_run": {
-    "seconds": 61.14483855999424,
-    "energy_j": 715.0109437266232,
-    "cpu_energy_j": 103.5724594567303,
-    "ram_energy_j": 611.4384842698927,
+    "seconds": 64.00856493799074,
+    "energy_j": 816.1627410210181,
+    "cpu_energy_j": 176.09002643081251,
+    "ram_energy_j": 640.0727145902056,
     "cpu_power_method": "cpu_load, Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz, TDP 15.0 W"
   },
   "locust": {
     "/v1/predict": {
-      "requests": 1184,
+      "requests": 882,
       "failures": 0,
-      "p50_ms": 710.0,
-      "p95_ms": 970.0,
-      "p99_ms": 1100.0,
-      "rate_per_s": 19.723888278895657,
+      "p50_ms": 3100.0,
+      "p95_ms": 5700.0,
+      "p99_ms": 7300.0,
+      "rate_per_s": 14.7,
+      "error_rate": 0.0
+    },
+    "/v1/price-range": {
+      "requests": 291,
+      "failures": 0,
+      "p50_ms": 2800.0,
+      "p95_ms": 5200.0,
+      "p99_ms": 6200.0,
+      "rate_per_s": 4.85,
       "error_rate": 0.0
     },
     "Aggregated": {
-      "requests": 1184,
+      "requests": 1173,
       "failures": 0,
-      "p50_ms": 710.0,
-      "p95_ms": 970.0,
-      "p99_ms": 1100.0,
-      "rate_per_s": 19.723888278895657,
+      "p50_ms": 3100.0,
+      "p95_ms": 5400.0,
+      "p99_ms": 7000.0,
+      "rate_per_s": 19.55,
       "error_rate": 0.0
     }
   },
-  "energy_per_request_j": 0.6038943781474858,
-  "energy_per_request_above_idle_j": 0.008951491374742838,
+  "throughput": {
+    "achieved_per_s": 19.55,
+    "target_per_s": 20.0,
+    "reached": true
+  },
+  "energy_per_request_j": 0.6957909130613965,
+  "energy_per_request_above_idle_j": -0.21103818816952577,
   "docker_stats": {
-    "samples": 31,
-    "memory_max_bytes": 535822336.0,
-    "memory_mean_bytes": 531354049.2387097,
-    "cpu_mean_percent": 161.31645161290325,
-    "cpu_max_percent": 212.74
+    "samples": 32,
+    "memory_max_bytes": 625999872.0,
+    "memory_mean_bytes": 601872793.6,
+    "cpu_mean_percent": 176.9515625,
+    "cpu_max_percent": 293.18
   },
   "metrics": {
     "/health": {
@@ -85,14 +103,19 @@
       "within_300ms": 1.0
     },
     "/v1/predict": {
-      "answers": 1200.0,
-      "within_200ms": 0.10416666666666667,
-      "within_300ms": 0.12166666666666667
+      "answers": 882.0,
+      "within_200ms": 0.0,
+      "within_300ms": 0.0022675736961451248
+    },
+    "/v1/price-range": {
+      "answers": 291.0,
+      "within_200ms": 0.0,
+      "within_300ms": 0.003436426116838488
     }
   },
   "prediction_log": {
-    "answered": 1200,
-    "logged": 1200,
+    "answered": 1173,
+    "logged": 1173,
     "missing": 0,
     "unexpected": 0,
     "duplicated": 0,

@@ -393,7 +393,7 @@ def _overview(result: dict[str, Any]) -> list[str]:
         reached = "yes" if t["reached"] else "no"
         lines.append(
             f"- Achieved {t['achieved_per_s']:.2f} of {t['target_per_s']:g} requests/s"
-            f" ({reached}, at least {RATE_REACHED:.0%} of the target, NFR-03)."
+            f" ({reached}, at least {RATE_REACHED * 100:.0f} % of the target, NFR-03)."
         )
     if "container" in result:
         container = result["container"]

@@ -54,8 +54,8 @@ CodeCarbon runs in `machine` mode, because its `process` mode measures only the 
 No machine we use lets a normal user read the RAPL energy counter (NFR-10), so the figure is CodeCarbon's estimate from the CPU's TDP and the load of the whole machine, plus a constant for the RAM.
 On a laptop that is everything the laptop does, the IDE and Locust included, so a laptop figure says nothing about the API.
 On the VM it is the stack and Locust; the report gives the API container's CPU and Locust's beside it.
-Most of the total is the RAM term, a constant power whatever the load (about 87 % of the dry run's energy), so the energy per request in total mostly measures the run's duration.
-The CPU term follows CodeCarbon's load model, the TDP times 0.1 + 0.9 x load³ with load the whole machine's CPU share, which stays near a tenth of the TDP at moderate load: the dry run's API used 1.6 cores on average, but those are 20 % of the laptop's 8 logical CPUs, and the model gave about 1.7 W.
+Most of the total is the RAM term, a constant power whatever the load (78 % of the dry run's energy), so the energy per request in total mostly measures the run's duration.
+The CPU term follows CodeCarbon's load model, the TDP times 0.1 + 0.9 x load³ with load the whole machine's CPU share, which stays near a tenth of the TDP at moderate load: the dry run's API used 1.8 cores on average, which are 22 % of the laptop's 8 logical CPUs, and the model gave 2.8 W for the CPU.
 CodeCarbon integrates the power every 15 s, so a 60 s run has about four samples; the report states the method, the TDP and the interval, and a 5-minute run on the VM has twenty.
 The idle baseline is measured just before the run, and the energy above it, divided by the requests, leaves the constant RAM term out and is the informative figure; it is reported as not measurable when the machine was busier during the baseline than during the run.
 On a VM CodeCarbon may not find the virtual CPU in its TDP table and fall back to a generic TDP; the report names the method and the TDP it used.
