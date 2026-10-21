@@ -250,7 +250,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 - **Static analysis:** we use ruff; enabling its Pylint rules (`PL`) covers the rubric's "Pylint or flake8", and ruff lints the code cells of the notebooks too, while Pynblint checks their structure.
 - Keep the Docker image small and CPU-only: no deep-learning or GPU libraries without team agreement.
 - **Dependency groups** **[decided]**, [EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `[project] dependencies` in `pyproject.toml` is the serving runtime only, and the API image installs that alone (`uv sync --no-default-groups`).
-  Everything else is in PEP 735 groups (`pipeline`, `notebook`, `docs`, `test`, `dev`), and `default-groups = "all"` keeps a plain `uv sync` installing the whole environment.
+  Everything else is in PEP 735 groups (`pipeline`, `notebook`, `docs`, `test`, `contract`, `dev`), and `default-groups = "all"` keeps a plain `uv sync` installing the whole environment.
   Measured from `uv.lock` on 2026-10-05: the runtime is 23 distributions, the project itself included, and 421 MB of site-packages (519 MB with bytecode), against 248 distributions and 815 MB (1,054 MB) for the full environment; pyarrow alone is 157 MB of it.
   FastAPI, uvicorn and pydantic joined the runtime with the API in M4 ([The API](api.md)); Great Expectations, CodeCarbon and `shap` go into groups.
   CI's `Serving runtime` job (`make test-serving`), a required check, runs the serving path from the runtime set and the test runner alone, so a training-only import in serving code fails the build.

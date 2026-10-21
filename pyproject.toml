@@ -204,6 +204,13 @@ loadtest = [
     "locust>=2.46.7",
     "psutil>=7.2.2",
 ]
+# The API contract tests that Schemathesis generates from the OpenAPI document
+# (`tests/api/test_contract.py`, #144). Not in `test`, because the serving check
+# installs that group, and Schemathesis brings requests, werkzeug and pyyaml,
+# which a serving import could then lean on unnoticed.
+contract = [
+    "schemathesis>=4.32.2",
+]
 
 [tool.uv]
 # Every group, so that `uv sync` and `uv run` still give the whole environment.
