@@ -3,7 +3,7 @@
 The app serves the index the `comparables` stage built from the synthetic
 fixture's train and validation frames. Each answer is held against the rule
 written out a second time here with pandas over that index, so a test checks
-the filter, the order and `k` together; `tests/test_comparables.py` tests each
+the filter, the order and `k` together; `tests/test_comparables_index.py` tests each
 window at its bound on a hand-built index.
 """
 
