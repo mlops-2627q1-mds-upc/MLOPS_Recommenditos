@@ -161,19 +161,30 @@ def test_fr07_a_request_with_every_required_field_gets_the_price_of_predict(
     _assert_range(price_range_answer)
 
 
-@pytest.mark.req("FR-07")
-@pytest.mark.parametrize("left_out", ["power_kw", "registration_date"])
+@pytest.mark.req("FR-07", "FR-02")
+@pytest.mark.parametrize("missing", ["power_kw", "registration_date", "fuel_category"])
+@pytest.mark.parametrize("how", ["left-out", "null"])
 def test_fr07_a_request_missing_a_required_field_gets_the_median(
-    left_out: str, client: TestClient, listing: dict, served: ServedModel
+    missing: str, how: str, client: TestClient, listing: dict, served: ServedModel
 ):
-    """Option C of EDN-85, second branch: the 50 % quantile model's price."""
-    del listing[left_out]
-    matrix = served.matrix(PartialListing(**listing))
-    median = float(served.model.predict_interval_eur(matrix)[INTERVAL_COLUMNS["median"]].iloc[0])
+    """Option C of EDN-85, second branch: the 50 % quantile model's price.
 
-    answer = client.post(PRICE_RANGE, json=listing).json()
+    A required field sent as `null` is as missing as one left out. The expected
+    price comes from the full listing's matrix with that field masked by
+    `Model.mask_absent`, not from the request path under test.
+    """
+    full = served.matrix(ValuationRequest(**listing))
+    seam = seam_names(served.fields, REQUEST_CONTRACT)[missing]
+    masked = served.model.mask_absent(full, [seam])
+    median = float(served.model.predict_interval_eur(masked)[INTERVAL_COLUMNS["median"]].iloc[0])
+    body = {key: value for key, value in listing.items() if key != missing}
+    if how == "null":
+        body[missing] = None
+
+    answer = client.post(PRICE_RANGE, json=body).json()
 
     assert answer["price_eur"] == round(median, 2)
+    assert answer["price_eur"] != client.post(PREDICT, json=listing).json()["price_eur"]
     _assert_range(answer)
 
 
@@ -306,6 +317,7 @@ def test_fr07_a_bundle_without_interval_models_answers_503(trained: dict, listin
         create_app(Path(trained["dir"]) / "lgbm-extended"), raise_server_exceptions=False
     ) as extended:
         assert not extended.app.state.served.has_price_range  # type: ignore[attr-defined]
+        assert extended.get("/health").json()["price_range"] is False
 
         problem = assert_problem(extended.post(PRICE_RANGE, json={"make": listing["make"]}), 503)
 

@@ -54,7 +54,7 @@ The operational endpoints are not part of that contract and stay at the root, wh
 | `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08, FR-13 |
 | `POST /v1/price-range` | The typical price and the nominal 90 % price range in EUR for a car described by any fields that include its make, the model, a request ID and warnings | FR-02 to FR-05, FR-07, FR-13 |
 | `POST /v1/feedback` | Stores the observed price of an answered listing against its request ID; internal, requires the API key | FR-10 |
-| `GET /health` | `ok` and the served model: its variant, version and training time | FR-11, FR-12 |
+| `GET /health` | `ok`, the served model (its variant, version and training time), and `price_range`, whether the bundle can answer `/v1/price-range` | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
 | `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
 
@@ -145,7 +145,7 @@ On the 19,665 listings of the test split, with the fields left out as a client w
 Measured in-process with `TestClient` on the shared 4-core development laptop under a load average of 4 to 6, over 900 requests built from test listings, 300 each make-only, P1 and full, a request took p50 38 ms and p95 47 ms, with no shape above p95 49 ms (`reports/analysis/price_range_latency.py`).
 That is inside NFR-02's 300 ms, which the load test on the target VM checks.
 
-A bundle without interval models, such as `lgbm-extended`, serves `/v1/predict` and answers `/v1/price-range` with a 503 problem.
+A bundle without interval models, such as `lgbm-extended`, serves `/v1/predict` and answers `/v1/price-range` with a 503 problem; `/health` then reports `"price_range": false`.
 
 ### Model version and request ID
 
@@ -255,7 +255,7 @@ Setting the variable and the volume on the VM is part of the deployment (NFR-04)
 ## Errors
 
 Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details object with the media type `application/problem+json` ([EDN-84](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-That holds for every error path: a request that fails validation, an unsupported make, a body over the size limit, an unknown route, a wrong method, and an unexpected failure.
+That holds for every error path: a request that fails validation, an unsupported make, a body over the size limit, an unknown route, a wrong method, a price range from a bundle without interval models (503), and an unexpected failure.
 
 ```json
 {

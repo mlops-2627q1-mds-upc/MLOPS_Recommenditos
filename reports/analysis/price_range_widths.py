@@ -16,10 +16,11 @@ left out by `Model.mask_absent`:
 Per scenario: the mean and the median relative width, `(upper - lower) / typical price`; the
 coverage of the served (widened) range; and the share of rows whose bounds were widened.
 
-Run: `uv run python reports/analysis/price_range_widths.py`, with the log lines removed, gives
+Run: `uv run python reports/analysis/price_range_widths.py` gives
 `price_range_widths_results.txt` (2026-10-20).
 """
 
+from loguru import logger
 import numpy as np
 
 from recommenditos.api.serving import price_range
@@ -39,6 +40,8 @@ SPLIT = "test"
 
 
 def main():
+    # The stages' log lines go to stderr, and none of them belongs in the results file.
+    logger.remove()
     params = load_params(PARAMS_FILE)
     model = load_model(MODELS_DIR / VARIANT)
     space = FeatureSpace.load(

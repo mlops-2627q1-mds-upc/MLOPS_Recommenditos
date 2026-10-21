@@ -11,7 +11,7 @@ the basic feature set the listing has). `ROUNDS` rounds of `PER_SHAPE` listings 
 interleaved, after `WARM_UP` unmeasured requests. The load average is printed before and after,
 because the laptop is shared.
 
-Run: `uv run python reports/analysis/price_range_latency.py`, with the log lines removed, gives
+Run: `uv run python reports/analysis/price_range_latency.py` gives
 `price_range_latency_results.txt` (2026-10-20).
 """
 
@@ -19,6 +19,7 @@ import os
 import time
 
 from fastapi.testclient import TestClient
+from loguru import logger
 import numpy as np
 import pandas as pd
 
@@ -67,6 +68,8 @@ def body(row: pd.Series, fields: tuple[str, ...]) -> dict:
 
 
 def main():
+    # The stages' log lines go to stderr, and none of them belongs in the results file.
+    logger.remove()
     client = TestClient(create_app())
     served = client.app.state.served
     frame = pd.read_parquet(PROCESSED_DATA_DIR / "test.parquet")

@@ -1,4 +1,3 @@
-[32m2026-10-20 20:42:46.045[0m | [1mINFO    [0m | [36mrecommenditos.pipeline[0m:[36mread_frame[0m:[36m38[0m - [1mRead 19,665 rows from /home/lukas/Documents/Studium/Master/UPC/MLOps/MLOPS_Recommenditos/.claude/worktrees/price-range-139/data/processed/features/basic/test.parquet as 'features-basic'.[0m
 lgbm-basic, test split, 19,665 rows
 
 scenario            typical price  mean width  median width  coverage  widened
