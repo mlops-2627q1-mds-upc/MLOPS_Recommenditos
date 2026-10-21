@@ -62,7 +62,7 @@ def _plan_the_mix(environment: Environment, **_: Any) -> None:
     bodies = [json.loads(line) for line in lines if line.strip()]
     # The target the person running the test named with --host.
     url = f"{str(environment.host).rstrip('/')}/openapi.json"
-    with urlopen(url, timeout=10) as answer:
+    with urlopen(url, timeout=10) as answer:  # noqa: S310
         openapi = json.load(answer)
     plan = _state["plan"] = build_plan(openapi, bodies)
     for endpoint in plan.endpoints:
@@ -94,7 +94,7 @@ class Seller(HttpUser):
     """A client of the valuation endpoints, at its share of `--rate`."""
 
     def on_start(self) -> None:
-        self.rng = random.Random()
+        self.rng = random.Random()  # noqa: S311 - picks request bodies, no secret
         options = _options(self.environment)
         self.pace = constant_throughput(options.rate / options.num_users)
 

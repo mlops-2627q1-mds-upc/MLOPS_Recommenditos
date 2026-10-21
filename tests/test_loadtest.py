@@ -4,6 +4,7 @@ The run itself needs a stack and is documented in docs/docs/load-testing.md;
 these tests hold the parts that turn what a run collects into its figures.
 """
 
+import json
 import random
 
 import pandas as pd
@@ -75,7 +76,7 @@ def test_a_target_without_a_valuation_endpoint_stops_the_run():
 def test_the_mix_follows_the_weights():
     schema = {"properties": {field: {} for field in LISTING}, "required": []}
     plan = build_plan(_openapi(predict=schema, price_range=schema, comparables=schema), [LISTING])
-    rng = random.Random(0)
+    rng = random.Random(0)  # noqa: S311 - a reproducible draw, no secret
 
     paths = [plan.pick(rng)[0] for _ in range(5000)]
 
@@ -110,7 +111,7 @@ def test_a_listing_without_a_required_field_gives_no_body():
 
 def test_the_shares_within_the_targets_come_from_the_difference_of_two_scrapes():
     metrics = ApiMetrics(ModelInfo(variant="lgbm-basic", version="abc", trained_at=None))
-    metrics.observe_request("POST", "/v1/predict", 200, 0.5)  # before the run
+    metrics.observe_request("POST", "/v1/predict", 200, 0.1)  # before the run, within both
     before = measure.latency_buckets(metrics.exposition().decode())
     for latency in (0.05, 0.15, 0.25, 0.35):
         metrics.observe_request("POST", "/v1/predict", 200, latency)
@@ -137,25 +138,25 @@ def test_docker_stats_lines_are_read_in_bytes_and_percent(line, expected):
     assert cpu == expected[1]
 
 
-def test_locust_statistics_are_read_per_endpoint(tmp_path):
-    columns = (
-        "Type,Name,Request Count,Failure Count,Median Response Time,Average Response Time,"
-        "Min Response Time,Max Response Time,Average Content Size,Requests/s,Failures/s,"
-        "50%,66%,75%,80%,90%,95%,98%,99%,99.9%,99.99%,100%"
-    )
-    stats = tmp_path / "run_stats.csv"
-    stats.write_text(
-        f"{columns}\n"
-        "POST,/v1/predict,1200,6,45,52,20,900,1500,20.0,0.1,45,50,55,60,80,120,200,300,800,900,900\n"
-        ",Aggregated,1200,6,45,52,20,900,1500,20.0,0.1,45,50,55,60,80,120,200,300,800,900,900\n",
-        encoding="utf-8",
-    )
+def test_locust_statistics_are_read_per_endpoint_and_in_total(tmp_path):
+    # The shape of Locust's `--json-file` output, keys of `response_times` as strings.
+    entries = [
+        {"name": "/v1/predict", "method": "POST", "num_requests": 100, "num_failures": 1,
+         "response_times": {"40": 50, "60": 45, "200": 4, "900": 1}},
+        {"name": "/v1/price-range", "method": "POST", "num_requests": 20, "num_failures": 0,
+         "response_times": {"30": 20}},
+    ]  # fmt: skip
+    path = tmp_path / "run-locust.json"
+    path.write_text(json.dumps(entries), encoding="utf-8")
 
-    read = measure.read_locust_stats(stats)
+    read = measure.read_locust_json(path, seconds=10)
 
-    assert read["/v1/predict"].p95_ms == 120
-    assert read["/v1/predict"].error_rate == pytest.approx(0.005)
-    assert read["Aggregated"].requests == 1200
+    predict = read["/v1/predict"]
+    assert (predict.p50_ms, predict.p95_ms, predict.p99_ms) == (40, 60, 200)
+    assert predict.error_rate == pytest.approx(0.01)
+    assert predict.rate_per_s == 10
+    assert (read["Aggregated"].requests, read["Aggregated"].failures) == (120, 1)
+    assert read["Aggregated"].rate_per_s == 12
 
 
 def test_the_log_check_passes_only_with_one_record_per_answer():

@@ -7,8 +7,9 @@ stack. Standard library only, like `plan.py`.
 
 from collections import Counter
 from collections.abc import Iterable, Mapping
-import csv
 from dataclasses import dataclass
+import json
+import math
 from pathlib import Path
 import re
 
@@ -100,19 +101,55 @@ class EndpointStats:
         return self.failures / self.requests if self.requests else 0.0
 
 
-def read_locust_stats(path: Path) -> dict[str, EndpointStats]:
-    """Locust's `<prefix>_stats.csv`, by request name; `Aggregated` is the total."""
+def percentile(histogram: Mapping[int, int], share: float) -> float:
+    """The smallest response time that `share` of the requests did not exceed.
+
+    `histogram` maps a response time in ms, as Locust rounds it, to its count.
+    """
+    total = sum(histogram.values())
+    if not total:
+        return math.nan
+    needed = math.ceil(share * total)
+    seen = 0
+    for milliseconds in sorted(histogram):
+        seen += histogram[milliseconds]
+        if seen >= needed:
+            return float(milliseconds)
+    return float(max(histogram))
+
+
+def _stats(
+    histogram: Mapping[int, int], requests: int, failures: int, seconds: float
+) -> EndpointStats:
+    return EndpointStats(
+        requests=requests,
+        failures=failures,
+        p50_ms=percentile(histogram, 0.50),
+        p95_ms=percentile(histogram, 0.95),
+        p99_ms=percentile(histogram, 0.99),
+        rate_per_s=requests / seconds,
+    )
+
+
+def read_locust_json(path: Path, seconds: float) -> dict[str, EndpointStats]:
+    """Locust's `--json-file` output, by request name, with `Aggregated` as the total.
+
+    Locust writes this file once, after the last request finished, unlike its
+    CSV statistics, which are a snapshot taken every second. The rate is over
+    the run's nominal duration.
+    """
     stats = {}
-    with path.open(encoding="utf-8", newline="") as handle:
-        for row in csv.DictReader(handle):
-            stats[row["Name"]] = EndpointStats(
-                requests=int(row["Request Count"]),
-                failures=int(row["Failure Count"]),
-                p50_ms=float(row["50%"]),
-                p95_ms=float(row["95%"]),
-                p99_ms=float(row["99%"]),
-                rate_per_s=float(row["Requests/s"]),
-            )
+    total: Counter[int] = Counter()
+    requests = failures = 0
+    for entry in json.loads(path.read_text(encoding="utf-8")):
+        histogram = {int(ms): count for ms, count in entry["response_times"].items()}
+        stats[entry["name"]] = _stats(
+            histogram, entry["num_requests"], entry["num_failures"], seconds
+        )
+        total.update(histogram)
+        requests += entry["num_requests"]
+        failures += entry["num_failures"]
+    stats["Aggregated"] = _stats(total, requests, failures, seconds)
     return stats
 
 

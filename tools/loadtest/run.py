@@ -17,8 +17,8 @@ targets, measures what the run did to the API container:
 
 It must run on the machine whose Docker daemon runs the stack (or with
 `DOCKER_HOST` pointing at it); `--no-docker` measures from Locust alone. It
-writes `<out>.json`, `<out>.md` and Locust's `<out>-locust_stats.csv` and
-`<out>-locust_failures.csv`. Standard library, Locust and CodeCarbon only, so a
+writes `<out>.json`, `<out>.md` and Locust's own statistics,
+`<out>-locust.json`. Standard library, Locust, CodeCarbon and psutil only, so a
 checkout with `uv sync --only-group loadtest` runs it; docs/docs/load-testing.md
 says how to run it on the VM.
 """
@@ -41,6 +41,7 @@ from typing import Any
 
 from codecarbon import OfflineEmissionsTracker
 from codecarbon.output import OutputMethod
+import psutil
 
 from tools.loadtest import measure
 
@@ -53,6 +54,14 @@ P95_TARGET_MS = {"/v1/predict": 200.0, "/v1/price-range": 300.0, "/v1/comparable
 ERROR_RATE = 0.01
 MEMORY_TARGET_BYTES = 1e9
 VALUATION_ENDPOINTS = tuple(P95_TARGET_MS)
+#: The share of the target rate a run must achieve to count as sustaining it.
+RATE_REACHED = 0.95
+#: Locust users per request per second of the target rate. Each user waits for
+#: its answer, so at 4 users per unit of rate the rate holds until an answer
+#: takes 4 s; with one user per unit it would drop as soon as one took 1 s.
+USERS_PER_RATE = 4
+#: How often CodeCarbon integrates its power samples, as in `energy.py`.
+MEASURE_POWER_SECS = 15
 
 #: The environment variable of the prediction log's file in the API container (#140).
 PREDICTION_LOG_ENV_VAR = "RECOMMENDITOS_PREDICTION_LOG"
@@ -94,8 +103,8 @@ def seconds(duration: str) -> int:
 
 def docker(*args: str) -> str:
     # Arguments this module builds itself; `docker` from PATH, as a user runs it.
-    return subprocess.run(
-        ["docker", *args],
+    return subprocess.run(  # noqa: S603
+        ["docker", *args],  # noqa: S607
         capture_output=True,
         text=True,
         check=True,
@@ -165,7 +174,7 @@ def tracker(output_dir: Path, name: str) -> OfflineEmissionsTracker:
         cloud_provider=None,
         cloud_region=None,
         tracking_mode="machine",
-        measure_power_secs=15,
+        measure_power_secs=MEASURE_POWER_SECS,
         output_dir=str(output_dir),
         output_file="emissions.csv",
         output_methods=[OutputMethod.CSV],
@@ -276,7 +285,7 @@ def locust_command(args: argparse.Namespace, users: int, ids_file: Path) -> list
         *("--host", args.host, "-u", str(users), "-r", str(users)),
         *("-t", f"{seconds(args.duration)}s", "--rate", str(args.rate)),
         *("--bodies", str(args.bodies), "--request-ids", str(ids_file)),
-        *("--csv", f"{args.out}-locust", "--only-summary", "--exit-code-on-error", "0"),
+        *("--json-file", f"{args.out}-locust", "--only-summary", "--exit-code-on-error", "0"),
         # At the end of the run, a user finishes the request it is waiting for
         # instead of abandoning it, so that every answer the API logged reached
         # the client and the prediction-log check compares like with like.
@@ -284,10 +293,31 @@ def locust_command(args: argparse.Namespace, users: int, ids_file: Path) -> list
     ]
 
 
+def run_locust(command: list[str], environment: dict[str, str]) -> dict[str, float]:
+    """Run Locust to its end, sampling its own CPU, which competes with the API's."""
+    # This interpreter running Locust with the arguments `locust_command` built.
+    process = subprocess.Popen(command, cwd=ROOT, env=environment)  # noqa: S603
+    watched = psutil.Process(process.pid)
+    watched.cpu_percent()
+    samples = []
+    while process.poll() is None:
+        time.sleep(2)
+        try:
+            samples.append(watched.cpu_percent())
+        except psutil.NoSuchProcess:
+            break
+    if process.wait() != 0:
+        raise SystemExit(f"Locust failed with exit code {process.returncode}")
+    return {
+        "cpu_mean_percent": sum(samples) / len(samples) if samples else math.nan,
+        "cpu_max_percent": max(samples, default=math.nan),
+    }
+
+
 def run(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     out: Path = args.out
     out.parent.mkdir(parents=True, exist_ok=True)
-    users = args.users or max(1, math.ceil(args.rate))
+    users = args.users or max(1, math.ceil(USERS_PER_RATE * args.rate))
     result: dict[str, Any] = {
         "label": out.name,
         "note": args.note,
@@ -316,19 +346,22 @@ def run(args: argparse.Namespace, work: Path) -> dict[str, Any]:
     environment = {**os.environ, "PYTHONPATH": str(ROOT)}
 
     def load() -> None:
-        # This interpreter running Locust with arguments built above.
-        subprocess.run(command, cwd=ROOT, env=environment, check=True)
+        result["locust_process"] = run_locust(command, environment)
 
     if args.no_energy:
         load()
     else:
         result["energy_run"] = measure_energy(work, "run", load)
     result["machine"]["load_average_after"] = load_average()
-    for suffix in ("_stats_history.csv", "_exceptions.csv"):
-        Path(f"{out}-locust{suffix}").unlink(missing_ok=True)
 
-    stats = measure.read_locust_stats(Path(f"{out}-locust_stats.csv"))
+    stats = measure.read_locust_json(Path(f"{out}-locust.json"), result["duration_s"])
     result["locust"] = {n: {**asdict(s), "error_rate": s.error_rate} for n, s in stats.items()}
+    achieved = stats["Aggregated"].rate_per_s
+    result["throughput"] = {
+        "achieved_per_s": achieved,
+        "target_per_s": args.rate,
+        "reached": achieved >= RATE_REACHED * args.rate,
+    }
     result |= energy_per_request(result, stats["Aggregated"].requests)
     if probe:
         result |= probe.finish(ids_file.read_text(encoding="utf-8").split())
@@ -355,6 +388,13 @@ def _overview(result: dict[str, Any]) -> list[str]:
             f" after: {machine['load_average_after']}."
         ),
     ]
+    if "throughput" in result:
+        t = result["throughput"]
+        reached = "yes" if t["reached"] else "no"
+        lines.append(
+            f"- Achieved {t['achieved_per_s']:.2f} of {t['target_per_s']:g} requests/s"
+            f" ({reached}, at least {RATE_REACHED:.0%} of the target, NFR-03)."
+        )
     if "container" in result:
         container = result["container"]
         lines.append(f"- API image `{container['image']}`, {container['workers']} worker(s).")
@@ -406,13 +446,32 @@ def _resources(result: dict[str, Any]) -> list[str]:
             f"- CPU: {cpu} (100 % is one core).",
             "",
         ]
+    if "locust_process" in result:
+        lp = result["locust_process"]
+        lines += [
+            "## Locust process (psutil)",
+            "",
+            (
+                f"- CPU: mean {lp['cpu_mean_percent']:.0f} %, max {lp['cpu_max_percent']:.0f} %"
+                " (100 % is one core), on the machine it ran on."
+            ),
+            "",
+        ]
     if "energy_run" in result:
         e = result["energy_run"]
         per_request = result.get("energy_per_request_j", math.nan)
         lines += [
             "## Energy (CodeCarbon, whole machine, NFR-10)",
             "",
-            f"- Method: {e['cpu_power_method']}; `machine` tracking mode.",
+            (
+                f"- Method: {e['cpu_power_method']}; `machine` tracking mode,"
+                f" power integrated every {MEASURE_POWER_SECS} s."
+            ),
+            (
+                f"- Of the run's energy, CPU {e['cpu_energy_j']:.0f} J and RAM"
+                f" {e['ram_energy_j']:.0f} J, the RAM part CodeCarbon's constant power;"
+                " the figure above the idle baseline leaves that constant out."
+            ),
             (
                 f"- Run: {e['energy_j']:.0f} J over {e['seconds']:.0f} s"
                 f" ({e['energy_j'] / e['seconds']:.1f} W), {per_request:.3f} J per request."
@@ -434,7 +493,7 @@ def _resources(result: dict[str, Any]) -> list[str]:
 
 def _log(result: dict[str, Any]) -> list[str]:
     log = result.get("prediction_log")
-    if not log:
+    if not log or not (log["answered"] or log["logged"]):
         return ["## Prediction log (NFR-03)", "", "- Not checked: the API has no prediction log."]
     verdict = "yes" if log["exactly_once"] else "no"
     return [

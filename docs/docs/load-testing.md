@@ -27,19 +27,21 @@ At start, the Locust file reads the target's OpenAPI document and calls `/v1/pre
 An endpoint the target does not serve is left out and named in the output, and each body is cut down to the fields the endpoint's request schema defines.
 
 **The rate.**
-`--rate` requests per second are shared evenly by as many Locust users as the rate (20 users at 1 request per second each for NFR-03's 20 requests/s).
-A user waits for its answer before it sends the next request, so a target that cannot keep up gets fewer requests per second rather than a growing queue: the achieved rate is part of the result.
+`--rate` requests per second are shared evenly by four Locust users per request per second (80 users at 0.25 requests per second each for NFR-03's 20 requests/s).
+A user waits for its answer before it sends the next request, so each has a budget of 4 s per request: the total rate holds until answers take about 4 s, and a target slower than that gets fewer requests per second rather than a growing queue.
+The report therefore states the achieved rate, the answers divided by the duration, against the target, and counts the target as sustained when at least 95 % of it was achieved.
 At the end of the run, each user finishes the request it is waiting for.
-Locust's statistics leave out those last answers, up to one per user (1,184 of 1,200 in the dry run), while `/metrics` and the prediction-log check count them.
+The counts and percentiles come from Locust's `--json-file` statistics, which Locust writes once at the end; its CSV statistics are a snapshot taken every second and miss the last answers.
 
 **The measurements.**
 `tools/loadtest/run.py` takes them on the Docker host of the stack, around the Locust run:
 
 | Figure | Source | Requirement |
 |--------|--------|-------------|
-| Requests, achieved rate, error rate, p50, p95 and p99 latency per endpoint | Locust, at the client | NFR-02, NFR-03 |
+| Requests, achieved rate against the target, error rate, p50, p95 and p99 latency per endpoint | Locust, at the client | NFR-02, NFR-03 |
 | Share of answers within 200 ms and 300 ms per endpoint | Two scrapes of `/metrics` inside the API container, before and after the run | NFR-02 |
 | API container memory (max and mean) and CPU | `docker stats`, sampled about every 2 s | NFR-04 |
+| Locust's own CPU, which competes with the API's when both run on one machine | psutil, every 2 s | - |
 | Energy per request, in total and above an idle baseline | CodeCarbon over the run and over an idle period before it | NFR-10 |
 | One prediction-log record per successful valuation, none missing, none extra | The request IDs Locust received against the records the log gained during the run | NFR-03 |
 
@@ -51,8 +53,11 @@ Every 4xx or 5xx answer is an error.
 CodeCarbon runs in `machine` mode, because its `process` mode measures only the process that runs it and its children, and the API runs in a container.
 No machine we use lets a normal user read the RAPL energy counter (NFR-10), so the figure is CodeCarbon's estimate from the CPU's TDP and the load of the whole machine, plus a constant for the RAM.
 On a laptop that is everything the laptop does, the IDE and Locust included, so a laptop figure says nothing about the API.
-On the VM it is the stack and Locust; the report gives the API container's CPU from `docker stats` beside it.
-The idle baseline is measured just before the run, and the energy above it, divided by the requests, is the closest figure to the API's own cost; it is reported as not measurable when the machine was busier during the baseline than during the run.
+On the VM it is the stack and Locust; the report gives the API container's CPU and Locust's beside it.
+Most of the total is the RAM term, a constant power whatever the load (about 87 % of the dry run's energy), so the energy per request in total mostly measures the run's duration.
+The CPU term follows CodeCarbon's load model, the TDP times 0.1 + 0.9 x load³ with load the whole machine's CPU share, which stays near a tenth of the TDP at moderate load: the dry run's API used 1.6 cores on average, but those are 20 % of the laptop's 8 logical CPUs, and the model gave about 1.7 W.
+CodeCarbon integrates the power every 15 s, so a 60 s run has about four samples; the report states the method, the TDP and the interval, and a 5-minute run on the VM has twenty.
+The idle baseline is measured just before the run, and the energy above it, divided by the requests, leaves the constant RAM term out and is the informative figure; it is reported as not measurable when the machine was busier during the baseline than during the run.
 On a VM CodeCarbon may not find the virtual CPU in its TDP table and fall back to a generic TDP; the report names the method and the TDP it used.
 
 ## Run it locally
@@ -67,7 +72,7 @@ make stack-down
 ```
 
 `make loadtest` takes `LOADTEST_URL` (default `http://localhost:8080`), `LOADTEST_RATE` (20), `LOADTEST_DURATION` (`5m`) and `LOADTEST_OUT`, and passes `LOADTEST_ARGS` on: `--idle 0` skips the 60 s idle baseline, `--no-energy` skips CodeCarbon, and `--no-docker` measures from Locust alone, for a target whose Docker daemon this machine cannot reach.
-It writes `<out>.md`, the figures beside their targets, `<out>.json`, every figure, and Locust's `<out>-locust_stats.csv` and `<out>-locust_failures.csv`.
+It writes `<out>.md`, the figures beside their targets, `<out>.json`, every figure, and Locust's statistics, `<out>-locust.json`.
 
 A laptop run is a dry run of the procedure and is labelled as one: [`reports/loadtest/laptop-dry-run-2026-10-21.md`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/laptop-dry-run-2026-10-21.md) is the first.
 
@@ -78,7 +83,7 @@ After the lab session of 2026-10-27, once the stack is deployed ([Deployment](de
 **Where Locust runs.**
 On the VM itself, against `http://localhost:<HTTP_PORT>`.
 `docker stats`, the `/metrics` scrape and the prediction log need the VM's Docker daemon, and CodeCarbon measures the machine it runs on.
-Locust then shares the VM's CPU with the stack; at 20 requests/s it needs a few percent of one core, and its share is visible in the report beside the API container's.
+Locust then shares the VM's CPU with the stack; the report gives its CPU beside the API container's.
 Its latency then contains no network, which is what NFR-02's "on the target VM" asks for.
 
 **Setup on the VM**, as the deploy user, once: a checkout of the public repository, without any DagsHub token, and an environment with Locust and CodeCarbon alone.
@@ -109,7 +114,7 @@ uv run --no-sync python -m tools.loadtest.run --host http://localhost:80 --rate 
 Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with.
 
 **What to record.**
-Copy the four files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note.
+Copy the three files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note.
 The prediction log keeps the run's records; they are 2 x 6,000 requests of about 750 bytes, far below its 2 GB cap; the report's start time and duration mark them, so M6's drift job can leave them out.
 
 **What follows.**
