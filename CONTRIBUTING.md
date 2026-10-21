@@ -58,7 +58,7 @@ Only the image, and `make test-serving` below, opt out with `--no-default-groups
 Adding one:
 
 ```bash
-uv add --group pipeline <package>   # or notebook, docs, test, contract, dev
+uv add --group pipeline <package>   # or notebook, docs, test, contract, loadtest, dev
 uv add <package>                    # the serving runtime, only by the rule below
 ```
 
