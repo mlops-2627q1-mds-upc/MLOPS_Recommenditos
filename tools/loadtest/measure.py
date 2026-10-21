@@ -22,7 +22,7 @@ _SAMPLE = re.compile(
     r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(?P<labels>.*)\})?\s+(?P<value>\S+)"
 )
 _LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
-_SIZE = re.compile(r"^\s*([0-9.]+)\s*([KMGT]?i?B)\s*$")
+_SIZE = re.compile(r"^\s*([0-9.]+)\s*([kKMGT]?i?B)\s*$")
 _UNITS = {
     "B": 1,
     "kB": 1e3,
