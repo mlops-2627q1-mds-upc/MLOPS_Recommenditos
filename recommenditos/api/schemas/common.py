@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 import re
 from typing import Annotated, Any, ClassVar
 
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 # --------------------------------------------------------------------------
 # Field types
@@ -32,20 +32,27 @@ from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Fie
 #: of FR-03 itself; the upper bound moves with the calendar and is checked below.
 _YEAR_MONTH = re.compile(r"^((?:19|20)\d{2})-(0[1-9]|1[0-2])$")
 
+#: Any year: a month outside the range then gets the range in its error rather
+#: than the pattern.
+_ANY_YEAR_MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
 #: The earliest registration month FR-03 accepts.
 EARLIEST_REGISTRATION = "1900-01"
 
 
-def _not_after_this_month(value: str) -> str:
-    """FR-03: a registration month lies between 1900-01 and the request month."""
-    match = _YEAR_MONTH.match(value)
-    if match is None:  # the pattern has already refused it; kept for the type checker
-        raise ValueError("must be a month in the form YYYY-MM")
+def _within_registration_range(value: Any) -> Any:
+    """FR-03: a registration month lies between 1900-01 and the request month.
+
+    It runs before the pattern, so `"1899-12"` and next month are both told the
+    range; a value that is no month at all is left to the pattern and the type.
+    """
+    if not isinstance(value, str) or not _ANY_YEAR_MONTH.match(value):
+        return value
     now = datetime.now(UTC)
-    if value > f"{now.year:04d}-{now.month:02d}":
+    this_month = f"{now.year:04d}-{now.month:02d}"
+    if not EARLIEST_REGISTRATION <= value <= this_month:
         raise ValueError(
-            f"must lie between {EARLIEST_REGISTRATION} and the current month, "
-            f"{now.year:04d}-{now.month:02d}"
+            f"must lie between {EARLIEST_REGISTRATION} and the current month, {this_month}"
         )
     return value
 
@@ -75,7 +82,7 @@ RegistrationDate = Annotated[
         "current month. The car's age is computed from it at the request date.",
         examples=["2019-06"],
     ),
-    AfterValidator(_not_after_this_month),
+    BeforeValidator(_within_registration_range),
 ]
 MileageKm = Annotated[
     float,

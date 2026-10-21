@@ -21,7 +21,6 @@ import sys
 import threading
 import time
 
-from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 import httpx2
@@ -171,7 +170,8 @@ def test_fr13_a_refused_request_is_not_an_answer_and_writes_no_record(
 def test_fr13_startup_creates_the_log(bundle: Path, tmp_path: Path):
     log_file = tmp_path / "new" / "prediction-log.sqlite3"
 
-    create_app(bundle, Settings(prediction_log=log_file)).state.store.close()
+    with TestClient(create_app(bundle, Settings(prediction_log=log_file))):
+        pass
 
     tables = {row[0] for row in _rows(log_file, "SELECT name FROM sqlite_master")}
     assert {"predictions", "feedback", "labelled_predictions"} <= tables
@@ -242,16 +242,13 @@ def test_nfr03_a_route_that_records_twice_fails(store: SqliteStore):
 
 @pytest.mark.req("NFR-03")
 def test_nfr03_an_answer_the_log_cannot_hold_is_a_503_not_an_answer(
-    bundle: Path, tmp_path: Path, listing: dict
+    bundle: Path, tmp_path: Path, listing: dict, monkeypatch: pytest.MonkeyPatch
 ):
+    def full_disk(self: SqliteStore, record: AnswerRecord) -> None:
+        raise StoreError("database or disk is full")
+
+    monkeypatch.setattr(SqliteStore, "record_answer", full_disk)
     app = create_app(bundle, Settings(prediction_log=tmp_path / "log.sqlite3"))
-
-    class FullDisk(SqliteStore):
-        def record_answer(self, record: AnswerRecord) -> None:
-            raise StoreError("database or disk is full")
-
-    app.state.store.close()
-    app.state.store = FullDisk(tmp_path / "log.sqlite3", max_bytes=10**9)
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post(PREDICT, json=listing)
 
@@ -407,9 +404,33 @@ def test_nfr04_nothing_is_pruned_under_the_cap(store: SqliteStore):
 # --------------------------------------------------------------------------
 
 
-def test_the_app_holds_its_store(app: FastAPI, log_file: Path):
-    assert isinstance(app.state.store, SqliteStore)
-    assert app.state.store.path == log_file
+def test_the_app_holds_its_store(client: TestClient, log_file: Path):
+    store = client.app_state["store"]
+    assert isinstance(store, SqliteStore)
+    assert store.path == log_file
+
+
+def test_a_log_that_cannot_be_opened_stops_the_startup(bundle: Path, tmp_path: Path):
+    log_file = tmp_path / "log.sqlite3"
+    connection = sqlite3.connect(log_file)
+    connection.execute("PRAGMA user_version = 99")
+    connection.close()
+    app = create_app(bundle, Settings(prediction_log=log_file))
+
+    with pytest.raises(StoreError, match="schema version 99"), TestClient(app):
+        pass
+
+
+@pytest.mark.req("FR-13")
+def test_an_app_started_twice_records_in_both_runs(bundle: Path, tmp_path: Path, listing: dict):
+    """A second run of the same app object opens a store of its own (Schemathesis restarts it)."""
+    log_file = tmp_path / "log.sqlite3"
+    app = create_app(bundle, Settings(prediction_log=log_file))
+    for _ in range(2):
+        with TestClient(app) as client:
+            assert client.post(PREDICT, json=listing).status_code == 200
+
+    assert _rows(log_file, "SELECT count(*) FROM predictions")[0][0] == 2
 
 
 @pytest.mark.req("NFR-04", "NFR-02")

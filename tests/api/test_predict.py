@@ -252,6 +252,18 @@ _INVALID = [
 
 
 @pytest.mark.req("FR-03")
+@pytest.mark.parametrize("month", ["1899-12", "0000-01", _next_month()])
+def test_fr03_a_month_outside_the_range_is_told_the_range(
+    month: str, client: TestClient, listing: dict
+):
+    problem = assert_problem(
+        client.post(PREDICT, json={**listing, "registration_date": month}), 422
+    )
+
+    assert "between 1900-01 and the current month" in problem["errors"][0]["detail"]
+
+
+@pytest.mark.req("FR-03")
 @pytest.mark.parametrize(("field", "value"), _INVALID)
 def test_fr03_refuses_an_invalid_value(field: str, value, client: TestClient, listing: dict):
     problem = assert_problem(client.post(PREDICT, json={**listing, field: value}), 422)

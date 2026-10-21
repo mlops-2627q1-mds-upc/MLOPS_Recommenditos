@@ -206,7 +206,7 @@ loadtest = [
 ]
 # The API contract tests that Schemathesis generates from the OpenAPI document
 # (`tests/api/test_contract.py`, #144). Not in `test`, because the serving check
-# installs that group, and Schemathesis brings requests, werkzeug and pyyaml,
+# installs that group, and Schemathesis brings requests and werkzeug,
 # which a serving import could then lean on unnoticed.
 contract = [
     "schemathesis>=4.32.2",

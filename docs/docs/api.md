@@ -376,7 +376,8 @@ Generation is deterministic, so every run sends the same requests, and a failure
 For the five operations so far that is about 640 requests in about 11 seconds on a laptop CPU.
 An operation behind an API key, such as `/v1/feedback`, gets the test app's key, and Schemathesis also checks that it refuses a request without it.
 
-The OpenAPI document is what a client codes against, so the API keeps to it as written: a listing body is strict, and `0` is not a boolean nor `"45000"` a number, while a whole float such as `4.0` is an integer, as JSON Schema defines one.
+The OpenAPI document is what a client codes against, so the API keeps to it as written: a request body is strict, and `0` is not a boolean nor `"45000"` a number, while a whole float such as `4.0` is an integer, as JSON Schema defines one.
 A constraint the schema cannot state needs a hook in the test module.
 The one so far is that `registration_date` must not lie after the current month (FR-03): the pattern states the lower bound, 1900-01, and the upper bound moves with the calendar.
+The response schemas allow additional properties, so a field an answer gains without being documented is not caught; a documented field that changes its type or goes missing is.
 A generated feedback names a request ID the prediction log does not hold, so the stored, repeated and conflicting prices of `/v1/feedback` are left to `tests/api/test_feedback.py`.

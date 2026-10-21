@@ -199,6 +199,38 @@ def test_fr10_an_invalid_body_is_a_422(field: str, value: object, client: TestCl
     assert [error["pointer"] for error in problem["errors"]] == [f"#/{field}"]
 
 
+@pytest.mark.req("FR-10", "FR-03")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("observed_price_eur", "20500", id="price-a-numeric-string"),
+        pytest.param("observed_price_eur", True, id="price-a-boolean"),
+    ],
+)
+def test_fr10_a_value_of_another_json_type_is_not_stored(
+    field: str, value: object, client: TestClient, listing: dict, log_file: Path
+):
+    """The body has the JSON types the OpenAPI document gives it, as a listing does (#144).
+
+    Against an answer the log holds, so that the 422 is not hidden behind the 404
+    of an unknown request ID.
+    """
+    answer = _answer(client, listing)
+    body = {**_feedback(answer["request_id"], 18000.0), field: value}
+
+    problem = assert_problem(client.post(FEEDBACK, json=body, headers=KEY), 422)
+
+    assert [error["pointer"] for error in problem["errors"]] == [f"#/{field}"]
+    connection = sqlite3.connect(log_file)
+    try:
+        stored = connection.execute(
+            "SELECT count(*) FROM feedback WHERE request_id = ?", (answer["request_id"],)
+        ).fetchone()
+    finally:
+        connection.close()
+    assert stored == (0,)
+
+
 def test_feedback_is_not_an_answer_and_writes_no_record(
     client: TestClient, listing: dict, log_file: Path
 ):
@@ -227,7 +259,8 @@ def test_nfr15_the_key_never_appears_in_the_settings_repr_or_the_startup_log(
     captured = io.StringIO()
     sink = logger.add(captured, level="DEBUG")
     try:
-        create_app(bundle, settings).state.store.close()
+        with TestClient(create_app(bundle, settings)):
+            pass
     finally:
         logger.remove(sink)
 
