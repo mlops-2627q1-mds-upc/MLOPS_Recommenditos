@@ -62,7 +62,7 @@ flowchart TB
     b_ci["<b>CI</b> [GitHub Actions]<br/>tests, Serving runtime,<br/>Promotion gate, Integration"]
     b_laptop["<b>Team laptop</b><br/>make image<br/>until M5"]
     b_cd["<b>CD</b> [GitHub Actions]<br/>M5"]
-    b_image[("<b>API image</b><br/>runtime, model bundle,<br/>comparables index")]
+    b_image[("<b>API image</b><br/>runtime, model bundle,<br/>comparables index (M4, #138)")]
 
     b_dvc <-->|"data, models, runs"| b_dagshub
     b_dvc -->|"dvc.lock, metrics.json<br/>in a pull request"| b_ci
@@ -103,7 +103,7 @@ flowchart TB
     d_laptop["<b>Team laptop</b><br/>until M5"]
     d_ghcr[("<b>GHCR</b><br/>M5")]
 
-    subgraph d_vm["FIB Virtech VM"]
+    subgraph d_vm["FIB Virtech VM#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;"]
         d_proxyc["<b>proxy</b><br/>nginx-unprivileged:1.30<br/>listens on 8080"]
         d_apic["<b>api</b><br/>recommenditos-api:sha<br/>user 10001, port 8000"]
         d_m6["<b>prometheus, grafana,<br/>drift job</b><br/>M6"]
@@ -113,8 +113,8 @@ flowchart TB
 
     d_user -->|"HTTP, host port 80"| d_proxyc
     d_uptime -.->|"/health"| d_proxyc
-    d_laptop -->|"docker save #124; ssh docker load"| d_vm
-    d_ghcr -.->|"docker compose pull"| d_vm
+    d_laptop -->|"docker save #124; ssh docker load"| d_apic
+    d_ghcr -.->|"docker compose pull"| d_apic
     d_proxyc -->|"api:8000"| d_apic
     d_m6 -.->|"/metrics"| d_apic
     d_apic --- d_tmpfs
