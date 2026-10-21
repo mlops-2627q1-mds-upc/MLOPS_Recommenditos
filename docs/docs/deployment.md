@@ -170,7 +170,7 @@ On the VM, as `recommenditos`:
 docker image ls recommenditos-api            # the tags the VM holds
 sed -i 's/^API_IMAGE_TAG=.*/API_IMAGE_TAG=<previous>/' .env && docker compose up -d --wait
 docker compose ps                            # state and health of both containers
-docker compose logs -f --tail 100            # both logs; the proxy's lines carry request_id
+docker compose logs -f --tail 100            # both logs, joined by request_id (api.md#following-one-request)
 docker image rm recommenditos-api:<old>      # each tag costs disk, of which there is 20 GB
 ```
 
