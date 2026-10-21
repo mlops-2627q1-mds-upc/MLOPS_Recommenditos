@@ -24,6 +24,7 @@ The service reads its settings from environment variables (`recommenditos/api/se
 | `RECOMMENDITOS_API_KEY` | none | The key `/v1/feedback` requires; at least 16 characters. Unset or empty, the endpoint refuses every request |
 | `RECOMMENDITOS_PREDICTION_LOG` | `logs/prediction-log.sqlite3` | The SQLite file of the prediction log and the feedback |
 | `RECOMMENDITOS_PREDICTION_LOG_MAX_BYTES` | `2000000000` | The size the log and the feedback are pruned to (NFR-04) |
+| `RECOMMENDITOS_LOG_FORMAT` | `text` | `json` for one JSON object per log line, as the image sets it ([Logs](#logs)); read by `recommenditos/api/logs.py`, because uvicorn configures the log before the app and its settings exist |
 
 The API key is a secret (NFR-15): `.env.template` lists it without a value, and the settings hold it as a `SecretStr`, which a repr or a log line shows as `**********`.
 The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
@@ -48,6 +49,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
 
 The client contract is versioned under `/v1`, so an incompatible change can ship as `/v2` beside it.
 The operational endpoints are not part of that contract and stay at the root, where a browser, an uptime monitor and Prometheus look for them: `/`, `/health` and `/metrics`.
+`/` and `/health` also answer `HEAD`, which uptime monitors often probe with, with the headers of the `GET` answer and no body.
 
 | Endpoint | Purpose | Requirements |
 |----------|---------|--------------|
@@ -151,6 +153,7 @@ A bundle without interval models, such as `lgbm-extended`, serves `/v1/predict` 
 
 The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
 Every response carries an `X-Request-ID` header; `/predict` and `/price-range` repeat it as `request_id`, and a problem names it in `instance`.
+The service generates it for every request and never takes it from the client; every line of the [service log](#logs) written while the request is answered carries it.
 
 ## Metrics
 
@@ -226,7 +229,7 @@ When the record cannot be written, the client gets a 503 instead of the answer, 
 An answer the log does not hold would break exactly-once silently, and the load test counts a 503 as an error, so a failing log is visible at once.
 
 Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 200 ms NFR-02 gives `/predict`.
-A record takes about 750 bytes, so the 2 GB of NFR-04 hold about 2.7 million answers.
+A record takes about 940 bytes, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold about 2.1 million answers, fewer when requests fill more optional fields.
 
 ### Feedback
 
@@ -251,6 +254,39 @@ It takes the lock per batch and pauses 50 ms between batches, so a request waits
 A batch of 1,000 held the lock for 2 ms at the median and 26 ms at most, measured on a 47 MB log of 150,000 records on a development laptop.
 SQLite reuses the freed pages for new records instead of growing the file, so the file stays at about the cap without a `VACUUM`, and the WAL file is truncated to 64 MB after each checkpoint.
 Setting the variable and the volume on the VM is part of the deployment (NFR-04).
+
+## Logs
+
+The service writes its log to stderr, through loguru.
+`RECOMMENDITOS_LOG_FORMAT` picks the format: `json` writes one JSON object per line, and `text`, the default, writes loguru's human-readable line.
+The image sets `json`, so `docker compose logs api` can be filtered with `jq`; `make api` keeps the text format for reading in a terminal.
+
+Every line has `time` (UTC), `level`, `logger` (the module that wrote it) and `message`, plus `exception` with the traceback when there is one.
+A line written while a request is answered also has its `request_id`, the value of the answer's `X-Request-ID`, whichever module wrote it.
+The last line of a request says how it was answered:
+
+```json
+{"time": "2026-10-21T08:37:38.570+00:00", "level": "INFO", "logger": "recommenditos.api.middleware", "message": "POST /v1/predict 200 54.7 ms", "request_id": "0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f", "method": "POST", "path": "/v1/predict", "status": 200, "duration_ms": 54.7}
+```
+
+That line replaces uvicorn's access log, which names the client's address and port.
+No line of the service log holds the client's address, a header, the request body or the path the client sent: `path` is the route template, as in the [metrics](#metrics), and `<unmatched>` for a path that matches no route.
+uvicorn's own lines, such as its startup and shutdown, and warnings from the libraries go to the same log in the same format, in the supervising process as in every worker, because `python -m recommenditos.api` starts uvicorn with `recommenditos/api/log_config.json`.
+uvicorn's `--log-level` sets the level of the whole log: `--log-level warning` leaves out the lines of answered requests.
+
+### Following one request
+
+nginx's access log line ends with `request_id=`, the `X-Request-ID` of the API's answer, so one ID finds the request in the proxy's log, in the API's log and in the prediction log:
+
+```bash
+docker compose logs proxy | grep 'request_id=<id>'      # the request as nginx saw it, with the client
+docker compose logs api | grep '"request_id": "<id>"'   # every line the API wrote for it
+docker compose exec api python -c 'import os, sqlite3, sys; print(sqlite3.connect(os.environ["RECOMMENDITOS_PREDICTION_LOG"]).execute("SELECT * FROM predictions WHERE request_id = ?", sys.argv[1:]).fetchone())' <id>   # its record
+```
+
+The client's address is only in nginx's log, which stays on the VM (NFR-08).
+A 403, 413 or 503 that nginx answers itself never reached the API: its `X-Request-ID` is nginx's own, 32 hex digits, and only nginx's log names it.
+The last command prints the [prediction-log record](#what-a-record-holds) of a valuation, or `None` for a request that is not one; a problem names the ID in `instance`, so a client that reports an error quotes the ID that finds it.
 
 ## Errors
 
@@ -292,7 +328,7 @@ The request body is larger than 10 KB (NFR-09).
 A declared `Content-Length` over the limit is refused before the body is read; a chunked body without one is counted as it arrives and refused as soon as it passes the limit.
 A valuation request with every optional field filled is about 2 KB.
 
-A 500 says nothing about its cause; the cause is in the service log under the request ID that `instance` names.
+A 500 says nothing about its cause; the cause is in the [service log](#logs), as the `exception` of the line with the request ID that `instance` names.
 
 ## Adding an endpoint
 
@@ -309,9 +345,10 @@ The code is in `recommenditos/api/`:
 | `settings.py` | `Settings`: the environment variables the service reads |
 | `prediction_log.py` | `PredictionStore` and its SQLite implementation, and `PredictionLog`, which records an answer |
 | `dependencies.py` | `Served`, `Metrics`, `RequestId`, `Log` and `Store`, which a route takes as parameters, and `RequireApiKey` |
-| `middleware.py` | The request ID and arrival time, the last-resort 500, and the body-size limit |
+| `middleware.py` | The request ID, its arrival time and the line that logs each request, the last-resort 500, and the body-size limit |
+| `logs.py`, `log_config.json` | The service log: JSON or text, the request ID on every line, uvicorn's lines in the same log |
 | `metrics.py` | The Prometheus metrics, the middleware that counts and times every request, and the multiprocess directory |
-| `__main__.py` | `python -m recommenditos.api`: prepares the multiprocess directory, then starts uvicorn |
+| `__main__.py` | `python -m recommenditos.api`: prepares the multiprocess directory, then starts uvicorn with the logging configuration |
 
 1. Add `routes/<group>.py` with `router = APIRouter(tags=[...])` and its operations.
    Take `served: Served` for the model and `request_id: RequestId` for the request ID.

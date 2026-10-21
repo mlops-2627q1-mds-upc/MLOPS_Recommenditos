@@ -45,8 +45,10 @@ What each part guarantees:
   It sends `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY`, hides its version (`server_tokens off`), and sends no HSTS header, because there is no TLS (NFR-09).
   It refuses bodies above 16 KB, as defence in depth behind the API's own 10 KB limit, and answers its own errors (403, 413, 503) as RFC 9457 problems like the API does (FR-16).
   While the API is down, for example in the seconds after a crash, it answers 503 within 2 s.
-  Its access log carries the API's `X-Request-ID`, and it resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
+  Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
+  It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
+- **Docker** keeps each container's log in at most five files of 10 MB, so the two logs take at most 100 MB of the VM's disk (NFR-04); the API's 50 MB hold about 120,000 requests of history.
 
 ## Run it locally
 
@@ -170,7 +172,7 @@ On the VM, as `recommenditos`:
 docker image ls recommenditos-api            # the tags the VM holds
 sed -i 's/^API_IMAGE_TAG=.*/API_IMAGE_TAG=<previous>/' .env && docker compose up -d --wait
 docker compose ps                            # state and health of both containers
-docker compose logs -f --tail 100            # both logs; the proxy's lines carry request_id
+docker compose logs -f --tail 100            # both logs, joined by request_id (api.md#following-one-request)
 docker image rm recommenditos-api:<old>      # each tag costs disk, of which there is 20 GB
 ```
 

@@ -11,6 +11,16 @@
 
 name: recommenditos
 
+# Docker keeps a container's log in json-file without a limit by default. Each
+# service keeps at most 5 files of 10 MB, 100 MB in all, of the VM's 20 GB
+# (NFR-04): the API's healthcheck alone writes about 3.5 MB a day, and each
+# service's 50 MB hold about 120,000 requests of history.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   api:
     image: recommenditos-api:${API_IMAGE_TAG:-local}
@@ -29,6 +39,7 @@ services:
     tmpfs:
       - /tmp/prometheus:uid=10001,gid=10001,mode=0700
     restart: unless-stopped
+    logging: *logging
     environment:
       # FR-10's key for /v1/feedback, from `.env` beside this file. Empty, the
       # endpoint refuses every request and the rest of the API works (NFR-15).
@@ -59,6 +70,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   prediction-log:

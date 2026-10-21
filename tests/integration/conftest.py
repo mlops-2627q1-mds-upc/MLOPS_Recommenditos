@@ -176,18 +176,36 @@ class Container:
     def exec(self, *command: str) -> str:
         return docker("exec", self.id, *command)
 
+    def log_lines(self) -> list[str]:
+        """The container's log, stdout and stderr, which `docker logs` passes on apart."""
+        result = subprocess.run(
+            [_docker_executable(), "logs", self.id],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+            check=False,
+        )
+        if result.returncode != 0:
+            pytest.fail(f"docker logs {self.id} failed: {result.stderr.strip()}")
+        return (result.stdout + result.stderr).splitlines()
+
 
 def docker(*arguments: str) -> str:
     """Run the Docker CLI; a failure fails the test with what Docker said."""
-    executable = shutil.which("docker")
-    if executable is None:
-        pytest.fail("the docker CLI is not on PATH, and docker_host tests need it")
     result = subprocess.run(
-        [executable, *arguments], capture_output=True, text=True, timeout=60, check=False
+        [_docker_executable(), *arguments], capture_output=True, text=True, timeout=60, check=False
     )
     if result.returncode != 0:
         pytest.fail(f"docker {' '.join(arguments)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def _docker_executable() -> str:
+    executable = shutil.which("docker")
+    if executable is None:
+        pytest.fail("the docker CLI is not on PATH, and docker_host tests need it")
+    return executable
 
 
 def service_container(service: str) -> Container:
