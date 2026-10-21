@@ -56,6 +56,11 @@ RUN apt-get update \
 RUN groupadd --system --gid 10001 api \
     && useradd --system --uid 10001 --gid api --no-create-home --shell /usr/sbin/nologin api
 
+# The one directory the API writes: the prediction log and the feedback (EDN-86).
+# Compose mounts a named volume here, which takes this owner when it is created,
+# so the service user can write it and the drift job can mount it too.
+RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
+
 # Owned by root and only readable by the service user: the API writes nothing
 # into its own code or model.
 COPY --from=builder /app/.venv /app/.venv
@@ -68,7 +73,8 @@ COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     RECOMMENDITOS_MODEL_DIR=/app/models/${MODEL_VARIANT} \
-    PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+    PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus \
+    RECOMMENDITOS_PREDICTION_LOG=/var/lib/recommenditos/prediction-log.sqlite3
 
 WORKDIR /app
 # Numeric, so that a runtime can check it is not root without reading /etc/passwd.

@@ -37,6 +37,7 @@ What each part guarantees:
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers, and `/metrics` adds up their figures ([API docs](api.md#metrics)).
 - **Compose** publishes only the proxy's port.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
+  The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
   A hung API, one whose process lives on but stops answering, is only marked unhealthy: Docker's restart policy acts when the process exits, so in M4 nothing restarts it automatically; doing so is an M5 item ([What M5 adds](#what-m5-adds)).
 - **nginx** refuses `/feedback` and `/metrics`, versioned or not, with a 403 (FR-10, EDN-13).
   The replay job and Prometheus reach those endpoints at `api:8000` inside the Compose network, never through the proxy.
@@ -53,7 +54,8 @@ You need Docker with the compose plugin and the pulled model:
 
 ```bash
 uv run dvc pull models/lgbm-basic
-make stack          # builds the image, starts both containers, waits until healthy
+RECOMMENDITOS_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))') make stack
+                    # builds the image, starts both containers, waits until healthy
 make test-integration   # the integration suite against http://localhost:8080
 make stack-down
 ```
@@ -82,7 +84,7 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, the API's port is not published, `/metrics` answers inside the Compose network, and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
+- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
 
 ```bash
 make test-integration                                # against http://localhost:8080
@@ -134,7 +136,7 @@ ssh recommenditos@<vm> 'nano .env'      # HTTP_PORT=80, or the forwarded port
 ```
 
 The `docker` group is root-equivalent on that machine; only the deploy user and the admins belong in it.
-FR-10's API key goes into the same `.env` once `/feedback` exists (#140); it never enters the repository (NFR-15).
+Set FR-10's API key in the same `.env` (`RECOMMENDITOS_API_KEY`, generated on the VM as the template says); it never enters the repository (NFR-15).
 
 ### Every deploy
 

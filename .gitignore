@@ -18,6 +18,9 @@
 mlflow.db
 mlruns/
 
+# The prediction log and the feedback of a locally run API (`make api`, EDN-86).
+/logs/
+
 # PDFs and Word files are not tracked (e.g. lab/course material, generated reports).
 # Their Markdown conversions live in references/.
 *.pdf

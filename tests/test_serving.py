@@ -70,6 +70,7 @@ from tests.lockfile import (
 
 from recommenditos.api.app import create_app
 from recommenditos.api.serving import ServingError
+from recommenditos.api.settings import PREDICTION_LOG_ENV_VAR, Settings
 from recommenditos.config import PARAMS_FILE
 from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
@@ -339,7 +340,14 @@ def test_serving_imports_nothing_only_the_test_group_installs(
         text=True,
         check=False,
         # Tracking is not on the serving path; keep a developer's `.env` out of it.
-        env={**os.environ, "MLFLOW_TRACKING_URI": ""},
+        # The app records its answer in a prediction log outside the repository.
+        env={
+            **os.environ,
+            "MLFLOW_TRACKING_URI": "",
+            PREDICTION_LOG_ENV_VAR: str(
+                served["models"].parent / f"prediction-log-{path}-{variant}.sqlite3"
+            ),
+        },
     )
     assert result.returncode == 0, result.stderr
     imported = json.loads(result.stdout.strip().splitlines()[-1])
@@ -368,7 +376,10 @@ def test_the_api_values_a_listing_with_a_bundle_on_disk(variant: str, served: di
     runtime-only environment, where the API image's dependencies are all there is.
     The explanation comes from the booster itself, so it is answered here too.
     """
-    with TestClient(create_app(served["models"] / variant)) as client:
+    settings = Settings(
+        prediction_log=served["models"].parent / f"prediction-log-{variant}.sqlite3"
+    )
+    with TestClient(create_app(served["models"] / variant, settings)) as client:
         app_model = client.app.state.served  # type: ignore[attr-defined]
         levels = app_model.model.input_schema.levels
         listing = {
