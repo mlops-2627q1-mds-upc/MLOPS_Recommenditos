@@ -38,9 +38,11 @@ typecheck:
 	uv run mypy
 
 ## Format source code with ruff
+# `--exit-zero`, so a finding `--fix` cannot fix still prints but does not stop
+# make before `ruff format` runs; `make lint` is the check that fails on it.
 .PHONY: format
 format:
-	uv run ruff check --fix
+	uv run ruff check --fix --exit-zero
 	uv run ruff format
 
 
