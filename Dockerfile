@@ -70,8 +70,11 @@ COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
 # Under /tmp, the one place the service user may write; Compose mounts a tmpfs
 # there, and the launcher creates the directory if nothing is mounted.
+# RECOMMENDITOS_LOG_FORMAT: one JSON object per log line, each line of a request
+# with its request ID (docs/docs/api.md#logs).
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
+    RECOMMENDITOS_LOG_FORMAT=json \
     RECOMMENDITOS_MODEL_DIR=/app/models/${MODEL_VARIANT} \
     PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus \
     RECOMMENDITOS_PREDICTION_LOG=/var/lib/recommenditos/prediction-log.sqlite3

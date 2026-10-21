@@ -1,4 +1,9 @@
-"""`GET /health`: the status and the loaded model (FR-11)."""
+"""`GET /health`: the status and the loaded model (FR-11).
+
+It answers `HEAD` too, which uptime monitors often probe with; FastAPI adds
+`HEAD` to no `GET` route by itself. The `HEAD` route is left out of the OpenAPI
+document, which would otherwise list a second operation for the same answer.
+"""
 
 from fastapi import APIRouter
 
@@ -8,6 +13,7 @@ from recommenditos.api.schemas.health import Health
 router = APIRouter(tags=["operations"])
 
 
+@router.head("/health", include_in_schema=False)
 @router.get("/health", summary="Service status and the served model")
 def health(served: Served) -> Health:
     """Answers `ok` whenever the service is up, with the model it serves.

@@ -1,4 +1,8 @@
-"""`GET /`: what this service is, and where its documentation is."""
+"""`GET /`: what this service is, and where its documentation is.
+
+It answers `HEAD` too, for an uptime monitor that probes the address itself
+(see `routes/health.py`).
+"""
 
 from fastapi import APIRouter, Request
 
@@ -8,6 +12,7 @@ from recommenditos.api.schemas.index import ServiceIndex
 router = APIRouter(tags=["operations"])
 
 
+@router.head("/", include_in_schema=False)
 @router.get("/", summary="Service name, served model and documentation links")
 def index(request: Request, served: Served) -> ServiceIndex:
     """The landing page of the service, for a person who opens its address.

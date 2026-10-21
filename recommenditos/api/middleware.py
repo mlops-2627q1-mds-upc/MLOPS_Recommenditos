@@ -29,11 +29,16 @@ MAX_BODY_BYTES = 10 * 1024
 
 
 class RequestIdMiddleware:
-    """Give every request an ID: in `request.state.request_id` and the response header.
+    """Give every request an ID: in `request.state.request_id`, the header and the log.
 
     The ID is generated here, never taken from the client, so that it identifies
     one request of this service. `/predict` returns it in its body (FR-06) and
-    every problem names it in `instance`. `request.state.request_started` is the
+    every problem names it in `instance`. Every log line written while the request
+    is answered carries it as `request_id` (`recommenditos.api.logs`), and the
+    last one says how the request was answered: its method, path, status and
+    duration. That line replaces uvicorn's access log, so the service log holds
+    no client address (NFR-08); nginx's access log, which names the client, joins
+    it by the `X-Request-ID` header. `request.state.request_started` is the
     `time.perf_counter()` at which the request arrived, which the prediction log
     measures the latency from (FR-13).
     """
@@ -48,14 +53,29 @@ class RequestIdMiddleware:
         request_id = str(uuid.uuid4())
         state = scope.setdefault("state", {})
         state["request_id"] = request_id
-        state["request_started"] = time.perf_counter()
+        state["request_started"] = started = time.perf_counter()
+        # A request whose app raised before it answered gets uvicorn's 500.
+        status = HTTPStatus.INTERNAL_SERVER_ERROR.value
 
         async def send_with_id(message: Message) -> None:
+            nonlocal status
             if message["type"] == "http.response.start":
+                status = message["status"]
                 MutableHeaders(scope=message)[REQUEST_ID_HEADER] = request_id
             await send(message)
 
-        await self.app(scope, receive, send_with_id)
+        with logger.contextualize(request_id=request_id):
+            try:
+                await self.app(scope, receive, send_with_id)
+            finally:
+                # The path without its query string, which could hold anything.
+                logger.info(
+                    "{method} {path} {status} {duration_ms} ms",
+                    method=scope["method"],
+                    path=scope["path"],
+                    status=status,
+                    duration_ms=round((time.perf_counter() - started) * 1000, 1),
+                )
 
 
 class UnexpectedErrorMiddleware:
@@ -86,7 +106,7 @@ class UnexpectedErrorMiddleware:
             if started:
                 raise
             request_id = str(scope.get("state", {}).get("request_id", ""))
-            logger.opt(exception=error).error(f"request {request_id} failed")
+            logger.opt(exception=error).error("the request failed")
             response = problem_response(
                 request_id,
                 ProblemError(
