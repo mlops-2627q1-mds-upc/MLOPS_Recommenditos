@@ -1150,8 +1150,8 @@ stages:
       size: 1545269
     - path: recommenditos/config.py
       hash: md5
-      md5: 2930e86c1b0156d9626ffb64ff0ee247
-      size: 1535
+      md5: a0a68dfc658598b27a5aa7d7e22e0672
+      size: 1488
     - path: recommenditos/data/build_comparables.py
       hash: md5
       md5: 19027c26fd43e2fdc182bcb16e2901f1
@@ -1166,8 +1166,8 @@ stages:
       size: 2346
     - path: recommenditos/schema.py
       hash: md5
-      md5: 5b136dbf586a1fa4ed55e641b41b3a6a
-      size: 36787
+      md5: 53fda2be439cb1a73b7afc593e6b6ab8
+      size: 36807
     params:
       params.yaml:
         reference_date: '2025-11-08'
