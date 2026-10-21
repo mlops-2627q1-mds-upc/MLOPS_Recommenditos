@@ -11,8 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
-import signal
-import socket
 import subprocess
 import sys
 import time
@@ -21,6 +19,7 @@ import urllib.request
 
 from prometheus_client.parser import text_string_to_metric_families
 import pytest
+from tests.api.helpers import free_port, stop_service
 
 from recommenditos.api.metrics import MULTIPROC_DIR_ENV_VAR
 from recommenditos.api.settings import MODEL_DIR_ENV_VAR
@@ -30,12 +29,6 @@ STARTUP_SECONDS = 120
 #: Valuations sent per round; rounds repeat until every worker has answered.
 ROUND = 40
 MAX_ROUNDS = 10
-
-
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return int(probe.getsockname()[1])
 
 
 def _get(url: str) -> str:
@@ -65,7 +58,7 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
     directory.mkdir()
     # A file left by an earlier run: the launcher must delete it before the workers start.
     (directory / "counter_1.db").write_bytes(b"stale")
-    port = _free_port()
+    port = free_port()
     env = {
         **os.environ,
         MULTIPROC_DIR_ENV_VAR: str(directory),
@@ -87,25 +80,7 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
         _get(f"{base}/health")
         yield base, directory
     finally:
-        _stop(process)
-
-
-def _stop(process: subprocess.Popen) -> None:
-    """Stop the service and its workers.
-
-    SIGTERM lets uvicorn stop its workers itself. Windows has no such signal for
-    a process without a console of its own, and a console event would reach the
-    test runner too, so there the whole process tree is killed.
-    """
-    if sys.platform == "win32":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], check=False)
-    else:
-        process.send_signal(signal.SIGTERM)
-    try:
-        process.wait(timeout=30)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+        stop_service(process)
 
 
 @pytest.mark.req("FR-11", "NFR-03")

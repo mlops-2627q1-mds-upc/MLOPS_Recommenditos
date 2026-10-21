@@ -24,6 +24,7 @@ The service reads its settings from environment variables (`recommenditos/api/se
 | `RECOMMENDITOS_API_KEY` | none | The key `/v1/feedback` requires; at least 16 characters. Unset or empty, the endpoint refuses every request |
 | `RECOMMENDITOS_PREDICTION_LOG` | `logs/prediction-log.sqlite3` | The SQLite file of the prediction log and the feedback |
 | `RECOMMENDITOS_PREDICTION_LOG_MAX_BYTES` | `2000000000` | The size the log and the feedback are pruned to (NFR-04) |
+| `RECOMMENDITOS_LOG_FORMAT` | `text` | `json` for one JSON object per log line, as the image sets it ([Logs](#logs)); read by `recommenditos/api/logs.py`, because uvicorn configures the log before the app and its settings exist |
 
 The API key is a secret (NFR-15): `.env.template` lists it without a value, and the settings hold it as a `SecretStr`, which a repr or a log line shows as `**********`.
 The bundle is loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).

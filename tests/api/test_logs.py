@@ -25,10 +25,10 @@ from loguru import logger
 import pytest
 from tests.api.helpers import free_port, stop_service
 
-from recommenditos.api.app import MODEL_DIR_ENV_VAR
 from recommenditos.api.logs import LOG_FORMAT_ENV_VAR, json_sink, log_format, text_format
 from recommenditos.api.middleware import REQUEST_ID_HEADER
 from recommenditos.api.serving import ServedModel
+from recommenditos.api.settings import MODEL_DIR_ENV_VAR
 
 PREDICT = "/v1/predict"
 
