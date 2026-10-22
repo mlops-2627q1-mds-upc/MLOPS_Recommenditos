@@ -1,6 +1,6 @@
-"""What the promotion pull request of a retrain on GitHub Actions says (FR-15, #201).
+"""What the summary of a retrain on GitHub Actions says, and the link it offers (FR-15, #201).
 
-The workflow runs `tools.retrain_promotion body` after committing the new outputs
+The workflow runs `tools.retrain_promotion summary` after committing the new outputs
 on a branch, so these tests build the same situation in a throwaway repository:
 `main` holds the committed run, the branch the retrained one.
 """
@@ -201,8 +201,49 @@ def test_the_link_stays_short_whatever_the_reason():
         run_url="https://github.com/o/r/actions/runs/1",
     )
 
-    assert len(link) < 2000
+    assert len(link) <= 2000
     assert parse_qs(urlsplit(link).query)["body"][0].count("...") == 1
+
+
+@pytest.mark.req("FR-15")
+def test_the_link_is_capped_on_its_encoded_length():
+    # One emoji is twelve characters once encoded, so 300 of them alone pass 2,000.
+    link = compare_link(
+        repo_url="https://github.com/o/r",
+        branch="retrain/run-7-1",
+        title="chore: promote x",
+        reason="\N{ROBOT FACE}" * 300,
+        run_url="https://github.com/o/r/actions/runs/1",
+    )
+
+    assert len(link) <= 2000
+
+
+@pytest.mark.req("FR-15", "NFR-10")
+def test_the_summary_says_a_merge_replaces_the_laptop_energy_figures(repo):
+    emissions = repo / "reports" / "emissions"
+    emissions.mkdir(parents=True)
+    for name in VARIANTS:
+        (emissions / f"{name}.csv").write_text(f"{name},laptop\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "laptop energy")
+    unchanged = render(base="retrain/run-1", reason="", run_url="u", runs={}, root=repo)[1]
+    git(repo, "checkout", "-q", "-b", "retrain/run-2")
+    (emissions / f"{CANDIDATE}.csv").write_text(f"{CANDIDATE},runner\n", encoding="utf-8")
+    retrain(repo, mdape=0.0670, gate_passed=True, model_md5="e" * 32)
+
+    _, body = render(base="retrain/run-1", reason="", run_url="u", runs={}, root=repo)
+
+    assert "the committed energy figures stay as they are" in unchanged
+    assert "replaces the committed energy table" in body
+    assert f"runner estimates for `{CANDIDATE}`, mixed with the laptop rows" in body
+    assert "NFR-10 caption must be updated" in body
+
+
+def write_bundle(root: Path, variant: str, run_id: str) -> None:
+    bundle = root / "models" / variant
+    bundle.mkdir(parents=True, exist_ok=True)
+    (bundle / "model.json").write_text(json.dumps({"mlflow": {"run_id": run_id}}), "utf-8")
 
 
 @pytest.mark.req("FR-15", "NFR-10")
@@ -216,12 +257,13 @@ def test_only_the_runs_retrained_on_the_runner_are_labelled_as_such(repo, monkey
     laptop_run = client.create_run(experiment).info.run_id
     record = repo / "reports" / "metrics" / "b0.json"
     record.write_text(json.dumps({"mlflow_run_id": laptop_run}), encoding="utf-8")
+    write_bundle(repo, "b0", laptop_run)
     git(repo, "commit", "-qam", "b0 trained on a laptop")
     git(repo, "checkout", "-q", "-b", "retrain/run-2")
     # The retrain fits the candidate only, so b0's record still names the laptop's run.
+    # The bundle names the run, so labelling works before `evaluate` has run at all.
     runner_run = client.create_run(experiment).info.run_id
-    record = repo / "reports" / "metrics" / f"{CANDIDATE}.json"
-    record.write_text(json.dumps({"mlflow_run_id": runner_run}), encoding="utf-8")
+    write_bundle(repo, CANDIDATE, runner_run)
 
     runs = tag_runs(repo / "runs.json", "retrain/run-1", root=repo)
 

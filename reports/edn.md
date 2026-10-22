@@ -1230,7 +1230,7 @@ How to add an entry:
 - **Participants:** @lukas2510 decided ([issue #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201))
 - **Decision:** A `workflow_dispatch` workflow, refused outside `main`, runs `dvc repro` on a GitHub-hosted runner, logs to the DagsHub MLflow, pushes to the DVC remote and pushes the new `dvc.lock` to a branch.
   Its summary gives the evidence and a link that opens the prefilled promotion pull request; a person opening it is the approval step, and CI runs on it.
-  Runner energy figures are kept, labelled as estimates.
+  Runner energy figures are kept, labelled as estimates; merging such a promotion replaces the laptop's NFR-10 figures.
 - **Alternatives considered:**
   - Only CI's `Pipeline lock (dvc.lock)` check, training on laptops: the pipeline would never run anywhere but a laptop.
   - The workflow opening the pull request: needs the repository-wide setting that lets Actions create and approve pull requests, which the goal does not need.

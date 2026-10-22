@@ -9,7 +9,7 @@
   participants = {@lukas2510 decided (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201}{issue \#201})},
   decision = {A \texttt{workflow\_\allowbreak{}dispatch} workflow, refused outside \texttt{main}, runs \texttt{dvc repro} on a GitHub-hosted runner, logs to the DagsHub MLflow, pushes to the DVC remote and pushes the new \texttt{dvc.\allowbreak{}lock} to a branch.
 Its summary gives the evidence and a link that opens the prefilled promotion pull request; a person opening it is the approval step, and CI runs on it.
-Runner energy figures are kept, labelled as estimates.},
+Runner energy figures are kept, labelled as estimates; merging such a promotion replaces the laptop's NFR-10 figures.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Only CI's \texttt{Pipeline lock (dvc.\allowbreak{}lock)} check, training on laptops: the pipeline would never run anywhere but a laptop.

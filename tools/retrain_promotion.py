@@ -57,6 +57,9 @@ ENERGY_TAG = "energy_estimate"
 #: The longest reason the pull request link carries; the summary has it whole.
 MAX_REASON_IN_LINK = 300
 
+#: The longest link the summary offers, encoded: much longer is not opened everywhere.
+MAX_LINK = 2000
+
 #: How many leaves outside the tolerance the summary lists before it only counts them.
 MAX_LISTED = 15
 
@@ -188,6 +191,10 @@ def render(
         "",
         f"**Why:** {reason.strip() or '(no reason given)'}",
         "",
+        "## Energy figures",
+        "",
+        energy_note(base, variants, root),
+        "",
         "## Model",
         "",
         f"- Promoted variant (`report.candidate_variant`): `{candidate}`",
@@ -232,15 +239,6 @@ def render(
     lines += reproduction(base, variants, root)
     lines += [
         "",
-        "## Energy",
-        "",
-        (
-            "The emissions files and `energy-vs-error` are measured on the runner. CodeCarbon "
-            "estimates them from the TDP of the runner's server CPU, so they are not "
-            "comparable with the laptop figures NFR-10 is judged on (EDN-92); the MLflow runs "
-            f"carry the tags `{MACHINE_TAG}` and `{ENERGY_TAG}`."
-        ),
-        "",
         "## After opening the pull request",
         "",
         (
@@ -252,6 +250,35 @@ def render(
     return title, "\n".join(lines) + "\n"
 
 
+def energy_note(base: str, variants: list[str], root: Path) -> str:
+    """What merging does to the committed energy figures of NFR-10 (EDN-92)."""
+    retrained = [
+        variant
+        for variant in variants
+        if (root / "reports" / "emissions" / f"{variant}.csv").exists()
+        and committed(base, f"reports/emissions/{variant}.csv", root)
+        != (root / "reports" / "emissions" / f"{variant}.csv").read_text("utf-8")
+    ]
+    if not retrained:
+        return (
+            "No variant was trained in this run, so the committed energy figures stay as they are."
+        )
+    mixed = (
+        ""
+        if len(retrained) == len(variants)
+        else " for " + ", ".join(f"`{v}`" for v in retrained) + ", mixed with the laptop "
+        "rows of the variants this run did not train"
+    )
+    return (
+        "**Merging this pull request replaces the committed energy table "
+        "(`reports/emissions/`, `reports/figures/energy-vs-error.*`) and the report's copy of "
+        f"the `energy-vs-error` figure with runner estimates{mixed}.** CodeCarbon assumes the "
+        "TDP of the runner's server CPU, so they are not comparable with the laptop figures "
+        "NFR-10 was judged on. The report's NFR-10 caption must be updated with the merge. "
+        f"The MLflow runs carry the tags `{MACHINE_TAG}` and `{ENERGY_TAG}`."
+    )
+
+
 def compare_link(*, repo_url: str, branch: str, title: str, reason: str, run_url: str) -> str:
     """The link that opens the pull request from `branch`, its title and body filled in.
 
@@ -261,16 +288,22 @@ def compare_link(*, repo_url: str, branch: str, title: str, reason: str, run_url
     and a pull request a person opens starts CI, which one opened with the
     workflow's own token would not.
     """
-    if len(reason) > MAX_REASON_IN_LINK:
-        reason = reason[: MAX_REASON_IN_LINK - 3].rstrip() + "..."
-    body = (
-        f"Retrained by {run_url}.\n\n"
-        f"**Why:** {reason.strip() or '(no reason given)'}\n\n"
-        "The model version, the metrics before and after with their MLflow runs, the gate "
-        f"verdict of NFR-01 and NFR-06's comparison are in the run's summary: {run_url}\n"
-    )
-    query = urlencode({"expand": "1", "title": title, "body": body})
-    return f"{repo_url.rstrip('/')}/compare/main...{branch}?{query}"
+    reason = reason.strip() or "(no reason given)"
+    keep = min(len(reason), MAX_REASON_IN_LINK)
+    while True:
+        shown = reason if keep == len(reason) else reason[:keep].rstrip() + "..."
+        body = (
+            f"Retrained by {run_url}.\n\n**Why:** {shown}\n\n"
+            "The model version, the metrics before and after with their MLflow runs, the gate "
+            f"verdict of NFR-01, NFR-06's comparison and what merging does to the energy "
+            f"figures are in the run's summary: {run_url}\n"
+        )
+        query = urlencode({"expand": "1", "title": title, "body": body})
+        link = f"{repo_url.rstrip('/')}/compare/main...{branch}?{query}"
+        # The limit is on the encoded link: one emoji takes twelve characters there.
+        if len(link) <= MAX_LINK or keep == 0:
+            return link
+        keep = max(0, keep - 20)
 
 
 def reproduction(base: str, variants: list[str], root: Path) -> list[str]:
@@ -327,9 +360,11 @@ def machine() -> str:
 def tag_runs(out: Path, base: str, root: Path | None = None) -> dict:
     """Tag the runs this retrain trained with the machine, and write every run's link to `out`.
 
-    A variant whose run id is the one `base` commits was not retrained here: only a
-    later stage reran, and `evaluate` appended to the run a laptop made. That run
-    keeps its tags.
+    The run id comes from the bundle `train` writes, `models/<variant>/model.json`,
+    so the workflow can label the runs of the variants it trained even when a later
+    stage failed. A variant whose run id is the one `base` commits was not retrained
+    here: only a later stage reran, and `evaluate` appended to the run a laptop made.
+    That run keeps its tags.
     """
     root = root or PROJ_ROOT
     # Imported here, so that `summary` neither loads MLflow nor prints its agent hint
@@ -350,10 +385,12 @@ def tag_runs(out: Path, base: str, root: Path | None = None) -> dict:
     }
     runs = {}
     for variant in (params.get("train") or {}).get("variants") or {}:
-        record = json.loads((root / "reports" / "metrics" / f"{variant}.json").read_text("utf-8"))
-        run_id = record.get("mlflow_run_id")
+        bundle = root / "models" / variant / "model.json"
+        if not bundle.exists():
+            continue
+        run_id = (json.loads(bundle.read_text("utf-8")).get("mlflow") or {}).get("run_id")
         if not run_id:
-            raise RuntimeError(f"{variant} has no MLflow run: was tracking on for the retrain?")
+            continue
         run = client.get_run(run_id)
         old_text = committed(base, f"reports/metrics/{variant}.json", root)
         if not old_text or json.loads(old_text).get("mlflow_run_id") != run_id:
