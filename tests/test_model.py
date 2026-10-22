@@ -22,6 +22,7 @@ builds on these fixtures rather than refitting.
 from fractions import Fraction
 import json
 from pathlib import Path
+import platform
 import shutil
 from statistics import median
 import time
@@ -1326,6 +1327,60 @@ def test_a_payload_written_by_another_library_version_is_flagged(tmp_path: Path,
         logger.remove(sink)
 
     assert any("scikit-learn 0.0.1" in message for message in reported), reported
+
+
+def _python_version_messages(bundle: Path, trained_with: str) -> dict[str, list[str]]:
+    """What `load_model` logs, by level, for a bundle recorded as trained on `trained_with`."""
+    record = json.loads((bundle / MODEL_FILE).read_text(encoding="utf-8"))
+    record["versions"]["python"] = trained_with
+    (bundle / MODEL_FILE).write_text(json.dumps(record), encoding="utf-8")
+
+    logged: dict[str, list[str]] = {"DEBUG": [], "WARNING": []}
+    sinks = [
+        logger.add(logged[level].append, format="{message}", level=level, filter=_exactly(level))
+        for level in logged
+    ]
+    try:
+        load_model(bundle)
+    finally:
+        for sink in sinks:
+            logger.remove(sink)
+    return logged
+
+
+def _exactly(level: str):
+    return lambda record: record["level"].name == level
+
+
+def test_a_python_patch_release_between_training_and_serving_is_not_a_warning(
+    tmp_path: Path, trained: dict
+):
+    """The API image takes the newest patch of its Python minor, so a patch gap is routine.
+
+    Warning on it made every API start log "python 3.12.13 -> 3.12.15" (#189) and
+    taught readers to ignore the warning that matters. The difference stays
+    visible at debug level.
+    """
+    bundle = tmp_path / "older-patch"
+    shutil.copytree(trained["dir"] / "b1", bundle)
+    major, minor, patch = platform.python_version().split(".")
+    trained_with = f"{major}.{minor}.{int(patch) + 1}"
+
+    logged = _python_version_messages(bundle, trained_with)
+
+    assert not any("python" in message for message in logged["WARNING"]), logged
+    assert any(f"trained with python {trained_with}" in m for m in logged["DEBUG"]), logged
+
+
+def test_a_python_minor_release_between_training_and_serving_is_still_a_warning(
+    tmp_path: Path, trained: dict
+):
+    bundle = tmp_path / "older-minor"
+    shutil.copytree(trained["dir"] / "b1", bundle)
+
+    logged = _python_version_messages(bundle, "3.0.1")
+
+    assert any("python 3.0.1 -> " in message for message in logged["WARNING"]), logged
 
 
 def test_a_training_price_range_that_cannot_bound_a_price_is_refused(
