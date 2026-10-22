@@ -8,7 +8,7 @@
   topic = {Containerization, Reliability},
   participants = {@lukas2510 decided (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185}{issue \#185})},
   decision = {Compose runs Docker's init in front of the API (\texttt{init: true}).
-After the 60 s start period, a probe that gets no answer from \texttt{/\allowbreak{}health} in two attempts of 6 s kills the init's children; the init exits and \texttt{restart: unless-\allowbreak{}stopped} restarts the container.
+Once the API has answered since its start, or after the 60 s start period, a probe that gets no answer from \texttt{/\allowbreak{}health} in two attempts of 6 s kills the init's children; the init exits and \texttt{restart: unless-\allowbreak{}stopped} restarts the container.
 Known limit: with several workers one hung worker goes unnoticed, so the API runs one worker until the VM's load test (\#143).},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]

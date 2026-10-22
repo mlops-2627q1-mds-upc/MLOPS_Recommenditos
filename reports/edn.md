@@ -1252,7 +1252,7 @@ How to add an entry:
 - **Activity / Topic:** Containerization, Reliability
 - **Participants:** @lukas2510 decided ([issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185))
 - **Decision:** Compose runs Docker's init in front of the API (`init: true`).
-  After the 60 s start period, a probe that gets no answer from `/health` in two attempts of 6 s kills the init's children; the init exits and `restart: unless-stopped` restarts the container.
+  Once the API has answered since its start, or after the 60 s start period, a probe that gets no answer from `/health` in two attempts of 6 s kills the init's children; the init exits and `restart: unless-stopped` restarts the container.
   Known limit: with several workers one hung worker goes unnoticed, so the API runs one worker until the VM's load test (#143).
 - **Alternatives considered:**
   - An autoheal sidecar (18.4 s): the Docker socket it needs is root on the host, against the hardening of #200.

@@ -24,8 +24,14 @@ from recommenditos.api.settings import Settings
 API_KEY_HEADER = "X-API-Key"
 
 
-def served_model(request: Request) -> ServedModel:
-    """The model `create_app` loaded, from the app's state."""
+async def served_model(request: Request) -> ServedModel:
+    """The model `create_app` loaded, from the app's state.
+
+    `async`, as is `comparables_index`: FastAPI runs a sync dependency in the
+    threadpool, so `/health`, a sync route, would wait for a thread three times
+    over, and the healthcheck's bound on a busy API counts one wait
+    (recommenditos/api/healthcheck.py).
+    """
     served = request.app.state.served
     if not isinstance(served, ServedModel):
         raise TypeError(f"app.state.served is a {type(served).__name__}, not a ServedModel")
@@ -40,7 +46,7 @@ def api_metrics(request: Request) -> ApiMetrics:
     return metrics
 
 
-def comparables_index(request: Request) -> ComparablesIndex | None:
+async def comparables_index(request: Request) -> ComparablesIndex | None:
     """The comparables index `create_app` loaded, or None if it was started without one."""
     index = request.app.state.comparables
     if index is not None and not isinstance(index, ComparablesIndex):

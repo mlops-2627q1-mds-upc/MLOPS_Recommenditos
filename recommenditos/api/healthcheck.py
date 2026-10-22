@@ -6,7 +6,9 @@ container is past its start period, the API is hung: its process lives on but
 does not answer, which Docker's restart policy cannot see, since it acts only
 when the process exits. The probe then kills the server, the init in front of
 it exits, and `restart: unless-stopped` starts the container again (NFR-05,
-EDN-93, docs/docs/deployment.md).
+EDN-93, docs/docs/deployment.md). The start period ends early, as Docker's does,
+at the first answer: a probe that got one leaves a marker, and a hang after it
+is ended at the next probes rather than only after the full start period.
 
 The kill needs Docker's init as PID 1, which Compose's `init: true` provides:
 the kernel drops a signal sent from inside the container to its PID 1 unless
@@ -34,6 +36,9 @@ URL = "http://127.0.0.1:8000/health"
 
 #: The healthcheck's interval and start period; the Dockerfile's HEALTHCHECK and
 #: deploy/compose.yaml repeat them (tests/api/test_healthcheck.py checks that).
+#: Before the first answer and within the start period, a missing answer is a
+#: start still in progress: with several workers uvicorn binds the port before
+#: they have loaded the model.
 INTERVAL_S = 10.0
 START_PERIOD_S = 60.0
 
@@ -41,8 +46,9 @@ START_PERIOD_S = 60.0
 #: - Recovery (NFR-05, 30 s): a hang that starts just after a probe is ended at
 #:   most INTERVAL_S + ATTEMPTS * TIMEOUT_S = 10 + 12 = 22 s later, and the API
 #:   answers again about 4 s after the kill (measured), 26 s in all.
-#: - No kill under load: `/health` is a sync route, so it queues with the
-#:   valuations in the worker's threadpool. At about 47 ms of CPU per valuation
+#: - No kill under load: `/health` is a sync route, so it waits once for a
+#:   thread of the worker's threadpool, behind the valuations (its dependencies
+#:   are async and wait for none). At about 47 ms of CPU per valuation
 #:   (recommenditos/api/__main__.py), a 6 s wait needs about 128 requests ahead
 #:   of the probe in one worker. The load test (docs/docs/load-testing.md) holds
 #:   at most 80 requests in flight, one per Locust user, which queue for at most
@@ -55,6 +61,11 @@ TIMEOUT_S = 6.0
 DOCKER_INIT = "/sbin/docker-init"
 
 PROC = Path("/proc")
+
+#: Left by a probe that got an answer, holding the start time of the PID 1 it
+#: saw. On the API's `/tmp` tmpfs, which Compose empties at every restart; the
+#: start time makes a marker from an earlier run of the container void anyway.
+MARKER = Path("/tmp/recommenditos-healthy")  # noqa: S108 - a path in the container
 
 #: Windows has no SIGKILL; the probe runs in the Linux container only.
 SIGKILL: int = getattr(signal, "SIGKILL", 9)
@@ -70,11 +81,31 @@ def answers(url: str = URL, timeout: float = TIMEOUT_S) -> bool:
         return False
 
 
+def init_started_ticks(proc: Path = PROC) -> int:
+    """When the container's PID 1 started, in clock ticks since boot."""
+    return int(_stat_fields(proc, 1)[19])  # field 22, `starttime`
+
+
 def container_uptime_s(proc: Path = PROC) -> float:
     """The seconds since the container's PID 1 started, read from Linux's procfs."""
     since_boot_s = float((proc / "uptime").read_text(encoding="ascii").split()[0])
-    started_ticks = int(_stat_fields(proc, 1)[19])  # field 22, `starttime`
-    return since_boot_s - started_ticks / os.sysconf("SC_CLK_TCK")
+    return since_boot_s - init_started_ticks(proc) / os.sysconf("SC_CLK_TCK")
+
+
+def mark_healthy(marker: Path = MARKER) -> None:
+    """Record that the API answered while the current PID 1 runs."""
+    started = str(init_started_ticks())
+    with contextlib.suppress(OSError):  # no writable /tmp: the start period applies
+        if not marker.exists() or marker.read_text(encoding="ascii") != started:
+            marker.write_text(started, encoding="ascii")
+
+
+def was_healthy(marker: Path = MARKER) -> bool:
+    """Whether the API answered since the current PID 1 started."""
+    try:
+        return marker.read_text(encoding="ascii") == str(init_started_ticks())
+    except OSError:
+        return False
 
 
 def server_processes(proc: Path = PROC) -> list[int]:
@@ -114,11 +145,12 @@ def _stat_fields(proc: Path, pid: int) -> list[str]:
     return (proc / str(pid) / "stat").read_text(encoding="ascii").rsplit(")", 1)[1].split()
 
 
-def main() -> int:
+def main(marker: Path = MARKER) -> int:
     for _ in range(ATTEMPTS):
         if answers():
+            mark_healthy(marker)
             return 0
-    if container_uptime_s() > START_PERIOD_S:
+    if was_healthy(marker) or container_uptime_s() > START_PERIOD_S:
         # Docker keeps the probe's output in `docker inspect` (State.Health.Log).
         killed = end_the_server()
         print(

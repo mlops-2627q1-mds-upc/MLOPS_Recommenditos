@@ -49,11 +49,12 @@ What each part guarantees:
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
   A hung API, one whose process lives on but stops answering, is restarted too, although Docker's restart policy acts only when the process exits ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-  Once the healthcheck's 60 s start period is over, a probe that gets no answer from `/health` in two attempts of 6 s kills the server.
+  Once the API has answered a probe since it started, or at the latest once the healthcheck's 60 s start period is over, a probe that gets no answer from `/health` in two attempts of 6 s kills the server.
+  The first answer leaves a marker on the API's `/tmp` tmpfs with the start time of PID 1, so a marker from before a restart counts for nothing.
   Docker's init, which `init: true` puts in front of the server as PID 1, then exits, and `restart: unless-stopped` starts the container again.
   The init is needed because the kernel ignores a kill sent from inside the container to its PID 1, and uvicorn's own signal handlers only ask the blocked event loop to stop.
   The probe kills only the children of Docker's init, and nothing when PID 1 is another process: a container of the image that shares the host's PID namespace inherits the healthcheck too.
-  The 6 s also bound overload: `/health` queues with the valuations in a worker's threadpool, so an API that is busy but not hung is killed only when about 128 requests, at about 47 ms each, wait ahead of the probe in one worker, more than the load test's 80 users can send at once ([Load testing](load-testing.md)).
+  The 6 s also bound overload: `/health` waits once for a thread of a worker's threadpool, behind the valuations (its dependencies are async), so an API that is busy but not hung is killed only when about 128 requests, at about 47 ms each, wait ahead of the probe in one worker, more than the load test's 80 users can send at once ([Load testing](load-testing.md)).
   An overload beyond that, which the load test does not reach, would be taken for a hang and restart the API.
 - **nginx** refuses `/feedback` and `/metrics`, versioned or not, with a 403 (FR-10, EDN-13).
   The replay job and Prometheus reach those endpoints at `api:8000` inside the Compose network, never through the proxy.
@@ -97,7 +98,7 @@ The crash test kills the uvicorn process from the host, as the kernel's OOM kill
 The process is found with `docker top`, because `docker inspect`'s `State.Pid` is now Docker's init in front of it.
 `docker kill` is no crash test, because Docker counts it as a manual stop and `unless-stopped` then leaves the container down.
 The integration suite runs the same crash test ([Integration tests](#integration-tests)).
-Its hang test stops the server and its workers with SIGSTOP instead, once the start period is over: they hold the port, so nginx's connection is accepted and never answered, as with a blocked event loop.
+Its hang test stops the server and its workers with SIGSTOP instead, as soon as Docker sees the API healthy: they hold the port, so nginx's connection is accepted and never answered, as with a blocked event loop.
 
 ## Integration tests
 

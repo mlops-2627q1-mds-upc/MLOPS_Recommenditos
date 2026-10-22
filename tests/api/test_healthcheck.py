@@ -50,12 +50,22 @@ def hung_url() -> Iterator[str]:
         yield f"http://127.0.0.1:{listener.getsockname()[1]}/health"
 
 
+#: The start time of the fake PID 1, in clock ticks.
+INIT_STARTED = 1000
+
+
 @pytest.fixture
 def kills(monkeypatch: pytest.MonkeyPatch) -> list[None]:
-    """The kills `main` would have sent, with nothing killed."""
+    """The kills `main` would have sent, with nothing killed, under a PID 1 of INIT_STARTED."""
     sent: list[None] = []
     monkeypatch.setattr(healthcheck, "end_the_server", lambda: sent.append(None))
+    monkeypatch.setattr(healthcheck, "init_started_ticks", lambda: INIT_STARTED)
     return sent
+
+
+@pytest.fixture
+def marker(tmp_path: Path) -> Path:
+    return tmp_path / "healthy"
 
 
 def _answers_in_turn(monkeypatch: pytest.MonkeyPatch, *results: bool) -> None:
@@ -78,34 +88,60 @@ def test_nfr05_a_connection_without_an_answer_is_not(hung_url: str):
 
 
 @pytest.mark.req("NFR-05")
-def test_nfr05_a_healthy_api_is_left_alone(monkeypatch: pytest.MonkeyPatch, kills: list[None]):
+def test_nfr05_a_healthy_api_is_left_alone_and_marked(
+    monkeypatch: pytest.MonkeyPatch, kills: list[None], marker: Path
+):
     _answers_in_turn(monkeypatch, True)
     _uptime(monkeypatch, 3600)
-    assert healthcheck.main() == 0
+    assert healthcheck.main(marker) == 0
     assert kills == []
+    assert marker.read_text(encoding="ascii") == str(INIT_STARTED)
 
 
 @pytest.mark.req("NFR-05")
-def test_nfr05_one_missed_answer_is_not_a_hang(monkeypatch: pytest.MonkeyPatch, kills: list[None]):
+def test_nfr05_one_missed_answer_is_not_a_hang(
+    monkeypatch: pytest.MonkeyPatch, kills: list[None], marker: Path
+):
     _answers_in_turn(monkeypatch, False, True)
     _uptime(monkeypatch, 3600)
-    assert healthcheck.main() == 0
+    assert healthcheck.main(marker) == 0
     assert kills == []
 
 
 @pytest.mark.req("NFR-05")
-def test_nfr05_a_hung_api_is_ended(monkeypatch: pytest.MonkeyPatch, kills: list[None]):
+def test_nfr05_a_hung_api_is_ended_after_the_start_period(
+    monkeypatch: pytest.MonkeyPatch, kills: list[None], marker: Path
+):
+    """Never answered, past the start period: a start that hung."""
     _answers_in_turn(monkeypatch, False, False)
     _uptime(monkeypatch, healthcheck.START_PERIOD_S + 1)
-    assert healthcheck.main() == 1
+    assert healthcheck.main(marker) == 1
     assert kills == [None]
 
 
 @pytest.mark.req("NFR-05")
-def test_nfr05_a_starting_api_is_not_ended(monkeypatch: pytest.MonkeyPatch, kills: list[None]):
+def test_nfr05_a_hang_after_the_first_answer_is_ended_at_once(
+    monkeypatch: pytest.MonkeyPatch, kills: list[None], marker: Path
+):
+    """Answered once in this run of the container: the start period is over early."""
+    marker.write_text(str(INIT_STARTED), encoding="ascii")
+    _answers_in_turn(monkeypatch, False, False)
+    _uptime(monkeypatch, 10)
+    assert healthcheck.main(marker) == 1
+    assert kills == [None]
+
+
+@pytest.mark.req("NFR-05")
+@pytest.mark.parametrize("left", [None, str(INIT_STARTED - 500)], ids=["none", "earlier run"])
+def test_nfr05_a_starting_api_is_not_ended(
+    monkeypatch: pytest.MonkeyPatch, kills: list[None], marker: Path, left: str | None
+):
+    """No answer yet in this run, within the start period: a start in progress."""
+    if left is not None:
+        marker.write_text(left, encoding="ascii")
     _answers_in_turn(monkeypatch, False, False)
     _uptime(monkeypatch, healthcheck.START_PERIOD_S - 1)
-    assert healthcheck.main() == 1
+    assert healthcheck.main(marker) == 1
     assert kills == []
 
 

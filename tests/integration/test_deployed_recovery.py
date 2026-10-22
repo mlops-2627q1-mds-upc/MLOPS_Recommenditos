@@ -3,14 +3,14 @@
 For the crash, the uvicorn process, not Docker's init in front of it, is killed
 with SIGKILL from the host's PID namespace, as the kernel's OOM killer or a
 segfault would end it. `docker kill` would not test this: Docker counts it as a
-manual stop, and `restart: unless-stopped` then leaves the container down. For the hang, the
-server's processes are stopped with SIGSTOP: they live on and hold the port, so
-a connection is accepted and never answered, as with a blocked event loop.
+manual stop, and `restart: unless-stopped` then leaves the container down. For
+the hang, the server's processes are stopped with SIGSTOP as soon as the API is
+healthy: they live on and hold the port, so a connection is accepted and never
+answered, as with a blocked event loop.
 Both signals are sent from a throwaway container of the API's own image with
 the host's PID namespace, so they need neither sudo nor another image.
 """
 
-from datetime import UTC, datetime
 import time
 
 import httpx2
@@ -69,7 +69,7 @@ def test_the_api_is_healthy_again_within_30_s_of_a_crash(
 def test_the_api_is_healthy_again_within_30_s_of_a_hang(
     client, api_container, record_testsuite_property, request
 ):
-    _wait_out_the_start_period(api_container)
+    _wait_until_healthy(api_container)
     image = api_container.inspect()["Image"]
     frozen = _server_processes(api_container)
     assert frozen, "the API container runs no server process"
@@ -97,18 +97,17 @@ def test_the_api_is_healthy_again_within_30_s_of_a_hang(
     record_testsuite_property("hang_recovery_s", round(recovered_after, 1))
 
 
-def _wait_out_the_start_period(container: Container) -> None:
-    """Wait until the healthcheck's start period is over, when a failure counts as a hang.
+def _wait_until_healthy(container: Container) -> None:
+    """Wait until Docker has seen the API healthy since its last start, as soon as it has.
 
-    The crash test before this one restarts the container, and a hang during
-    start-up is not what this test drills.
+    The crash test before this one restarts the container. The hang then comes
+    right after the API turned healthy, the earliest moment a missing answer is
+    a hang rather than a start in progress, and the latest one to be ended.
     """
-    state = container.inspect()
-    start_period_s = state["Config"].get("Healthcheck", {}).get("StartPeriod", 0) / 1e9
-    started_at = datetime.fromisoformat(state["State"]["StartedAt"])
-    remaining = start_period_s - (datetime.now(UTC) - started_at).total_seconds()
-    if remaining > 0:
-        time.sleep(remaining + 1)
+    deadline = time.monotonic() + RECOVERY_S * 3
+    while container.inspect()["State"]["Health"]["Status"] != "healthy":
+        assert time.monotonic() < deadline, "the API did not turn healthy"
+        time.sleep(0.2)
 
 
 def _server_processes(container: Container) -> list[int]:

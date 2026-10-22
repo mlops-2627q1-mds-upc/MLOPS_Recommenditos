@@ -59,6 +59,8 @@ The `/metrics` shares are measured inside the API, from the request reaching it 
 Every 4xx or 5xx answer is an error.
 `run.py` does not record restarts: on the VM, compare the API container's `RestartCount` (`docker inspect -f '{{.RestartCount}}' recommenditos-api-1`) before and after the run.
 It has to stay the same, because a restart during the run means the healthcheck took the loaded API for a hung one ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [Deployment](deployment.md)).
+Re-measure the hang drill on the VM too, with the SIGSTOP that [Deployment](deployment.md) describes.
+Its worst case of 26 s assumes the laptop's restart of about 4 s from the kill to the next answer; a cold restart of 8 s or more on the VM would break NFR-05's 30 s, and the probe's timings would have to shrink.
 
 **What CodeCarbon measures.**
 CodeCarbon runs in `machine` mode, because its `process` mode measures only the process that runs it and its children, and the API runs in a container.
