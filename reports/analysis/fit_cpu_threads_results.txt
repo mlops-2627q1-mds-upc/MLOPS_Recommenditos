@@ -1,0 +1,243 @@
+2026-10-22 20:27, x86_64, 8 logical CPUs, Python 3.12.13, load 1.66
+b1 stage: done in 5 s
+b1 bare: done in 4 s
+b1 omp1: done in 5 s
+b1 blas1: done in 5 s
+b1 all1: done in 4 s
+lgbm-basic stage: done in 160 s
+lgbm-basic bare: done in 165 s
+lgbm-basic omp1: done in 183 s
+lgbm-basic blas1: done in 161 s
+lgbm-basic all1: done in 168 s
+lgbm-extended stage: done in 30 s
+lgbm-extended bare: done in 28 s
+lgbm-extended omp1: done in 42 s
+lgbm-extended blas1: done in 30 s
+lgbm-extended all1: done in 45 s
+
+## CPU over wall time of the measured span
+
+variant                    stage              bare              omp1             blas1              all1
+b1              5.51/  1.32=4.18  5.06/  1.28=3.97  1.10/  1.09=1.01  1.10/  1.09=1.01  1.09/  1.09=1.00
+lgbm-basic    168.11/156.39=1.07171.57/161.98=1.06180.85/178.87=1.01168.60/157.16=1.07164.78/164.82=1.00
+lgbm-extended  41.90/ 25.46=1.65 40.55/ 24.87=1.63 38.25/ 37.92=1.01 43.94/ 26.30=1.67 42.02/ 42.03=1.00
+(each cell: CPU seconds / wall seconds = ratio)
+
+## b1, stage: 5.51 s CPU in 1.32 s
+train and validation L1 in the record: 0.1323342030497867, 0.14059481235275015
+CPU seconds by thread:
+  main thread                                              1.30
+  native threads started before the span (24)              4.18
+  Python thread 'Thread-1' (1)                             0.00
+  Python thread 'Thread-3' (1)                             0.00
+  threads that ended in the span                           0.03
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+    of which Ridge.fit (LSQR)  wall     0.50   main     0.49   others     3.31
+  estimator fit                wall     1.02   main     1.01   others     3.33
+  train and validation L1      wall     0.28   main     0.27   others     0.83
+Thread pools after the span (threadpoolctl):
+  openblas  blas     8 threads  libscipy_openblas
+  openmp    openmp   8 threads  libgomp
+  openmp    openmp   8 threads  libgomp
+  openblas  blas     8 threads  libscipy_openblas
+
+## b1, bare: 5.06 s CPU in 1.28 s
+train and validation L1 in the record: 0.1323342030497867, 0.14059481235275015
+CPU seconds by thread:
+  main thread                                              1.26
+  native threads started before the span (24)              3.83
+  threads that ended in the span                          -0.03
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+    of which Ridge.fit (LSQR)  wall     0.44   main     0.43   others     2.98
+  estimator fit                wall     0.97   main     0.96   others     2.99
+  train and validation L1      wall     0.30   main     0.28   others     0.84
+
+## b1, omp1: 1.10 s CPU in 1.09 s
+train and validation L1 in the record: 0.1323306416822438, 0.14058918829403477
+CPU seconds by thread:
+  main thread                                              1.09
+  native threads started before the span (3)               0.00
+  Python thread 'Thread-1' (1)                             0.00
+  Python thread 'Thread-3' (1)                             0.00
+  threads that ended in the span                           0.01
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+    of which Ridge.fit (LSQR)  wall     0.33   main     0.33   others     0.00
+  estimator fit                wall     0.86   main     0.86   others     0.00
+  train and validation L1      wall     0.22   main     0.22   others     0.00
+
+## b1, blas1: 1.10 s CPU in 1.09 s
+train and validation L1 in the record: 0.1323306416822438, 0.14058918829403477
+CPU seconds by thread:
+  main thread                                              1.10
+  native threads started before the span (10)              0.00
+  Python thread 'Thread-1' (1)                             0.00
+  Python thread 'Thread-3' (1)                             0.00
+  threads that ended in the span                           0.00
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+    of which Ridge.fit (LSQR)  wall     0.32   main     0.32   others     0.00
+  estimator fit                wall     0.86   main     0.86   others     0.00
+  train and validation L1      wall     0.23   main     0.23   others     0.00
+
+## b1, all1: 1.09 s CPU in 1.09 s
+train and validation L1 in the record: 0.1323306416822438, 0.14058918829403477
+CPU seconds by thread:
+  main thread                                              1.08
+  native threads started before the span (3)               0.00
+  threads that ended in the span                           0.01
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+    of which Ridge.fit (LSQR)  wall     0.33   main     0.34   others     0.00
+  estimator fit                wall     0.86   main     0.85   others     0.00
+  train and validation L1      wall     0.23   main     0.22   others     0.00
+
+## lgbm-basic, stage: 168.11 s CPU in 156.39 s
+train and validation L1 in the record: 0.062220312929652494, 0.10039602776340445
+CPU seconds by thread:
+  main thread                                            156.28
+  native threads started before the span (24)              0.00
+  native threads started in the span (7)                  10.05
+  Python thread 'Thread-161' (1)                           0.00
+  Python thread 'Thread-168' (1)                           0.00
+  threads that ended in the span                           1.78
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.05   main     0.04   others     0.00
+  estimator fit                wall    14.74   main    14.74   others     0.00
+  train and validation L1      wall     1.49   main     1.41   others     9.98
+  quantile models              wall    82.68   main    82.67   others     0.07
+  calibration                  wall    57.43   main    57.41   others     0.00
+Thread pools after the span (threadpoolctl):
+  openblas  blas     8 threads  libscipy_openblas
+  openblas  blas     8 threads  libscipy_openblas
+  openmp    openmp   8 threads  libgomp
+  openmp    openmp   8 threads  libgomp
+
+## lgbm-basic, bare: 171.57 s CPU in 161.98 s
+train and validation L1 in the record: 0.062220312929652494, 0.10039602776340445
+CPU seconds by thread:
+  main thread                                            161.90
+  native threads started before the span (24)              0.00
+  native threads started in the span (7)                   9.64
+  threads that ended in the span                           0.03
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.04   main     0.03   others     0.00
+  estimator fit                wall    14.99   main    14.98   others     0.00
+  train and validation L1      wall     1.42   main     1.37   others     9.54
+  quantile models              wall    84.75   main    84.74   others     0.08
+  calibration                  wall    60.77   main    60.75   others     0.00
+
+## lgbm-basic, omp1: 180.85 s CPU in 178.87 s
+train and validation L1 in the record: 0.062220312929652494, 0.10039602776340445
+CPU seconds by thread:
+  main thread                                            178.75
+  native threads started before the span (3)               0.00
+  Python thread 'Thread-177' (1)                           0.00
+  Python thread 'Thread-191' (1)                           0.00
+  threads that ended in the span                           2.10
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.04   main     0.05   others     0.00
+  estimator fit                wall    16.29   main    16.28   others     0.00
+  train and validation L1      wall     9.51   main     9.50   others     0.00
+  quantile models              wall    88.79   main    88.76   others     0.00
+  calibration                  wall    64.22   main    64.16   others     0.00
+
+## lgbm-basic, blas1: 168.60 s CPU in 157.16 s
+train and validation L1 in the record: 0.062220312929652494, 0.10039602776340445
+CPU seconds by thread:
+  main thread                                            157.01
+  native threads started before the span (10)              0.00
+  native threads started in the span (7)                   9.76
+  Python thread 'Thread-161' (1)                           0.00
+  Python thread 'Thread-169' (1)                           0.00
+  threads that ended in the span                           1.83
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.05   main     0.04   others     0.00
+  estimator fit                wall    15.60   main    15.59   others     0.00
+  train and validation L1      wall     1.46   main     1.38   others     9.65
+  quantile models              wall    82.50   main    82.48   others     0.08
+  calibration                  wall    57.54   main    57.51   others     0.00
+
+## lgbm-basic, all1: 164.78 s CPU in 164.82 s
+train and validation L1 in the record: 0.062220312929652494, 0.10039602776340445
+CPU seconds by thread:
+  main thread                                            164.78
+  native threads started before the span (3)               0.00
+  threads that ended in the span                           0.00
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.04   main     0.04   others     0.00
+  estimator fit                wall    14.65   main    14.64   others     0.00
+  train and validation L1      wall     8.32   main     8.32   others     0.00
+  quantile models              wall    84.42   main    84.40   others     0.00
+  calibration                  wall    57.38   main    57.37   others     0.00
+
+## lgbm-extended, stage: 41.90 s CPU in 25.46 s
+train and validation L1 in the record: 0.04111520729939895, 0.09663131546522054
+CPU seconds by thread:
+  main thread                                             25.41
+  native threads started before the span (24)              0.00
+  Python thread 'Thread-17' (1)                            0.00
+  native threads started in the span (7)                  16.21
+  Python thread 'Thread-28' (1)                            0.00
+  threads that ended in the span                           0.28
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+  estimator fit                wall    22.92   main    22.92   others     0.00
+  train and validation L1      wall     2.53   main     2.47   others    16.19
+Thread pools after the span (threadpoolctl):
+  openblas  blas     8 threads  libscipy_openblas
+  openmp    openmp   8 threads  libgomp
+  openblas  blas     8 threads  libscipy_openblas
+  openmp    openmp   8 threads  libgomp
+
+## lgbm-extended, bare: 40.55 s CPU in 24.87 s
+train and validation L1 in the record: 0.04111520729939895, 0.09663131546522054
+CPU seconds by thread:
+  main thread                                             24.76
+  native threads started before the span (24)              0.00
+  native threads started in the span (7)                  15.74
+  threads that ended in the span                           0.05
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+  estimator fit                wall    22.33   main    22.33   others     0.00
+  train and validation L1      wall     2.53   main     2.41   others    15.74
+
+## lgbm-extended, omp1: 38.25 s CPU in 37.92 s
+train and validation L1 in the record: 0.04111520729939895, 0.09663131546522054
+CPU seconds by thread:
+  main thread                                             37.89
+  native threads started before the span (3)               0.00
+  Python thread 'Thread-33' (1)                            0.00
+  Python thread 'Thread-41' (1)                            0.00
+  threads that ended in the span                           0.36
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+  estimator fit                wall    22.47   main    22.45   others     0.00
+  train and validation L1      wall    15.44   main    15.44   others     0.00
+
+## lgbm-extended, blas1: 43.94 s CPU in 26.30 s
+train and validation L1 in the record: 0.04111520729939895, 0.09663131546522054
+CPU seconds by thread:
+  main thread                                             25.98
+  native threads started before the span (10)              0.00
+  Python thread 'Thread-17' (1)                            0.00
+  native threads started in the span (7)                  17.68
+  Python thread 'Thread-29' (1)                            0.00
+  threads that ended in the span                           0.28
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+  estimator fit                wall    23.24   main    23.24   others     0.00
+  train and validation L1      wall     3.05   main     2.73   others    17.68
+
+## lgbm-extended, all1: 42.02 s CPU in 42.03 s
+train and validation L1 in the record: 0.04111520729939895, 0.09663131546522054
+CPU seconds by thread:
+  main thread                                             42.02
+  native threads started before the span (3)               0.00
+  threads that ended in the span                           0.00
+CPU seconds by step (wall, main thread, other threads):
+  blanked copies               wall     0.00   main     0.00   others     0.00
+  estimator fit                wall    24.97   main    24.97   others     0.00
+  train and validation L1      wall    17.05   main    17.04   others     0.00

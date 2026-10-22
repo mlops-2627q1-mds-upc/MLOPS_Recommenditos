@@ -254,3 +254,11 @@ Since the measurement was adopted, `lgbm-basic` adds these copies in the pipelin
 `price_range_point_estimate.py` measures, on the calibration split, where the typical price of a `/price-range` answer should come from: `lgbm-basic`'s point estimate, which FR-07 names today, or the 50 % quantile model the price range carries beside its bounds.
 It compares the two by MdAPE, with a paired bootstrap over seller groups, for full inputs, for the ten fields FR-01 requires, for P1 and for a make-only request, and reports how often each lies outside the conformal interval.
 `price_range_point_estimate_results.txt` is its output (2026-10-20).
+
+## The threads of a measured fit (issue #113)
+
+`fit_cpu_threads.py` attributes the CPU time of the span `train` measures, for `b1`, `lgbm-basic` and `lgbm-extended`, to the threads that spent it and to the steps of the fit, from `/proc/self/task/<tid>/stat` (Linux only).
+Each fit runs in a process of its own, as the stage runs it with CodeCarbon, without CodeCarbon, and with `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1` or both.
+`fit_cpu_threads_results.txt` is its output (2026-10-22): `train.num_threads` holds for LightGBM's boosting, and the CPU time beyond one thread comes from `Booster.predict` computing the training and validation L1 for the model record on every core, and from OpenBLAS's pool behind `b1`'s Ridge solver.
+`ridge_blas_threads.py` follows up on the one number the threads changed, `b1`'s L1: it fits `b1` at 1, 2, 4 and 8 OpenBLAS threads and compares the coefficients with each other and with the committed model.
+`ridge_blas_threads_results.txt` is its output (2026-10-22).

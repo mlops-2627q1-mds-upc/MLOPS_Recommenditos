@@ -115,6 +115,7 @@ CodeCarbon's row for the fit goes to `reports/emissions/<variant>.csv`, uncached
 CodeCarbon appends to that file, and DVC deletes a stage's outputs before running it, so after `dvc repro` it holds exactly the one row of the fit that produced the model; a run outside DVC appends a row, and the model's `model.json` names its own by CodeCarbon's run id.
 `compare-energy` joins each model, its emissions row and its metrics on those ids into the table and figure the report's energy section cites.
 On the machines we train on, the figure is CodeCarbon's estimate from the CPU's TDP and the fit's CPU time plus a constant for the RAM, not a meter reading: `recommenditos/modeling/energy.py` says how to read it.
+The fit's CPU time is more than its wall time although `train.num_threads` is 1, because that setting pins LightGBM's boosting and not the predictions behind the training and validation L1 in the model record, nor the OpenBLAS threads of `b1`'s Ridge solver ([model card](model-card.md#determinism), issue #113).
 
 `comparables` writes the index of real listings that `POST /v1/comparables` returns for UC2 (FR-09), and the API image carries it beside the bundle (FR-12).
 It is not written under `models/`, because `evaluate` and `compare-energy` depend on that whole directory and a file there would mark both as changed.
