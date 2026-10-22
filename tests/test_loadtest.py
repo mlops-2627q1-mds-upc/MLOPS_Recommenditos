@@ -214,5 +214,22 @@ def test_the_users_together_keep_the_total_rate():
 
 def test_a_user_sends_at_once_after_an_answer_slower_than_its_gap():
     arrivals = Arrivals(rate=1000.0, rng=random.Random(3))  # noqa: S311
-    first = arrivals.next_wait(0.0)
-    assert arrivals.next_wait(first + 5.0) == 0.0
+    gaps = random.Random(3)  # noqa: S311 - the same draws, to know the gaps
+    first, _, third = (gaps.expovariate(1000.0) for _ in range(3))
+    assert arrivals.next_wait(0.0) == first
+    late = first + 5.0
+    assert arrivals.next_wait(late) == 0.0
+    # The next gap counts from the late send, not from the send it planned, so
+    # the user does not catch up with a burst after a slow answer.
+    assert arrivals.next_wait(late) == pytest.approx(third)
+
+
+@pytest.mark.parametrize(
+    ("written", "kept"),
+    [(b'{"a": 1}', b'{"a": 1}\n'), (b'{"a": 1}\n', b'{"a": 1}\n'), (b"", b"")],
+)
+def test_the_locust_json_ends_with_one_newline(tmp_path, written, kept):
+    path = tmp_path / "run-locust.json"
+    path.write_bytes(written)
+    measure.end_with_newline(path)
+    assert path.read_bytes() == kept

@@ -33,7 +33,10 @@ Each user waits an exponential gap before every request, its first included, 4 s
 Locust starts all users within the first second, and a fixed gap per user made them send together, all 80 within a second and again every 4 s: the API saw the rate as bursts, and the requests of a burst queued behind each other.
 On one stack with one worker, at 10 requests/s for 40 s and two runs each, the fixed gap measured `/v1/predict` at p50 850 to 920 ms and p95 1,500 to 1,600 ms, the exponential gaps at p50 89 to 91 ms and p95 160 to 190 ms; the bursts inflated the latency about tenfold.
 The [first laptop dry run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/2bcebf0/reports/loadtest/laptop-dry-run-2026-10-21.md), with the fixed gap, measured p50 3,100 ms and p95 5,700 ms for `/v1/predict`.
-A user waits for its answer before it sends the next request, so each has a budget of 4 s per request on average: a gap shorter than the answer is cut to nothing, which costs under 0.1 % of the rate while answers take 100 ms, and a target slower than 4 s gets fewer requests per second rather than a growing queue.
+A user waits for its answer before it sends the next request, so a slow target gets fewer requests per second rather than a growing queue.
+The time between a user's sends is then the longer of its gap and the answer, and the share of the rate a run achieves is `m / (R + m * exp(-R / m))` on average, with `m` the mean gap of 4 s and `R` the answer time: 99.9 % at 200 ms, 97 % at 1 s, 95 % at about 1.4 s, 90 % at 2 s and 73 % at 4 s.
+A simulation of 80 users at 20 requests/s over 600 s with `tools/loadtest/arrivals.py` agrees within its noise.
+The 95 % verdict below thus fails from answers of about 1.4 s, long after NFR-02's 200 and 300 ms.
 The report therefore states the achieved rate, the answers divided by the duration, against the target, and counts the target as sustained when at least 95 % of it was achieved.
 The number of requests a run sends is random, with a standard deviation of 1.3 % of the target over NFR-03's 5 minutes at 20 requests/s, which puts the 95 % threshold four standard deviations below the target; over a 60 s dry run it is 2.9 %.
 At the end of the run, each user finishes the request it is waiting for.
