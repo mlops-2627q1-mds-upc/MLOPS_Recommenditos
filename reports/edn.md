@@ -1222,6 +1222,29 @@ How to add an entry:
 - **Other evidence:** [Issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197), [PR #207](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/207), [`cd.yml`](../.github/workflows/cd.yml), [deployment docs](../docs/docs/deployment.md#continuous-delivery), EDN-08.
 - **In LaTeX:** yes
 
+### EDN-92: A manually started GitHub Actions workflow retrains and prepares the promotion pull request
+
+- **Date:** 2026-10-22
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** CI/CD, Reproducibility
+- **Participants:** @lukas2510 decided ([issue #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201))
+- **Decision:** A `workflow_dispatch` workflow, refused outside `main`, runs `dvc repro` on a GitHub-hosted runner, logs to the DagsHub MLflow, pushes to the DVC remote and pushes the new `dvc.lock` to a branch.
+  Its summary gives the evidence and a link that opens the prefilled promotion pull request; a person opening it is the approval step, and CI runs on it.
+  Runner energy figures are kept, labelled as estimates; merging such a promotion replaces the laptop's NFR-10 figures.
+- **Alternatives considered:**
+  - Only CI's `Pipeline lock (dvc.lock)` check, training on laptops: the pipeline would never run anywhere but a laptop.
+  - The workflow opening the pull request: needs the repository-wide setting that lets Actions create and approve pull requests, which the goal does not need.
+  - Correcting CodeCarbon's CPU power for the runner: more work, unclear accuracy.
+  - CodeCarbon off in CI: no energy figures.
+- **Rationale:** A forced run of every stage took 333 s and 388 s, at most 3.3 GB of the runner's 16 GB of RAM and 2.4 GB of disk, and cost no Actions minutes on this public repository. It reproduced every committed metric except per-segment shares of the Ridge baseline, which differ between the two CPUs.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured the pipeline on the runner, compared the outputs with the committed ones, checked the billing API when @lukas2510 asked about the Actions limits, laid out the options and recommended this one.
+  @lukas2510 chose it, the energy labelling, and to keep the Actions pull request setting off.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 on issue #201: runner measurement, billing check, recommendation, workflow.
+- **Other evidence:** [measurement on #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135), runs [39825393405](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39825393405) and [39826534385](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39826534385), EDN-12.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

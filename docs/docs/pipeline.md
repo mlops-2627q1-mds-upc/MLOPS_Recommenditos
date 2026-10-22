@@ -44,6 +44,10 @@ So the dry run went on to `dvc repro --force` in the same clone, which ran all t
 
 Nothing of the forced run was pushed or committed, and the clone was removed afterwards.
 
+The same forced run on a GitHub-hosted runner (AMD EPYC 7763, 4 vCPU) on 2026-10-22 ([#201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135)) reproduced every data file and every fitted estimator above byte for byte except one, the Ridge baseline's `pipeline.joblib`, and so `metrics.json` (`variants.b1.mdape`) and `reports/metrics/b1.json` (191 of its 580 leaves) differ as a result.
+`b1`'s MdAPE moved by 0.0007 percentage points, while 17 of its per-segment and masked-input shares moved by more than 0.1 point, the largest by 0.95 points on the 105 test rows of Hyundai; no gate verdict changed, and two runs on the runner agreed with each other.
+So NFR-06 holds across machines for the splits, the models that are served and the headline metrics, and not for every per-segment figure of `b1`; the model card says what is promised across CPU architectures.
+
 The tests never run the pipeline through DVC.
 They call the same stage functions in the same order against a synthetic fixture in a temporary directory, so `pytest` stays fast and hermetic:
 
@@ -451,6 +455,36 @@ On a pull request that leaves `dvc.lock` alone the job succeeds at once; it runs
 The person's review of the metrics diff stays on top of it: the job rules out a rejected model, it does not approve an accepted one.
 The job cannot tell a promotion from any other change to `dvc.lock`, such as a re-run of the pipeline after a code change, so every pull request that updates the lock needs a passing verdict.
 While no variant passes the gate, none of them can merge.
+
+### Retraining on GitHub Actions
+
+The `Retrain` workflow (`.github/workflows/retrain.yml`, [EDN-92](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) runs the pipeline on a GitHub-hosted runner and prepares the promotion pull request, so a model can be retrained from the repository alone instead of on a laptop.
+Use it when a monitoring finding calls for a retrain (FR-15), or when CI's `Pipeline lock (dvc.lock)` check reports stale stages on `main` (see [Working on a stage](#working-on-a-stage)).
+Start it under **Actions → Retrain → Run workflow** on `main`, with the reason, which goes into the pull request it prepares; any other branch is refused, because only `main` may use the `dagshub` environment and its token, which can write (NFR-15).
+`force` reruns every stage from the Zenodo download, which is NFR-06's clean-clone drill; without it, the run pulls the committed artefacts and reruns only the stale stages.
+
+The run:
+
+1. pulls the committed artefacts from the DVC remote and runs `dvc repro` with tracking required, so every training run is in the DagsHub MLflow and the run fails rather than training untracked;
+2. stops with nothing to promote when `dvc.lock` did not change;
+3. copies the stage figures over the report's copies, tags the MLflow runs it trained with the machine (also when a later stage failed, so no run it trained stays unlabelled), and pushes the artefacts to the DVC remote;
+4. commits the outputs to a branch `retrain/run-<run number>-<attempt>` and pushes it;
+5. writes the evidence into the run's summary: the model version (the MD5 `dvc.lock` records for `models/<candidate>`, which `/health` reports), the reason, the gate verdict as the Promotion gate check will see it, the metrics of every variant beside the committed ones with their MLflow runs, and NFR-06's comparison with the committed metrics.
+
+The summary starts with a link that opens the promotion pull request with its title and a short body filled in; the body links back to the summary, because the evidence would not fit into a URL.
+Read the evidence and open the pull request: that is the person's approval step of [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), and CI, the Promotion gate included, runs on it because a person opened it.
+Merge it once the checks pass; nothing merges by itself.
+The workflow does not open the pull request itself: one opened with its `GITHUB_TOKEN` would start no CI, and the setting that lets Actions create pull requests stays off (EDN-92).
+To drop a retrain, delete its branch.
+That does not undo what the run wrote to shared places before anyone reviewed it: its new MLflow runs and the pushed artefacts stay, unreferenced, and when `evaluate` reran without a retrain, which is the usual case for a stale lock after a change to evaluation code, it reopened the committed runs a laptop trained and overwrote their `evaluate.git_commit` and `evaluate.deps.*` tags and appended its metrics there.
+The runs' `git_commit` is the commit of `main` the workflow started from, so the squash merge loses nothing, and the rule against rebasing a branch with a tracked run does not apply to a `retrain/*` branch.
+When `main` has moved on or `dvc.lock` conflicts by the time the pull request is opened, run the workflow again rather than merging `main` into the branch.
+
+A forced run takes about 6 minutes on the runner, with at most 3.3 GB of its 16 GB of RAM and 2.4 GB of disk.
+Its energy figures are estimates for the runner: CodeCarbon has no energy counter there either and assumes the 280 W TDP of the runner's 64-core server CPU, which puts the `lgbm-basic` fit at 3.0 Wh against 0.5 Wh on the laptop.
+The MLflow runs carry `trained_on` and `energy_estimate` tags that say so.
+Merging a promotion from the workflow replaces the committed emissions files, `energy-vs-error` and the report's copy of that figure with these estimates, mixed with laptop rows when only some variants were retrained; the run's summary says so at the top.
+So the laptop stays NFR-10's reference only as long as no promotion trained on the runner is merged, and the report's NFR-10 caption has to be updated with such a merge.
 
 Working on a stage
 ------------------
