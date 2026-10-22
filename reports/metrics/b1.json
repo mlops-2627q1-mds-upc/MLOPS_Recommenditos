@@ -4,7 +4,7 @@
   "data_source": "zenodo",
   "feature_set": "basic",
   "n_test_rows": 19665,
-  "mlflow_run_id": "2764ae9dc8214146be4e4d7cea38cd40",
+  "mlflow_run_id": "ec7e826611db4114a59347e1b68f07b8",
   "mdape": 0.0951563754861866,
   "within_10pct": 0.5200610221205186,
   "within_20pct": 0.8029494024917366,
