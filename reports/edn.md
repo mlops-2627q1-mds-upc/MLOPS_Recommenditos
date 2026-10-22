@@ -1245,6 +1245,30 @@ How to add an entry:
 - **Other evidence:** [measurement on #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135), runs [39825393405](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39825393405) and [39826534385](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39826534385), EDN-12.
 - **In LaTeX:** yes
 
+### EDN-93: A hung API is ended by its healthcheck and restarted by Docker
+
+- **Date:** 2026-10-22
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** Containerization, Reliability
+- **Participants:** @lukas2510 decided ([issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185))
+- **Decision:** Compose runs Docker's init in front of the API (`init: true`).
+  After the 60 s start period, a healthcheck probe that gets no answer from `/health` in two attempts of 2 s kills the server; the init exits and `restart: unless-stopped` restarts the container.
+  Known limit: with several workers one hung worker goes unnoticed, so the API runs one worker until the VM's load test (#143).
+- **Alternatives considered:**
+  - An autoheal sidecar (18.4 s): it needs the Docker socket, which is root on the host, against the hardening of #200.
+  - A watchdog on the VM (19.2 s): changes to the VM that CI cannot test.
+  - gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies, does not run on Windows and misses a full threadpool.
+  - uvicorn's supervisor: replaces a frozen worker, not one whose event loop is blocked.
+- **Rationale:** With the server frozen by SIGSTOP, the old stack was still down after 75 s; with the probe, `/health` answered again after 8.2 to 13.6 s in four runs, at most about 18 s, under #200's hardening and with no new package, image or privilege.
+  The init is needed because the kernel ignores a kill sent inside the container to its PID 1.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found the options, measured each on the stack or a small test server, and recommended the probe, which @lukas2510 chose.
+  AI then wrote the probe and a hang drill that fails on the old stack and passes on the new one.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 on Milestone 5: the measured options for restarting a hung API.
+- **Other evidence:** [Issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185), [deployment docs](../docs/docs/deployment.md), [`healthcheck.py`](../recommenditos/api/healthcheck.py), [hang drill](../tests/integration/test_deployed_recovery.py).
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
