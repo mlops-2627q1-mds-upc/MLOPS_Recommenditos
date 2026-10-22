@@ -13,8 +13,8 @@ Known limit: with several workers one hung worker goes unnoticed, so the API run
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item An autoheal sidecar (18.4 s): the Docker socket it needs is root on the host, against the hardening of \#200.
-\item A watchdog on the VM (19.2 s): changes to the VM that CI cannot test.
-\item gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies, does not run on Windows and misses a full threadpool.
+\item A watchdog on the VM (19.2 s): VM changes that CI cannot test.
+\item gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies and misses a full threadpool.
 \item uvicorn's supervisor: misses a blocked event loop.
 \end{itemize}
 \par

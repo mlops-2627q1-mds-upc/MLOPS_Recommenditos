@@ -1256,8 +1256,8 @@ How to add an entry:
   Known limit: with several workers one hung worker goes unnoticed, so the API runs one worker until the VM's load test (#143).
 - **Alternatives considered:**
   - An autoheal sidecar (18.4 s): the Docker socket it needs is root on the host, against the hardening of #200.
-  - A watchdog on the VM (19.2 s): changes to the VM that CI cannot test.
-  - gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies, does not run on Windows and misses a full threadpool.
+  - A watchdog on the VM (19.2 s): VM changes that CI cannot test.
+  - gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies and misses a full threadpool.
   - uvicorn's supervisor: misses a blocked event loop.
 - **Rationale:** With the server frozen by SIGSTOP, the old stack was still down after 75 s.
   A prototype under #200's hardening recovered in 16.1 s with one worker and 17.2 s with two; the final probe, on the stack without it, in 15.8 to 20.6 s in four runs with one worker and 16.8 s with two.
