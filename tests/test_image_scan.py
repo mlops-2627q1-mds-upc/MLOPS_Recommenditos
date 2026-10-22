@@ -103,6 +103,23 @@ def test_trivy_scans_for_high_and_critical_with_the_ignore_file(tmp_path):
 
 
 @pytest.mark.req("NFR-09")
+def test_canary_tries_the_next_registry_only_after_an_error(monkeypatch, capsys):
+    scanned = []
+
+    def scan(trivy, image):
+        scanned.append(image)
+        if len(scanned) == 1:
+            raise image_scan.ScanError("TOOMANYREQUESTS")
+        return ImageResult(image, [Finding("CVE-1", "openssl", "1", "2", "HIGH", "debian")])
+
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setattr(image_scan, "scan_image", scan)
+    assert image_scan.main(["--trivy", "trivy", "canary"]) == 0
+    assert scanned == list(image_scan.CANARY_IMAGES[:2])
+    assert "with 1 fixable" in capsys.readouterr().out
+
+
+@pytest.mark.req("NFR-09")
 def test_canary_fails_when_the_scan_finds_nothing(monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     monkeypatch.setattr(
@@ -153,6 +170,6 @@ def compose_images() -> list[str]:
 
 @pytest.mark.req("NFR-09")
 def test_every_image_is_pinned_by_tag_and_digest():
-    images = dockerfile_images() + compose_images() + [image_scan.CANARY_IMAGE]
-    assert len(images) >= 7
+    images = dockerfile_images() + compose_images() + list(image_scan.CANARY_IMAGES)
+    assert len(images) >= 8
     assert [image for image in images if not DIGEST.match(image)] == []

@@ -58,11 +58,15 @@ DB_REPOSITORIES = (
 # it never changes: Debian 12.2 with dozens of HIGH and CRITICAL vulnerabilities
 # that later point releases fixed (93 with trivy 0.76.1 on 2026-10-22). Fixes
 # only accumulate for an image that never changes, so it stays a positive.
-# From Amazon ECR Public's copy of Docker Hub's official images, the same digest,
-# so that the canary does not count against Docker Hub's anonymous pull limit.
-CANARY_IMAGE = (
-    "public.ecr.aws/docker/library/python:3.12.0-slim-bookworm"
-    "@sha256:19a6235339a74eca01227b03629f63b6f5020abc21142436eced6ec3a9839a76"
+# The same digest from two registries in turn, so that one registry's anonymous
+# pull limit does not fail the job: ECR Public answered a CI run with
+# TOOMANYREQUESTS on 2026-10-22. (mirror.gcr.io serves the manifest but no
+# longer the layers of an image this old.) Only an error moves on to the next
+# registry; a scan that finds nothing fails the canary at once.
+CANARY_DIGEST = "sha256:19a6235339a74eca01227b03629f63b6f5020abc21142436eced6ec3a9839a76"
+CANARY_IMAGES = tuple(
+    f"{registry}/python:3.12.0-slim-bookworm@{CANARY_DIGEST}"
+    for registry in ("public.ecr.aws/docker/library", "docker.io/library")
 )
 
 # trivy's status for a vulnerability with a released fix; `--ignore-unfixed`
@@ -249,20 +253,27 @@ def cmd_scan(trivy: str, images: list[str]) -> int:
 
 def cmd_canary(trivy: str) -> int:
     check_ignore_file()
-    result = scan_image(trivy, CANARY_IMAGE)
-    if result.passed:
+    errors = []
+    for image in CANARY_IMAGES:
+        try:
+            result = scan_image(trivy, image)
+        except ScanError as error:
+            errors.append(str(error))
+            continue
+        if result.passed:
+            publish(
+                "## Image scan canary\n\n**Failed**: the scan found no fixable HIGH or CRITICAL"
+                f" vulnerability in `{image}`, which has dozens, so a passing scan proves"
+                " nothing. Check the trivy flags in tools/image_scan.py and `.trivyignore`.\n"
+            )
+            return 1
         publish(
-            "## Image scan canary\n\n**Failed**: the scan found no fixable HIGH or CRITICAL"
-            f" vulnerability in `{CANARY_IMAGE}`, which has dozens, so a passing scan proves"
-            " nothing. Check the trivy flags in tools/image_scan.py and `.trivyignore`.\n"
+            f"## Image scan canary\n\nThe scan fails `{image}`, an image from October 2023,"
+            f" with {len(result.fixable)} fixable HIGH or CRITICAL findings, so a scan that"
+            " passes is evidence.\n"
         )
-        return 1
-    publish(
-        f"## Image scan canary\n\nThe scan fails `{CANARY_IMAGE}`, an image from October 2023,"
-        f" with {len(result.fixable)} fixable HIGH or CRITICAL findings, so a scan that passes"
-        " is evidence.\n"
-    )
-    return 0
+        return 0
+    raise ScanError("; ".join(errors))
 
 
 def main(argv: list[str] | None = None) -> int:
