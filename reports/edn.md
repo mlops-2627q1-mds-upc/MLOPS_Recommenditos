@@ -1177,6 +1177,28 @@ How to add an entry:
 - **Other evidence:** [PR #169](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/169), [per-make coverage table](metrics/interval-coverage-by-make.csv), [split analysis](analysis/split_strategy_results.txt), EDN-32 and EDN-85.
 - **In LaTeX:** yes
 
+### EDN-92: A manually started GitHub Actions workflow retrains and opens the promotion pull request
+
+- **Date:** 2026-10-22
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** CI/CD, Reproducibility
+- **Participants:** @lukas2510 decided ([issue #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201))
+- **Decision:** A `workflow_dispatch` workflow, refused outside `main`, runs `dvc repro` on a GitHub-hosted runner, logs to the DagsHub MLflow, pushes to the DVC remote and opens a draft promotion pull request with the model version, metrics and gate verdict.
+  A person marks it ready, which starts CI, and merges it.
+  Its energy figures are kept and labelled as runner estimates.
+- **Alternatives considered:**
+  - CI only reports a stale `dvc.lock` and training stays on laptops: the pipeline would never run anywhere but a laptop.
+  - Correcting CodeCarbon's CPU power for the runner: more work, with unclear accuracy.
+  - CodeCarbon off in CI: models trained there would have no energy figures.
+- **Rationale:** A forced run of every stage took 333 s and 388 s, at most 3.3 GB of the runner's 16 GB of RAM and 2.4 GB of disk, and cost no Actions minutes on this public repository. It reproduced every committed metric except per-segment shares of the Ridge baseline, which differ between the two CPUs.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured the pipeline on the runner, compared the outputs with the committed ones, checked the billing API when @lukas2510 asked about the Actions limits, laid out the options and recommended this one.
+  @lukas2510 chose it and the energy labelling.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 on issue #201: runner measurement, billing check, recommendation, workflow.
+- **Other evidence:** [measurement on #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135), runs [39825393405](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39825393405) and [39826534385](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39826534385), EDN-12.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

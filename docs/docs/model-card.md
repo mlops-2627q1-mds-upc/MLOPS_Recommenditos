@@ -405,6 +405,8 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
 - What holds, and is asserted by `tests/test_model.py`: two fits of the same variant on the same rows give bit-identical predictions and a byte-identical payload file.
   `model.json` is deliberately excluded, because it carries `trained_at` and the MLflow run id, which are provenance and cannot be stable.
   What is **not** promised is bit-identical results across different LightGBM, scikit-learn or NumPy builds or across CPU architectures; NFR-06's "within 0.1 percentage points" is the promise that survives a toolchain change.
+  Measured across CPUs on 2026-10-22 ([#201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135)): on a GitHub runner's AMD EPYC the B0 lookup and both LightGBM boosters came out byte-identical to the laptop's, the Ridge pipeline of B1 did not.
+  B1's MdAPE moved by 0.0007 percentage points, and some of its per-segment shares by up to 0.95 points on small segments; why `lsqr` differs between the two CPUs was not looked into.
 
 ##### What a trained variant writes
 

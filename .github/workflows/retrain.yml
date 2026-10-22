@@ -1,0 +1,185 @@
+name: Retrain
+
+# FR-15: a person who reacts to a monitoring finding, or to a stale `dvc.lock`
+# (#193), retrains here instead of on a laptop (EDN-92, issue #201). The run
+# reproduces the pipeline from `main` on a GitHub-hosted runner, logs to the
+# DagsHub MLflow, pushes the artefacts to the DagsHub DVC remote and opens a
+# draft promotion pull request with the new `dvc.lock`. Nothing merges by itself
+# (EDN-12): a person marks the pull request ready, which starts CI and with it the
+# Promotion gate, and merges it.
+#
+# Started by hand only (EDN-12 rules out a schedule), and only from `main`: the
+# `dagshub` environment holds a token that can write, and its branch policy
+# admits `main` alone (NFR-15). The first job says so instead of leaving the
+# refusal to the environment.
+#
+# Measured on 2026-10-22 (#201): a forced run of every stage takes about 6 min,
+# at most 3.3 GB of the runner's 16 GB of RAM and 2.4 GB of disk.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why retrain: the monitoring finding, or the change that made dvc.lock stale"
+        required: true
+        type: string
+      force:
+        description: "Rerun every stage from the Zenodo download (NFR-06's clean-clone drill), not only the stale ones"
+        required: false
+        type: boolean
+        default: false
+
+# Two retrains never overlap: the second waits, and is not cancelled, so a
+# request is never lost.
+concurrency:
+  group: retrain
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  MLFLOW_TRACKING_URI: https://dagshub.com/recommenditos/MLOPS_Recommenditos.mlflow
+
+jobs:
+  main-only:
+    name: Refuse any ref but main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check the ref
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Retrain runs only from main (NFR-15), and this run was started on $REF."
+            exit 1
+          fi
+
+  retrain:
+    name: Retrain and open the promotion pull request
+    needs: main-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: dagshub
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BRANCH: retrain/run-${{ github.run_number }}
+    steps:
+      # No token in .git/config while stage code runs; the push below passes it
+      # for that one command.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+
+      # The DVC credentials live in the gitignored .dvc/config.local only while a
+      # step that talks to the remote runs.
+      - name: Pull the committed artefacts
+        if: ${{ !inputs.force }}
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_USER_TOKEN: ${{ secrets.DAGSHUB_USER_TOKEN }}
+        run: |
+          trap 'rm -f .dvc/config.local' EXIT
+          uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
+          uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
+          uv run dvc pull
+
+      # RECOMMENDITOS_REQUIRE_TRACKING: a run that cannot reach MLflow fails
+      # instead of training untracked, because a promotion cites these runs.
+      - name: Reproduce the pipeline
+        env:
+          FORCE: ${{ inputs.force }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_USER_TOKEN }}
+          RECOMMENDITOS_REQUIRE_TRACKING: "1"
+        run: |
+          if [ "$FORCE" = "true" ]; then
+            uv run dvc repro --force
+          else
+            uv run dvc repro
+          fi
+          uv run dvc status
+
+      - name: Check whether anything changed
+        id: changed
+        run: |
+          if git diff --quiet -- dvc.lock; then
+            echo "dvc.lock is unchanged, so there is nothing to promote." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "lock=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "lock=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A figure the report includes is a committed copy of the stage's output,
+      # and tests/test_committed_outputs.py fails while the copy is behind.
+      - name: Refresh the report's copies of the stage figures
+        if: steps.changed.outputs.lock == 'true'
+        run: |
+          for copy in reports/latex/figures/*.pdf; do
+            source="reports/figures/$(basename "$copy")"
+            if [ -f "$source" ]; then cp "$source" "$copy"; fi
+          done
+
+      - name: Label the MLflow runs as trained on the runner
+        if: steps.changed.outputs.lock == 'true'
+        env:
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_USER_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/promotion"
+          uv run python -m tools.retrain_promotion tag-runs --out "$RUNNER_TEMP/promotion/runs.json"
+
+      - name: Push the artefacts to the DVC remote
+        if: steps.changed.outputs.lock == 'true'
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_USER_TOKEN: ${{ secrets.DAGSHUB_USER_TOKEN }}
+        run: |
+          trap 'rm -f .dvc/config.local' EXIT
+          uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
+          uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
+          uv run dvc push
+
+      - name: Commit the promotion
+        if: steps.changed.outputs.lock == 'true'
+        env:
+          REASON: ${{ inputs.reason }}
+        run: |
+          git switch -c "$BRANCH"
+          git add -A
+          git status --short
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898299+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "chore: retrain the pipeline on GitHub Actions" -m "$REASON"
+
+      - name: Write the pull request
+        if: steps.changed.outputs.lock == 'true'
+        env:
+          REASON: ${{ inputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          uv run python -m tools.retrain_promotion body --base origin/main \
+            --runs "$RUNNER_TEMP/promotion/runs.json" --reason "$REASON" --run-url "$RUN_URL" --out-dir "$RUNNER_TEMP/promotion"
+          cat "$RUNNER_TEMP/promotion/body.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # A pull request opened with GITHUB_TOKEN triggers no workflow, so CI would
+      # never report its required checks. It is opened as a draft, and the person
+      # who marks it ready triggers CI (`ready_for_review` in ci.yml).
+      - name: Push the branch and open the draft pull request
+        if: steps.changed.outputs.lock == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push origin "HEAD:refs/heads/$BRANCH"
+          gh pr create --draft --base main --head "$BRANCH" \
+            --title "$(cat "$RUNNER_TEMP/promotion/title.txt")" --body-file "$RUNNER_TEMP/promotion/body.md"
