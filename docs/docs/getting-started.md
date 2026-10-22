@@ -19,7 +19,7 @@ uv run pre-commit install-hooks
 ```
 
 `uv sync` creates `.venv` from `uv.lock`, so everyone gets byte-identical versions.
-It installs the serving runtime and every dependency group on top of it - `pipeline`, `notebook`, `docs`, `test` and `dev` - so there is nothing else to install; only the API image leaves the groups out (see [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies)).
+It installs the serving runtime and every dependency group on top of it - `pipeline`, `notebook`, `docs`, `test`, `contract`, `loadtest` and `dev` - so there is nothing else to install; only the API image leaves the groups out (see [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies)).
 Run project commands through `uv run <command>` rather than activating the environment, which is how CI runs them too.
 
 `install-hooks` builds the hooks now rather than during your first commit.

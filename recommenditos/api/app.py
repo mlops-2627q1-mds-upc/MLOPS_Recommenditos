@@ -66,23 +66,35 @@ _TAGS = [
 def create_app(model_dir: Path | None = None, settings: Settings | None = None) -> FastAPI:
     """The API configured by `settings`, or the environment, around the bundle in `model_dir`.
 
-    `model_dir` overrides the settings' `model_dir`. The prediction log's schema
-    is created when the file has none, so a log that cannot be opened stops the
-    service at startup, like a bundle that cannot be served.
+    `model_dir` overrides the settings' `model_dir`. The prediction log is
+    opened when the app starts serving (its lifespan), and its schema created
+    when the file has none, so a log that cannot be opened fails the startup,
+    like a bundle that cannot be served. With one worker, the image's default,
+    uvicorn then exits non-zero; with several, uvicorn 0.54's supervisor exits 0
+    although every worker failed its startup.
     """
     settings = settings or Settings()
     directory = Path(model_dir or settings.model_dir)
     served = ServedModel.load(directory)
     logger.info(f"serving {served.info.variant} version {served.info.version} from {directory}")
-    store = SqliteStore(settings.prediction_log, max_bytes=settings.prediction_log_max_bytes)
-    logger.info(f"recording answers in {settings.prediction_log}")
     if settings.api_key is None:
         logger.warning(f"{API_KEY_ENV_VAR} is not set: /v1/feedback refuses every request")
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        store.close()
+    async def lifespan(_: FastAPI) -> AsyncIterator[dict[str, Any]]:
+        """Opens the prediction log for one run of the app and closes it after.
+
+        The store is lifespan state, which Starlette hands to every request of
+        this run as `request.state.store`, so an app object that is started
+        again, or twice at once (a test client beside Schemathesis'), gets a
+        store per run instead of a closed one.
+        """
+        store = SqliteStore(settings.prediction_log, max_bytes=settings.prediction_log_max_bytes)
+        logger.info(f"recording answers in {settings.prediction_log}")
+        try:
+            yield {"store": store}
+        finally:
+            store.close()
 
     app = FastAPI(
         title="Recommenditos used-car price API",
@@ -96,7 +108,6 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
     app.state.served = served
     app.state.metrics = ApiMetrics(served.info)
     app.state.settings = settings
-    app.state.store = store
     # The last middleware added is the outermost: every response, a refused body
     # and an unexpected failure included, carries the request ID.
     app.add_middleware(BodySizeLimitMiddleware)

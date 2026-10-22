@@ -129,6 +129,10 @@ def _too_large(client: TestClient, listing: dict):
     )
 
 
+def _not_utf8(client: TestClient, listing: dict):
+    return client.post(PREDICT, content=b"\xff", headers={"content-type": "application/json"})
+
+
 def _unknown_route(client: TestClient, listing: dict):
     return client.get("/v1/nothing-here")
 
@@ -142,6 +146,7 @@ _PATHS: list = [
     pytest.param(_unsupported_make, 422, id="unsupported-make"),
     pytest.param(_not_json, 422, id="body-not-json"),
     pytest.param(_not_an_object, 422, id="body-not-an-object"),
+    pytest.param(_not_utf8, 422, id="body-not-utf8"),
     pytest.param(_too_large, 413, id="body-too-large"),
     pytest.param(_unknown_route, 404, id="unknown-route"),
     pytest.param(_wrong_method, 405, id="wrong-method"),

@@ -180,9 +180,25 @@ async def _problem_error(request: Request, error: Exception) -> JSONResponse:
     return problem_response(request_id_of(request), error)
 
 
+def _not_utf8(error: StarletteHTTPException) -> bool:
+    """Whether FastAPI refused a body with a bare 400 because it is not UTF-8.
+
+    FastAPI turns a JSON syntax error into a validation error, but answers a body
+    it cannot decode with a 400 that the error documentation does not list.
+    RFC 8259 asks JSON to be UTF-8, so such a body gets the 422 of any other body
+    that is not valid JSON.
+    """
+    return error.status_code == HTTPStatus.BAD_REQUEST and isinstance(
+        error.__cause__, UnicodeDecodeError
+    )
+
+
 async def _http_error(request: Request, error: Exception) -> JSONResponse:
     if not isinstance(error, StarletteHTTPException):
         raise TypeError(f"{type(error).__name__} reached the StarletteHTTPException handler")
+    if _not_utf8(error):
+        not_utf8 = FieldError(pointer="#", detail="The body is not valid JSON (it is not UTF-8).")
+        return problem_response(request_id_of(request), validation_problem([not_utf8]))
     type_ = (
         PAYLOAD_TOO_LARGE if error.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE else BLANK
     )

@@ -156,7 +156,12 @@ scope = {
         (b"content-length", str(len(body)).encode()),
     ],
 }
-asyncio.run(app(scope, receive, send))
+async def serve():
+    # As a server does: the request runs inside the app's lifespan, which opens
+    # the prediction log and hands it to the request as lifespan state.
+    async with app.router.lifespan_context(app) as state:
+        await app({**scope, "state": dict(state or {})}, receive, send)
+asyncio.run(serve())
 status = sent[0]["status"]
 answer = json.loads(b"".join(m.get("body", b"") for m in sent[1:]))
 assert status == 200 and answer["price_eur"] > 0, (status, answer)
