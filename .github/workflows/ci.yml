@@ -30,7 +30,9 @@ permissions:
 # run then uses the image the jobs were written and tested on, and moving to a new
 # image is a pull request of its own instead of a red run nobody caused. GitHub
 # supports the 24.04 image well past the course; the arm64 report job already
-# pins ubuntu-24.04-arm.
+# pins ubuntu-24.04-arm. The Windows job does the same with windows-2025-vs2026,
+# the image windows-latest resolved to on 2026-10-22 (#186), so a new Windows
+# image is also a pull request of its own.
 jobs:
   changes:
     name: Detect changed areas
@@ -224,7 +226,7 @@ jobs:
   test-windows:
     name: Tests (Windows)
     needs: changes
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.code == 'true'
