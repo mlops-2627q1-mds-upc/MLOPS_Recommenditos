@@ -465,7 +465,8 @@ Working on a stage
 
 Step 6 holds for every pull request that changes a file a stage lists under `deps`, not only for one that works on a stage, and even when the edit touches only comments: `dvc.lock` records each dependency by its hash, so the stage is stale until `dvc repro` re-runs it.
 `recommenditos/config.py` and `recommenditos/schema.py` are dependencies of every stage.
-When several such pull requests are in flight, merge them first and re-run once afterwards instead of once each, and merge none of them while a tracked re-run is in flight, or its lock is stale again when it lands.
+When several such pull requests are in flight, they may merge without the re-run if one pull request re-runs the pipeline and commits `dvc.lock` after the last of them has merged; each of them says that the lock is stale until then.
+None of them merges while a tracked re-run is in flight, or that run's lock is stale when it lands; if one does, the run is repeated on the merged `main`.
 A new stage writes its outputs outside any directory that other stages depend on as a whole: `evaluate` and `compare-energy` depend on all of `models/`, so one new file there makes both stale.
 
 `dvc.yaml` is hand-edited on purpose.
