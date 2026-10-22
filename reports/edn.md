@@ -1177,6 +1177,28 @@ How to add an entry:
 - **Other evidence:** [PR #169](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/169), [per-make coverage table](metrics/interval-coverage-by-make.csv), [split analysis](analysis/split_strategy_results.txt), EDN-32 and EDN-85.
 - **In LaTeX:** yes
 
+### EDN-90: CI warns about a stale `dvc.lock` instead of blocking the merge
+
+- **Date:** 2026-10-22
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** CI/CD, Reproducibility
+- **Participants:** @lukas2510 decided ([issue #193](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/193))
+- **Decision:** A non-blocking CI job reports every stage whose git-tracked dependencies, parameters or command differ from what `dvc.lock` records, in its job summary and as one warning on the pull request, on every pull request and every push to `main`.
+  It filters `dvc status` and skips the data and models CI does not have.
+- **Alternatives considered:**
+  - A required check: every edit of stage code, comments included, would need a 15-30 minute tracked re-run with new MLflow runs before the merge.
+  - No check and a re-sync before each delivery: a stale lock stays invisible until the delivery, as it did during M4.
+- **Rationale:** During M4, five changes to stage code left the lock stale until #183 re-ran the whole pipeline, and no check noticed.
+  One of them changed only `recommenditos/config.py`, which every stage lists, so even a comment there makes all 16 stages stale.
+  The warning shows this on the pull request that causes it, and the re-run can wait for a convenient moment, at the latest the delivery.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI drafted the three options and recommended the warning in #193, from the stale-lock incident of #183; @lukas2510 accepted it and asked for it to be implemented.
+  AI then built the check, and on the real repository a comment-only edit of `config.py` reported all 16 stages while `main` reported none.
+- **AI interaction evidence:** Claude Code session orchestrating M4, prompt "please do you recommendations here: #193, dvc.lock-Check in der CI".
+- **Other evidence:** [Issue #193](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/193), [PR #183](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/183), [PR #205](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/205), [`tools/stale_lock.py`](../tools/stale_lock.py).
+- **In LaTeX:** yes
+
 ### EDN-91: A green CI run on `main` publishes the API image to a public GHCR package
 
 - **Date:** 2026-10-22
