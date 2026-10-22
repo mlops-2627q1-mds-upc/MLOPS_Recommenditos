@@ -127,8 +127,8 @@ flowchart TB
 - **The stack.** Docker Compose runs the project `recommenditos` from `/opt/recommenditos` with two containers today: `proxy`, the only one with a published port, and `api`, reachable only inside the Compose network ([EDN-87][edn]).
   The host port is `HTTP_PORT` in the stack's `.env`: 80 on the VM, 8080 on a laptop, where `make stack` runs the same stack.
   Both containers restart after a crash and after a reboot, and `proxy` starts once the API's health check passes (NFR-05).
-- **Storage.** The workers' metric files live in a tmpfs, and the prediction log on the named volume `prediction-log`, which survives a new image and which the drift job will mount; both are owned by the service user.
-  Everything else in the API container is the image.
+- **Storage.** The workers' metric files live in a tmpfs, the temporary files of SQLite and Python in another one on `/tmp`, and the prediction log on the named volume `prediction-log`, which survives a new image and which the drift job will mount; all are owned by the service user.
+  Everything else in the API container is the image, mounted read-only ([Deployment](deployment.md#the-stack)).
 - **How the image gets there.** Until CD exists, a laptop builds the image at the commit to deploy and streams it with `docker save | ssh docker load`, so the VM needs neither the repository, DVC nor a DagsHub token ([Deployment](deployment.md#how-the-image-gets-there)).
   In M5, CD builds the same image in GitHub Actions and the VM pulls it from GHCR; rolling back is starting the previous tag.
 

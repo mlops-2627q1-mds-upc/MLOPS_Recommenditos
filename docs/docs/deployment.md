@@ -37,6 +37,12 @@ What each part guarantees:
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
 - **Compose** publishes only the proxy's port.
+  Both containers run with a read-only root file system, without any Linux capability and with `no-new-privileges` (NFR-09), so they write only to their tmpfs mounts and the API also to its volume.
+  Neither needed a capability back or any other exception.
+  The API needed one writable path more than its metric files: a tmpfs on `/tmp`, where SQLite writes a sort too large for its cache and Python's `tempfile` writes; without it a large query of the prediction log fails with "disk I/O error".
+  nginx's unprivileged image writes only its pid file and buffered bodies, all under `/tmp`, which is a tmpfs too.
+  Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, each about 1.3 times or more the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements, and the VM's [load test](load-testing.md#run-it-on-the-vm) re-checks them.
+  A container that exceeds its memory limit is killed by the kernel and restarted like after a crash.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
   A hung API, one whose process lives on but stops answering, is only marked unhealthy: Docker's restart policy acts when the process exits, so in M4 nothing restarts it automatically; doing so is an M5 item ([What M5 adds](#what-m5-adds)).
@@ -88,7 +94,7 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
+- on the Docker host: both containers run as a non-root user with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
 
 ```bash
 make test-integration                                # against http://localhost:8080
@@ -273,5 +279,5 @@ That loses the image as the unit we test and deploy, so we would ask for Docker 
 - CD deploys the SHA tag that [continuous delivery](#continuous-delivery) pushed over SSH with `docker compose pull && docker compose up -d --wait`, then runs `make smoke` and puts the previous tag back if it fails (NFR-13).
   The steps of [Every deploy](#every-deploy) are what CD automates; `API_IMAGE_TAG` in the VM's `.env` is already the variable it sets.
 - `trivy` scans the image before it is deployed (NFR-09).
-- Hardening of the containers: a read-only root file system, dropped capabilities, `no-new-privileges` and memory limits.
+- The containers are hardened ([#200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200)): a read-only root file system, no capabilities, `no-new-privileges`, and limits on memory and processes, as [the Compose bullet above](#the-stack) describes and the integration suite checks.
 - Recovery from a hung API: a container that stays unhealthy is restarted, for example by a watchdog that restarts unhealthy containers, since Docker's restart policy covers only a process that exits.

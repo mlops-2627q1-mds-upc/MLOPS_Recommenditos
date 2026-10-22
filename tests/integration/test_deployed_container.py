@@ -1,4 +1,4 @@
-"""The running containers, inspected on the Docker host: user, packages, published ports."""
+"""The running containers, inspected on the Docker host: user, packages, ports, hardening."""
 
 import hashlib
 import json
@@ -10,6 +10,9 @@ from tests.lockfile import PROJECT, normalise, read_lock, runtime_closure
 from recommenditos.config import PROJ_ROOT
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
+
+#: NFR-04's cap on the API container's memory, 1 GB.
+NFR04_API_MEMORY_BYTES = 10**9
 
 #: Prints the distributions the API's interpreter can import, which is the
 #: image's virtual environment: it is created without the system site-packages.
@@ -87,3 +90,51 @@ def test_the_image_holds_the_package_of_the_checkout(api_container):
         f"the image's recommenditos package differs from the checkout in {differ}: "
         "rebuild the image from this checkout (make stack)"
     )
+
+
+def process_status(container) -> dict[str, str]:
+    """The fields of `/proc/1/status` of the container's main process."""
+    lines = container.exec("cat", "/proc/1/status").splitlines()
+    return dict(line.split(":\t", 1) for line in lines if ":\t" in line)
+
+
+def root_mount_options(container) -> list[str]:
+    """The mount options of the container's root file system, from `/proc/1/mounts`."""
+    for line in container.exec("cat", "/proc/1/mounts").splitlines():
+        _, mount_point, _, options, *_ = line.split()
+        if mount_point == "/":
+            return options.split(",")
+    pytest.fail("the container has no root mount in /proc/1/mounts")
+
+
+@pytest.mark.req("NFR-09")
+@pytest.mark.parametrize("service", ["api", "proxy"])
+def test_the_container_has_a_read_only_root_and_no_privileges(service, request):
+    """Compose's hardening, as configured and as the main process sees it."""
+    container = request.getfixturevalue(f"{service}_container")
+    host_config = container.inspect()["HostConfig"]
+    status = process_status(container)
+
+    assert host_config["ReadonlyRootfs"] is True, f"{service} has a writable root file system"
+    assert "ro" in root_mount_options(container), f"{service}'s root is not mounted read-only"
+    assert host_config["CapDrop"] == ["ALL"], f"{service} drops {host_config['CapDrop']}"
+    assert not host_config["CapAdd"], f"{service} adds back {host_config['CapAdd']}"
+    # Effective and bounding sets: no capability now, none gained later.
+    assert int(status["CapEff"], 16) == 0, f"{service} runs with capabilities {status['CapEff']}"
+    assert int(status["CapBnd"], 16) == 0, f"{service} may gain capabilities {status['CapBnd']}"
+    assert "no-new-privileges:true" in (host_config["SecurityOpt"] or [])
+    assert status["NoNewPrivs"].strip() == "1", f"{service} may gain privileges through exec"
+
+
+@pytest.mark.req("NFR-04")
+@pytest.mark.parametrize("service", ["api", "proxy"])
+def test_the_container_has_memory_and_process_limits(service, request):
+    """Each container has a memory limit without swap and a process limit (deploy/compose.yaml)."""
+    host_config = request.getfixturevalue(f"{service}_container").inspect()["HostConfig"]
+
+    memory, pids = host_config["Memory"], host_config["PidsLimit"]
+    assert memory > 0, f"{service} has no memory limit"
+    assert host_config["MemorySwap"] == memory, f"{service} may swap beyond its memory limit"
+    assert pids is not None and pids > 0, f"{service} has no process limit"
+    if service == "api":
+        assert memory <= NFR04_API_MEMORY_BYTES, f"the API may use {memory:,} bytes, NFR-04 1 GB"

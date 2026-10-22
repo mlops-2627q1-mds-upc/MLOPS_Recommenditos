@@ -21,8 +21,29 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
+# The hardening both containers share (NFR-09, #200). The root file system is
+# read-only, so a service writes only to the tmpfs mounts and the volume listed
+# under it; every Linux capability is dropped, since neither binds a port below
+# 1024, changes a file's owner or switches user; and `no-new-privileges` keeps a
+# setuid binary in an image from raising a process's privileges. Neither service
+# needed an exception: both run with no capability at all. The API needed one
+# writable path more than before, a tmpfs on /tmp (see there).
+x-hardening: &hardening
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+# Memory and process limits keep one leaking service from starving the others on
+# the VM's 4 GB, which M6's monitoring shares (NFR-04). `memswap_limit` equal to
+# `mem_limit` allows no swap: a service over its limit is killed by the kernel
+# and restarted (`restart: unless-stopped`, NFR-05) rather than slowing the VM
+# down. A tmpfs is memory and counts against its container's limit.
+
 services:
   api:
+    <<: *hardening
     image: recommenditos-api:${API_IMAGE_TAG:-local}
     build:
       context: ..
@@ -30,14 +51,19 @@ services:
     # from a sibling service such as the replay job (FR-10, EDN-13).
     expose:
       - "8000"
-    # The workers' metric files (PROMETHEUS_MULTIPROC_DIR in the image), in memory
-    # rather than on the container's writable layer. Prometheus scrapes
-    # api:8000/metrics from inside this network; nginx refuses the path.
+    # The two writable paths besides the prediction-log volume, both in memory.
+    # /tmp/prometheus holds the workers' metric files (PROMETHEUS_MULTIPROC_DIR in
+    # the image), 88 KB with two workers after a load test; Prometheus scrapes
+    # api:8000/metrics from inside this network, and nginx refuses the path.
+    # /tmp is where SQLite spills a sort or index too large for its cache and
+    # where Python's `tempfile` writes: with the root read-only and no /tmp, a
+    # spilling query of the prediction log fails with "disk I/O error" (#200).
     # Owned by the service user explicitly: without the options, Docker remounts
-    # it as root's 0755 when the container restarts, and the API then cannot
+    # a tmpfs as root's 0755 when the container restarts, and the API then cannot
     # start again after a crash.
     tmpfs:
-      - /tmp/prometheus:uid=10001,gid=10001,mode=0700
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m
+      - /tmp/prometheus:uid=10001,gid=10001,mode=0700,size=16m
     restart: unless-stopped
     logging: *logging
     environment:
@@ -47,6 +73,20 @@ services:
       # The number of uvicorn worker processes; the load test runs with 2 to
       # check NFR-03's exactly-once logging (docs/docs/load-testing.md).
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
+    # NFR-04 caps the API at 1 GB. 768 MiB is 1.3 times the most it used in the
+    # laptop load tests of 2026-10-22, with two workers at 20 requests/s: 581 MiB
+    # in `docker stats` (the dry run of reports/loadtest/ measured 566 MiB), and
+    # 598 MiB in the cgroup's `memory.peak`, which includes the start-up and the
+    # page cache. One worker, the default, needs less. Re-check against the VM
+    # run of #143.
+    mem_limit: 768m
+    memswap_limit: 768m
+    # Processes and threads: 33 at most in the same load tests. Each worker can
+    # hold its event loop, up to 40 threads of the pool that runs the routes, the
+    # scoring thread and the log's pruning thread, about 45, so 256 leaves room
+    # for four workers and still stops a thread leak like #179's, 137 to 345
+    # threads per worker, before it exhausts the VM.
+    pids_limit: 256
     volumes:
       # The prediction log and the feedback, one SQLite file (EDN-86). A named
       # volume, so it survives a new image and M6's drift job can mount it.
@@ -62,6 +102,7 @@ services:
       retries: 3
 
   proxy:
+    <<: *hardening
     image: nginxinc/nginx-unprivileged:1.30-alpine
     depends_on:
       api:
@@ -72,6 +113,17 @@ services:
       - "${HTTP_PORT:-8080}:8080"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    # The unprivileged image writes nothing but /tmp: its pid file and the
+    # temporary files of request and response bodies too large for nginx's
+    # buffers. Owned by its user, 101, for the same reason as the API's tmpfs.
+    tmpfs:
+      - /tmp:uid=101,gid=101,mode=0700,size=16m
+    # 14 MB and 15 processes at most in the same load tests, with one worker per
+    # CPU of the laptop's eight (`worker_processes auto`): 64 MiB and 64
+    # processes leave room for a larger host.
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 64
     restart: unless-stopped
     logging: *logging
 
