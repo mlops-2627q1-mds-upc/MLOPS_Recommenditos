@@ -396,11 +396,20 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
   It is also the steadiest value by a long way - three fits at 1 thread land within a second of each other, three at 8 span 26 s - so it is what makes a reported fit time mean anything.
   The same reversal is sharper on the 744-row test fixture (0.33 s at 1 thread against 28.6 s at 8), because OpenMP's overhead dominates whenever there is little work per thread - and the suite fits every variant on that fixture.
   These seconds are a controlled sweep for the ratios, not comparable with the ladder table's one-off wall-clock fit times below.
+  The setting pins LightGBM's boosting and nothing else in the span `train` measures, so the measured fit uses more CPU time than wall time (issue #113, `reports/analysis/fit_cpu_threads.py`, 2026-10-22).
+  The boosting of the point model and of the price range's quantile models, and MAPIE's calibration, run on one thread: at most 0.08 s of CPU time on any other thread in any of them.
+  The training and validation L1 that `fit_variant` writes into the model record are predicted with `Booster.predict`, which ignores the setting and uses LightGBM's default of one OpenMP thread per core: 16.2 s of CPU time on other threads in 2.5 s for `lgbm-extended`, and 10.0 s in 1.5 s for `lgbm-basic`.
+  Those threads do useful work and change no number: at `OMP_NUM_THREADS=1` the two L1 are identical, and the step takes 15.4 s and 9.5 s instead.
+  `b1` runs on OpenBLAS's pool of one thread per core, in the Ridge solver and in the predictions, and gains no time from it (the Ridge item below says what it changes): 4.2 s of CPU time on other threads in a span of 1.32 s, against 1.09 s at `OPENBLAS_NUM_THREADS=1`.
+  CodeCarbon's own sampling adds at most about 1 % of CPU time: the threads that ended inside the span used 1.78 s with the tracker against 0.03 s without it for `lgbm-basic` (1.0 %), and 0.28 s against 0.05 s for `lgbm-extended` (0.5 %).
+  The measured CPU time over wall time is therefore 4.2 for `b1`, 1.07 for `lgbm-basic`, whose span is mostly its single-threaded price range, and 1.65 for `lgbm-extended`; with both variables at 1 it is 1.00 for all three.
 - **LightGBM:** `deterministic=True` and `force_row_wise=True`, so the histogram construction is not chosen by data size and thread count.
   Documented insurance rather than a measured fix, and worth being exact about: with both flags **off** the trees are still identical across 1, 2, 4 and 8 threads, so the flags are not what makes the result thread-independent here.
   They do change *which* trees are built, so they are not without consequence; they are simply not load-bearing for this property at this data size.
-- **Ridge:** `solver="lsqr"`, scipy's single-threaded iterative solver, rather than the default `auto`, which may pick a dense solver and go through BLAS, whose reduction order depends on the thread count.
-  Also insurance: the coefficients came out byte-identical across separate processes at 1 and 8 BLAS threads with `auto` too.
+- **Ridge:** `solver="lsqr"`, scipy's iterative solver, rather than the default `auto`, which may pick a dense solver.
+  It does not make `b1` thread-independent: LSQR's vector operations go through OpenBLAS, whose pool has one thread per core unless `OPENBLAS_NUM_THREADS` says otherwise, and `train.num_threads` does not reach it.
+  Fitted in separate processes at 1, 2, 4 and 8 OpenBLAS threads, the coefficients differ at every count, while two fits at 8 are byte-identical and equal the committed `models/b1` (`reports/analysis/ridge_blas_threads.py`, 2026-10-22).
+  So `b1`'s `pipeline.joblib`, and its hash in `dvc.lock`, depend on the core count of the machine that fits it; its validation L1 moves by at most 0.00002 between the counts.
 - **B0:** group medians only, and a median is order-independent, so the result does not depend on the row order Parquet hands back.
 - What holds, and is asserted by `tests/test_model.py`: two fits of the same variant on the same rows give bit-identical predictions and a byte-identical payload file.
   `model.json` is deliberately excluded, because it carries `trained_at` and the MLflow run id, which are provenance and cannot be stable.
@@ -759,7 +768,8 @@ The figures below without a date are from the run of 2026-10-13, before the pric
 **The figure is an estimate, not a reading.**
 RAPL, the CPU's energy counter, is root-only on Linux since kernel 5.10, so on every machine we train on CodeCarbon falls back to its `cpu_load` model: 10 W for the RAM plus the CPU's TDP times the share of its logical CPUs the fit kept busy.
 On the i5-10210U the ladder is trained on, that is 15 W / 8 x the fit's CPU time plus 10 W x its wall time, so a single-threaded fit is charged 11.75 to 11.80 W for every second it runs, and the RAM constant is most of it.
-The real fits are charged 13 to 15 W for every second in the ladder run of 2026-10-13, because they use more than one thread although `train.num_threads` is 1: the CPU time of the two LightGBM fits is 1.6 and 1.7 times their wall time, and that of `b1` 3.8 times.
+The real fits are charged 13 to 15 W for every second in the ladder run of 2026-10-13, because parts of the measured span use more than one thread although `train.num_threads` is 1: the CPU time of the two LightGBM fits is 1.6 and 1.7 times their wall time, and that of `b1` 3.8 times.
+The extra CPU time is the training and validation L1 the model record carries, which LightGBM predicts on one thread per core, and for `b1` OpenBLAS's threads behind the Ridge solver; [Determinism](#determinism) has the measurement.
 The energies of two variants therefore follow their fit times closely (1.7 against 1.6 for `lgbm-extended` over `lgbm-basic`), which is a fair comparison of their cost when both come from one run on one machine, and nothing more: the same fit is charged more on a busy laptop, because it takes longer, and about 80 W per second on a GitHub runner, whose four vCPUs CodeCarbon gives a quarter of a 280 W server TDP each.
 Emissions are energy times the Spanish grid's 174.05 g CO2eq/kWh, pinned rather than geolocated so that an identical fit has identical emissions wherever it runs.
 Checked once against the RAPL counter on an idle laptop (`reports/analysis/rapl_validation.py`, 2026-10-06, at the committed hyperparameters, which the search of issue #88 later kept, and with `lgbm-basic` fitted without its blanked copies), with an idle package draw of 6.6 W and three fits of each variant.
