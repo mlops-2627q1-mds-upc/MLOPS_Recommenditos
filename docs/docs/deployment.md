@@ -92,7 +92,7 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 | API container memory, idle after the smoke check (`docker stats`), measured on 2026-10-22 | 248 MiB with one worker; 539 MiB with two, a 52 MiB supervisor and two workers (nginx: 7 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
-| SIGSTOP of the API's processes (a hang) to the next 200 from `/health` through nginx, measured on 2026-10-22 | 15.7 to 21.1 s in 4 runs with one worker, 16.3 s with two, with the hardening of #200; 23.6 to 25.5 s in 4 runs for a hang right after the API turned healthy, just after a probe, the latest placement; at most about 26 s (10 s interval, two attempts of 6 s, about 4 s to restart) | within 30 s (NFR-05) |
+| SIGSTOP of the API's processes (a hang) to the next 200 from `/health` through nginx, measured on 2026-10-23 with the hardening of #200 | 19.4 to 20.8 s in 4 runs, the hang placed right after the API turned healthy, the latest point for a probe to catch it; at most about 21 s (5 s interval, two attempts of 6 s, about 4 s to restart) | within 30 s (NFR-05) |
 
 The crash test kills the uvicorn process from the host, as the kernel's OOM killer or a segfault would: `docker run --rm --pid=host alpine kill -9 $(docker top recommenditos-api-1 -eo pid,args | awk '$4 == "recommenditos.api" {print $1}')`.
 The process is found with `docker top`, because `docker inspect`'s `State.Pid` is now Docker's init in front of it.

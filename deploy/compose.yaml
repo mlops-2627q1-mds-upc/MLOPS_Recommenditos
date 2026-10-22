@@ -13,8 +13,9 @@ name: recommenditos
 
 # Docker keeps a container's log in json-file without a limit by default. Each
 # service keeps at most 5 files of 10 MB, 100 MB in all, of the VM's 20 GB
-# (NFR-04): the API's healthcheck alone writes about 3.5 MB a day, and each
-# service's 50 MB hold about 120,000 requests of history.
+# (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
+# day, so the API's 50 MB hold about a week of it, and each service's 50 MB
+# hold about 120,000 requests of history.
 x-logging: &logging
   driver: json-file
   options:
@@ -101,11 +102,11 @@ services:
       - prediction-log:/var/lib/recommenditos
     # The test is the image's HEALTHCHECK (recommenditos/api/healthcheck.py).
     # Probed every second while the API starts, so nginx and `--wait` see it
-    # healthy as soon as it is, then every 10 s. After the start period, a probe
+    # healthy as soon as it is, then every 5 s. After the start period, a probe
     # that gets no answer in two attempts of 6 s ends the hung server, which
     # comes back within NFR-05's 30 s (EDN-93); the timeout leaves room for both.
     healthcheck:
-      interval: 10s
+      interval: 5s
       timeout: 15s
       start_period: 60s
       start_interval: 1s

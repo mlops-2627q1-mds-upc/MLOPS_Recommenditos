@@ -1260,8 +1260,8 @@ How to add an entry:
   - gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies and misses a full threadpool.
   - uvicorn's supervisor: misses a blocked event loop.
 - **Rationale:** With the server frozen by SIGSTOP, the old stack was still down after 75 s.
-  With the probe, on the stack hardened by #200, `/health` answered again after 15.7 to 21.1 s in four runs with one worker and 16.3 s with two.
-  The worst case is 10 s interval + 2 × 6 s + 4 s restart = 26 s; under load, a kill needs about 128 requests of 47 ms queued ahead of `/health`, more than the load test's 80 users.
+  With the probe, on the stack hardened by #200, `/health` answered again after 19.4 to 20.8 s in four runs, the hang placed right after the API turned healthy.
+  The worst case is 5 s interval + 2 × 6 s + 4 s restart = 21 s; under load, a kill needs about 128 requests of 47 ms queued ahead of `/health`, more than the load test's 80 users.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found the options, measured each on the stack or a small test server, and recommended the probe, which @lukas2510 chose.

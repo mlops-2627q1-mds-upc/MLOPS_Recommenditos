@@ -1,6 +1,6 @@
 """The container's healthcheck: `python -m recommenditos.api.healthcheck`.
 
-Docker runs it as the image's HEALTHCHECK, every 10 s once the API is up. It
+Docker runs it as the image's HEALTHCHECK, every 5 s once the API is up. It
 asks `/health` up to twice. When neither attempt gets an answer and the
 container is past its start period, the API is hung: its process lives on but
 does not answer, which Docker's restart policy cannot see, since it acts only
@@ -39,13 +39,14 @@ URL = "http://127.0.0.1:8000/health"
 #: Before the first answer and within the start period, a missing answer is a
 #: start still in progress: with several workers uvicorn binds the port before
 #: they have loaded the model.
-INTERVAL_S = 10.0
+INTERVAL_S = 5.0
 START_PERIOD_S = 60.0
 
 #: Two attempts of 6 s each. The bounds on the 6 s:
 #: - Recovery (NFR-05, 30 s): a hang that starts just after a probe is ended at
-#:   most INTERVAL_S + ATTEMPTS * TIMEOUT_S = 10 + 12 = 22 s later, and the API
-#:   answers again about 4 s after the kill (measured), 26 s in all.
+#:   most INTERVAL_S + ATTEMPTS * TIMEOUT_S = 5 + 12 = 17 s later, and the API
+#:   answers again about 4 s after the kill (measured on a laptop), 21 s in all.
+#:   That leaves room for a restart of up to 13 s on a slower machine.
 #: - No kill under load: `/health` is a sync route, so it waits once for a
 #:   thread of the worker's threadpool, behind the valuations (its dependencies
 #:   are async and wait for none). At about 47 ms of CPU per valuation
