@@ -99,10 +99,14 @@ WORKDIR /app
 USER 10001:10001
 EXPOSE 8000
 
-# urllib from the standard library, so the image needs no curl. Every second
-# while the API starts, then every 10 s; 3 failures in a row mark it unhealthy.
-HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --start-interval=1s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+# A probe from the standard library, so the image needs no curl. Every second
+# while the API starts, then every 5 s; 3 failures in a row mark it unhealthy.
+# After the start period, a probe whose two attempts of 6 s both go unanswered
+# also ends the hung server, so that the restart policy brings it back; that
+# needs an init in front of the server, which Compose's `init: true` adds
+# (recommenditos/api/healthcheck.py, NFR-05, EDN-93).
+HEALTHCHECK --interval=5s --timeout=15s --start-period=60s --start-interval=1s --retries=3 \
+    CMD ["python", "-m", "recommenditos.api.healthcheck"]
 
 # The launcher empties PROMETHEUS_MULTIPROC_DIR, then starts uvicorn with the app
 # factory; WEB_CONCURRENCY sets the number of workers (one by default).
