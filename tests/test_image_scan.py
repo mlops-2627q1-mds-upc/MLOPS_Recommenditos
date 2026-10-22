@@ -85,6 +85,24 @@ def test_scan_exits_1_and_lists_the_fixable_findings(monkeypatch, capsys):
 
 
 @pytest.mark.req("NFR-09")
+def test_trivy_scans_for_high_and_critical_with_the_ignore_file(tmp_path):
+    output = tmp_path / "report.json"
+    command = image_scan.trivy_command("trivy", "api:local", output)
+
+    def value(flag: str) -> str:
+        return command[command.index(flag) + 1]
+
+    assert command[:2] == ["trivy", "image"]
+    assert command[-1] == "api:local"
+    assert set(value("--severity").split(",")) == {"CRITICAL", "HIGH"}
+    assert value("--scanners") == "vuln"
+    assert Path(value("--ignorefile")) == PROJ_ROOT / ".trivyignore"
+    assert (value("--format"), Path(value("--output"))) == ("json", output)
+    # Findings without a fix are counted in the summary, so trivy has to report them.
+    assert "--ignore-unfixed" not in command
+
+
+@pytest.mark.req("NFR-09")
 def test_canary_fails_when_the_scan_finds_nothing(monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     monkeypatch.setattr(
@@ -120,8 +138,11 @@ def test_the_committed_trivyignore_is_well_formed():
 
 
 def dockerfile_images() -> list[str]:
-    text = (PROJ_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    return [line.split()[1] for line in text.splitlines() if line.startswith("FROM ")]
+    images = []
+    for dockerfile in (PROJ_ROOT / "Dockerfile", PROJ_ROOT / "reports" / "latex" / "Dockerfile"):
+        text = dockerfile.read_text(encoding="utf-8")
+        images += [line.split()[1] for line in text.splitlines() if line.startswith("FROM ")]
+    return images
 
 
 def compose_images() -> list[str]:
@@ -133,5 +154,5 @@ def compose_images() -> list[str]:
 @pytest.mark.req("NFR-09")
 def test_every_image_is_pinned_by_tag_and_digest():
     images = dockerfile_images() + compose_images() + [image_scan.CANARY_IMAGE]
-    assert len(images) >= 5
+    assert len(images) >= 7
     assert [image for image in images if not DIGEST.match(image)] == []

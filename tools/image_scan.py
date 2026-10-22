@@ -18,9 +18,10 @@ line above it and an expiry date (`exp:YYYY-MM-DD`), after which trivy reports
 the finding again. An entry without either is refused before anything is
 scanned.
 
-The vulnerability database is downloaded on every run, about 9 s, rather than
-kept in the Actions cache: it is 1.6 GB unpacked, and the repository's cache is
-already at GitHub's 10 GB limit. A rate limit (HTTP 429) or a server error on
+The vulnerability database is downloaded on every run rather than kept in the
+Actions cache: the download takes about 5 s in CI, and the database is rebuilt
+every few hours, so a cached copy would be stale by the next run and trivy would
+download it again anyway. A rate limit (HTTP 429) or a server error on
 one registry does not fail the scan: trivy then tries the next of
 `DB_REPOSITORIES` (`shouldTryOtherRepo` in trivy's pkg/oci/artifact.go).
 

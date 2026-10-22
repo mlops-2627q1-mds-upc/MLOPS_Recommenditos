@@ -23,11 +23,12 @@ updates:
       actions:
         patterns: ["*"]
 
-  # The FROM lines of the Dockerfile, uv's stage included. A tag and the digest
-  # pinned beside it move together, and a new digest under the same tag (the
-  # rebuild of a base image with Debian's security fixes) is a pull request too.
+  # The FROM lines of the API's Dockerfile, uv's stage included, and of the
+  # report's TeX Live image. A tag and the digest pinned beside it move together,
+  # and a new digest under the same tag (the rebuild of a base image with
+  # Debian's security fixes) is a pull request too.
   - package-ecosystem: docker
-    directory: /
+    directories: ["/", "/reports/latex"]
     schedule:
       interval: weekly
       day: monday

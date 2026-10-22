@@ -360,12 +360,12 @@ jobs:
       # The canary first: it fails unless the same scan fails an image known to
       # be vulnerable, so a scan reporting nothing is evidence (tools/image_scan.py).
       - uses: ./.github/actions/setup-trivy
-        if: always() && steps.build.outcome == 'success'
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
       - name: Check that the scan still fails a known-vulnerable image
-        if: always() && steps.build.outcome == 'success'
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: python3 tools/image_scan.py canary
       - name: Scan the images of the stack (trivy)
-        if: always() && steps.build.outcome == 'success'
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           mapfile -t images < <(docker compose -f deploy/compose.yaml config --images)
           python3 tools/image_scan.py scan "${images[@]}"

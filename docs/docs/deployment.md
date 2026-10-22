@@ -361,7 +361,7 @@ CI's `Integration (Compose stack)` job scans both images of the stack, the API i
 The result, a table per image, goes into the job summary.
 Before the scan, a canary scans `python:3.12.0-slim-bookworm` as published in October 2023, pinned by digest, and fails the job unless the same scan finds fixable findings there (93 on 2026-10-22), so a scan that passes is evidence, as the gitleaks job's planted token is for NFR-15.
 trivy is the release binary, pinned by version and SHA-256 in `.github/actions/setup-trivy`, not `aquasecurity/trivy-action`, whose tags an attacker moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)).
-Its vulnerability database is downloaded on each run, in about 10 s, rather than cached: it is 1.6 GB unpacked, and the repository's Actions cache is at its 10 GB limit.
+Its vulnerability database is downloaded on each run, in about 5 s in CI, rather than kept in the Actions cache: it is rebuilt every few hours, so a cached copy would be stale by the next run.
 When one registry answers with a rate limit or a server error, trivy takes the database from the next one: `mirror.gcr.io`, then Amazon ECR Public, then `ghcr.io`.
 
 To scan locally, with trivy installed:
@@ -380,7 +380,7 @@ On 2026-10-22 the API image had no fixable HIGH or CRITICAL finding and 44 witho
 Its one exception, DL3008 for the unpinned `libgomp1`, carries its reason in the `Dockerfile`: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
 
 **Dependabot.**
-`.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile` and of `deploy/compose.yaml`, and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.
+`.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile`, of `deploy/compose.yaml` and of the report's TeX Live image (`reports/latex/Dockerfile`), and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.
 Every image is pinned by tag and digest (`python:3.12-slim-trixie@sha256:...`), so a rebuild starts from the bytes the last scan saw, and Dependabot moves both; a base image rebuilt under the same tag with Debian's security fixes is a new digest and so a pull request too, whose integration job scans the new image.
 Python's minor version and nginx's stable branch are not moved: those are changes of their own.
 The actions are pinned by commit SHA with the release in a comment, which Dependabot moves the same way.
