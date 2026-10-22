@@ -3,14 +3,8 @@ on:
   push:
     branches: [test/stabilise-json-log-test]
 jobs:
-  repro:
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: ["", "--wait-all"]
+  loop:
     runs-on: windows-latest
-    env:
-      REPRO_OUT: D:\repro
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.1.0
@@ -19,8 +13,9 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: |
-          New-Item -ItemType Directory -Force D:\repro | Out-Null
-          Copy-Item tmp_repro\dump.py tests\api\test_zz_dump.py
-          uv run pytest tests/api/test_zz_dump.py -q --no-cov -p no:cacheprovider
-          Remove-Item tests\api\test_zz_dump.py
-      - run: uv run python tmp_repro/loop.py D:\repro\bundle D:\repro\listing.json D:\repro\runs 60 ${{ matrix.mode }}
+          $failed = 0
+          for ($i = 1; $i -le 20; $i++) {
+            uv run pytest tests/api/test_logs.py -q --no-cov -p no:cacheprovider -rs -k one_json_object_per_line
+            if ($LASTEXITCODE -ne 0) { $failed++ }
+          }
+          "FAILED RUNS: $failed of 20"
