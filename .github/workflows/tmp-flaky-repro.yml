@@ -1,0 +1,26 @@
+name: Temporary flaky repro
+on:
+  push:
+    branches: [test/stabilise-json-log-test]
+jobs:
+  repro:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ["", "--wait-all"]
+    runs-on: windows-latest
+    env:
+      REPRO_OUT: D:\repro
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: |
+          New-Item -ItemType Directory -Force D:\repro | Out-Null
+          Copy-Item tmp_repro\dump.py tests\api\test_zz_dump.py
+          uv run pytest tests/api/test_zz_dump.py -q --no-cov -p no:cacheprovider
+          Remove-Item tests\api\test_zz_dump.py
+      - run: uv run python tmp_repro/loop.py D:\repro\bundle D:\repro\listing.json D:\repro\runs 60 ${{ matrix.mode }}
