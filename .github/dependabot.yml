@@ -1,0 +1,77 @@
+# Version updates for what the image and the workflows are built from (NFR-09):
+# the GitHub Actions, the base images of the Dockerfile and of deploy/compose.yaml,
+# and the locked Python dependencies in uv.lock. Weekly, and one pull request per
+# ecosystem and week, so that a week brings a handful of them at most.
+#
+# The PR title check (amannn/action-semantic-pull-request in ci.yml) wants a
+# Conventional Commit, which the `chore(deps)` prefix gives every title:
+# "chore(deps): bump the actions group with 3 updates".
+#
+# Security updates, which open a pull request for a vulnerable dependency at
+# once instead of on Monday, are a repository setting, not part of this file.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The FROM lines of the Dockerfile, uv's stage included. A tag and the digest
+  # pinned beside it move together, and a new digest under the same tag (the
+  # rebuild of a base image with Debian's security fixes) is a pull request too.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      docker:
+        patterns: ["*"]
+    ignore:
+      # Python's minor version is the project's, set in pyproject.toml and CI
+      # too; a move to 3.13 is a pull request of its own. Digests still update.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  # The proxy image of deploy/compose.yaml. The API's own image there is built
+  # from the Dockerfile and has no registry to update from.
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      docker-compose:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: recommenditos-api
+      # nginx's odd minor versions are its mainline; 1.30 is the stable branch,
+      # whose patch releases and rebuilt digests still update.
+      - dependency-name: nginxinc/nginx-unprivileged
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  # uv.lock and pyproject.toml. Minor and patch updates in one pull request a
+  # week; a major update comes on its own, as it is the one likely to need code
+  # changes.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

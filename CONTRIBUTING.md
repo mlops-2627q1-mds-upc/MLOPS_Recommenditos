@@ -112,7 +112,7 @@ If the hook fires on something else that is not a secret, the fix is a narrow al
 
 ```bash
 make format         # ruff format + fix
-make lint           # mypy + ruff format --check + ruff check + hadolint
+make lint           # mypy + ruff format --check + ruff check + hadolint + actionlint
 make test           # pytest, which also reports the coverage of recommenditos/
 make test-serving   # the serving path from the runtime dependencies alone
 make test-integration  # the API as deployed, through nginx (needs `make stack` first)

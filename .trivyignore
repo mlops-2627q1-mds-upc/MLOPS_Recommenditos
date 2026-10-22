@@ -1,0 +1,7 @@
+# Findings of the image scan (tools/image_scan.py, NFR-09) that are accepted
+# for now. Each entry is a vulnerability ID with an expiry date, after which
+# trivy reports it again, and the comment line directly above it says why it
+# is accepted; the scan refuses an entry without either. For example:
+#
+#   # Only in the builder stage's uv, which the runtime image does not contain.
+#   CVE-2026-12345 exp:2026-12-31

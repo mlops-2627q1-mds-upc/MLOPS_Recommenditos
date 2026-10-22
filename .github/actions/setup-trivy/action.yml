@@ -1,0 +1,29 @@
+name: Set up trivy
+description: >-
+  Installs the trivy release binary, pinned by version and checksum, for
+  tools/image_scan.py (NFR-09). Used by the integration job of CI and by CD.
+
+# The release binary rather than aquasecurity/trivy-action or setup-trivy: in
+# March 2026 an attacker force-pushed 76 of trivy-action's 77 tags and all of
+# setup-trivy's to a credential stealer and published a malicious trivy 0.69.4
+# (GHSA-69fq-xp46-6x23). A checksum written here cannot be moved that way; the
+# gitleaks job installs its binary the same way. Moving to a new release means
+# changing both values below together.
+runs:
+  using: composite
+  steps:
+    - name: Install trivy
+      shell: bash
+      env:
+        TRIVY_VERSION: 0.76.1
+        # SHA-256 of trivy_0.76.1_Linux-64bit.tar.gz, from that release's
+        # checksums file.
+        TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      run: |
+        archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+        curl -sSfL --retry 3 -o "$RUNNER_TEMP/$archive" \
+          "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/$archive"
+        echo "${TRIVY_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+        mkdir -p "$RUNNER_TEMP/trivy"
+        tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/trivy" trivy
+        echo "$RUNNER_TEMP/trivy" >> "$GITHUB_PATH"

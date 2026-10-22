@@ -349,9 +349,44 @@ If Docker is installed and we are not in the group, we ask the lecturer to add u
 If there is no Docker and no sudo, the fallback is the course demo's recipe in our home directory: uv installs Python and `uv sync --locked --no-default-groups` the runtime, the bundle is copied with `scp`, uvicorn runs on an unprivileged port under `systemd --user` or a `@reboot` cron entry, and nginx, without root, runs on an unprivileged port as well.
 That loses the image as the unit we test and deploy, so we would ask for Docker before building it.
 
+## Vulnerabilities and dependency updates
+
+NFR-09 requires that a dependency with a known and fixable vulnerability does not reach the running system.
+Three checks keep it that way.
+
+**The image scan.**
+`tools/image_scan.py` scans an image with [trivy](https://trivy.dev) for HIGH and CRITICAL vulnerabilities, in the Debian packages and in the Python packages of the virtual environment.
+A finding with a fix available fails the job; one without a fix is counted in the summary and does not, so that a CVE of the base image that Debian has not patched yet does not block every pull request and every deploy.
+CI's `Integration (Compose stack)` job scans both images of the stack, the API image it built and the nginx image, on every pull request that changes the image, and CD scans them again before it pushes.
+The result, a table per image, goes into the job summary.
+Before the scan, a canary scans `python:3.12.0-slim-bookworm` as published in October 2023, pinned by digest, and fails the job unless the same scan finds fixable findings there (93 on 2026-10-22), so a scan that passes is evidence, as the gitleaks job's planted token is for NFR-15.
+trivy is the release binary, pinned by version and SHA-256 in `.github/actions/setup-trivy`, not `aquasecurity/trivy-action`, whose tags an attacker moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)).
+Its vulnerability database is downloaded on each run, in about 10 s, rather than cached: it is 1.6 GB unpacked, and the repository's Actions cache is at its 10 GB limit.
+When one registry answers with a rate limit or a server error, trivy takes the database from the next one: `mirror.gcr.io`, then Amazon ECR Public, then `ghcr.io`.
+
+To scan locally, with trivy installed:
+
+```bash
+python3 tools/image_scan.py scan $(docker compose -f deploy/compose.yaml config --images)
+```
+
+When the scan fails, update the base image or the package; Dependabot's pull request may already do so.
+If neither is possible yet, accept the finding in `.trivyignore`: the vulnerability ID with an expiry date (`CVE-2026-12345 exp:2026-12-31`), after which trivy reports it again, and a comment line above it that says why the risk is accepted.
+The scan refuses an entry without either.
+On 2026-10-22 the API image had no fixable HIGH or CRITICAL finding and 44 without a fix, all in Debian packages; the nginx image had none.
+
+**The Dockerfile lint.**
+[hadolint](https://github.com/hadolint/hadolint) checks the `Dockerfile` in the pre-commit hook and in CI's required `Lint & format` job.
+Its one exception, DL3008 for the unpinned `libgomp1`, carries its reason in the `Dockerfile`: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
+
+**Dependabot.**
+`.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile` and of `deploy/compose.yaml`, and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.
+Every image is pinned by tag and digest (`python:3.12-slim-trixie@sha256:...`), so a rebuild starts from the bytes the last scan saw, and Dependabot moves both; a base image rebuilt under the same tag with Debian's security fixes is a new digest and so a pull request too, whose integration job scans the new image.
+Python's minor version and nginx's stable branch are not moved: those are changes of their own.
+The actions are pinned by commit SHA with the release in a comment, which Dependabot moves the same way.
+
 ## What M5 adds
 
 - Continuous deployment to the VM: the `Deploy` workflow and `deploy.sh` with its rollback are built and rehearsed against the local stack ([Every deploy](#every-deploy)); turning them on needs the VM ([Turn continuous deployment on](#turn-continuous-deployment-on)), and so does the rollback drill on the VM itself and NFR-05's reboot check (NFR-13, FR-15).
-- `trivy` scans the image before it is deployed (NFR-09).
 - The containers are hardened ([#200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200)): a read-only root file system, no capabilities, `no-new-privileges`, and limits on memory and processes, as [the Compose bullet above](#the-stack) describes and the integration suite checks.
 - Recovery from a hung API: a container that stays unhealthy is restarted, for example by a watchdog that restarts unhealthy containers, since Docker's restart policy covers only a process that exits.

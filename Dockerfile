@@ -7,13 +7,18 @@
 # virtual environment with uv, and the runtime stage copies that environment
 # and the bundle onto the same slim Python image, without uv, the build cache or
 # the source tree.
-
-ARG PYTHON_IMAGE=python:3.12-slim-trixie
-
-FROM ${PYTHON_IMAGE} AS builder
+#
+# Every image is pinned by digest as well as by tag, so a rebuild starts from
+# the bytes the last scan saw (NFR-09). Dependabot moves tag and digest together
+# (.github/dependabot.yml); it reads only `FROM` lines, written out in full, so
+# the base image is not an ARG and uv comes in through a stage of its own.
 
 # A pinned uv, so that a rebuild resolves nothing differently from CI.
-COPY --from=ghcr.io/astral-sh/uv:0.11.11 /uv /bin/uv
+FROM ghcr.io/astral-sh/uv:0.11.11@sha256:798712e57f879c5393777cbda2bb309b29fcdeb0532129d4b1c3125c5385975a AS uv
+
+FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2 AS builder
+
+COPY --from=uv /uv /bin/uv
 
 # Bytecode compiled at build time, so the first request does not pay for it;
 # files copied out of the cache mount rather than hard-linked into it; the
@@ -45,7 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-default-groups --no-editable --reinstall-package recommenditos
 
 
-FROM ${PYTHON_IMAGE}
+FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2
 
 # The bundle to serve. `/health` reports the DVC hash of this directory, so it is
 # copied whole and unchanged, and FR-12's check compares it with dvc.lock.
