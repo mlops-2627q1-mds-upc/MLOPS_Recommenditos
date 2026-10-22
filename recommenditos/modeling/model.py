@@ -1854,6 +1854,11 @@ def _warn_about_library_versions(model: Model) -> None:
     loads across a minor release, and refusing would make a routine upgrade stop
     the pipeline. Silence would be worse than either, because the symptom of a
     payload read by the wrong version is a changed number, not an error.
+
+    Python is compared by major and minor version only. A patch release is a
+    bug-fix release with the same ABI, and the API image takes the newest patch
+    of its Python minor on every build, so a patch difference between training
+    and serving is the normal case; it is logged at debug level, not warned.
     """
     recorded = model.metadata.get("versions", {})
     running = _versions(*type(model).libraries)
@@ -1862,9 +1867,22 @@ def _warn_about_library_versions(model: Model) -> None:
         for name, was in recorded.items()
         if name in running and running[name] != was
     }
+    if (python := moved.get("python")) and _python_release(python[0]) == _python_release(
+        python[1]
+    ):
+        logger.debug(
+            f"{model.variant!r} was trained with python {python[0]} and runs on python "
+            f"{python[1]}: a patch release, not worth a warning."
+        )
+        del moved["python"]
     if moved:
         listed = ", ".join(f"{name} {was} -> {now}" for name, (was, now) in sorted(moved.items()))
         logger.warning(
             f"{model.variant!r} was trained with {listed}. Its predictions may differ from "
             f"the metrics recorded for it; retrain to make the two comparable."
         )
+
+
+def _python_release(version: str) -> tuple[str, ...]:
+    """`"3.12.13"` as `("3", "12")`: the part of a Python version a patch release leaves alone."""
+    return tuple(version.split(".")[:2])
