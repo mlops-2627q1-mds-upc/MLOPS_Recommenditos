@@ -63,6 +63,7 @@ make stack-down
 ```
 
 `make stack` is `docker compose -f deploy/compose.yaml up -d --build --wait`, so it runs the same way on Windows without `make`.
+The `Dockerfile` installs third-party wheels from uv's build cache, but builds the `recommenditos` wheel from the build context every time (`--reinstall-package`): the cache is shared by every build on the machine, and uv would otherwise install a wheel it built from another worktree or branch ([#180](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/180)); the integration suite checks that the image holds the checkout's package.
 Docker copies a symbolic link into the image as a link, so `models/lgbm-basic` has to hold the files themselves: `find models/lgbm-basic -type l` must print nothing.
 That holds for DVC's default cache type, `copy`, and for `hardlink`; with `symlink`, set `cache.type` to one of those and run `uv run dvc checkout --relink models/lgbm-basic`.
 
@@ -70,7 +71,7 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 
 | What | Measured | Target |
 |------|----------|--------|
-| Image size (`docker image inspect`, uncompressed) | 665 MB | at most 1 GB (NFR-04) |
+| Image size (`docker image inspect`, uncompressed) | 702 MB, measured on 2026-10-21 with the three interval boosters of [#158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158) | at most 1 GB (NFR-04) |
 | API container memory, idle after the smoke check (`docker stats`) | 157 MiB (nginx: 10 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
@@ -86,7 +87,7 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
+- on the Docker host: both containers run as a non-root user, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
 
 ```bash
 make test-integration                                # against http://localhost:8080
