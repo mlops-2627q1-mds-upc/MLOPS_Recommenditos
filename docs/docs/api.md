@@ -46,6 +46,26 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
   "seller_type": "Dealer"}'
 ```
 
+## Performance
+
+Each worker process scores one request at a time, in the order the requests arrive, on a thread of its own (`ServedModel` hands every valuation and price range to it).
+The request threads of uvicorn's pool wait for their answer there without using CPU.
+Scored in the request threads themselves, concurrent requests took turns at the GIL every few milliseconds, and every request's latency grew to that of all of them.
+In one process with 8 callers in a closed loop on the laptop (issue #179), that cost 86 ms of CPU per valuation against 50 ms with the scoring thread, about 30 % less CPU per valuation, without the multi-second tail a plain lock showed (p99 above 4 s).
+A plain lock serialises the requests too, but it is not fair: a thread that releases it can take it straight back, and p99 reached 4.7 s.
+The trade-off is that one process uses at most about one core for scoring, so the API scales by workers (`WEB_CONCURRENCY`), each with about 240 MiB of memory, and this pays off when there are about as many workers as vCPUs.
+With cores to spare, latency with the scoring thread is similar or slightly worse than without it: in-process percentiles at 10 requests per second varied up to two-fold between runs on the laptop, so only CPU per valuation is quoted.
+
+`python -m recommenditos.api`, and so the image, sets `OMP_NUM_THREADS=1` for its workers unless the environment sets it already.
+LightGBM's default is one OpenMP thread per core, and `Booster.predict` ignores the `num_threads` that `booster.txt` records.
+In a worker's scoring thread one OpenMP thread costs 47 ms of CPU per valuation against 50 ms with the default, and each worker then no longer holds an OpenMP team for every thread that ever scored (137 to 345 threads per worker under load).
+The answers are the same either way; the FR-06 parity test compares the API's prices with the pipeline's, which predicts with the default.
+Batch scoring in the pipeline keeps the default, and so does an app started another way, such as the tests' `TestClient`.
+
+A valuation takes about 50 ms: about 18 ms to build the one-row matrix (`build_matrix` and the schema's casts, the code the pipeline uses too), about 20 ms for LightGBM's SHAP export behind the explanation, and the price itself.
+The explanation's per-field sums run on the NumPy array, 0.1 ms against 7 ms through pandas.
+In the laptop measurement, one worker saturated at about 20 requests per second of the load test's mix; [Load testing](load-testing.md) measures what the VM sustains.
+
 ## Endpoints
 
 The client contract is versioned under `/v1`, so an incompatible change can ship as `/v2` beside it.
