@@ -55,11 +55,13 @@ COPY recommenditos ./recommenditos
 # The wheel's files are then copied, with their bytecode and their parent
 # directories, to /project, under the same paths, for the runtime stage to lay
 # over the dependencies. The wheel installs nothing else, no script and no other
-# top-level package; the RECORD check fails the build when that changes.
+# top-level package; the RECORD check fails the build when that changes, and
+# when it cannot read RECORD (grep exits with 1 only when it read the file and
+# printed no line).
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-default-groups --no-editable --reinstall-package recommenditos \
     && site="$(/app/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
-    && ! grep -v -e '^recommenditos/' -e '^recommenditos-[^/]*\.dist-info/' "$site"/recommenditos-*.dist-info/RECORD \
+    && { grep -v -e '^recommenditos/' -e '^recommenditos-[^/]*\.dist-info/' "$site"/recommenditos-*.dist-info/RECORD; test $? -eq 1; } \
     && mkdir /project \
     && cp -a --parents "$site"/recommenditos "$site"/recommenditos-*.dist-info /project/
 
