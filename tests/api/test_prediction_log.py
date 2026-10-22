@@ -26,7 +26,12 @@ from fastapi.testclient import TestClient
 import httpx2
 import pytest
 from tests.api.conftest import API_KEY
-from tests.api.helpers import answer_record, assert_problem, write_records
+from tests.api.helpers import (
+    SKIP_UVICORN_WORKERS_ON_WINDOWS,
+    answer_record,
+    assert_problem,
+    write_records,
+)
 from tests.conftest import PII_COLUMNS
 
 from recommenditos.api import prediction_log
@@ -284,6 +289,7 @@ def _free_port() -> int:
 
 
 @pytest.mark.req("NFR-03", "FR-13")
+@SKIP_UVICORN_WORKERS_ON_WINDOWS
 def test_nfr03_two_uvicorn_workers_record_every_request_exactly_once(
     bundle: Path, listing: dict, tmp_path: Path
 ):

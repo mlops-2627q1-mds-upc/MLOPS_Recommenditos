@@ -19,7 +19,7 @@ import urllib.request
 
 from prometheus_client.parser import text_string_to_metric_families
 import pytest
-from tests.api.helpers import free_port, stop_service
+from tests.api.helpers import SKIP_UVICORN_WORKERS_ON_WINDOWS, free_port, stop_service
 
 from recommenditos.api.metrics import MULTIPROC_DIR_ENV_VAR
 from recommenditos.api.settings import MODEL_DIR_ENV_VAR
@@ -84,6 +84,7 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
 
 
 @pytest.mark.req("FR-11", "NFR-03")
+@SKIP_UVICORN_WORKERS_ON_WINDOWS
 def test_fr11_metrics_add_up_across_two_worker_processes(service: tuple[str, Path], listing: dict):
     base, directory = service
     assert not (directory / "counter_1.db").exists()
