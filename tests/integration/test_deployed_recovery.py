@@ -19,6 +19,12 @@ pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 #: NFR-05: back within 30 seconds of a crash.
 RECOVERY_S = 30
 
+#: The API's tmpfs mounts (deploy/compose.yaml) with the owner and mode they keep
+#: after a restart. Without `uid` and `gid` a tmpfs is root's, and the service
+#: user cannot write it.
+# Paths inside the container, not temporary files of this process.
+WRITABLE_TMPFS = {"/tmp": "10001:10001 700", "/tmp/prometheus": "10001:10001 700"}  # noqa: S108
+
 
 @pytest.mark.req("NFR-05")
 def test_the_api_is_healthy_again_within_30_s_of_a_crash(
@@ -48,5 +54,10 @@ def test_the_api_is_healthy_again_within_30_s_of_a_crash(
     after = api_container.inspect()
     assert after["RestartCount"] == restarts + 1, "Docker did not restart the API after the kill"
     assert status == 200, f"/health still answers {status} {recovered_after:.1f} s after the kill"
+    stat = api_container.exec("stat", "-c", "%n %u:%g %a", *WRITABLE_TMPFS)
+    owners = dict(line.split(" ", 1) for line in stat.splitlines())
+    assert owners == WRITABLE_TMPFS, f"after the restart the tmpfs mounts are {owners}"
+    # As the service user, the default user of `docker exec`.
+    api_container.exec("python", "-c", "import tempfile; tempfile.TemporaryFile().close()")
     # In the JUnit file, which CI and `make test-integration` write.
     record_testsuite_property("recovery_s", round(recovered_after, 1))
