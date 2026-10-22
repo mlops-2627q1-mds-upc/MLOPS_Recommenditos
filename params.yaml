@@ -283,6 +283,13 @@ train:
   # span 26 s. The same reversal is sharper on the 744-row fixture the suite uses
   # (0.33 s at 1 thread, 28.6 s at 8), because OpenMP's overhead dominates
   # whenever there is little work per thread.
+  #
+  # It pins LightGBM's boosting and nothing else in the measured fit (issue #113):
+  # the training and validation L1 the model record carries are predicted with
+  # `Booster.predict`, which ignores it and uses one OpenMP thread per core, and
+  # `b1`'s Ridge solver runs on OpenBLAS's pool of one thread per core, which also
+  # makes its coefficients depend on the core count. That is why a fit's CPU time
+  # exceeds its wall time; the model card's Determinism section has the numbers.
   num_threads: 1
   # How CodeCarbon measures the fit (NFR-10, issue #38). Only the fit is
   # measured, and `recommenditos/modeling/energy.py` says what the figure is: on a
