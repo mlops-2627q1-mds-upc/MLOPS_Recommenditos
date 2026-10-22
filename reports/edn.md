@@ -1260,7 +1260,7 @@ How to add an entry:
   - gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies, does not run on Windows and misses a full threadpool.
   - uvicorn's supervisor: misses a blocked event loop.
 - **Rationale:** With the server frozen by SIGSTOP, the old stack was still down after 75 s.
-  A prototype under #200's hardening recovered in 16.1 s with one worker and 17.2 s with two; the final probe FINAL_NUMBERS.
+  A prototype under #200's hardening recovered in 16.1 s with one worker and 17.2 s with two; the final probe, on the stack without it, in 15.8 to 20.6 s in four runs with one worker and 16.8 s with two.
   The worst case is 10 s interval + 2 × 6 s + 4 s restart = 26 s; under load, a kill needs about 128 requests of 47 ms queued ahead of `/health`, more than the load test's 80 users.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
