@@ -37,9 +37,12 @@ x-hardening: &hardening
 
 # Memory and process limits keep one leaking service from starving the others on
 # the VM's 4 GB, which M6's monitoring shares (NFR-04). `memswap_limit` equal to
-# `mem_limit` allows no swap: a service over its limit is killed by the kernel
-# and restarted (`restart: unless-stopped`, NFR-05) rather than slowing the VM
-# down. A tmpfs is memory and counts against its container's limit.
+# `mem_limit` allows no swap: in a container over its limit, the kernel kills
+# the largest process rather than letting the VM swap. With several workers that
+# is usually a worker, which the server's master (uvicorn's supervisor, nginx's
+# master) replaces; when the main process dies, Docker restarts the container
+# (`restart: unless-stopped`, NFR-05). A tmpfs is memory and counts against its
+# container's limit.
 
 services:
   api:
@@ -58,9 +61,9 @@ services:
     # /tmp is where SQLite spills a sort or index too large for its cache and
     # where Python's `tempfile` writes: with the root read-only and no /tmp, a
     # spilling query of the prediction log fails with "disk I/O error" (#200).
-    # Owned by the service user explicitly: without the options, Docker remounts
-    # a tmpfs as root's 0755 when the container restarts, and the API then cannot
-    # start again after a crash.
+    # Owned by the service user explicitly: without `uid` and `gid` a tmpfs is
+    # root's, and the API cannot write it (with mode 0700 it does not even start).
+    # The recovery test checks owner and mode after a restart.
     tmpfs:
       - /tmp:uid=10001,gid=10001,mode=0700,size=64m
       - /tmp/prometheus:uid=10001,gid=10001,mode=0700,size=16m

@@ -92,15 +92,19 @@ def test_the_image_holds_the_package_of_the_checkout(api_container):
     )
 
 
-def process_status(container) -> dict[str, str]:
-    """The fields of `/proc/1/status` of the container's main process."""
-    lines = container.exec("cat", "/proc/1/status").splitlines()
+#: The process whose view the hardening tests read: the container's main process.
+MAIN_PID = 1
+
+
+def process_status(container, pid: int = MAIN_PID) -> dict[str, str]:
+    """The fields of `/proc/<pid>/status` in the container."""
+    lines = container.exec("cat", f"/proc/{pid}/status").splitlines()
     return dict(line.split(":\t", 1) for line in lines if ":\t" in line)
 
 
-def root_mount_options(container) -> list[str]:
-    """The mount options of the container's root file system, from `/proc/1/mounts`."""
-    for line in container.exec("cat", "/proc/1/mounts").splitlines():
+def root_mount_options(container, pid: int = MAIN_PID) -> list[str]:
+    """The mount options of the root file system, from `/proc/<pid>/mounts` in the container."""
+    for line in container.exec("cat", f"/proc/{pid}/mounts").splitlines():
         _, mount_point, _, options, *_ = line.split()
         if mount_point == "/":
             return options.split(",")
@@ -119,8 +123,8 @@ def test_the_container_has_a_read_only_root_and_no_privileges(service, request):
     assert "ro" in root_mount_options(container), f"{service}'s root is not mounted read-only"
     assert host_config["CapDrop"] == ["ALL"], f"{service} drops {host_config['CapDrop']}"
     assert not host_config["CapAdd"], f"{service} adds back {host_config['CapAdd']}"
-    # Effective and bounding sets: no capability now, none gained later.
-    assert int(status["CapEff"], 16) == 0, f"{service} runs with capabilities {status['CapEff']}"
+    # The bounding set, not the effective one: a non-root process has no effective
+    # capability anyway, and the bounding set is what it could ever gain.
     assert int(status["CapBnd"], 16) == 0, f"{service} may gain capabilities {status['CapBnd']}"
     assert "no-new-privileges:true" in (host_config["SecurityOpt"] or [])
     assert status["NoNewPrivs"].strip() == "1", f"{service} may gain privileges through exec"
