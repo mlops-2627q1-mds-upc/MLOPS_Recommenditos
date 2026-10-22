@@ -1,7 +1,7 @@
 """The image scan of NFR-09, and the canary that proves it can fail.
 
-    python3 tools/image_scan.py scan IMAGE [IMAGE ...] [--trivy PATH]
-    python3 tools/image_scan.py canary [--trivy PATH]
+    python3 tools/image_scan.py [--trivy PATH] scan IMAGE [IMAGE ...]
+    python3 tools/image_scan.py [--trivy PATH] canary
 
 `scan` runs trivy over each image and fails when one of them has a HIGH or
 CRITICAL vulnerability with a fix available. A finding without a fix does not
@@ -20,9 +20,8 @@ scanned.
 
 The vulnerability database is downloaded on every run rather than kept in the
 Actions cache: the download takes about 5 s in CI, and the database is rebuilt
-every few hours, so a cached copy would be stale by the next run and trivy would
-download it again anyway. A rate limit (HTTP 429) or a server error on
-one registry does not fail the scan: trivy then tries the next of
+every few hours, so a cached copy would be stale by the next run. A rate limit
+(HTTP 429) or a server error on one registry does not fail the scan: trivy then tries the next of
 `DB_REPOSITORIES` (`shouldTryOtherRepo` in trivy's pkg/oci/artifact.go).
 
 Both commands write their result as Markdown to the job summary when they run

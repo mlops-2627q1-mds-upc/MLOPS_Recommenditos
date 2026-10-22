@@ -120,6 +120,16 @@ def test_canary_tries_the_next_registry_only_after_an_error(monkeypatch, capsys)
 
 
 @pytest.mark.req("NFR-09")
+def test_canary_fails_when_no_registry_can_be_scanned(monkeypatch):
+    def scan(trivy, image):
+        raise image_scan.ScanError(f"trivy could not scan {image}")
+
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setattr(image_scan, "scan_image", scan)
+    assert image_scan.main(["--trivy", "trivy", "canary"]) == 2
+
+
+@pytest.mark.req("NFR-09")
 def test_canary_fails_when_the_scan_finds_nothing(monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     monkeypatch.setattr(
