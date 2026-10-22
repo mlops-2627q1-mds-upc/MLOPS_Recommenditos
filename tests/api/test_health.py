@@ -1,4 +1,4 @@
-"""`GET /health`: the status and the loaded model version (FR-11, FR-12)."""
+"""`GET /health`: the status, the loaded model and index versions (FR-11, FR-12)."""
 
 from pathlib import Path
 import tempfile
@@ -9,12 +9,13 @@ from dvc_data.hashfile.db import HashFileDB
 from fastapi.testclient import TestClient
 import pytest
 
+from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.serving import ServedModel, bundle_version
 
 
 @pytest.mark.req("FR-11")
 def test_fr11_health_returns_the_status_and_the_loaded_model(
-    client: TestClient, served: ServedModel, bundle: Path
+    client: TestClient, served: ServedModel, index: ComparablesIndex, bundle: Path
 ):
     response = client.get("/health")
 
@@ -27,6 +28,7 @@ def test_fr11_health_returns_the_status_and_the_loaded_model(
             "trained_at": served.model.metadata["trained_at"],
         },
         "price_range": True,
+        "comparables": {"version": index.version, "listings": len(index)},
     }
 
 
@@ -53,3 +55,14 @@ def test_fr11_health_answers_head_for_uptime_monitors(client: TestClient):
     assert head.content == b""
     assert head.headers["content-type"] == get.headers["content-type"]
     assert head.headers["content-length"] == get.headers["content-length"]
+
+
+@pytest.mark.req("FR-12")
+def test_fr12_the_index_version_is_the_hash_dvc_records_for_the_index(index_file: Path):
+    """The index version `/health` reports is the value `dvc.lock` holds for its file."""
+    path = index_file
+    with tempfile.TemporaryDirectory() as cache:
+        fs = LocalFileSystem()
+        _, _, entry = build(HashFileDB(fs, cache), str(path), fs, "md5")
+
+    assert ComparablesIndex.load(path).version == entry.hash_info.value

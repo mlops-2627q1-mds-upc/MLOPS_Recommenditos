@@ -19,7 +19,8 @@ URL, so it never kills or inspects a container (docs/docs/deployment.md).
 The model version `/health` reports is compared with `dvc.lock`, as FR-12 asks,
 unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` names another one: CI builds the
 image around a synthetic bundle, whose version `tests/fixtures/synthetic_bundle.py`
-prints.
+prints. The comparables index's version is compared the same way, unless
+`RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION` names another one.
 
 A new endpoint adds one file here, `test_deployed_<endpoint>.py`, with one valid
 request through the proxy and its documented shape; `test_deployed_predict.py`
@@ -46,6 +47,7 @@ from recommenditos.config import PROJ_ROOT
 
 STACK_URL_ENV_VAR = "RECOMMENDITOS_STACK_URL"
 EXPECTED_VERSION_ENV_VAR = "RECOMMENDITOS_EXPECTED_MODEL_VERSION"
+EXPECTED_COMPARABLES_ENV_VAR = "RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION"
 DEFAULT_STACK_URL = "http://localhost:8080"
 
 #: The Compose project of deploy/compose.yaml (`name:`), on the laptop, in CI and
@@ -129,12 +131,27 @@ def expected_version(health: httpx2.Response) -> str:
     return version
 
 
+@pytest.fixture(scope="session")
+def expected_comparables_version() -> str:
+    """The comparables index version the image has to report: the override, or dvc.lock's."""
+    if override := os.environ.get(EXPECTED_COMPARABLES_ENV_VAR):
+        return override
+    version = output_hash(PROJ_ROOT / "dvc.lock", "data/processed/comparables.parquet")
+    assert version is not None, "dvc.lock records no data/processed/comparables.parquet"
+    return version
+
+
 def bundle_hash(lock: Path, variant: str) -> str | None:
     """The MD5 `dvc.lock` records for `models/<variant>`, without DVC's `.dir` suffix."""
+    return output_hash(lock, f"models/{variant}")
+
+
+def output_hash(lock: Path, path: str) -> str | None:
+    """The MD5 `dvc.lock` records for the output `path`, without DVC's `.dir` suffix."""
     stages = yaml.safe_load(lock.read_text(encoding="utf-8"))["stages"]
     for stage in stages.values():
         for out in stage.get("outs", []):
-            if out["path"] == f"models/{variant}":
+            if out["path"] == path:
                 return str(out["md5"]).removesuffix(".dir")
     return None
 

@@ -33,6 +33,7 @@ What each part guarantees:
 
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
+  It also copies FR-09's comparables index, `data/processed/comparables.parquet`, to `/app/models/comparables.parquet` beside the bundle, where `RECOMMENDITOS_COMPARABLES_FILE` points the API, and `/health` reports the md5 `dvc.lock` records for that file as the index's version.
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
 - **Compose** publishes only the proxy's port.
@@ -52,10 +53,10 @@ What each part guarantees:
 
 ## Run it locally
 
-You need Docker with the compose plugin and the pulled model:
+You need Docker with the compose plugin and the pulled model and comparables index:
 
 ```bash
-uv run dvc pull models/lgbm-basic
+uv run dvc pull models/lgbm-basic data/processed/comparables.parquet
 RECOMMENDITOS_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))') make stack
                     # builds the image, starts both containers, waits until healthy
 make test-integration   # the integration suite against http://localhost:8080
@@ -64,8 +65,8 @@ make stack-down
 
 `make stack` is `docker compose -f deploy/compose.yaml up -d --build --wait`, so it runs the same way on Windows without `make`.
 The `Dockerfile` installs third-party wheels from uv's build cache, but builds the `recommenditos` wheel from the build context every time (`--reinstall-package`): the cache is shared by every build on the machine, and uv would otherwise install a wheel it built from another worktree or branch ([#180](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/180)); the integration suite checks that the image holds the checkout's package.
-Docker copies a symbolic link into the image as a link, so `models/lgbm-basic` has to hold the files themselves: `find models/lgbm-basic -type l` must print nothing.
-That holds for DVC's default cache type, `copy`, and for `hardlink`; with `symlink`, set `cache.type` to one of those and run `uv run dvc checkout --relink models/lgbm-basic`.
+Docker copies a symbolic link into the image as a link, so `models/lgbm-basic` and `data/processed/comparables.parquet` have to be the files themselves: `find models data/processed/comparables.parquet -type l` must print nothing.
+That holds for DVC's default cache type, `copy`, and for `hardlink`; with `symlink`, set `cache.type` to one of those and run `uv run dvc checkout --relink models/lgbm-basic data/processed/comparables.parquet`.
 
 Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.9:
 
@@ -98,11 +99,11 @@ The base URL is `RECOMMENDITOS_STACK_URL`, which the make targets set.
 The tests that need the Docker host, the crash test among them, run when that URL is a loopback address and are skipped otherwise.
 `make smoke` never touches containers: it deselects those tests whatever the URL, so a smoke run on the VM, from a runner on it, or through an SSH tunnel cannot kill the production API or inspect the machine's own containers.
 `make test-integration` is the full run, for CI and the local stack.
-`/health` is compared with the hash `dvc.lock` records for the bundle (FR-12), unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` names another version.
+`/health` is compared with the hashes `dvc.lock` records for the bundle and the index (FR-12), unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` and `RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION` name other versions.
 `make test` leaves the suite out (`-m "not integration"` in `pyproject.toml`).
 
 CI's `Integration (Compose stack)` job runs the suite on every pull request that touches the package, the `Dockerfile`, `deploy/`, the dependencies or the suite.
-CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version), builds the image around it, starts the stack, runs the suite with that version as the expected one, prints both containers' logs if anything failed and always tears the stack down.
+CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version and writes a comparables index of the same fixture to `data/processed/comparables.parquet`), builds the image around both, starts the stack, runs the suite with their versions as the expected ones, prints both containers' logs if anything failed and always tears the stack down.
 
 ## Deploy to the VM
 
@@ -143,7 +144,7 @@ Set FR-10's API key in the same `.env` (`RECOMMENDITOS_API_KEY`, generated on th
 
 ### Every deploy
 
-From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic`:
+From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`:
 
 ```bash
 make image                                   # recommenditos-api:<short commit SHA>

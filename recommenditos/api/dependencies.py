@@ -1,10 +1,10 @@
-"""What a route can ask FastAPI for: the model, the metrics, the request ID, the log, the key.
+"""What a route can ask FastAPI for: the model and index, the metrics, the request ID, the log.
 
-A route declares `served: Served`, `metrics: Metrics`, `request_id: RequestId`,
-`log: Log` or `store: Store` as a parameter and gets the object the app created
-at startup, so no route reaches into global state, and a test can build an app
-around any bundle. `RequireApiKey` in a route's `dependencies` refuses a
-request without the API key (FR-10).
+A route declares `served: Served`, `index: Index`, `metrics: Metrics`,
+`request_id: RequestId`, `log: Log` or `store: Store` as a parameter and gets
+the object the app created at startup, so no route reaches into global state,
+and a test can build an app around any bundle. `RequireApiKey` in a route's
+`dependencies` refuses a request without the API key (FR-10).
 """
 
 from http import HTTPStatus
@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 
+from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.errors import request_id_of
 from recommenditos.api.metrics import ApiMetrics
 from recommenditos.api.prediction_log import PredictionLog, PredictionStore
@@ -37,6 +38,14 @@ def api_metrics(request: Request) -> ApiMetrics:
     if not isinstance(metrics, ApiMetrics):
         raise TypeError(f"app.state.metrics is a {type(metrics).__name__}, not an ApiMetrics")
     return metrics
+
+
+def comparables_index(request: Request) -> ComparablesIndex | None:
+    """The comparables index `create_app` loaded, or None if it was started without one."""
+    index = request.app.state.comparables
+    if index is not None and not isinstance(index, ComparablesIndex):
+        raise TypeError(f"app.state.comparables is a {type(index).__name__}, not an index")
+    return index
 
 
 def prediction_store(request: Request) -> PredictionStore:
@@ -95,6 +104,7 @@ def require_api_key(
 
 Served = Annotated[ServedModel, Depends(served_model)]
 Metrics = Annotated[ApiMetrics, Depends(api_metrics)]
+Index = Annotated[ComparablesIndex | None, Depends(comparables_index)]
 RequestId = Annotated[str, Depends(request_id_of)]
 Log = Annotated[PredictionLog, Depends(prediction_log)]
 Store = Annotated[PredictionStore, Depends(prediction_store)]

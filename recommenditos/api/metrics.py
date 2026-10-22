@@ -8,6 +8,8 @@ the warnings by field (FR-05), and the version of the served model. The price
 ranges of `/v1/price-range` have metrics of their own, because a typical price
 from a request that names little more than the make is not an asking price of
 `/v1/predict`'s, and the width of the range says how much the clients tell.
+`/v1/comparables` records how many listings each answer held, so an index that
+leaves many requests with an empty list shows (FR-09).
 
 The figures are correct for any number of uvicorn worker processes when
 `PROMETHEUS_MULTIPROC_DIR` names a directory: every worker then writes its
@@ -76,6 +78,9 @@ PRICE_BUCKETS = (
     150_000,
     250_000,
 )
+
+#: Listings per comparables answer: none, one, a few, the default k, k's cap.
+COMPARABLES_BUCKETS = (0, 1, 2, 3, 5, 10, 20)
 
 #: Relative width bucket bounds, `(upper - lower) / typical price`. Measured on the
 #: test split, the mean is 0.47 for a full request, 0.93 for P1 and 2.30 for a
@@ -183,6 +188,18 @@ class ApiMetrics:
             ("field",),
             registry=self.registry,
         )
+        self.comparables_returned = Histogram(
+            "recommenditos_comparables_listings",
+            "Listings per /v1/comparables answer, 0 when none lies in every window (FR-09).",
+            buckets=COMPARABLES_BUCKETS,
+            registry=self.registry,
+        )
+        self.comparables_warnings = Counter(
+            "recommenditos_comparables_warnings",
+            "Warnings in /v1/comparables answers, by the request field they point at.",
+            ("field",),
+            registry=self.registry,
+        )
         self.model = Gauge(
             "recommenditos_model_info",
             "The served model: 1, labelled with its variant and its DVC version (FR-12).",
@@ -213,6 +230,12 @@ class ApiMetrics:
         self.range_width.observe((upper_eur - lower_eur) / price_eur)
         for warning in warnings:
             self.range_warnings.labels(field=_field(warning)).inc()
+
+    def observe_comparables(self, listings: int, warnings: "list[FieldWarning]") -> None:
+        """Record one answered comparables request: how many listings it returned."""
+        self.comparables_returned.observe(listings)
+        for warning in warnings:
+            self.comparables_warnings.labels(field=_field(warning)).inc()
 
     def exposition(self) -> bytes:
         """The metrics in the text exposition format, summed over the workers if several."""

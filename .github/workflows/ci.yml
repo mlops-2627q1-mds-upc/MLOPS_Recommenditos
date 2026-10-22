@@ -292,7 +292,7 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
         if: needs.changes.outputs.stack == 'true'
-      - name: Fit a synthetic lgbm-basic bundle where the Dockerfile expects it
+      - name: Fit a synthetic lgbm-basic bundle and comparables index where the Dockerfile expects them
         if: needs.changes.outputs.stack == 'true'
         # `shell: bash` for pipefail, so a failed fit fails here and not at the
         # image's COPY.
@@ -300,6 +300,8 @@ jobs:
         run: |
           version=$(uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models | tail -n 1)
           echo "RECOMMENDITOS_EXPECTED_MODEL_VERSION=$version" >> "$GITHUB_ENV"
+          index=$(md5sum data/processed/comparables.parquet | cut -d " " -f 1)
+          echo "RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION=$index" >> "$GITHUB_ENV"
       - name: Generate the API key of this run
         if: needs.changes.outputs.stack == 'true'
         # A fresh key per run, never committed (NFR-15): Compose hands it to the

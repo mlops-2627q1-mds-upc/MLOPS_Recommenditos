@@ -1,8 +1,8 @@
 # The build context is the repository root, and the image needs only these:
-# the project metadata and lock, the package, and the model bundles that `dvc
-# pull` put under models/ (the Dockerfile copies one of them). Everything else,
-# data, .venv, .git and the credentials in .env included, never leaves the
-# machine that builds.
+# the project metadata and lock, the package, the model bundles that `dvc pull`
+# put under models/ (the Dockerfile copies one of them) and the comparables
+# index. Everything else, the rest of data, .venv, .git and the credentials in
+# .env included, never leaves the machine that builds.
 *
 !pyproject.toml
 !uv.lock
@@ -10,6 +10,7 @@
 !LICENSE
 !recommenditos/
 !models/
+!data/processed/comparables.parquet
 
 **/__pycache__
 **/*.py[co]

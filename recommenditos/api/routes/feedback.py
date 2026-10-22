@@ -46,7 +46,8 @@ def feedback(body: FeedbackRequest, store: Store, response: Response) -> Feedbac
 
     - a new price is stored, `201`;
     - the same price again is answered `200` and changes nothing, so a retry is safe;
-    - another price for the same answer is refused with `409`;
+    - another price for the same answer is refused with `409`, and so is any price for
+      an answer that gave none, such as one of `/v1/comparables`;
     - a `request_id` the log does not hold, or no longer holds after rotation, is `404`.
     """
     result = store.record_feedback(
@@ -56,6 +57,12 @@ def feedback(body: FeedbackRequest, store: Store, response: Response) -> Feedbac
         raise ProblemError(
             HTTPStatus.NOT_FOUND,
             f"No answer with request ID {body.request_id} is in the prediction log.",
+        )
+    if result.outcome is FeedbackOutcome.UNPRICED_ANSWER:
+        raise ProblemError(
+            HTTPStatus.CONFLICT,
+            f"The answer with request ID {body.request_id} gave no price, so there is no "
+            "estimate an observed price could be compared with.",
         )
     if result.stored is None:
         raise RuntimeError(f"a {result.outcome.name} feedback outcome carries no stored price")

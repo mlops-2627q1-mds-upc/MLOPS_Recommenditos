@@ -16,7 +16,12 @@ import sys
 from dvc.repo import Repo
 import pandas as pd
 import pytest
-from tests.fixtures.synthetic_bundle import FIXTURE_ROWS, build_matrices, train_bundles
+from tests.fixtures.synthetic_bundle import (
+    FIXTURE_ROWS,
+    build_index,
+    build_matrices,
+    train_bundles,
+)
 from tools.requirement_matrix import MARKER, REQUIREMENTS_DOC, unknown_marker_ids
 import yaml
 
@@ -278,6 +283,9 @@ def supported_makes(matrices: dict) -> tuple[str, ...]:
 def trained(matrices: dict) -> dict:
     """Every variant of the real params.yaml, trained once, with tracking off.
 
+    The comparables index of the same fixture is built too, at `comparables`, for
+    the apps of the API tests to serve (FR-09).
+
     The environment is cleared inside the fixture rather than by an autouse
     monkeypatch, because a session fixture outlives a function-scoped one and
     would otherwise inherit whatever `.env` the developer's machine has.
@@ -295,8 +303,10 @@ def trained(matrices: dict) -> dict:
         train_bundles(
             train_variants(), matrices["features"], models, matrices["root"] / "emissions"
         )
+    index = build_index(matrices["processed"], matrices["processed"] / "comparables.parquet")
     return {
         "dir": models,
+        "comparables": index,
         "emissions": matrices["root"] / "emissions",
         "models": {name: load_model(models / name) for name in train_variants()},
     }

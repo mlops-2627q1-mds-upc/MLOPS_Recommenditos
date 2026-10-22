@@ -297,10 +297,12 @@ _EXAMPLES: dict[int, dict[str, Any]] = {
 _DESCRIPTIONS: dict[int, str] = {
     HTTPStatus.UNAUTHORIZED: "The `X-API-Key` header is missing or wrong (FR-10).",
     HTTPStatus.NOT_FOUND: "The prediction log holds no answer with this request ID.",
-    HTTPStatus.CONFLICT: "Another price is stored for this request ID.",
+    HTTPStatus.CONFLICT: "Another price is stored for this request ID, or its answer gave no "
+    "price, as a `/v1/comparables` answer does.",
     HTTPStatus.SERVICE_UNAVAILABLE: "The service cannot answer: the prediction log cannot be "
-    "written, so nothing was answered or stored (NFR-03), or `/v1/price-range` was asked of a "
-    "bundle without interval models (EDN-85).",
+    "written, so nothing was answered or stored (NFR-03), `/v1/price-range` was asked of a "
+    "bundle without interval models (EDN-85), or `/v1/comparables` of a service without the "
+    "comparables index (FR-09).",
     HTTPStatus.UNPROCESSABLE_ENTITY: "The request is invalid; `errors` lists every invalid field.",
     HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "The body is larger than 10 KB (NFR-09).",
 }

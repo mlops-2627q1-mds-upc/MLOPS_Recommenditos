@@ -5,12 +5,11 @@ This page shows how the price component is built in two views: the logical view,
 It then names the architectural patterns, what the design leaves out, and the decisions behind both, with their entries in the [Engineering Decision Notebook][edn] (EDN).
 What each part must do is in the [specification](specification.md); how to run the API and the stack is in [The API](api.md) and [Deployment](deployment.md).
 
-Every element is in one of three states, and the diagrams draw them differently:
+Every element is in one of two states, and the diagrams draw them differently:
 
 | State | Drawn as | Meaning |
 |-------|----------|---------|
 | Built | Solid border | On `main` |
-| M4, in progress | Dashed blue border | Milestone 4 work with an open issue or pull request, named in the label |
 | Planned | Grey, dashed border | Milestone 5 or 6, named in the label |
 
 A dashed line is a connection that does not exist yet.
@@ -33,7 +32,7 @@ flowchart TB
         api["<b>Price API</b><br/>[FastAPI, uvicorn workers]"]
         drift["<b>Drift job</b><br/>[Alibi Detect, scheduled]<br/>M6"]
         bundle[("<b>Model bundle</b><br/>in the image")]
-        comparables[("<b>Comparables index</b><br/>in the image<br/>M4, #138")]
+        comparables[("<b>Comparables index</b><br/>in the image")]
         log[("<b>Prediction log, feedback</b><br/>SQLite, WAL, volume")]
     end
 
@@ -43,13 +42,11 @@ flowchart TB
     replay -.->|"/v1/predict, /v1/feedback"| api
     prom -.->|"/metrics"| api
     api -->|"loads at start"| bundle
-    api -.->|"looks up"| comparables
+    api -->|"looks up"| comparables
     api -->|"writes"| log
     drift -.->|"reads, joins"| log
 
-    classDef m4 stroke:#1f6feb,stroke-width:2px,stroke-dasharray:6 4
     classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class comparables m4
     class uptime,replay,prom,drift later
 ```
 
@@ -62,7 +59,7 @@ flowchart TB
     b_ci["<b>CI</b> [GitHub Actions]<br/>tests, Serving runtime,<br/>Promotion gate, Integration"]
     b_laptop["<b>Team laptop</b><br/>make image<br/>until M5"]
     b_cd["<b>CD</b> [GitHub Actions]<br/>M5"]
-    b_image[("<b>API image</b><br/>runtime, model bundle,<br/>comparables index (M4, #138)")]
+    b_image[("<b>API image</b><br/>runtime, model bundle,<br/>comparables index")]
 
     b_dvc <-->|"data, models, runs"| b_dagshub
     b_dvc -->|"dvc.lock, metrics.json<br/>in a pull request"| b_ci
@@ -78,9 +75,9 @@ flowchart TB
 | Container | Responsibility | State, code |
 |-----------|----------------|-------------|
 | **Gateway** (nginx 1.30, unprivileged) | Publishes the stack's only port; answers `/feedback` and `/metrics` with 403; sets security headers; its own errors are RFC 9457 problems | Built, `deploy/nginx.conf` |
-| **Price API** (FastAPI, uvicorn; `WEB_CONCURRENCY` workers) | Validates and prices a request and explains the price (FR-08); `/v1/predict`, `/v1/price-range`, `/v1/feedback`, `/`, `/health`, `/metrics`, `/docs` | Built, `recommenditos/api/`; `/v1/comparables` M4 (#138) |
+| **Price API** (FastAPI, uvicorn; `WEB_CONCURRENCY` workers) | Validates and prices a request and explains the price (FR-08); `/v1/predict`, `/v1/price-range`, `/v1/comparables`, `/v1/feedback`, `/`, `/health`, `/metrics`, `/docs` | Built, `recommenditos/api/` |
 | **Model bundle** (directory in the image) | UC1 and UC2 boosters, interval offsets, feature pipeline; `/health` reports its `dvc.lock` hash (FR-12) | Built, `Dockerfile`, `modeling/model.py` |
-| **Comparables index** (file in the image) | The training and validation listings `/v1/comparables` searches (FR-09) | M4, #138 |
+| **Comparables index** (`data/processed/comparables.parquet`, copied into the image) | The training and validation listings `/v1/comparables` searches (FR-09) | Built, `recommenditos/data/build_comparables.py` (stage `comparables`), `recommenditos/api/comparables.py` |
 | **Prediction log and feedback** (SQLite in WAL mode, named volume) | One row per answer (FR-13) and per observed price (FR-10), joined by request ID (FR-14) | Built, `api/prediction_log.py` |
 | **Replay job** | Sends the `ES` holdout as requests and its prices as feedback (NFR-11) | M6 |
 | **Drift job** (Alibi Detect, scheduled container) | Input drift, error and interval coverage per window of logged requests (FR-14, EDN-14) | M6 |

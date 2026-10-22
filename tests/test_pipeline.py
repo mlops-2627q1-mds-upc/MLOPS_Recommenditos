@@ -47,6 +47,7 @@ STAGE_MODULES = {
     "configure_gx": "recommenditos.data.gx_context_configuration",
     "validate-data": "recommenditos.data.validate_data",
     "split": "recommenditos.data.split_data",
+    "comparables": "recommenditos.data.build_comparables",
     "features": "recommenditos.data.build_features",
     "train": "recommenditos.modeling.train",
     "evaluate": "recommenditos.modeling.evaluate",
