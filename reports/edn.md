@@ -1195,7 +1195,7 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI drafted the three options and recommended the warning in #193, from the stale-lock incident of #183; @lukas2510 accepted it and asked for it to be implemented.
   AI then built the check, and on the real repository a comment-only edit of `config.py` reported all 16 stages while `main` reported none.
-- **AI interaction evidence:** Claude Code session orchestrating M4, prompt "please do you recommendations here: #193, dvc.lock-Check in der CI".
+- **AI interaction evidence:** Claude Code session orchestrating M4, prompt "please do you recommendations here: #193".
 - **Other evidence:** [Issue #193](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/193), [PR #183](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/183), [PR #205](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/205), [`tools/stale_lock.py`](../tools/stale_lock.py).
 - **In LaTeX:** yes
 

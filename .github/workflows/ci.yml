@@ -393,8 +393,9 @@ jobs:
   # minute tracked re-run for every edit of stage code, comments included. So the
   # step cannot fail the job, and the job is not a required check. The stale
   # stages go to the job summary, and one warning annotation shows on the pull
-  # request. The logic is tools/stale_lock.py; it needs no data, no remote and no
-  # credentials, because it skips what `dvc pull` would provide.
+  # request; a check that cannot run says so in both places instead. The logic
+  # is tools/stale_lock.py; it needs no data, no remote and no credentials,
+  # because it skips what `dvc pull` would provide.
   #
   # No paths filter: a stale lock on main is worth seeing on every run, and the
   # job costs a `uv sync` and a few seconds of `dvc status`.
@@ -408,6 +409,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
       - name: Report the stages dvc.lock is stale for
         continue-on-error: true

@@ -16,10 +16,15 @@ that `dvc pull` fetches, so DVC reports those as deleted or modified. A
 dependency counts only when git tracks it and, for a directory, when no output
 `dvc.lock` records inside it is missing from git (`models/` holds the cached
 model directories and only a git-tracked `.gitignore`). Every parameter counts,
-because `params.yaml` is tracked. A changed command counts too.
+because `params.yaml` is tracked. A changed command counts too. A directory
+dependency that holds both git-tracked files and a cached output is skipped as a
+whole, so its tracked files go unchecked; no stage has one today, but
+`reports/data-validation` would be one if a stage ever depended on it.
 
-It exits 0 whether or not a stage is stale. Under GitHub Actions it writes the
-stale stages to the job summary and emits one warning annotation.
+It exits 0 whether or not a stage is stale, and 1 when the check cannot run, for
+example because `dvc.yaml` does not parse. Under GitHub Actions it writes the
+result to the job summary and emits one warning annotation when a stage is stale
+or the check failed, so a broken check does not pass for a clean lock.
 """
 
 import argparse
@@ -139,23 +144,42 @@ def summary(stale: Mapping[str, list[str]]) -> str:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--root", type=Path, default=Path.cwd())
-    args = parser.parse_args(argv)
-    stale = collect(args.root.resolve())
-    text = summary(stale)
+def _report(text: str, warning: str | None) -> None:
+    """Print `text`, append it to the job summary, and emit `warning` under GitHub Actions."""
     print(text)
     summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_file:
         with open(summary_file, "a", encoding="utf-8") as handle:
             handle.write(text)
-    if stale and os.environ.get("GITHUB_ACTIONS") == "true":
-        print(
+    if warning and os.environ.get("GITHUB_ACTIONS") == "true":
+        # An annotation is one line: GitHub reads `%0A` as a line break.
+        print(warning.replace("%", "%25").replace("\r", "").replace("\n", "%0A"))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    args = parser.parse_args(argv)
+    try:
+        stale = collect(args.root.resolve())
+    # Whatever stops the check, a broken `dvc.yaml`, a missing git or an
+    # unreadable lock, has to show, because CI continues on this step's error.
+    except Exception as error:  # noqa: BLE001
+        _report(
+            "## Pipeline lock\n\n"
+            "The check could not run, so it is not known whether `dvc.lock` is stale:\n\n"
+            f"```\n{error}\n```\n",
+            f"::warning title=Stale dvc.lock check failed::The check could not run: {error}",
+        )
+        return 1
+    warning = None
+    if stale:
+        warning = (
             f"::warning file=dvc.lock,title=Stale dvc.lock::{len(stale)} stage(s) differ "
             f"from dvc.lock: {', '.join(stale)}. Re-run them with dvc repro; "
             "the job summary lists what changed."
         )
+    _report(summary(stale), warning)
     return 0
 
 

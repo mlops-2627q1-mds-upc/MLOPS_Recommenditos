@@ -221,3 +221,26 @@ def test_the_filter_keeps_code_parameters_and_commands_and_drops_missing_data():
 
 def test_the_summary_says_so_when_the_lock_is_in_sync():
     assert "matches the code and parameters of every stage" in summary({})
+
+
+def test_a_check_that_cannot_run_says_so_instead_of_passing_for_a_clean_lock(
+    project, tmp_path_factory, monkeypatch, capsys
+):
+    # A command that names a parameter params.yaml lacks: `dvc status` fails.
+    broken = DVC_YAML.replace("python src/evaluate.py", "python src/evaluate.py ${missing.key}")
+    (project / "dvc.yaml").write_text(broken, encoding="utf-8")
+    summary_file = tmp_path_factory.mktemp("summary") / "summary.md"
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_file))
+
+    assert main(["--root", str(project)]) == 1
+
+    warnings = [
+        line for line in capsys.readouterr().out.splitlines() if line.startswith("::warning")
+    ]
+    assert len(warnings) == 1
+    assert warnings[0].startswith("::warning title=Stale dvc.lock check failed::")
+    assert "missing.key" in warnings[0]
+    text = summary_file.read_text(encoding="utf-8")
+    assert "The check could not run" in text
+    assert "matches the code" not in text
