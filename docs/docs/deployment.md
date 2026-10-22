@@ -27,6 +27,7 @@ client --HTTP--> proxy (nginx, host port 8080 locally, 80 on the VM)
 | `deploy/nginx.conf` | The proxy's configuration |
 | `deploy/.env.template` | The template of the stack's `.env` on the VM |
 | `deploy/bootstrap.sh` | Prepares a fresh VM |
+| `deploy/deploy.sh` | Runs one image tag on the VM and puts the previous one back if it fails |
 | `tests/integration/` | The integration suite: tests a running stack through its proxy (`make test-integration`, `make smoke`) |
 
 What each part guarantees:
@@ -94,7 +95,8 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05).
+- on the Docker host: both containers run as a non-root user with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05);
+- the rollback drill: `deploy.sh` puts the previous tag back when a new one does not start, as a second Compose project beside the stack ([Every deploy](#every-deploy)).
 
 ```bash
 make test-integration                                # against http://localhost:8080
@@ -158,10 +160,10 @@ docker inspect --format '{{json .Config.Labels}}' ghcr.io/mlops-2627q1-mds-upc/m
 
 ### How the image gets there
 
-Until CD deploys ([#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198)), the image is built on a laptop and streamed to the VM with `docker save | ssh docker load`.
-The VM then needs Docker and three files, and none of the repository, uv, DVC or a DagsHub token, which would otherwise sit on a shared university machine.
+[Continuous delivery](#continuous-delivery) pushes the image of every merge to GHCR, and the VM pulls it from there: `deploy/deploy.sh` on the VM pulls the commit's tag and starts it.
+The VM therefore needs Docker and four files, and none of the repository, uv, DVC or a DagsHub token, which would otherwise sit on a shared university machine.
 It also keeps the DVC cache and the build cache off the VM's 20 GB disk (NFR-04).
-Once #198 is in, the VM pulls the image that [continuous delivery](#continuous-delivery) pushed to GHCR instead.
+When GHCR cannot be reached, a laptop builds the image and streams it to the VM with `docker save | ssh docker load` instead ([Every deploy](#every-deploy)).
 
 ### First time: bootstrap a fresh VM
 
@@ -173,14 +175,14 @@ scp -r deploy <admin>@<vm>:
 ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
 ```
 
-Run the same two commands to bring a changed `bootstrap.sh`, `compose.yaml` or `nginx.conf` to the VM: `scp -r deploy <vm>:` replaces the files of `~/deploy`, whereas a named target directory that already exists, such as `<vm>:some-dir`, would receive a nested `some-dir/deploy/` and leave the old files in place.
+Run the same two commands to bring a changed `bootstrap.sh`, `compose.yaml`, `nginx.conf` or `deploy.sh` to the VM: `scp -r deploy <vm>:` replaces the files of `~/deploy`, whereas a named target directory that already exists, such as `<vm>:some-dir`, would receive a nested `some-dir/deploy/` and leave the old files in place.
 
 `bootstrap.sh` is idempotent and does four things:
 
 1. installs Docker Engine and the compose plugin from Docker's apt repository, following Docker's install page (it first removes the distribution's conflicting packages, such as `docker.io`), and enables Docker at boot;
 2. creates the deploy user `recommenditos`, a member of the `docker` group, whose home `/opt/recommenditos` holds the stack;
 3. lets every SSH key of the account that ran it log in as `recommenditos`, so that every later step is `ssh recommenditos@<vm>` without sudo;
-4. copies `compose.yaml`, `nginx.conf` and `.env.template` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists.
+4. copies `compose.yaml`, `nginx.conf`, `.env.template` and `deploy.sh` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists.
 
 Then set the port the [lab checklist](#lab-checklist) found reachable:
 
@@ -193,25 +195,60 @@ Set FR-10's API key in the same `.env` (`RECOMMENDITOS_API_KEY`, generated on th
 
 ### Every deploy
 
-From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`:
+The `Deploy` workflow ([`.github/workflows/deploy.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/deploy.yml)) deploys every image that [continuous delivery](#continuous-delivery) pushes, once it is [turned on](#turn-continuous-deployment-on) (NFR-13).
+It starts when a CD run on `main` finishes, and only if that run passed and pushed an image: a commit that changes only `docs/`, `reports/` or top-level Markdown files builds none and deploys nothing.
+It deploys the image's commit SHA tag, never `:latest`, in one job of the GitHub Environment `production`:
+
+1. reads the tag the VM runs, and skips the commit if the VM already runs a newer one that contains it, which happens when the CD runs of two merges finish in the opposite order (the rule that keeps `:latest` moving forward);
+2. runs `deploy.sh deploy <SHA>` on the VM, which pulls the image, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag again and the run fails;
+3. runs `make smoke` from the runner against the VM's public address, the outside view the proxy rules are about; if it fails, `deploy.sh rollback` starts the previous tag again and the run fails;
+4. writes the deployed commit, the outcome and the tag that runs now into the job summary.
+
+Deploys never overlap and are never cancelled: the workflow's runs queue in the order they arrive (`concurrency` with `queue: max`), and `deploy.sh` holds a lock on the VM, so a deploy by hand waits for a running one.
+The job checks out the deployed commit, so the smoke suite holds `/health` to that commit's `dvc.lock` (FR-12).
+
+A manual run (**Actions**, **Deploy**, **Run workflow** on `main`) deploys the full commit SHA it is given, an older one too: that is how an earlier version is redeployed on purpose, for example after a promoted model regressed (FR-15).
+Any tag CD pushed can be deployed this way, since GHCR keeps them all.
+
+`deploy.sh` is also how a deploy runs by hand, on the VM as `recommenditos` or over SSH:
 
 ```bash
-make image                                   # recommenditos-api:<short commit SHA>
-TAG=$(git rev-parse --short HEAD)
-docker save recommenditos-api:$TAG | gzip | ssh recommenditos@<vm> docker load
-ssh recommenditos@<vm> "sed -i 's/^API_IMAGE_TAG=.*/API_IMAGE_TAG=$TAG/' .env && docker compose up -d --wait"
+ssh recommenditos@<vm> ./deploy.sh deploy <full commit SHA>
 make smoke SMOKE_URL=http://<vm-host>:<port>
 ```
 
 `--wait` returns once both containers are healthy, and `make smoke` is what says the deployment worked: it runs the [integration suite](#integration-tests) against the VM, without the tests that need the Docker host, and exits non-zero on any failure.
 Run it from outside the VM, because the proxy rules it checks are about requests from outside.
-On Windows, run these in Git Bash or WSL: Windows PowerShell 5 corrupts binary data in a pipe.
-Without either, save to a file instead: `docker save -o api.tar recommenditos-api:$TAG`, `scp api.tar recommenditos@<vm>:`, `ssh recommenditos@<vm> docker load -i api.tar`.
 
-A change to `compose.yaml` or `nginx.conf` reaches the VM by copying it and starting the stack again:
+The rollback is rehearsed against the local stack by `tests/integration/test_deploy_rollback.py`, part of `make test-integration` and CI's integration job.
+It copies the VM's stack directory (`compose.yaml`, `nginx.conf`, `.env` and `deploy.sh`) into a temporary directory and runs it as a second Compose project on a port of its own.
+It deploys the image under test, then the same image with a server that exits as soon as it starts, and checks that the first tag is back in `.env`, runs and answers through the proxy; a second test checks `deploy.sh rollback`, the step that follows a failed smoke check.
+A third test closes `deploy.sh`'s output as soon as it starts the broken tag, as a cancelled run or a lost SSH connection would, and checks that the rollback still finishes; a fourth checks that a deploy removes the image of the tag two deploys back and keeps the rest.
+The drill's tags are full commit SHAs, the only tags `deploy.sh` accepts.
+On a laptop on 2026-10-22, `deploy.sh deploy` of the broken tag returned 7 s after it started, with the previous tag serving again, and the four tests took 62 s.
+CI's integration job runs beside the `Tests` job, which took 5 minutes on the pull request that added the drill, so the drill does not lengthen a CI run.
+
+**Fallback without GHCR.** From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`, the image is built locally, given the name the VM's `.env` expects and streamed to the VM:
 
 ```bash
-scp deploy/compose.yaml deploy/nginx.conf recommenditos@<vm>:
+TAG=$(git rev-parse HEAD)
+IMAGE=ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api
+make image IMAGE_TAG=$TAG                    # recommenditos-api:<full commit SHA>
+docker tag recommenditos-api:$TAG $IMAGE:$TAG
+docker save $IMAGE:$TAG | gzip | ssh recommenditos@<vm> docker load
+ssh recommenditos@<vm> ./deploy.sh deploy $TAG
+make smoke SMOKE_URL=http://<vm-host>:<port>
+```
+
+`deploy.sh` finds the image on the VM and does not pull it.
+On Windows, run these in Git Bash or WSL: Windows PowerShell 5 corrupts binary data in a pipe.
+Without either, save to a file instead: `docker save -o api.tar $IMAGE:$TAG`, `scp api.tar recommenditos@<vm>:`, `ssh recommenditos@<vm> docker load -i api.tar`.
+
+A change to `compose.yaml`, `nginx.conf` or `deploy.sh` reaches the VM by running the [bootstrap](#first-time-bootstrap-a-fresh-vm) again, then starting the stack again:
+
+```bash
+scp -r deploy <admin>@<vm>:
+ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
 ssh recommenditos@<vm> docker compose up -d --wait
 ```
 
@@ -220,12 +257,50 @@ ssh recommenditos@<vm> docker compose up -d --wait
 On the VM, as `recommenditos`:
 
 ```bash
-docker image ls recommenditos-api            # the tags the VM holds
-sed -i 's/^API_IMAGE_TAG=.*/API_IMAGE_TAG=<previous>/' .env && docker compose up -d --wait
+./deploy.sh status                           # the tag that runs, its health and the previous tag
+./deploy.sh rollback                         # start the previous tag again
+./deploy.sh deploy <full commit SHA>         # start any tag CD pushed
+cat deploy-history.log                       # every deploy and rollback, with its time and outcome
+cat deploy-last-run.log                      # the whole output of the last deploy or rollback
 docker compose ps                            # state and health of both containers
 docker compose logs -f --tail 100            # both logs, joined by request_id (api.md#following-one-request)
-docker image rm recommenditos-api:<old>      # each tag costs disk, of which there is 20 GB
 ```
+
+`rollback` goes back one step, to the tag that ran before the last deploy; to go further back, deploy an older tag.
+After a successful deploy, `deploy.sh` removes the images of the tags it deployed before, except the one that runs and the previous one, since each costs disk, of which there is 20 GB; any other tag can be pulled again.
+
+### Turn continuous deployment on
+
+The `Deploy` workflow is off until the repository variable `DEPLOY_VIA` is set: until then each run is green and its summary says that deploying is off.
+Its deploying job, the one in the Environment `production`, runs only once it is on.
+GitHub's documentation says that running a workflow that references a missing environment creates it, without any protection; whether a skipped job does that too is not documented, so `production` may already exist, empty, after the first run.
+Once `DEPLOY_VIA` is set, a missing variable or secret fails the run with a line naming it.
+The workflow reaches the VM over SSH from a GitHub-hosted runner, option A of [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198); if the [lab checklist](#lab-checklist) finds the VM's SSH port unreachable from outside, a self-hosted runner on the VM replaces the step `Reach the VM` and the job's `runs-on`, and nothing else.
+
+After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by hand, and once the GHCR package `mlops_recommenditos/api` is public (see [Continuous delivery](#continuous-delivery)), since the VM pulls without a credential; `docker manifest inspect ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:latest` answers without logging in once it is:
+
+1. **The deploy key.** Generate a key pair for CD alone, on a laptop: `ssh-keygen -t ed25519 -N '' -C recommenditos-cd -f cd_key`.
+   Append its public half to `/opt/recommenditos/.ssh/authorized_keys` on the VM, restricted to `deploy.sh`, so it can do nothing but deploy, roll back and report the tag (NFR-15):
+
+    ```text
+    command="/opt/recommenditos/deploy.sh",restrict ssh-ed25519 AAAA... recommenditos-cd
+    ```
+
+    sshd passes the command the workflow asks for to `deploy.sh` in `SSH_ORIGINAL_COMMAND`, and `deploy.sh` refuses anything but `deploy <tag>`, `rollback` and `status`; `restrict` turns off port, agent and X11 forwarding and the terminal.
+2. **The host key**, pinned so the runner connects to the VM and nothing else: `ssh-keyscan -p <ssh-port> <vm-host>` from a trusted network, compared with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the VM.
+3. **The Environment `production`:** create it (**Settings**, **Environments**, **New environment**), or open it if a run has already created it, and limit **Deployment branches and tags** to `main`; `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/environments --jq '.environments[] | [.name, (.deployment_branch_policy | tostring)]'` shows both. It holds:
+
+    | Name | Kind | Value |
+    |------|------|-------|
+    | `VM_SSH_KEY` | secret | the private half, `cd_key`; then delete the local copy |
+    | `VM_HOST` | variable | the VM's public host name or address |
+    | `VM_SSH_PORT` | variable | the forwarded SSH port, if it is not 22 |
+    | `VM_USER` | variable | `recommenditos` is the default; set it only if it differs |
+    | `VM_KNOWN_HOSTS` | variable | the lines of step 2 |
+    | `SMOKE_URL` | variable | `http://<vm-host>:<port>`, the address `make smoke` checks |
+
+4. **The switch:** the repository variable `DEPLOY_VIA` = `ssh` (**Settings**, **Secrets and variables**, **Actions**, **Variables**).
+5. **The first run:** run the workflow by hand with the SHA of the newest image, then check its summary and the [rollback drill](#every-deploy) on the VM: deploy a tag whose image does not start, or one whose smoke check fails, and link the run that put the previous tag back in [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198).
 
 ## Lab checklist
 
@@ -276,8 +351,7 @@ That loses the image as the unit we test and deploy, so we would ask for Docker 
 
 ## What M5 adds
 
-- CD deploys the SHA tag that [continuous delivery](#continuous-delivery) pushed over SSH with `docker compose pull && docker compose up -d --wait`, then runs `make smoke` and puts the previous tag back if it fails (NFR-13).
-  The steps of [Every deploy](#every-deploy) are what CD automates; `API_IMAGE_TAG` in the VM's `.env` is already the variable it sets.
+- Continuous deployment to the VM: the `Deploy` workflow and `deploy.sh` with its rollback are built and rehearsed against the local stack ([Every deploy](#every-deploy)); turning them on needs the VM ([Turn continuous deployment on](#turn-continuous-deployment-on)), and so does the rollback drill on the VM itself and NFR-05's reboot check (NFR-13, FR-15).
 - `trivy` scans the image before it is deployed (NFR-09).
 - The containers are hardened ([#200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200)): a read-only root file system, no capabilities, `no-new-privileges`, and limits on memory and processes, as [the Compose bullet above](#the-stack) describes and the integration suite checks.
 - Recovery from a hung API: a container that stays unhealthy is restarted, for example by a watchdog that restarts unhealthy containers, since Docker's restart policy covers only a process that exits.
