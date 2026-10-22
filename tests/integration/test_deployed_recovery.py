@@ -19,7 +19,7 @@ from tests.integration.conftest import Container, docker
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 
-#: NFR-05: back within 30 seconds of a crash.
+#: NFR-05: back within 30 seconds of a crash or a hang.
 RECOVERY_S = 30
 
 #: The API's tmpfs mounts (deploy/compose.yaml) with the owner and mode they keep

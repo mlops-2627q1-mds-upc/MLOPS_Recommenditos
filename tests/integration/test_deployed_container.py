@@ -92,29 +92,44 @@ def test_the_image_holds_the_package_of_the_checkout(api_container):
     )
 
 
-#: The process whose view the hardening tests read: the container's main process.
-MAIN_PID = 1
+#: What Docker's `--init` (Compose's `init: true`) runs as PID 1 in front of the command.
+DOCKER_INIT = "/sbin/docker-init"
 
 
-def process_status(container, pid: int = MAIN_PID) -> dict[str, str]:
-    """The fields of `/proc/<pid>/status` in the container."""
+def main_pid(container) -> int:
+    """The PID of the image's command in the container, whose view the hardening tests read.
+
+    It is PID 1, or the init's one child when Docker's init runs in front of it,
+    as it does for the API (EDN-93).
+    """
+    if container.exec("cat", "/proc/1/cmdline").split("\0")[0] != DOCKER_INIT:
+        return 1
+    children = container.exec("cat", "/proc/1/task/1/children").split()
+    assert len(children) == 1, f"Docker's init runs {len(children)} processes, not the one command"
+    return int(children[0])
+
+
+def process_status(container, pid: int | None = None) -> dict[str, str]:
+    """The fields of `/proc/<pid>/status` in the container, of its command by default."""
+    pid = main_pid(container) if pid is None else pid
     lines = container.exec("cat", f"/proc/{pid}/status").splitlines()
     return dict(line.split(":\t", 1) for line in lines if ":\t" in line)
 
 
-def root_mount_options(container, pid: int = MAIN_PID) -> list[str]:
-    """The mount options of the root file system, from `/proc/<pid>/mounts` in the container."""
+def root_mount_options(container, pid: int | None = None) -> list[str]:
+    """The mount options of the root file system, as `/proc/<pid>/mounts` lists them."""
+    pid = main_pid(container) if pid is None else pid
     for line in container.exec("cat", f"/proc/{pid}/mounts").splitlines():
         _, mount_point, _, options, *_ = line.split()
         if mount_point == "/":
             return options.split(",")
-    pytest.fail("the container has no root mount in /proc/1/mounts")
+    pytest.fail(f"the container has no root mount in /proc/{pid}/mounts")
 
 
 @pytest.mark.req("NFR-09")
 @pytest.mark.parametrize("service", ["api", "proxy"])
 def test_the_container_has_a_read_only_root_and_no_privileges(service, request):
-    """Compose's hardening, as configured and as the main process sees it."""
+    """Compose's hardening, as configured and as the image's command sees it."""
     container = request.getfixturevalue(f"{service}_container")
     host_config = container.inspect()["HostConfig"]
     status = process_status(container)
