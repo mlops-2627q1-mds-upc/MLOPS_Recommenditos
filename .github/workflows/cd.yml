@@ -1,0 +1,262 @@
+name: CD
+
+# The API image of every merge to main, built with the model and comparables
+# index that dvc.lock points to (FR-12, EDN-08), tested as a Compose stack with
+# the integration suite, and pushed to GHCR as :<commit SHA> and :latest (NFR-13,
+# EDN-91). docs/docs/deployment.md#continuous-delivery describes it.
+#
+# Started by a finished CI run rather than by the push itself, so that a commit
+# whose CI failed never publishes an image. `workflow_run` always runs this file
+# as it is on main, with github.sha and github.ref of main's tip; the commit CI
+# tested is github.event.workflow_run.head_sha, and every step works on that one,
+# never on the tip, which a later merge may already have moved.
+#
+# A manual run (Actions, CD, Run workflow) builds main's tip again, for a run
+# that failed on something outside the commit, such as a registry outage. It
+# runs only from main, and only when CI passed on that commit too.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One publication at a time, never cancelled: a cancelled run would leave its
+# commit without an image. GitHub keeps at most one run waiting behind the
+# running one, so of several quick merges the newest is built; the others keep
+# their CI result and no image.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  # NFR-13: a merge deploys unless it touches nothing but docs/, reports/ and
+  # the Markdown files at the top level. Stated as that exclusion, so a path
+  # nobody thought of builds once too often instead of never. `workflow_run` has
+  # no paths filter, so the commit's own diff decides: main takes only squash
+  # merges, so each commit there is one merge and its first parent the main it
+  # was merged into. A manual run always builds.
+  changes:
+    name: Decide whether to build
+    if: >-
+      (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_repository.full_name == github.repository)
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      # `actions: read` for a manual run, which looks up CI's result itself.
+      actions: read
+      contents: read
+    outputs:
+      deploy: ${{ steps.diff.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check that CI passed on this commit (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$SHA" \
+            --event push --limit 1 --json conclusion --jq '.[0].conclusion // "none"')
+          if [ "$conclusion" != success ]; then
+            echo "::error::CI on $SHA concluded '$conclusion', so CD does not publish it."
+            echo "CI on \`$SHA\` concluded \`$conclusion\`, so no image is built." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - id: diff
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only HEAD^ HEAD)
+          deploying=$(grep -Ev '^(docs/|reports/|[^/]+\.md$)' <<< "$changed" || true)
+          if [ -n "$deploying" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Commit \`$SHA\` changes only docs/, reports/ or top-level Markdown files, so no image is built (NFR-13)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  publish:
+    name: Build, test and push the API image
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The DagsHub credentials are secrets of this environment, which only main
+    # may use (EDN-91). Pull requests never reach this job (NFR-15).
+    environment: dagshub
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # The bundle the Dockerfile copies; deployment.md's manual deploy pulls the same.
+      MODEL_VARIANT: lgbm-basic
+      # The tag the Compose stack runs below (deploy/compose.yaml reads it).
+      API_IMAGE_TAG: cd
+    steps:
+      - name: Note the start time
+        run: echo "STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          # The whole history, so the push below can tell whether :latest is older.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Name the image
+        # GHCR names are lowercase; the repository's name is not. The creation
+        # time is the OCI label's.
+        shell: bash
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/api" >> "$GITHUB_ENV"
+          echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Pull the model bundle and the comparables index that dvc.lock points to
+        # The only step that sees the DagsHub token. DVC's HTTP remote reads no
+        # environment variable, so the credentials go into .dvc/config.local, as
+        # on a laptop, and are deleted again when the step ends, whatever the
+        # outcome. The build context never includes that file (.dockerignore).
+        shell: bash
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_USER_TOKEN: ${{ secrets.DAGSHUB_USER_TOKEN }}
+        run: |
+          if [ -z "$DAGSHUB_USERNAME" ] || [ -z "$DAGSHUB_USER_TOKEN" ]; then
+            msg="The secrets DAGSHUB_USERNAME and DAGSHUB_USER_TOKEN of the environment 'dagshub' did not reach the job: check that they exist and that the environment lets main deploy."
+            echo "::error::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          trap 'rm -f .dvc/config.local' EXIT
+          uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
+          uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
+          uv run dvc pull "models/$MODEL_VARIANT" data/processed/comparables.parquet
+      - uses: docker/setup-buildx-action@v4
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          build-args: MODEL_VARIANT=${{ env.MODEL_VARIANT }}
+          # Into the runner's Docker, to be tested before anything is pushed.
+          load: true
+          push: false
+          tags: |
+            recommenditos-api:${{ env.API_IMAGE_TAG }}
+            ${{ env.IMAGE }}:${{ env.SHA }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SHA }}
+            org.opencontainers.image.version=${{ env.SHA }}
+            org.opencontainers.image.created=${{ env.CREATED }}
+            org.opencontainers.image.title=Recommenditos API
+          # Layers in the GitHub Actions cache: an unchanged uv.lock reuses the
+          # environment's layer, so a model promotion rebuilds only the bundle's.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Check the image size (NFR-04, at most 1 GB)
+        shell: bash
+        run: |
+          size=$(docker image inspect --format '{{.Size}}' "recommenditos-api:$API_IMAGE_TAG")
+          echo "IMAGE_SIZE_MB=$((size / 1000000))" >> "$GITHUB_ENV"
+          echo "The image is $((size / 1000000)) MB."
+          if [ "$size" -gt 1000000000 ]; then
+            echo "::error::The image is $((size / 1000000)) MB, above NFR-04's 1 GB."
+            exit 1
+          fi
+      - name: Generate the API key of this run
+        # As in CI's integration job: a fresh key, masked before it reaches
+        # $GITHUB_ENV, which GitHub prints in each later step's env header.
+        run: |
+          key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+          echo "::add-mask::$key"
+          echo "RECOMMENDITOS_API_KEY=$key" >> "$GITHUB_ENV"
+      - name: Start the stack with the built image
+        run: docker compose -f deploy/compose.yaml up -d --no-build --wait
+      - name: Run the integration suite against the versions in dvc.lock
+        # No RECOMMENDITOS_EXPECTED_* override: /health has to report the hashes
+        # dvc.lock records for the bundle and the index (FR-12).
+        run: make test-integration
+      - name: Read the versions the image serves
+        shell: bash
+        run: |
+          health=$(curl -fsS http://localhost:8080/health)
+          echo "MODEL_VERSION=$(jq -r '.model.variant + " " + .model.version' <<< "$health")" >> "$GITHUB_ENV"
+          echo "COMPARABLES_VERSION=$(jq -r '.comparables.version' <<< "$health")" >> "$GITHUB_ENV"
+      - name: Print the container logs
+        if: failure()
+        run: docker compose -f deploy/compose.yaml logs --no-color --timestamps
+      - name: Tear the stack down
+        if: always()
+        run: docker compose -f deploy/compose.yaml down --volumes
+
+      # #199 adds the image scan here: after the tests, before the push.
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push :<commit SHA> and move :latest forward
+        # :latest only moves forward: when the CI runs of two merges finish in
+        # the opposite order, the older commit's run must not take :latest back.
+        # It stays only where it names a newer commit that contains this one.
+        shell: bash
+        run: |
+          if ! docker push "$IMAGE:$SHA"; then
+            msg="Pushing $IMAGE:$SHA failed. If the log above says denied or forbidden: the organisation must let members create packages, and an existing package must give this repository the Write role under Manage Actions access."
+            echo "::error::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          latest=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{json .Image}}' 2>/dev/null \
+            | jq -r '[.. | objects | .Labels? // empty | .["org.opencontainers.image.revision"] // empty][0] // empty' \
+            || true)
+          if [ -n "$latest" ] && [ "$latest" != "$SHA" ] && git merge-base --is-ancestor "$SHA" "$latest" 2>/dev/null; then
+            echo "::notice::Not moving :latest: it is $latest, a newer commit than $SHA."
+            echo "LATEST=kept on \`$latest\`, a newer commit" >> "$GITHUB_ENV"
+          else
+            docker tag "$IMAGE:$SHA" "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+            echo "LATEST=moved" >> "$GITHUB_ENV"
+          fi
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$SHA")
+          echo "DIGEST=${digest#*@}" >> "$GITHUB_ENV"
+      - name: Write the job summary
+        shell: bash
+        run: |
+          {
+            echo "### API image of \`$SHA\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Pushed | \`$IMAGE:$SHA\` |"
+            if [ "$LATEST" = moved ]; then
+              echo "| Also tagged | \`$IMAGE:latest\` |"
+            else
+              echo "| \`:latest\` | $LATEST |"
+            fi
+            echo "| Digest | \`$DIGEST\` |"
+            echo "| Model (variant, version) | \`$MODEL_VERSION\` |"
+            echo "| Comparables index version | \`$COMPARABLES_VERSION\` |"
+            echo "| Size | $IMAGE_SIZE_MB MB (NFR-04: at most 1,000 MB) |"
+            echo "| Job runtime | $(( ($(date +%s) - STARTED_AT) / 60 )) min $(( ($(date +%s) - STARTED_AT) % 60 )) s |"
+          } >> "$GITHUB_STEP_SUMMARY"
