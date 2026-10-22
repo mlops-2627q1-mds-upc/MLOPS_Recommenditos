@@ -73,15 +73,16 @@ services:
       # The number of uvicorn worker processes; the load test runs with 2 to
       # check NFR-03's exactly-once logging (docs/docs/load-testing.md).
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
-    # NFR-04 caps the API at 1 GB. 768 MiB is 1.3 times the most it used in the
-    # laptop load tests of 2026-10-22, with two workers at 20 requests/s: 581 MiB
-    # in `docker stats` (the dry run of reports/loadtest/ measured 566 MiB), and
-    # 598 MiB in the cgroup's `memory.peak`, which includes the start-up and the
-    # page cache. One worker, the default, needs less. Re-check against the VM
-    # run of #143.
+    # NFR-04 caps the API at 1 GB. 768 MiB is 1.2 to 1.3 times the most it used in
+    # four laptop load tests of 2026-10-22 (#200), two workers at 20 requests/s for
+    # 60 s, with and without these limits: 606 MiB in `docker stats` (the dry run
+    # in reports/loadtest/ measured 566 MiB), and 634 MiB in the cgroup's
+    # `memory.peak`, which includes the start-up and reclaimable page cache. One
+    # worker, the default, holds 248 MiB idle against two workers' 539 MiB
+    # (docs/docs/deployment.md). Re-check against the VM run of #143.
     mem_limit: 768m
     memswap_limit: 768m
-    # Processes and threads: 33 at most in the same load tests. Each worker can
+    # Processes and threads: 33 at most in the same load tests (`pids.peak`). Each worker can
     # hold its event loop, up to 40 threads of the pool that runs the routes, the
     # scoring thread and the log's pruning thread, about 45, so 256 leaves room
     # for four workers and still stops a thread leak like #179's, 137 to 345
@@ -118,7 +119,7 @@ services:
     # buffers. Owned by its user, 101, for the same reason as the API's tmpfs.
     tmpfs:
       - /tmp:uid=101,gid=101,mode=0700,size=16m
-    # 14 MB and 15 processes at most in the same load tests, with one worker per
+    # 20 MB and 15 processes at most in the same load tests, with one worker per
     # CPU of the laptop's eight (`worker_processes auto`): 64 MiB and 64
     # processes leave room for a larger host.
     mem_limit: 64m

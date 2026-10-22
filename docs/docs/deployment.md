@@ -41,7 +41,7 @@ What each part guarantees:
   Neither needed a capability back or any other exception.
   The API needed one writable path more than its metric files: a tmpfs on `/tmp`, where SQLite writes a sort too large for its cache and Python's `tempfile` writes; without it a large query of the prediction log fails with "disk I/O error".
   nginx's unprivileged image writes only its pid file and buffered bodies, all under `/tmp`, which is a tmpfs too.
-  Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, each about 1.3 times or more the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements, and the VM's [load test](load-testing.md#run-it-on-the-vm) re-checks them.
+  Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, at least 1.2 times the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements, and the VM's [load test](load-testing.md#run-it-on-the-vm) re-checks them.
   A container that exceeds its memory limit is killed by the kernel and restarted like after a crash.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
