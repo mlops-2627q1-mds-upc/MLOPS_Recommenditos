@@ -57,6 +57,8 @@ The counts and percentiles come from Locust's `--json-file` statistics, which Lo
 Locust's latency includes nginx and the network between Locust and the VM, and Locust rounds times above 100 ms to two significant digits.
 The `/metrics` shares are measured inside the API, from the request reaching it to its last byte, so they exclude both.
 Every 4xx or 5xx answer is an error.
+`run.py` does not record restarts: on the VM, compare the API container's `RestartCount` (`docker inspect -f '{{.RestartCount}}' recommenditos-api-1`) before and after the run.
+It has to stay the same, because a restart during the run means the healthcheck took the loaded API for a hung one ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [Deployment](deployment.md)).
 
 **What CodeCarbon measures.**
 CodeCarbon runs in `machine` mode, because its `process` mode measures only the process that runs it and its children, and the API runs in a container.

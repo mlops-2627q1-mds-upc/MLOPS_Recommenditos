@@ -138,6 +138,7 @@ def _signal(image: str, pids: list[int], name: str) -> None:
         "        pass\n"
     )
     docker(
-        "run", "--rm", "--pid=host", "--user=0", "--network=none", "--entrypoint=python", image,
+        "run", "--rm", "--pid=host", "--user=0", "--network=none", "--no-healthcheck",
+        "--entrypoint=python", image,
         "-c", script,
     )  # fmt: skip

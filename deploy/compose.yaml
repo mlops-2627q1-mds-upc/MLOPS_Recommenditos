@@ -102,11 +102,11 @@ services:
     # The test is the image's HEALTHCHECK (recommenditos/api/healthcheck.py).
     # Probed every second while the API starts, so nginx and `--wait` see it
     # healthy as soon as it is, then every 10 s. After the start period, a probe
-    # that gets no answer in two attempts of 2 s ends the hung server, which
+    # that gets no answer in two attempts of 6 s ends the hung server, which
     # comes back within NFR-05's 30 s (EDN-93); the timeout leaves room for both.
     healthcheck:
       interval: 10s
-      timeout: 6s
+      timeout: 15s
       start_period: 60s
       start_interval: 1s
       retries: 3

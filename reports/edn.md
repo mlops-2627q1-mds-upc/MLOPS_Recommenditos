@@ -1252,15 +1252,16 @@ How to add an entry:
 - **Activity / Topic:** Containerization, Reliability
 - **Participants:** @lukas2510 decided ([issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185))
 - **Decision:** Compose runs Docker's init in front of the API (`init: true`).
-  After the 60 s start period, a healthcheck probe that gets no answer from `/health` in two attempts of 2 s kills the server; the init exits and `restart: unless-stopped` restarts the container.
+  After the 60 s start period, a probe that gets no answer from `/health` in two attempts of 6 s kills the init's children; the init exits and `restart: unless-stopped` restarts the container.
   Known limit: with several workers one hung worker goes unnoticed, so the API runs one worker until the VM's load test (#143).
 - **Alternatives considered:**
-  - An autoheal sidecar (18.4 s): it needs the Docker socket, which is root on the host, against the hardening of #200.
+  - An autoheal sidecar (18.4 s): the Docker socket it needs is root on the host, against the hardening of #200.
   - A watchdog on the VM (19.2 s): changes to the VM that CI cannot test.
   - gunicorn's worker timeout: catches one hung worker among several, but adds two serving dependencies, does not run on Windows and misses a full threadpool.
-  - uvicorn's supervisor: replaces a frozen worker, not one whose event loop is blocked.
-- **Rationale:** With the server frozen by SIGSTOP, the old stack was still down after 75 s; with the probe, `/health` answered again after 8.2 to 13.6 s in four runs, at most about 18 s, under #200's hardening and with no new package, image or privilege.
-  The init is needed because the kernel ignores a kill sent inside the container to its PID 1.
+  - uvicorn's supervisor: misses a blocked event loop.
+- **Rationale:** With the server frozen by SIGSTOP, the old stack was still down after 75 s.
+  A prototype under #200's hardening recovered in 16.1 s with one worker and 17.2 s with two; the final probe FINAL_NUMBERS.
+  The worst case is 10 s interval + 2 × 6 s + 4 s restart = 26 s; under load, a kill needs about 128 requests of 47 ms queued ahead of `/health`, more than the load test's 80 users.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found the options, measured each on the stack or a small test server, and recommended the probe, which @lukas2510 chose.
