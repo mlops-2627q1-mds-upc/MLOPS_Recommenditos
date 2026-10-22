@@ -29,8 +29,9 @@ on:
         type: boolean
         default: false
 
-# Two retrains never overlap: the second waits, and is not cancelled, so a
-# request is never lost.
+# Two retrains never overlap: a running one is never cancelled, and a second
+# request waits for it. GitHub keeps one waiting run per group, so a third
+# request replaces the waiting second; both would retrain the same `main`.
 concurrency:
   group: retrain
   cancel-in-progress: false
@@ -73,10 +74,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      # Restores main's cache and never saves one, like every job but a push to
+      # main (ci.yml).
       - uses: astral-sh/setup-uv@v10.1.0
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: false
       - run: uv sync --locked
 
       # The DVC credentials live in the gitignored .dvc/config.local only while a

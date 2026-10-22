@@ -1177,6 +1177,29 @@ How to add an entry:
 - **Other evidence:** [PR #169](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/169), [per-make coverage table](metrics/interval-coverage-by-make.csv), [split analysis](analysis/split_strategy_results.txt), EDN-32 and EDN-85.
 - **In LaTeX:** yes
 
+### EDN-91: A green CI run on `main` publishes the API image to a public GHCR package
+
+- **Date:** 2026-10-22
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** CI/CD, Containerization, Security
+- **Participants:** @lukas2510 decided ([issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197))
+- **Decision:** A workflow of its own, `cd.yml`, runs after CI passed on a push to `main` that changes more than documentation.
+  It pulls the model with a DagsHub token from the GitHub Environment `dagshub`, which only `main` may use, tests the image as a Compose stack, and pushes it to a public GHCR package.
+- **Alternatives considered:**
+  - A read-only DagsHub account for CI: one more account, against a threat a three-person team with branch protection does not face.
+  - A private package with a read token on the VM: a credential on a shared university machine, for an image without secrets or personal data.
+  - A job in `ci.yml`: the secret would sit in the workflow pull requests run, and the job would have to wait for every other job.
+- **Rationale:** DagsHub tokens have no read-only scope, so the protection is where the token can be used: one step of one job, after a push to `main`, never on a pull request (NFR-15).
+  The API key reaches the container at run time, so the public image holds only code and the model the model card describes.
+  Built locally with the workflow's steps, the image is 704 MB (NFR-04: 1 GB) and passes the 27 integration tests against `dvc.lock`'s hashes.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the three questions with their options in the issue and recommended the chosen ones; @lukas2510 decided all three as recommended.
+  AI then wrote the workflow and checked the build, the size gate, and the integration suite locally with the real model.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 planning Milestone 5: the options and recommendations of issue #197.
+- **Other evidence:** [Issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197), [PR #207](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/207), [`cd.yml`](../.github/workflows/cd.yml), [deployment docs](../docs/docs/deployment.md#continuous-delivery), EDN-08.
+- **In LaTeX:** yes
+
 ### EDN-92: A manually started GitHub Actions workflow retrains and opens the promotion pull request
 
 - **Date:** 2026-10-22

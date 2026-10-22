@@ -3,8 +3,8 @@ Deployment
 
 The API runs as a Docker Compose stack of two containers: the API image, which holds the serving runtime and one model bundle, and nginx in front of it.
 The same stack runs on a laptop and on the FIB Virtech VM ([EDN-87](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-This page says what the stack guarantees, how to run it locally, how to set up a fresh VM and deploy to it, and what to check at the lab session where we get the VM.
-Milestone 5 adds CI/CD, the image scan and the hardening on top of this stack ([What M5 adds](#what-m5-adds)).
+This page says what the stack guarantees, how to run it locally, how CI builds and publishes the image, how to set up a fresh VM and deploy to it, and what to check at the lab session where we get the VM.
+Milestone 5 adds CI/CD, the image scan and the hardening on top of this stack ([Continuous delivery](#continuous-delivery), [What M5 adds](#what-m5-adds)).
 
 > **Unverified: everything about the VM.**
 > We get access to the VM at the lab on 2026-10-27.
@@ -105,14 +105,57 @@ The tests that need the Docker host, the crash test among them, run when that UR
 CI's `Integration (Compose stack)` job runs the suite on every pull request that touches the package, the `Dockerfile`, `deploy/`, the dependencies or the suite.
 CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version and writes a comparables index of the same fixture to `data/processed/comparables.parquet`), builds the image around both, starts the stack, runs the suite with their versions as the expected ones, prints both containers' logs if anything failed and always tears the stack down.
 
+## Continuous delivery
+
+The `CD` workflow ([`.github/workflows/cd.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/cd.yml)) builds the API image of every merge to `main` and pushes it to GHCR (NFR-13, [EDN-91](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)):
+
+```text
+ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<full commit SHA>
+ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:latest
+```
+
+It starts when a CI run on a push to `main` finishes, and only if that run passed, so a commit whose CI failed never publishes an image.
+It works on the commit CI tested (`github.event.workflow_run.head_sha`), not on the tip of `main`, which a later merge may have moved.
+A commit that changes nothing but `docs/`, `reports/` and the Markdown files at the top level builds nothing; the run is green and its summary says so.
+A manual run (**Actions**, **CD**, **Run workflow** on `main`) builds the tip of `main` again if CI passed on it, for a run that failed on something outside the commit, such as a registry outage.
+A failed step that depends on a GitHub setting, the DagsHub secrets or the permission to push the package, says in the job summary which setting to check.
+
+For every other commit, one job:
+
+1. pulls `models/lgbm-basic` and `data/processed/comparables.parquet` at the versions `dvc.lock` points to (FR-12, EDN-08);
+2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache;
+3. fails if the image is larger than 1 GB (NFR-04);
+4. starts the Compose stack with it and runs the [integration suite](#integration-tests) with no expected-version override, so `/health` has to report the hashes `dvc.lock` records;
+5. pushes `:<commit SHA>` and moves `:latest` to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
+6. writes the pushed tags, the digest, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
+
+Only the `dvc pull` step sees the DagsHub token.
+It is a secret of the GitHub Environment `dagshub`, which only `main` may use, and the step writes it into `.dvc/config.local`, as on a laptop, and deletes that file when it ends.
+The job's token may read the repository and write packages, nothing more.
+The trivy scan of [#199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199) goes between the tests and the push.
+
+The builder stage's layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged skips the `uv sync` of the third-party dependencies.
+The runtime stage copies the whole environment as one layer of 536 MB (`docker history`) that holds the `recommenditos` package too, so a change to the package or the lock rebuilds and pushes that layer; a model promotion, which changes only `dvc.lock`, reuses it and rebuilds only the bundle's 45 MB layer.
+The job summary states each run's runtime.
+Built locally with the job's steps on 2026-10-22, the image was 704 MB and passed the 27 tests of the integration suite against the hashes `dvc.lock` records.
+
+The package is public, so the VM and anyone else pull it without a credential; the image holds no secret and no personal data, as the API key is passed at run time.
+GHCR creates a new package as private, so after the first push an organisation owner makes it public once: the organisation's **Packages** tab, `mlops_recommenditos/api`, **Package settings**, **Change visibility**, **Public**.
+After that, any commit's image can be checked from anywhere:
+
+```bash
+docker pull ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<SHA>
+docker inspect --format '{{json .Config.Labels}}' ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<SHA>
+```
+
 ## Deploy to the VM
 
 ### How the image gets there
 
-Until CD exists, the image is built on a laptop and streamed to the VM with `docker save | ssh docker load`.
+Until CD deploys ([#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198)), the image is built on a laptop and streamed to the VM with `docker save | ssh docker load`.
 The VM then needs Docker and three files, and none of the repository, uv, DVC or a DagsHub token, which would otherwise sit on a shared university machine.
 It also keeps the DVC cache and the build cache off the VM's 20 GB disk (NFR-04).
-In M5, CD builds the same image in GitHub Actions and the VM pulls it from GHCR instead.
+Once #198 is in, the VM pulls the image that [continuous delivery](#continuous-delivery) pushed to GHCR instead.
 
 ### First time: bootstrap a fresh VM
 
@@ -227,7 +270,7 @@ That loses the image as the unit we test and deploy, so we would ask for Docker 
 
 ## What M5 adds
 
-- CI builds the image on every merge to `main`, tags it with the commit SHA, pushes it to GHCR, and CD deploys it over SSH with `docker compose pull && docker compose up -d --wait`, then runs `make smoke` and puts the previous tag back if it fails (NFR-13).
+- CD deploys the SHA tag that [continuous delivery](#continuous-delivery) pushed over SSH with `docker compose pull && docker compose up -d --wait`, then runs `make smoke` and puts the previous tag back if it fails (NFR-13).
   The steps of [Every deploy](#every-deploy) are what CD automates; `API_IMAGE_TAG` in the VM's `.env` is already the variable it sets.
 - `trivy` scans the image before it is deployed (NFR-09).
 - Hardening of the containers: a read-only root file system, dropped capabilities, `no-new-privileges` and memory limits.
