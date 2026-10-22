@@ -463,6 +463,11 @@ Working on a stage
 5. Add tests against the fixture: a module of its own once the stage is more than a stub, as `preprocess` has `tests/test_preprocess.py`, otherwise `tests/test_data.py` or `tests/test_model.py`. Mark the requirement IDs a test verifies with `@pytest.mark.req("NFR-08")`.
 6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`. `dvc repro` runs on the real snapshot, so run `dvc pull` first and the stages your change does not touch stay up to date; a stage you do touch pays the budget above. Set `download.source` to `synthetic` while iterating if you have no credentials, and set it back before you commit a lock, because a lock built from the stand-in is not the one the project ships.
 
+Step 6 holds for every pull request that changes a file a stage lists under `deps`, not only for one that works on a stage, and even when the edit touches only comments: `dvc.lock` records each dependency by its hash, so the stage is stale until `dvc repro` re-runs it.
+`recommenditos/config.py` and `recommenditos/schema.py` are dependencies of every stage.
+When several such pull requests are in flight, merge them first and re-run once afterwards instead of once each, and merge none of them while a tracked re-run is in flight, or its lock is stale again when it lands.
+A new stage writes its outputs outside any directory that other stages depend on as a whole: `evaluate` and `compare-energy` depend on all of `models/`, so one new file there makes both stale.
+
 `dvc.yaml` is hand-edited on purpose.
 `dvc stage add` rewrites the whole file, re-indents every list and line-wraps long commands, which would destroy the comments that explain why each stage is wired the way it is.
 
