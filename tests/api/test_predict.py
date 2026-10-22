@@ -243,7 +243,24 @@ _INVALID = [
     pytest.param("country_code", "US", id="country-outside-the-8"),
     pytest.param("make", 42, id="make-not-a-string"),
     pytest.param("nr_doors", "four", id="optional-not-a-number"),
+    # The schema's types hold as written: no number for a boolean, no numeric
+    # string for a number (found by the contract tests, #144).
+    pytest.param("is_rental", 0, id="flag-a-number"),
+    pytest.param("mileage_km_raw", "45000", id="mileage-a-numeric-string"),
+    pytest.param("nr_doors", 4.5, id="integer-a-fraction"),
 ]
+
+
+@pytest.mark.req("FR-03")
+@pytest.mark.parametrize("month", ["1899-12", "0000-01", _next_month()])
+def test_fr03_a_month_outside_the_range_is_told_the_range(
+    month: str, client: TestClient, listing: dict
+):
+    problem = assert_problem(
+        client.post(PREDICT, json={**listing, "registration_date": month}), 422
+    )
+
+    assert "between 1900-01 and the current month" in problem["errors"][0]["detail"]
 
 
 @pytest.mark.req("FR-03")
@@ -311,6 +328,8 @@ _BOUNDARIES = [
     pytest.param("mileage_km_raw", 1_000_000, id="mileage-1m"),
     pytest.param("power_kw", 1, id="power-1"),
     pytest.param("power_kw", 1_200, id="power-1200"),
+    # JSON Schema counts a whole float as an integer.
+    pytest.param("nr_doors", 4.0, id="integer-a-whole-float"),
 ]
 
 

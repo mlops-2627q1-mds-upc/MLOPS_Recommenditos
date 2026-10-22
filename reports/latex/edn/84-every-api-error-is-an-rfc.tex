@@ -3,14 +3,17 @@
 \ednentry{
   id = {EDN-84},
   title = {Every API error is an RFC 9457 Problem Details object},
+  note = {\textbf{Revised on 2026-10-21}: request bodies are validated strictly against the documented schema.},
   date = {2026-10-20},
   milestone = {M4: Model Deployment},
   topic = {API Design},
   participants = {@lukas2510 decided (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135}{issue \#135})},
-  decision = {Every error response of the API is \texttt{application/\allowbreak{}problem+json} as RFC 9457 defines it: \texttt{type}, \texttt{title}, \texttt{status}, \texttt{detail}, \texttt{instance}, and for a 422 an \texttt{errors} list with one entry per invalid field, holding a JSON Pointer, a message and, for a field with a fixed set of values, the accepted ones.},
+  decision = {Every error response of the API is \texttt{application/\allowbreak{}problem+json} as RFC 9457 defines it: \texttt{type}, \texttt{title}, \texttt{status}, \texttt{detail}, \texttt{instance}, and for a 422 an \texttt{errors} list with one entry per invalid field, holding a JSON Pointer, a message and, for a field with a fixed set of values, the accepted ones.
+A request body is validated strictly against its documented schema, because the Schemathesis contract tests found that lax coercion accepted \texttt{0} as a boolean and \texttt{\textquotedbl{}20500\textquotedbl{}} as a price.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item An error envelope of our own: free to shape, but one more format for every client to learn and for us to document, and FastAPI's 422 needs rewriting for it too.
+\item Lax coercion of request values: forgiving to clients, but the server then accepts what the schema refuses, and \texttt{0} silently becomes \texttt{false}.
 \end{itemize}
 \par
 \emph{Why:} FR-16 requires one shape for validation errors, the scope check, the API key and the body-size limit, so FastAPI's default 422 had to be rewritten whichever shape we chose.
@@ -18,7 +21,7 @@ Only the standard gives a client something it may already parse, which is what t
 Every error path, from a missing field to an unknown route, the 413 of NFR-09 and an unexpected failure, is tested to return the same shape.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},
-  assessment = {AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape.},
+  assessment = {AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape, and on 2026-10-21 laid out strict against lax coercion and recommended strict, which @lukas2510 chose.},
   aievidence = {Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135}{Issue \#135}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151}{PR \#151}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/api.md}{API docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/api/errors.py}{\texttt{errors.\allowbreak{}py}}, \href{https://www.rfc-editor.org/rfc/rfc9457}{RFC 9457}.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135}{Issue \#135}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151}{PR \#151}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/175}{PR \#175}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/api.md}{API docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/api/errors.py}{\texttt{errors.\allowbreak{}py}}, \href{https://www.rfc-editor.org/rfc/rfc9457}{RFC 9457}.},
 }

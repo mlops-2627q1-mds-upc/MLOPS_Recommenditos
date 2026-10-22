@@ -22,28 +22,37 @@ from datetime import UTC, datetime
 import re
 from typing import Annotated, Any, ClassVar
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 # --------------------------------------------------------------------------
 # Field types
 # --------------------------------------------------------------------------
 
-_YEAR_MONTH = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
+#: A month from 1900-01 to 2099-12, so the OpenAPI document states the lower bound
+#: of FR-03 itself; the upper bound moves with the calendar and is checked below.
+_YEAR_MONTH = re.compile(r"^((?:19|20)\d{2})-(0[1-9]|1[0-2])$")
+
+#: Any year: a month outside the range then gets the range in its error rather
+#: than the pattern.
+_ANY_YEAR_MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 #: The earliest registration month FR-03 accepts.
 EARLIEST_REGISTRATION = "1900-01"
 
 
-def _not_after_this_month(value: str) -> str:
-    """FR-03: a registration month lies between 1900-01 and the request month."""
-    match = _YEAR_MONTH.match(value)
-    if match is None:  # the pattern has already refused it; kept for the type checker
-        raise ValueError("must be a month in the form YYYY-MM")
+def _within_registration_range(value: Any) -> Any:
+    """FR-03: a registration month lies between 1900-01 and the request month.
+
+    It runs before the pattern, so `"1899-12"` and next month are both told the
+    range; a value that is no month at all is left to the pattern and the type.
+    """
+    if not isinstance(value, str) or not _ANY_YEAR_MONTH.match(value):
+        return value
     now = datetime.now(UTC)
-    if value < EARLIEST_REGISTRATION or value > f"{now.year:04d}-{now.month:02d}":
+    this_month = f"{now.year:04d}-{now.month:02d}"
+    if not EARLIEST_REGISTRATION <= value <= this_month:
         raise ValueError(
-            f"must lie between {EARLIEST_REGISTRATION} and the current month, "
-            f"{now.year:04d}-{now.month:02d}"
+            f"must lie between {EARLIEST_REGISTRATION} and the current month, {this_month}"
         )
     return value
 
@@ -73,7 +82,7 @@ RegistrationDate = Annotated[
         "current month. The car's age is computed from it at the request date.",
         examples=["2019-06"],
     ),
-    AfterValidator(_not_after_this_month),
+    BeforeValidator(_within_registration_range),
 ]
 MileageKm = Annotated[
     float,
@@ -120,21 +129,42 @@ DriveTrain = Annotated[
     str,
     Field(description="Drive train, one of the served model's.", examples=["Front Wheel Drive"]),
 ]
+
+
+def _integral_float_as_int(value: Any) -> Any:
+    """`4.0` as `4`: JSON Schema counts it as an integer, and strict mode would not."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+#: Follows the `Field` of an integer type, which keeps the bounds in the OpenAPI
+#: document; before it, pydantic writes them as unknown keywords.
+_WHOLE_NUMBER = BeforeValidator(_integral_float_as_int)
+
 # The optional numbers are bounded by what a passenger car can have, not by the
 # training data, which holds data-entry errors such as 99 previous owners or a
 # 16,000 kg car. A value outside reaches no model: it is a 422 (FR-03).
-PreviousOwners = Annotated[int, Field(ge=0, le=20, description="Previous owners, 0 to 20.")]
-Gears = Annotated[int, Field(ge=0, le=12, description="Gears, 0 to 12 (0 for a single-speed EV).")]
-Seats = Annotated[int, Field(ge=1, le=9, description="Seats, 1 to 9.")]
-Doors = Annotated[int, Field(ge=1, le=7, description="Doors, 1 to 7.")]
-Cylinders = Annotated[int, Field(ge=0, le=16, description="Cylinders, 0 to 16 (0 for an EV).")]
+PreviousOwners = Annotated[
+    int, Field(ge=0, le=20, description="Previous owners, 0 to 20."), _WHOLE_NUMBER
+]
+Gears = Annotated[
+    int, Field(ge=0, le=12, description="Gears, 0 to 12 (0 for a single-speed EV)."), _WHOLE_NUMBER
+]
+Seats = Annotated[int, Field(ge=1, le=9, description="Seats, 1 to 9."), _WHOLE_NUMBER]
+Doors = Annotated[int, Field(ge=1, le=7, description="Doors, 1 to 7."), _WHOLE_NUMBER]
+Cylinders = Annotated[
+    int, Field(ge=0, le=16, description="Cylinders, 0 to 16 (0 for an EV)."), _WHOLE_NUMBER
+]
 DisplacementCc = Annotated[
     float,
     Field(
         ge=0, le=10_000, allow_inf_nan=False, description="Engine displacement in cc, 0 to 10,000."
     ),
 ]
-WeightKg = Annotated[int, Field(ge=1, le=10_000, description="Kerb weight in kg, 1 to 10,000.")]
+WeightKg = Annotated[
+    int, Field(ge=1, le=10_000, description="Kerb weight in kg, 1 to 10,000."), _WHOLE_NUMBER
+]
 ElectricRangeKm = Annotated[
     float,
     Field(ge=0, le=2_000, allow_inf_nan=False, description="Electric range in km, 0 to 2,000."),
@@ -158,12 +188,14 @@ class ListingFields(BaseModel):
     """The base of every request body that describes one listing.
 
     It refuses fields it does not know, so that a misspelt optional field is a
-    422 instead of a silently ignored input. The error handler runs the served
+    422 instead of a silently ignored input. It is strict, so a value has the
+    JSON type the OpenAPI document gives it: `0` is not a boolean and `"45000"`
+    is not a number (#144). The error handler runs the served
     model's checks on any body of this type, so a request with a type error and
     an unsupported make gets both in one response (FR-03).
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
     #: The request fields whose values must be levels of the served model (FR-03,
     #: FR-04). `make` is checked against the supported makes, `country_code`

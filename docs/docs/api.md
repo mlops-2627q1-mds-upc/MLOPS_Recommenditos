@@ -363,6 +363,21 @@ The code is in `recommenditos/api/`:
    The fixtures in `tests/api/conftest.py` give an app on a synthetic bundle (`client`, `served`) and a valid listing (`listing`), and `tests/api/helpers.py` checks the problem shape.
    `tests/api/test_openapi.py` walks every operation, so it fails until the new one has a request and a response example and documents its errors as problems (FR-16).
    `tests/api/test_prediction_log.py` posts a listing to every operation tagged `valuation` and fails until it records its answer once.
+   `tests/api/test_contract.py` covers the new operation without a change: Schemathesis generates valid and invalid requests from the OpenAPI document and fails on a 5xx, an undocumented status code, a response that does not match its schema, a valid request refused or an invalid one accepted ([Contract tests](#contract-tests)).
 6. Add `tests/integration/test_deployed_<group>.py` with one valid request through the proxy and the documented shape of its answer; `test_deployed_predict.py` is the example ([Deployment](deployment.md#integration-tests)).
 
 A module the API comes to import has to stay within the serving runtime; [Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#dependencies) explains the check.
+
+## Contract tests
+
+`tests/api/test_contract.py` runs with every `make test` and in CI, against the app in process, with no server and no network.
+Schemathesis reads `/openapi.json` and sends each operation the boundary and invalid values its coverage phase derives from the schema (about 370 requests for `/v1/predict`), up to 50 random valid and invalid requests, and the documented example.
+Generation is deterministic, so every run sends the same requests, and a failure prints a `curl` line that reproduces it.
+For the six operations so far that is about 970 requests in about 18 seconds on a laptop CPU, most of them for `/v1/predict` and `/v1/price-range`.
+An operation behind an API key, such as `/v1/feedback`, gets the test app's key, and Schemathesis also checks that it refuses a request without it.
+
+The OpenAPI document is what a client codes against, so the API keeps to it as written: a request body is strict, and `0` is not a boolean nor `"45000"` a number, while a whole float such as `4.0` is an integer, as JSON Schema defines one.
+A constraint the schema cannot state needs a hook in the test module.
+The one so far is that `registration_date` must not lie after the current month (FR-03): the pattern states the lower bound, 1900-01, and the upper bound moves with the calendar.
+The response schemas allow additional properties, so a field an answer gains without being documented is not caught; a documented field that changes its type or goes missing is.
+A generated feedback names a request ID the prediction log does not hold, so the stored, repeated and conflicting prices of `/v1/feedback` are left to `tests/api/test_feedback.py`.

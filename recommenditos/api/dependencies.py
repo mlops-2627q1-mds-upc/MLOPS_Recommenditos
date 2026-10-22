@@ -40,8 +40,8 @@ def api_metrics(request: Request) -> ApiMetrics:
 
 
 def prediction_store(request: Request) -> PredictionStore:
-    """The store `create_app` opened, from the app's state."""
-    store: PredictionStore = request.app.state.store
+    """The store the app's lifespan opened for this run, from the request's state."""
+    store: PredictionStore = request.state.store
     return store
 
 

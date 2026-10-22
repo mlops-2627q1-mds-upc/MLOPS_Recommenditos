@@ -11,15 +11,21 @@ _REQUEST_ID = "0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f"
 class FeedbackRequest(BaseModel):
     """The price a listing was observed at, for an answer of the API."""
 
+    # Not strict: a JSON body reaches pydantic as Python objects, where strict
+    # mode takes a `UUID` instance only, and a request ID arrives as a string.
     request_id: UUID = Field(
-        description="The `request_id` of the answer the price belongs to, as the API returned it."
+        strict=False,
+        description="The `request_id` of the answer the price belongs to, as the API returned it.",
     )
     observed_price_eur: float = Field(
         gt=0, allow_inf_nan=False, description="The observed asking price in EUR."
     )
 
+    # Strict, like a listing body: a value has the JSON type the OpenAPI document
+    # gives it, so `"20500"` or `true` is not a price (#144).
     model_config = ConfigDict(
         extra="forbid",
+        strict=True,
         json_schema_extra={
             "examples": [{"request_id": _REQUEST_ID, "observed_price_eur": 20500.0}]
         },
