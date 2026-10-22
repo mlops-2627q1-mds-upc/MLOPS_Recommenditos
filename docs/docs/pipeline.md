@@ -491,6 +491,7 @@ Working on a stage
 6. Run `make lint`, `make test` and `dvc repro`, then commit `dvc.lock` and run `dvc push`. `dvc repro` runs on the real snapshot, so run `dvc pull` first and the stages your change does not touch stay up to date; a stage you do touch pays the budget above. Set `download.source` to `synthetic` while iterating if you have no credentials, and set it back before you commit a lock, because a lock built from the stand-in is not the one the project ships.
 
 Step 6 holds for every pull request that changes a file a stage lists under `deps`, not only for one that works on a stage, and even when the edit touches only comments: `dvc.lock` records each dependency by its hash, so the stage is stale until `dvc repro` re-runs it.
+CI's `Pipeline lock (dvc.lock)` job reports such stale stages, with the dependency or parameter that changed, in its job summary and as a warning on the pull request, on every pull request and every push to `main`, without blocking the merge; `uv run python -m tools.stale_lock` runs the same check locally.
 `recommenditos/config.py` and `recommenditos/schema.py` are dependencies of every stage.
 When several such pull requests are in flight, they may merge without the re-run if one pull request re-runs the pipeline and commits `dvc.lock` after the last of them has merged; each of them says that the lock is stale until then.
 None of them merges while a tracked re-run is in flight, or that run's lock is stale when it lands; if one does, the run is repeated on the merged `main`.

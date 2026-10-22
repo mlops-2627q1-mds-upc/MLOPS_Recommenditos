@@ -34,7 +34,9 @@ permissions:
 # run then uses the image the jobs were written and tested on, and moving to a new
 # image is a pull request of its own instead of a red run nobody caused. GitHub
 # supports the 24.04 image well past the course; the arm64 report job already
-# pins ubuntu-24.04-arm.
+# pins ubuntu-24.04-arm. The Windows job does the same with windows-2025-vs2026,
+# the image windows-latest resolved to on 2026-10-22 (#186), so a new Windows
+# image is also a pull request of its own.
 jobs:
   changes:
     name: Detect changed areas
@@ -228,7 +230,7 @@ jobs:
   test-windows:
     name: Tests (Windows)
     needs: changes
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v7
         if: needs.changes.outputs.code == 'true'
@@ -388,6 +390,34 @@ jobs:
           path: |
             reports/requirement-matrix.md
             reports/requirement-matrix.json
+
+  # Reports every stage whose code dependencies or parameters differ from what
+  # `dvc.lock` records, which during M4 went unnoticed until #183 re-ran the whole
+  # pipeline. It only warns (EDN-90, #193): a required check would force a 15-30
+  # minute tracked re-run for every edit of stage code, comments included. So the
+  # step cannot fail the job, and the job is not a required check. The stale
+  # stages go to the job summary, and one warning annotation shows on the pull
+  # request; a check that cannot run says so in both places instead. The logic
+  # is tools/stale_lock.py; it needs no data, no remote and no credentials,
+  # because it skips what `dvc pull` would provide.
+  #
+  # No paths filter: a stale lock on main is worth seeing on every run, and the
+  # job costs a `uv sync` and a few seconds of `dvc status`.
+  stale-lock:
+    name: Pipeline lock (dvc.lock)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
+      - run: uv sync --locked
+      - name: Report the stages dvc.lock is stale for
+        continue-on-error: true
+        run: uv run python -m tools.stale_lock
 
   # FR-15: a model is promoted by merging a pull request that changes `dvc.lock`
   # (EDN-08), and from M5 on every merge to `main` deploys it (NFR-13). The gate
