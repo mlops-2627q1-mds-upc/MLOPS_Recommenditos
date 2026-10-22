@@ -42,8 +42,17 @@ def log_file(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def app(bundle: Path, log_file: Path) -> FastAPI:
-    return create_app(bundle, Settings(prediction_log=log_file, api_key=SecretStr(API_KEY)))
+def index_file(trained: dict) -> Path:
+    """The comparables index of the synthetic fixture, which the app serves (FR-09)."""
+    return Path(trained["comparables"])
+
+
+@pytest.fixture(scope="session")
+def app(bundle: Path, index_file: Path, log_file: Path) -> FastAPI:
+    settings = Settings(
+        prediction_log=log_file, api_key=SecretStr(API_KEY), comparables_file=index_file
+    )
+    return create_app(bundle, settings)
 
 
 @pytest.fixture(scope="session")
@@ -56,7 +65,7 @@ def served(app: FastAPI) -> ServedModel:
 
 @pytest.fixture(scope="session")
 def index(app: FastAPI) -> ComparablesIndex:
-    """The comparables index the app loaded from beside the bundle (FR-09)."""
+    """The comparables index the app loaded from `index_file` (FR-09)."""
     loaded = app.state.comparables
     assert isinstance(loaded, ComparablesIndex)
     return loaded

@@ -78,7 +78,7 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `configure_gx` | `recommenditos/data/gx_context_configuration.py` | `gx/`, the Great Expectations context |
 | `validate-data` | `recommenditos/data/validate_data.py` | `reports/data-validation/`: the summary, the validation results and the Data Docs; a failed expectation fails the pipeline |
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
-| `comparables` | `recommenditos/data/build_comparables.py` | `models/comparables.parquet`, the index `/v1/comparables` serves |
+| `comparables` | `recommenditos/data/build_comparables.py` | `data/processed/comparables.parquet`, the index `/v1/comparables` serves |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
 | `train` | `recommenditos/modeling/train.py`, and `intervals.py` for a variant with a price range | `models/<variant>/`, `reports/emissions/<variant>.csv` |
 | `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs,interval-coverage-by-make}.csv` |
@@ -117,6 +117,7 @@ CodeCarbon appends to that file, and DVC deletes a stage's outputs before runnin
 On the machines we train on, the figure is CodeCarbon's estimate from the CPU's TDP and the fit's CPU time plus a constant for the RAM, not a meter reading: `recommenditos/modeling/energy.py` says how to read it.
 
 `comparables` writes the index of real listings that `POST /v1/comparables` returns for UC2 (FR-09), and the API image carries it beside the bundle (FR-12).
+It is not written under `models/`, because `evaluate` and `compare-energy` depend on that whole directory and a file there would mark both as changed.
 It reads the `train` and `validation` frames and no other, so no `ES` (EDN-03), test or calibration listing can reach it, and it refuses a row of the holdout country should a changed `split` ever let one through.
 Its contract, `COMPARABLES_SCHEMA` in the stage's module, selects the key features and the price, so no PII column (NFR-08) and not the `seller_group_id` pseudonym reaches the index; it is kept out of `recommenditos/schema.py` because every stage depends on that module, and a contract added there would rerun the whole pipeline.
 `age_years` is each listing's age on the snapshot date, from the function the `features` stage uses, and the rows are sorted by make, model, age, mileage and price, so a rerun writes the same bytes and the API breaks a tie the same way every time.

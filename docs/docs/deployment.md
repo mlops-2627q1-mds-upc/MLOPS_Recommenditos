@@ -33,7 +33,7 @@ What each part guarantees:
 
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
-  It also copies FR-09's comparables index, `models/comparables.parquet`, beside the bundle, and `/health` reports the md5 `dvc.lock` records for that file as the index's version.
+  It also copies FR-09's comparables index, `data/processed/comparables.parquet`, to `/app/models/comparables.parquet` beside the bundle, where `RECOMMENDITOS_COMPARABLES_FILE` points the API, and `/health` reports the md5 `dvc.lock` records for that file as the index's version.
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
 - **Compose** publishes only the proxy's port.
@@ -56,7 +56,7 @@ What each part guarantees:
 You need Docker with the compose plugin and the pulled model and comparables index:
 
 ```bash
-uv run dvc pull models/lgbm-basic models/comparables.parquet
+uv run dvc pull models/lgbm-basic data/processed/comparables.parquet
 RECOMMENDITOS_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))') make stack
                     # builds the image, starts both containers, waits until healthy
 make test-integration   # the integration suite against http://localhost:8080
@@ -103,7 +103,7 @@ The tests that need the Docker host, the crash test among them, run when that UR
 `make test` leaves the suite out (`-m "not integration"` in `pyproject.toml`).
 
 CI's `Integration (Compose stack)` job runs the suite on every pull request that touches the package, the `Dockerfile`, `deploy/`, the dependencies or the suite.
-CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version and writes a comparables index of the same fixture beside it), builds the image around both, starts the stack, runs the suite with their versions as the expected ones, prints both containers' logs if anything failed and always tears the stack down.
+CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version and writes a comparables index of the same fixture to `data/processed/comparables.parquet`), builds the image around both, starts the stack, runs the suite with their versions as the expected ones, prints both containers' logs if anything failed and always tears the stack down.
 
 ## Deploy to the VM
 
@@ -144,7 +144,7 @@ Set FR-10's API key in the same `.env` (`RECOMMENDITOS_API_KEY`, generated on th
 
 ### Every deploy
 
-From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic models/comparables.parquet`:
+From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`:
 
 ```bash
 make image                                   # recommenditos-api:<short commit SHA>

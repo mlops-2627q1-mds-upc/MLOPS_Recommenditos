@@ -300,7 +300,7 @@ jobs:
         run: |
           version=$(uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models | tail -n 1)
           echo "RECOMMENDITOS_EXPECTED_MODEL_VERSION=$version" >> "$GITHUB_ENV"
-          index=$(md5sum models/comparables.parquet | cut -d " " -f 1)
+          index=$(md5sum data/processed/comparables.parquet | cut -d " " -f 1)
           echo "RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION=$index" >> "$GITHUB_ENV"
       - name: Generate the API key of this run
         if: needs.changes.outputs.stack == 'true'

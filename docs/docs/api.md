@@ -1,7 +1,7 @@
 The API
 =======
 
-The HTTP API serves the price model: it estimates the asking price of a used car (UC1) and the price range of a car described in part (UC2) with the model bundle the service was started with, and returns real listings comparable to that car (UC2) from the comparables index beside the bundle.
+The HTTP API serves the price model: it estimates the asking price of a used car (UC1) and the price range of a car described in part (UC2) with the model bundle the service was started with, and returns real listings comparable to that car (UC2) from the comparables index the service was started with.
 This page says how to run it, what it offers and how its errors are shaped, and how to add an endpoint.
 The field-by-field reference is the generated OpenAPI document, served by the API itself at `/docs` (Swagger UI), `/redoc` (ReDoc) and `/openapi.json`; this page does not repeat it.
 What each endpoint must do is in the [specification](specification.md) (FR-01 to FR-16, NFR-03, NFR-04, NFR-08, NFR-09).
@@ -21,13 +21,14 @@ The service reads its settings from environment variables (`recommenditos/api/se
 | Variable | Default | What it sets |
 |----------|---------|--------------|
 | `RECOMMENDITOS_MODEL_DIR` | `models/lgbm-basic` | The bundle to serve |
+| `RECOMMENDITOS_COMPARABLES_FILE` | `data/processed/comparables.parquet` | The comparables index `/v1/comparables` searches; the image sets `/app/models/comparables.parquet` |
 | `RECOMMENDITOS_API_KEY` | none | The key `/v1/feedback` requires; at least 16 characters. Unset or empty, the endpoint refuses every request |
 | `RECOMMENDITOS_PREDICTION_LOG` | `logs/prediction-log.sqlite3` | The SQLite file of the prediction log and the feedback |
 | `RECOMMENDITOS_PREDICTION_LOG_MAX_BYTES` | `2000000000` | The size the log and the feedback are pruned to (NFR-04) |
 | `RECOMMENDITOS_LOG_FORMAT` | `text` | `json` for one JSON object per log line, as the image sets it ([Logs](#logs)); read by `recommenditos/api/logs.py`, because uvicorn configures the log before the app and its settings exist |
 
 The API key is a secret (NFR-15): `.env.template` lists it without a value, and the settings hold it as a `SecretStr`, which a repr or a log line shows as `**********`.
-The bundle and the comparables index beside it, `models/comparables.parquet`, are loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
+The bundle and the comparables index, `data/processed/comparables.parquet` or the file `RECOMMENDITOS_COMPARABLES_FILE` names, are loaded once, before the first request, and the API never calls MLflow ([EDN-08](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), FR-12).
 A bundle the API cannot serve stops the service at startup instead of failing on the first request: one that consumes no column for a field FR-01 requires, and one without a SHAP export to explain a valuation with (FR-08), which today means every bundle but a LightGBM one (`b0` and `b1` are refused).
 
 `make api` runs `python -m recommenditos.api`, which passes its options on to uvicorn: `python -m recommenditos.api --workers 2`, or `WEB_CONCURRENCY=2 make api`, starts two worker processes.
@@ -162,8 +163,8 @@ A field the request leaves out sets no filter and adds no distance: a request wi
 No filter is relaxed, so a car outside every window gets an empty list; a `model` of which the index holds no listing for the make gets one too, with a warning that says so.
 Fields other than these four are checked like everywhere else and do not change which listings come back.
 
-The answer names the index it searched, `index.version` and `index.listings`, as `/health` does: the version is the md5 `dvc.lock` records for `models/comparables.parquet`, which the `comparables` stage writes ([pipeline](pipeline.md#stages)).
-A service started without the index, such as one around a bundle copied elsewhere, values listings, answers `/v1/comparables` with a 503 problem and reports `"comparables": null` on `/health`.
+The answer names the index it searched, `index.version` and `index.listings`, as `/health` does: the version is the md5 `dvc.lock` records for `data/processed/comparables.parquet`, which the `comparables` stage writes ([pipeline](pipeline.md#stages)).
+A service whose `RECOMMENDITOS_COMPARABLES_FILE` names no file values listings, answers `/v1/comparables` with a 503 problem and reports `"comparables": null` on `/health`.
 
 The real index holds 70,172 listings and takes 1.87 MiB on disk, which is what it adds to the image.
 A process that has built the app around `lgbm-basic` holds 338.7 MiB resident with the index and 272.9 MiB without it, so the index costs every uvicorn worker about 65.9 MiB of NFR-04's 1 GB container cap; it is read on one thread, because Arrow's thread pool added about 40 MiB more.

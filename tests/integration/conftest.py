@@ -136,8 +136,8 @@ def expected_comparables_version() -> str:
     """The comparables index version the image has to report: the override, or dvc.lock's."""
     if override := os.environ.get(EXPECTED_COMPARABLES_ENV_VAR):
         return override
-    version = output_hash(PROJ_ROOT / "dvc.lock", "models/comparables.parquet")
-    assert version is not None, "dvc.lock records no models/comparables.parquet"
+    version = output_hash(PROJ_ROOT / "dvc.lock", "data/processed/comparables.parquet")
+    assert version is not None, "dvc.lock records no data/processed/comparables.parquet"
     return version
 
 

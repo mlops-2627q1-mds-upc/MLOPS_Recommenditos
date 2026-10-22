@@ -11,7 +11,6 @@ import pytest
 
 from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.serving import ServedModel, bundle_version
-from recommenditos.data.build_comparables import INDEX_FILE
 
 
 @pytest.mark.req("FR-11")
@@ -59,9 +58,9 @@ def test_fr11_health_answers_head_for_uptime_monitors(client: TestClient):
 
 
 @pytest.mark.req("FR-12")
-def test_fr12_the_index_version_is_the_hash_dvc_records_for_the_index(bundle: Path):
+def test_fr12_the_index_version_is_the_hash_dvc_records_for_the_index(index_file: Path):
     """The index version `/health` reports is the value `dvc.lock` holds for its file."""
-    path = bundle.parent / INDEX_FILE
+    path = index_file
     with tempfile.TemporaryDirectory() as cache:
         fs = LocalFileSystem()
         _, _, entry = build(HashFileDB(fs, cache), str(path), fs, "md5")

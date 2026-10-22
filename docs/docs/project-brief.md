@@ -186,7 +186,7 @@ On the test split, read once for the adopted configuration, `lgbm-basic` answers
 SC-06 of the [problem specification](problem-spec.md#8-success-criteria) caps the MdAPE loss when an optional field is absent, and NFR-01's gate enforces it before a model is deployed.
 
 Comparable listings: a filtered lookup over the processed training and validation listings (same make and model, close in age and mileage), not a learned nearest-neighbour model.
-The `comparables` stage writes them as an index, `models/comparables.parquet`, which the API image carries beside the bundle (FR-09, FR-12).
+The `comparables` stage writes them as an index, `data/processed/comparables.parquet`, which the API image carries beside the bundle (FR-09, FR-12).
 The exact window is defined in the [specification](specification.md) FR-09.
 
 Explainability: TreeSHAP per prediction, from the booster's own export and summed per request field (FR-08), and globally with the `shap` package offline.

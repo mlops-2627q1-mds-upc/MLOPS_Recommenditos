@@ -8,7 +8,7 @@ window at its bound on a hand-built index.
 """
 
 from datetime import UTC, datetime
-import shutil
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pandas as pd
@@ -19,6 +19,8 @@ from recommenditos.api.app import create_app
 from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.schemas.comparables import ComparablesRequest
 from recommenditos.api.schemas.partial_listing import PartialListing
+from recommenditos.api.settings import Settings
+from recommenditos.config import PROCESSED_DATA_DIR
 from recommenditos.data.build_comparables import INDEX_FILE
 
 COMPARABLES = "/v1/comparables"
@@ -245,11 +247,14 @@ def test_fr09_metrics_count_the_listings_of_every_answer(client: TestClient, car
 
 
 @pytest.mark.req("FR-09", "FR-16")
-def test_fr09_a_service_without_an_index_answers_503(trained: dict, car: dict, tmp_path):
-    bundle = tmp_path / "lgbm-basic"
-    shutil.copytree(trained["dir"] / "lgbm-basic", bundle)
-    assert not (tmp_path / INDEX_FILE).exists()
+def test_fr09_a_service_without_an_index_answers_503(bundle: Path, car: dict, tmp_path: Path):
+    missing = tmp_path / INDEX_FILE
+    settings = Settings(prediction_log=tmp_path / "log.sqlite3", comparables_file=missing)
 
-    with TestClient(create_app(bundle), raise_server_exceptions=False) as api:
+    with TestClient(create_app(bundle, settings), raise_server_exceptions=False) as api:
         assert_problem(api.post(COMPARABLES, json=car), 503)
         assert api.get("/health").json()["comparables"] is None
+
+
+def test_the_default_comparables_file_is_where_the_stage_writes_it():
+    assert Settings.model_fields["comparables_file"].default == PROCESSED_DATA_DIR / INDEX_FILE

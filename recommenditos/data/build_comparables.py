@@ -37,7 +37,7 @@ from loguru import logger
 import pandas as pd
 import typer
 
-from recommenditos.config import MODELS_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
+from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR
 from recommenditos.data.build_features import age_years
 from recommenditos.pipeline import load_params, read_frame, write_frame
 from recommenditos.schema import DERIVED_COLUMNS, PROCESSED_SCHEMA
@@ -48,7 +48,7 @@ app = typer.Typer()
 #: `calibration` or the `ES` holdout: see the module docstring.
 SOURCES: tuple[str, ...] = ("train", "validation")
 
-#: Where the stage writes the index, and where the API reads it from.
+#: The index's file name in `data/processed/`, the API's default comparables file.
 INDEX_FILE = "comparables.parquet"
 
 #: The index's contract: a selection of the processed columns, the key features
@@ -116,7 +116,7 @@ def build_index(
 @app.command()
 def main(
     input_dir: Path = PROCESSED_DATA_DIR,
-    output_path: Path = MODELS_DIR / INDEX_FILE,
+    output_path: Path = PROCESSED_DATA_DIR / INDEX_FILE,
     params_path: Path = PARAMS_FILE,
 ):
     params = load_params(params_path)

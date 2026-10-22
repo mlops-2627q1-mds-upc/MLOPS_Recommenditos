@@ -283,8 +283,8 @@ def supported_makes(matrices: dict) -> tuple[str, ...]:
 def trained(matrices: dict) -> dict:
     """Every variant of the real params.yaml, trained once, with tracking off.
 
-    The comparables index is written beside the bundles, as the pipeline writes
-    it, so an app around any of them serves `/v1/comparables` (FR-09).
+    The comparables index of the same fixture is built too, at `comparables`, for
+    the apps of the API tests to serve (FR-09).
 
     The environment is cleared inside the fixture rather than by an autouse
     monkeypatch, because a session fixture outlives a function-scoped one and
@@ -303,9 +303,10 @@ def trained(matrices: dict) -> dict:
         train_bundles(
             train_variants(), matrices["features"], models, matrices["root"] / "emissions"
         )
-    build_index(matrices["processed"], models)
+    index = build_index(matrices["processed"], matrices["processed"] / "comparables.parquet")
     return {
         "dir": models,
+        "comparables": index,
         "emissions": matrices["root"] / "emissions",
         "models": {name: load_model(models / name) for name in train_variants()},
     }

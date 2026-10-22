@@ -7,8 +7,9 @@ around such a bundle (docs/docs/deployment.md):
 
     uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models
 
-writes `models/lgbm-basic` and the comparables index `models/comparables.parquet`
-beside it, and prints the version `/health` will report for the bundle.
+writes `models/lgbm-basic` and the comparables index
+`data/processed/comparables.parquet`, where the Dockerfile copies them from, and
+prints the version `/health` will report for the bundle.
 The pipeline's own stage functions do the work, with tracking off, so a bundle
 from here has the layout and the metadata of a real one.
 """
@@ -71,13 +72,8 @@ def train_bundles(
         train.main(variant, features, models, params_path, energy)
 
 
-def build_index(processed: Path, models: Path, params_path: Path = PARAMS_FILE) -> Path:
-    """The comparables index of the `split` frames in `processed`, beside the bundles.
-
-    Written where the pipeline writes it, `models/comparables.parquet`, which is
-    where the API looks for it beside the bundle it serves (FR-09).
-    """
-    path = models / build_comparables.INDEX_FILE
+def build_index(processed: Path, path: Path, params_path: Path = PARAMS_FILE) -> Path:
+    """The comparables index of the `split` frames in `processed`, written to `path` (FR-09)."""
     build_comparables.main(processed, path, params_path)
     return path
 
@@ -86,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("variant", help="a key of train.variants in params.yaml")
     parser.add_argument("output_dir", type=Path, help="where models/<variant> goes, e.g. models")
+    parser.add_argument(
+        "--index",
+        type=Path,
+        default=Path("data/processed") / build_comparables.INDEX_FILE,
+        help="where the comparables index goes",
+    )
     args = parser.parse_args(argv)
 
     from recommenditos.api.serving import bundle_version  # noqa: PLC0415
@@ -97,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         root = Path(scratch)
         matrices = build_matrices(root, generate_raw_listings(FIXTURE_ROWS))
         train_bundles([args.variant], matrices["features"], args.output_dir, root / "emissions")
-        build_index(matrices["processed"], args.output_dir)
+        build_index(matrices["processed"], args.index)
     print(bundle_version(args.output_dir / args.variant))
     return 0
 

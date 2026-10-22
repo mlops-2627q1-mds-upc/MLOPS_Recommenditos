@@ -197,9 +197,11 @@ stages:
   #
   # Built from the train and validation frames and from no other, so no `ES`
   # (EDN-03), test or calibration listing reaches it; those two files are its
-  # only data dependencies, which is what makes that checkable here. It is a
-  # file under models/ because it ships in the API image beside the bundle
-  # (FR-12), and `/health` reports the md5 this file's lock records for it.
+  # only data dependencies, which is what makes that checkable here. It ships
+  # in the API image beside the bundle (FR-12), and `/health` reports the md5
+  # this file's lock records for it. It is not under models/: `evaluate` and
+  # `compare-energy` depend on that whole directory, so a file there would
+  # mark both as changed.
   # `build_features.py` is a dependency for `age_years`, the one function age
   # is computed by.
   # ----------------------------------------------------------------------
@@ -217,7 +219,7 @@ stages:
       - reference_date
       - split.holdout_country
     outs:
-      - models/comparables.parquet
+      - data/processed/comparables.parquet
 
   # ----------------------------------------------------------------------
   # features: one matrix per feature set, per split (#36).

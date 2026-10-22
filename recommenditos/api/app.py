@@ -1,7 +1,7 @@
 """The FastAPI application: one served model, versioned routes, one error shape.
 
 `create_app` reads the settings from the environment (`settings.py`), loads the
-bundle and the comparables index beside it once, before the first request
+bundle and the comparables index once, before the first request
 (FR-12: both ship in the image and the API never calls MLflow), opens the
 prediction log, wires the middlewares and the error handlers, mounts the
 routers of `recommenditos.api.routes` (the client contract under `/v1`, the
@@ -42,7 +42,6 @@ from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
 from recommenditos.api.schemas.common import FieldError, ListingFields
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import API_KEY_ENV_VAR, Settings
-from recommenditos.data.build_comparables import INDEX_FILE
 
 API_VERSION = "1.0.0"
 
@@ -80,7 +79,7 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
     directory = Path(model_dir or settings.model_dir)
     served = ServedModel.load(directory)
     logger.info(f"serving {served.info.variant} version {served.info.version} from {directory}")
-    index = _comparables_index(directory.parent / INDEX_FILE)
+    index = _comparables_index(settings.comparables_file)
     if settings.api_key is None:
         logger.warning(f"{API_KEY_ENV_VAR} is not set: /v1/feedback refuses every request")
 
@@ -140,7 +139,7 @@ async def _store_unavailable(request: Request, error: Exception) -> Response:
 
 
 def _comparables_index(path: Path) -> ComparablesIndex | None:
-    """FR-09's index, read from beside the bundle, where the pipeline and the image put it.
+    """FR-09's index, read from `settings.comparables_file` (`RECOMMENDITOS_COMPARABLES_FILE`).
 
     A service without one still values listings and answers `/v1/comparables`
     with a 503; `/health` then reports no index, which the integration suite

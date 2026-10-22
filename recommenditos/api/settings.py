@@ -15,7 +15,7 @@ from typing import Annotated
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from recommenditos.config import MODELS_DIR, PROJ_ROOT
+from recommenditos.config import MODELS_DIR, PROCESSED_DATA_DIR, PROJ_ROOT
 
 ENV_PREFIX = "RECOMMENDITOS_"
 
@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     model_dir: Path = Field(
         default=MODELS_DIR / "lgbm-basic",
         description="The bundle to serve (EDN-08, FR-12).",
+    )
+    comparables_file: Path = Field(
+        default=PROCESSED_DATA_DIR / "comparables.parquet",
+        description="FR-09's comparables index, the file the `comparables` stage writes; the "
+        "image sets it to where it copies the file. Missing, `/v1/comparables` answers 503.",
     )
     api_key: Annotated[SecretStr, Field(min_length=MIN_API_KEY_LENGTH)] | None = Field(
         default=None,

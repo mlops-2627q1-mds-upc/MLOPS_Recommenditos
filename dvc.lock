@@ -1154,8 +1154,8 @@ stages:
       size: 1488
     - path: recommenditos/data/build_comparables.py
       hash: md5
-      md5: 19027c26fd43e2fdc182bcb16e2901f1
-      size: 5755
+      md5: d279a2eead3faa5c1ee88ad48c6b4a43
+      size: 5764
     - path: recommenditos/data/build_features.py
       hash: md5
       md5: 3ff2e1486cbfe0e25fabc05c0b1e4450
@@ -1173,7 +1173,7 @@ stages:
         reference_date: '2025-11-08'
         split.holdout_country: ES
     outs:
-    - path: models/comparables.parquet
+    - path: data/processed/comparables.parquet
       hash: md5
       md5: 9993b933797d905b2b6271b03bac50ee
       size: 1956112

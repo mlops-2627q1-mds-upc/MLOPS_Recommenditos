@@ -2,12 +2,12 @@
 
 NFR-04 caps the API image and the API container at 1 GB each, and NFR-02 asks
 for a p95 of at most 300 ms for `/comparables` on the target VM. This measures
-the committed `models/comparables.parquet` on the laptop:
+the committed `data/processed/comparables.parquet` on the laptop:
 
 - its size on disk, which is what it adds to the image;
 - the resident memory of a process that has built the app, once around
-  `models/lgbm-basic` with the index beside it and once around a copy of the
-  bundle without it, each in a fresh interpreter, `RUNS` times; the difference
+  `models/lgbm-basic` with the index and once with a comparables file that does
+  not exist, each in a fresh interpreter, `RUNS` times; the difference
   is what the index costs every uvicorn worker;
 - the in-process latency of `/v1/comparables` with FastAPI's test client, so it
   holds the validation, the model's checks and the search, and no network,
@@ -19,7 +19,7 @@ the committed `models/comparables.parquet` on the laptop:
   because the laptop is shared.
 
 Linux only, because the resident memory is read from `/proc`. Run from the
-repository root after `dvc pull models/lgbm-basic models/comparables.parquet
+repository root after `dvc pull models/lgbm-basic data/processed/comparables.parquet
 data/processed/test.parquet`:
 
     uv run python reports/analysis/comparables_footprint.py

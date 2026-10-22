@@ -1,6 +1,6 @@
 # The API image: the serving runtime from uv.lock (EDN-47), one model bundle and
 # the comparables index (EDN-08, FR-12), built after `dvc pull` so that
-# `models/<variant>` and `models/comparables.parquet` are present.
+# `models/<variant>` and `data/processed/comparables.parquet` are present.
 # docs/docs/deployment.md says how it is built, run and deployed.
 #
 # Two stages, after uv's Docker guide: the builder installs the project into a
@@ -73,7 +73,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # FR-09's index, beside the bundle, where the API looks for it; `/health`
 # reports its md5, which is what dvc.lock records for it.
-COPY models/comparables.parquet /app/models/comparables.parquet
+COPY data/processed/comparables.parquet /app/models/comparables.parquet
 
 # PROMETHEUS_MULTIPROC_DIR: where every uvicorn worker writes its metrics, so
 # that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
@@ -85,6 +85,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     RECOMMENDITOS_LOG_FORMAT=json \
     RECOMMENDITOS_MODEL_DIR=/app/models/${MODEL_VARIANT} \
+    RECOMMENDITOS_COMPARABLES_FILE=/app/models/comparables.parquet \
     PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus \
     RECOMMENDITOS_PREDICTION_LOG=/var/lib/recommenditos/prediction-log.sqlite3
 

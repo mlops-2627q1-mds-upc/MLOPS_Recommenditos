@@ -56,7 +56,7 @@ class ComparablesIndexInfo(BaseModel):
 
     version: str = Field(
         description="The md5 of the index file, which `dvc.lock` records for "
-        "`models/comparables.parquet`."
+        "`data/processed/comparables.parquet`."
     )
     listings: int = Field(description="How many listings the index holds.")
 

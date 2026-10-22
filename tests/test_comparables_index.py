@@ -103,7 +103,7 @@ def test_dvc_yaml_gives_the_stage_train_and_validation_as_its_only_data():
     data = [dep for dep in stage["deps"] if dep.startswith("data/")]
 
     assert data == [f"data/processed/{name}.parquet" for name in SOURCES]
-    assert stage["outs"] == [f"models/{INDEX_FILE}"]
+    assert stage["outs"] == [f"data/processed/{INDEX_FILE}"]
 
 
 @pytest.mark.req("FR-09")
