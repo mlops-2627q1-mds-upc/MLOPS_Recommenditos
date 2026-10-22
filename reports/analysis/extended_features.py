@@ -15,6 +15,7 @@ holdout and the split are reproduced here too, because the vocabulary is decided
 rows alone. The raw dataset is not in the repo (NFR-08, EDN-25), see the README.
 """
 
+import ast
 import hashlib
 import re
 import sys
@@ -187,7 +188,7 @@ def report_equipment(training):
     for column in EQUIPMENT_COLUMNS:
         values = training[column].dropna()
         counts = pd.Series(
-            [item for value in values for item in set(eval(value))]  # noqa: S307
+            [item for value in values for item in set(ast.literal_eval(value))]
         ).value_counts()
         kept = counts[counts > EQUIPMENT_MIN_FREQUENCY * len(training)]
         total_items += len(counts)
