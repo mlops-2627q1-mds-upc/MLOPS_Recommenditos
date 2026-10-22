@@ -1,7 +1,7 @@
 {
-  "label": "laptop-dry-run-2026-10-21",
+  "label": "laptop-dry-run-2026-10-22",
   "note": "**Dry run on a shared development laptop, not a measurement of the VM.** The stack ran on the same 4-core laptop as Locust, an IDE and other development sessions, so latency, throughput and energy here say nothing about NFR-02 to NFR-04 on the VM; the run checks that the load test and its measurements work end to end. 60 s instead of NFR-03's 5 minutes, to keep the shared machine usable.",
-  "started_at": "2026-10-21T15:44:36+00:00",
+  "started_at": "2026-10-22T13:08:28+00:00",
   "host": "http://localhost:8080",
   "rate_per_s": 20.0,
   "duration_s": 60,
@@ -10,14 +10,14 @@
     "hostname": "lukas-NBLB-WAX9N",
     "cpus": 8,
     "load_average_before": [
-      3.74,
-      2.82,
-      2.41
+      0.59,
+      0.43,
+      0.62
     ],
     "load_average_after": [
-      3.96,
-      3.03,
-      2.52
+      0.68,
+      0.52,
+      0.63
     ]
   },
   "container": {
@@ -26,65 +26,74 @@
     "prediction_log": "/var/lib/recommenditos/prediction-log.sqlite3"
   },
   "energy_idle": {
-    "seconds": 30.000598229991738,
-    "energy_j": 498.5575359606382,
-    "cpu_energy_j": 48.04416674050373,
-    "ram_energy_j": 450.51336922013434,
+    "seconds": 60.00028145900069,
+    "energy_j": 691.3706344086908,
+    "cpu_energy_j": 90.87445082869223,
+    "ram_energy_j": 600.4961835799986,
     "cpu_power_method": "cpu_load, Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz, TDP 15.0 W"
   },
   "locust_process": {
-    "cpu_mean_percent": 4.359375,
-    "cpu_max_percent": 43.0
+    "cpu_mean_percent": 4.532258064516129,
+    "cpu_max_percent": 39.0
   },
   "energy_run": {
-    "seconds": 64.00856493799074,
-    "energy_j": 816.1627410210181,
-    "cpu_energy_j": 176.09002643081251,
-    "ram_energy_j": 640.0727145902056,
+    "seconds": 62.01205674099947,
+    "energy_j": 716.0208730969341,
+    "cpu_energy_j": 95.91157341692703,
+    "ram_energy_j": 620.1092996800071,
     "cpu_power_method": "cpu_load, Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz, TDP 15.0 W"
   },
   "locust": {
-    "/v1/predict": {
-      "requests": 882,
+    "/v1/price-range": {
+      "requests": 214,
       "failures": 0,
-      "p50_ms": 3100.0,
-      "p95_ms": 5700.0,
-      "p99_ms": 7300.0,
-      "rate_per_s": 14.7,
+      "p50_ms": 78.0,
+      "p95_ms": 190.0,
+      "p99_ms": 250.0,
+      "rate_per_s": 3.566666666666667,
       "error_rate": 0.0
     },
-    "/v1/price-range": {
-      "requests": 291,
+    "/v1/predict": {
+      "requests": 722,
       "failures": 0,
-      "p50_ms": 2800.0,
-      "p95_ms": 5200.0,
-      "p99_ms": 6200.0,
-      "rate_per_s": 4.85,
+      "p50_ms": 90.0,
+      "p95_ms": 180.0,
+      "p99_ms": 250.0,
+      "rate_per_s": 12.033333333333333,
+      "error_rate": 0.0
+    },
+    "/v1/comparables": {
+      "requests": 244,
+      "failures": 0,
+      "p50_ms": 13.0,
+      "p95_ms": 39.0,
+      "p99_ms": 55.0,
+      "rate_per_s": 4.066666666666666,
       "error_rate": 0.0
     },
     "Aggregated": {
-      "requests": 1173,
+      "requests": 1180,
       "failures": 0,
-      "p50_ms": 3100.0,
-      "p95_ms": 5400.0,
-      "p99_ms": 7000.0,
-      "rate_per_s": 19.55,
+      "p50_ms": 71.0,
+      "p95_ms": 170.0,
+      "p99_ms": 250.0,
+      "rate_per_s": 19.666666666666668,
       "error_rate": 0.0
     }
   },
   "throughput": {
-    "achieved_per_s": 19.55,
+    "achieved_per_s": 19.666666666666668,
     "target_per_s": 20.0,
     "reached": true
   },
-  "energy_per_request_j": 0.6957909130613965,
-  "energy_per_request_above_idle_j": -0.21103818816952577,
+  "energy_per_request_j": 0.6067973500821475,
+  "energy_per_request_above_idle_j": 0.0012448939670441554,
   "docker_stats": {
-    "samples": 32,
-    "memory_max_bytes": 625999872.0,
-    "memory_mean_bytes": 601872793.6,
-    "cpu_mean_percent": 176.9515625,
-    "cpu_max_percent": 293.18
+    "samples": 31,
+    "memory_max_bytes": 593179443.2,
+    "memory_mean_bytes": 586925194.7354839,
+    "cpu_mean_percent": 93.12870967741935,
+    "cpu_max_percent": 147.09
   },
   "metrics": {
     "/health": {
@@ -102,20 +111,25 @@
       "within_200ms": 1.0,
       "within_300ms": 1.0
     },
+    "/v1/comparables": {
+      "answers": 244.0,
+      "within_200ms": 1.0,
+      "within_300ms": 1.0
+    },
     "/v1/predict": {
-      "answers": 882.0,
-      "within_200ms": 0.0,
-      "within_300ms": 0.0022675736961451248
+      "answers": 722.0,
+      "within_200ms": 0.9764542936288089,
+      "within_300ms": 0.9986149584487535
     },
     "/v1/price-range": {
-      "answers": 291.0,
-      "within_200ms": 0.0,
-      "within_300ms": 0.003436426116838488
+      "answers": 214.0,
+      "within_200ms": 0.9719626168224299,
+      "within_300ms": 0.9953271028037384
     }
   },
   "prediction_log": {
-    "answered": 1173,
-    "logged": 1173,
+    "answered": 1180,
+    "logged": 1180,
     "missing": 0,
     "unexpected": 0,
     "duplicated": 0,

@@ -13,6 +13,7 @@ k6 was considered and would add a JavaScript toolchain.
 |------|------------|
 | `tools/loadtest/bodies.py` | Writes request bodies from real held-out listings (`make loadtest-bodies`) |
 | `tools/loadtest/locustfile.py` | The Locust users: the valuation requests, at a fixed total rate |
+| `tools/loadtest/arrivals.py` | When each user sends: exponential gaps at its share of the rate |
 | `tools/loadtest/plan.py` | Which endpoints a run calls, read from the target's `/openapi.json` |
 | `tools/loadtest/run.py` | Runs Locust and takes the measurements around it (`make loadtest`) |
 | `tools/loadtest/measure.py` | Turns what a run collected into its figures |
@@ -28,8 +29,13 @@ An endpoint the target does not serve is left out and named in the output, and e
 
 **The rate.**
 `--rate` requests per second are shared evenly by four Locust users per request per second (80 users at 0.25 requests per second each for NFR-03's 20 requests/s).
-A user waits for its answer before it sends the next request, so each has a budget of 4 s per request: the total rate holds until answers take about 4 s, and a target slower than that gets fewer requests per second rather than a growing queue.
+Each user waits an exponential gap before every request, its first included, 4 s on average at 0.25 requests per second, so the users together send like a Poisson process at the total rate, as independent clients do.
+Locust starts all users within the first second, and a fixed gap per user made them send together, all 80 within a second and again every 4 s: the API saw the rate as bursts, and the requests of a burst queued behind each other.
+On one stack with one worker, at 10 requests/s for 40 s and two runs each, the fixed gap measured `/v1/predict` at p50 850 to 920 ms and p95 1,500 to 1,600 ms, the exponential gaps at p50 89 to 91 ms and p95 160 to 190 ms; the bursts inflated the latency about tenfold.
+The [first laptop dry run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/2bcebf0/reports/loadtest/laptop-dry-run-2026-10-21.md), with the fixed gap, measured p50 3,100 ms and p95 5,700 ms for `/v1/predict`.
+A user waits for its answer before it sends the next request, so each has a budget of 4 s per request on average: a gap shorter than the answer is cut to nothing, which costs under 0.1 % of the rate while answers take 100 ms, and a target slower than 4 s gets fewer requests per second rather than a growing queue.
 The report therefore states the achieved rate, the answers divided by the duration, against the target, and counts the target as sustained when at least 95 % of it was achieved.
+The number of requests a run sends is random, with a standard deviation of 1.3 % of the target over NFR-03's 5 minutes at 20 requests/s, which puts the 95 % threshold four standard deviations below the target; over a 60 s dry run it is 2.9 %.
 At the end of the run, each user finishes the request it is waiting for.
 The counts and percentiles come from Locust's `--json-file` statistics, which Locust writes once at the end; its CSV statistics are a snapshot taken every second and miss the last answers.
 
@@ -54,8 +60,8 @@ CodeCarbon runs in `machine` mode, because its `process` mode measures only the 
 No machine we use lets a normal user read the RAPL energy counter (NFR-10), so the figure is CodeCarbon's estimate from the CPU's TDP and the load of the whole machine, plus a constant for the RAM.
 On a laptop that is everything the laptop does, the IDE and Locust included, so a laptop figure says nothing about the API.
 On the VM it is the stack and Locust; the report gives the API container's CPU and Locust's beside it.
-Most of the total is the RAM term, a constant power whatever the load (78 % of the dry run's energy), so the energy per request in total mostly measures the run's duration.
-The CPU term follows CodeCarbon's load model, the TDP times 0.1 + 0.9 x load³ with load the whole machine's CPU share, which stays near a tenth of the TDP at moderate load: the dry run's API used 1.8 cores on average, which are 22 % of the laptop's 8 logical CPUs, and the model gave 2.8 W for the CPU.
+Most of the total is the RAM term, a constant power whatever the load (87 % of the latest dry run's energy), so the energy per request in total mostly measures the run's duration.
+The CPU term follows CodeCarbon's load model, the TDP times 0.1 + 0.9 x load³ with load the whole machine's CPU share, which stays near a tenth of the TDP at moderate load: the latest dry run's API used 0.93 cores on average, which are 12 % of the laptop's 8 logical CPUs, and the model gave 1.5 W for the CPU.
 CodeCarbon integrates the power every 15 s, so a 60 s run has about four samples; the report states the method, the TDP and the interval, and a 5-minute run on the VM has twenty.
 The idle baseline is measured just before the run, and the energy above it, divided by the requests, leaves the constant RAM term out and is the informative figure; it is reported as not measurable when the machine was busier during the baseline than during the run.
 On a VM CodeCarbon may not find the virtual CPU in its TDP table and fall back to a generic TDP; the report names the method and the TDP it used.
@@ -74,7 +80,7 @@ make stack-down
 `make loadtest` takes `LOADTEST_URL` (default `http://localhost:8080`), `LOADTEST_RATE` (20), `LOADTEST_DURATION` (`5m`) and `LOADTEST_OUT`, and passes `LOADTEST_ARGS` on: `--idle 0` skips the 60 s idle baseline, `--no-energy` skips CodeCarbon, and `--no-docker` measures from Locust alone, for a target whose Docker daemon this machine cannot reach.
 It writes `<out>.md`, the figures beside their targets, `<out>.json`, every figure, and Locust's statistics, `<out>-locust.json`.
 
-A laptop run is a dry run of the procedure and is labelled as one: [`reports/loadtest/laptop-dry-run-2026-10-21.md`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/laptop-dry-run-2026-10-21.md) is the first.
+A laptop run is a dry run of the procedure and is labelled as one: [`reports/loadtest/laptop-dry-run-2026-10-22.md`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/laptop-dry-run-2026-10-22.md) is the latest, with two workers at 20 requests/s for 60 s.
 
 ## Run it on the VM
 

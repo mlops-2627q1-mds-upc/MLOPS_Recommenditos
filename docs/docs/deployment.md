@@ -73,7 +73,7 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 | What | Measured | Target |
 |------|----------|--------|
 | Image size (`docker image inspect`, uncompressed) | 702 MB, measured on 2026-10-21 with the three interval boosters of [#158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158) | at most 1 GB (NFR-04) |
-| API container memory, idle after the smoke check (`docker stats`) | 157 MiB (nginx: 10 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
+| API container memory, idle after the smoke check (`docker stats`), measured on 2026-10-22 | 248 MiB with one worker; 539 MiB with two, a 52 MiB supervisor and two workers (nginx: 7 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
 
