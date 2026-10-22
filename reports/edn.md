@@ -1197,7 +1197,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI laid out the three questions with their options in the issue and recommended the chosen ones; @lukas2510 decided all three as recommended.
   AI then wrote the workflow and checked the build, the size gate, and the integration suite locally with the real model.
 - **AI interaction evidence:** Claude Code session of 2026-10-22 planning Milestone 5: the options and recommendations of issue #197.
-- **Other evidence:** [Issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197), [`cd.yml`](../.github/workflows/cd.yml), [deployment docs](../docs/docs/deployment.md#continuous-delivery), EDN-08.
+- **Other evidence:** [Issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197), [PR #207](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/207), [`cd.yml`](../.github/workflows/cd.yml), [deployment docs](../docs/docs/deployment.md#continuous-delivery), EDN-08.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
