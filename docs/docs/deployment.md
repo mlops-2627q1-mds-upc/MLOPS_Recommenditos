@@ -35,8 +35,10 @@ What each part guarantees:
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
   It also copies FR-09's comparables index, `data/processed/comparables.parquet`, to `/app/models/comparables.parquet` beside the bundle, where `RECOMMENDITOS_COMPARABLES_FILE` points the API, and `/health` reports the md5 `dvc.lock` records for that file as the index's version.
-  The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` asks `/health` with Python's `urllib`, so the image needs no curl.
+  The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` runs `python -m recommenditos.api.healthcheck`, which asks `/health` with Python's `urllib`, so the image needs no curl.
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
+  With more than one worker, a single worker whose event loop blocks goes unnoticed: the others still answer `/health`, so the healthcheck passes while the requests that worker accepted hang, and uvicorn's supervisor replaces a worker only when it stops answering its ping, which runs in a thread of its own.
+  The API therefore runs one worker until the load test on the VM ([#143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143)) settles the count ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 - **Compose** publishes only the proxy's port.
   Both containers run with a read-only root file system, without any Linux capability and with `no-new-privileges` (NFR-09), so they write only to their tmpfs mounts and the API also to its volume.
   Neither needed a capability back or any other exception.
@@ -46,7 +48,10 @@ What each part guarantees:
   In a container that exceeds its memory limit, the kernel kills the largest process: usually a worker, which uvicorn's supervisor or nginx's master replaces, and when it is the main process, Docker restarts the container as after a crash.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
-  A hung API, one whose process lives on but stops answering, is only marked unhealthy: Docker's restart policy acts when the process exits, so in M4 nothing restarts it automatically; doing so is an M5 item ([What M5 adds](#what-m5-adds)).
+  A hung API, one whose process lives on but stops answering, is restarted too, although Docker's restart policy acts only when the process exits ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  Once the healthcheck's 60 s start period is over, a probe that gets no answer from `/health` in two attempts of 2 s kills the server.
+  Docker's init, which `init: true` puts in front of the server as PID 1, then exits, and `restart: unless-stopped` starts the container again.
+  The init is needed because the kernel ignores a kill sent from inside the container to its PID 1, and uvicorn's own signal handlers only ask the blocked event loop to stop.
 - **nginx** refuses `/feedback` and `/metrics`, versioned or not, with a 403 (FR-10, EDN-13).
   The replay job and Prometheus reach those endpoints at `api:8000` inside the Compose network, never through the proxy.
   nginx matches the normalised path, so `//feedback`, `/v1/./feedback` and percent-encoded spellings are refused too.
@@ -83,10 +88,13 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 | API container memory, idle after the smoke check (`docker stats`), measured on 2026-10-22 | 248 MiB with one worker; 539 MiB with two, a 52 MiB supervisor and two workers (nginx: 7 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
+| SIGSTOP of the API's processes (a hang) to the next 200 from `/health` through nginx, measured on 2026-10-22 | HANG_NUMBERS | within 30 s (NFR-05) |
 
-The crash test kills the uvicorn process from the host, as the kernel's OOM killer or a segfault would: `docker run --rm --pid=host alpine kill -9 $(docker inspect -f '{{.State.Pid}}' recommenditos-api-1)`.
+The crash test kills the uvicorn process from the host, as the kernel's OOM killer or a segfault would: `docker run --rm --pid=host alpine kill -9 $(docker top recommenditos-api-1 -eo pid,args | awk '$4 == "recommenditos.api" {print $1}')`.
+The process is found with `docker top`, because `docker inspect`'s `State.Pid` is now Docker's init in front of it.
 `docker kill` is no crash test, because Docker counts it as a manual stop and `unless-stopped` then leaves the container down.
 The integration suite runs the same crash test ([Integration tests](#integration-tests)).
+Its hang test stops the server's processes with SIGSTOP instead (`kill -STOP` in the command above), once the start period is over: they hold the port, so nginx's connection is accepted and never answered, as with a blocked event loop.
 
 ## Integration tests
 
@@ -95,7 +103,7 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process `/health` is 200 again within 30 s (NFR-05);
+- on the Docker host: both containers run as a non-root user with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process, and after the API hangs, `/health` is 200 again within 30 s (NFR-05);
 - the rollback drill: `deploy.sh` puts the previous tag back when a new one does not start, as a second Compose project beside the stack ([Every deploy](#every-deploy)).
 
 ```bash
@@ -389,4 +397,3 @@ The actions are pinned by commit SHA with the release in a comment, which Depend
 
 - Continuous deployment to the VM: the `Deploy` workflow and `deploy.sh` with its rollback are built and rehearsed against the local stack ([Every deploy](#every-deploy)); turning them on needs the VM ([Turn continuous deployment on](#turn-continuous-deployment-on)), and so does the rollback drill on the VM itself and NFR-05's reboot check (NFR-13, FR-15).
 - The containers are hardened ([#200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200)): a read-only root file system, no capabilities, `no-new-privileges`, and limits on memory and processes, as [the Compose bullet above](#the-stack) describes and the integration suite checks.
-- Recovery from a hung API: a container that stays unhealthy is restarted, for example by a watchdog that restarts unhealthy containers, since Docker's restart policy covers only a process that exits.

@@ -1,9 +1,9 @@
 """The stack recovers by itself from a crash or a hang of the API (NFR-05).
 
-For the crash, the uvicorn process is killed with SIGKILL from the host's PID
-namespace, as the kernel's OOM killer or a segfault would end it. `docker kill`
-would not test this: Docker counts it as a manual stop, and
-`restart: unless-stopped` then leaves the container down. For the hang, the
+For the crash, the uvicorn process, not Docker's init in front of it, is killed
+with SIGKILL from the host's PID namespace, as the kernel's OOM killer or a
+segfault would end it. `docker kill` would not test this: Docker counts it as a
+manual stop, and `restart: unless-stopped` then leaves the container down. For the hang, the
 server's processes are stopped with SIGSTOP: they live on and hold the port, so
 a connection is accepted and never answered, as with a blocked event loop.
 Both signals are sent from a throwaway container of the API's own image with
@@ -34,13 +34,12 @@ def test_the_api_is_healthy_again_within_30_s_of_a_crash(
     client, api_container, record_testsuite_property
 ):
     before = api_container.inspect()
-    pid, restarts, image = before["State"]["Pid"], before["RestartCount"], before["Image"]
-    assert pid > 0, "the API container has no running process"
+    restarts, image = before["RestartCount"], before["Image"]
+    server = _server_processes(api_container)
+    assert server, "the API container runs no server process"
 
-    docker(
-        "run", "--rm", "--pid=host", "--user=0", "--network=none", "--entrypoint=python", image,
-        "-c", f"import os, signal; os.kill({pid}, signal.SIGKILL)",
-    )  # fmt: skip
+    # The server's own process, the first of its tree, not the init in front of it.
+    _signal(image, server[:1], "SIGKILL")
     killed_at = time.monotonic()
 
     status = None
@@ -113,7 +112,7 @@ def _wait_out_the_start_period(container: Container) -> None:
 
 
 def _server_processes(container: Container) -> list[int]:
-    """The host PIDs of the server: the image's command and every process it started.
+    """The host PIDs of the server: the image's command first, then every process it started.
 
     An init that Docker or the image puts in front of the command is left
     running, as is a healthcheck probe, which is no child of the command.
@@ -122,10 +121,10 @@ def _server_processes(container: Container) -> list[int]:
     rows = docker("top", container.id, "-eo", "pid,ppid,args").splitlines()[1:]
     fields = (row.split(None, 2) for row in rows)
     processes = [(int(pid), int(ppid), args) for pid, ppid, args in fields]
-    server = {pid for pid, _, args in processes if args == command}
-    while new := {pid for pid, ppid, _ in processes if ppid in server} - server:
-        server |= new
-    return sorted(server)
+    server = [pid for pid, _, args in processes if args == command]
+    for parent in server:  # grows while it runs: children, then theirs
+        server += [pid for pid, ppid, _ in processes if ppid == parent]
+    return server
 
 
 def _signal(image: str, pids: list[int], name: str) -> None:

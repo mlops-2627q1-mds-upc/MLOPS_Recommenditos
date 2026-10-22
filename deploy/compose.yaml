@@ -68,6 +68,10 @@ services:
       - /tmp:uid=10001,gid=10001,mode=0700,size=64m
       - /tmp/prometheus:uid=10001,gid=10001,mode=0700,size=16m
     restart: unless-stopped
+    # Docker's init (tini) as PID 1, with the server as its child. The healthcheck
+    # can then kill a hung server, and the container exits; the kernel ignores
+    # that kill when the server itself is PID 1 (EDN-93).
+    init: true
     logging: *logging
     environment:
       # FR-10's key for /v1/feedback, from `.env` beside this file. Empty, the
@@ -95,12 +99,14 @@ services:
       # The prediction log and the feedback, one SQLite file (EDN-86). A named
       # volume, so it survives a new image and M6's drift job can mount it.
       - prediction-log:/var/lib/recommenditos
-    # The test is the image's HEALTHCHECK (urllib against /health). Probed every
-    # second while the API starts, so nginx and `--wait` see it healthy as soon as
-    # it is, then every 10 s (NFR-05).
+    # The test is the image's HEALTHCHECK (recommenditos/api/healthcheck.py).
+    # Probed every second while the API starts, so nginx and `--wait` see it
+    # healthy as soon as it is, then every 10 s. After the start period, a probe
+    # that gets no answer in two attempts of 2 s ends the hung server, which
+    # comes back within NFR-05's 30 s (EDN-93); the timeout leaves room for both.
     healthcheck:
       interval: 10s
-      timeout: 3s
+      timeout: 6s
       start_period: 60s
       start_interval: 1s
       retries: 3

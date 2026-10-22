@@ -145,7 +145,7 @@ flowchart TB
 | Versioned client contract | `/v1` routers; `/`, `/health`, `/metrics` at the root | An incompatible change can ship as `/v2` beside `/v1`; monitors and Prometheus find the operational endpoints where they look for them | - |
 | Training-only libraries kept out of serving | `[project] dependencies` against dependency groups | MLflow, `shap` and MAPIE stay out of the image, which keeps it under NFR-04's 1 GB (702 MB measured for EDN-87); `make test-serving` fails on a serving import from a group | [EDN-47][edn], [EDN-11][edn], [EDN-85][edn] |
 | Promotion as a gated merge | Required CI check `Promotion gate` | A pull request that changes `dvc.lock` fails unless its committed verdict passes NFR-01's gate, so promoting a model is a reviewed merge; the SC-04 waiver for `lgbm-basic` is versioned in `params.yaml` | [EDN-12][edn], [EDN-62][edn], [EDN-06][edn] |
-| Health-checked containers with a restart policy | Image `HEALTHCHECK`, `restart: unless-stopped` | A crashed API is back within NFR-05's 30 s, and nginx answers 503 meanwhile; a hung but living API is only marked unhealthy until M5 | [EDN-10][edn] |
+| Health-checked containers with a restart policy | Image `HEALTHCHECK`, `restart: unless-stopped` | A crashed or hung API is back within NFR-05's 30 s, and nginx answers 503 meanwhile; for a hang, the healthcheck kills the server behind Docker's init (`init: true`) | [EDN-10][edn], [EDN-93][edn] |
 
 ## What the design leaves out
 
