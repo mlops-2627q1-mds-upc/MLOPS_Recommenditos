@@ -1,4 +1,9 @@
 name: CD
+# The commit this run builds, which the Deploy workflow reads back from the run's
+# title (`workflow_run.display_title`): for a run started by `workflow_run`,
+# GitHub gives the Deploy workflow this run's own head_sha, which is main's tip
+# when this run started, not the commit it builds. Keep the 40-hex SHA in it.
+run-name: CD of ${{ github.event.workflow_run.head_sha || github.sha }}
 
 # The API image of every merge to main, built with the model and comparables
 # index that dvc.lock points to (FR-12, EDN-08), tested as a Compose stack with

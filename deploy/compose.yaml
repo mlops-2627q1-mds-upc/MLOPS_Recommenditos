@@ -47,7 +47,7 @@ x-hardening: &hardening
 services:
   api:
     <<: *hardening
-    image: recommenditos-api:${API_IMAGE_TAG:-local}
+    image: ${API_IMAGE:-recommenditos-api}:${API_IMAGE_TAG:-local}
     build:
       context: ..
     # No `ports`: the API is reachable only inside this network, through nginx or
