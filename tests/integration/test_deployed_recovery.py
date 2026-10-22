@@ -113,13 +113,19 @@ def _wait_out_the_start_period(container: Container) -> None:
 
 
 def _server_processes(container: Container) -> list[int]:
-    """The host PIDs of uvicorn and its workers, not of an init or a healthcheck probe."""
-    rows = docker("top", container.id, "-eo", "pid,args").splitlines()[1:]
-    return [
-        int(pid)
-        for pid, args in (row.split(None, 1) for row in rows)
-        if "recommenditos.api" in args or "multiprocessing" in args
-    ]
+    """The host PIDs of the server: the image's command and every process it started.
+
+    An init that Docker or the image puts in front of the command is left
+    running, as is a healthcheck probe, which is no child of the command.
+    """
+    command = " ".join(container.inspect()["Config"]["Cmd"])
+    rows = docker("top", container.id, "-eo", "pid,ppid,args").splitlines()[1:]
+    fields = (row.split(None, 2) for row in rows)
+    processes = [(int(pid), int(ppid), args) for pid, ppid, args in fields]
+    server = {pid for pid, _, args in processes if args == command}
+    while new := {pid for pid, ppid, _ in processes if ppid in server} - server:
+        server |= new
+    return sorted(server)
 
 
 def _signal(image: str, pids: list[int], name: str) -> None:
