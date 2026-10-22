@@ -67,7 +67,7 @@ def test_the_api_port_is_not_published_on_the_host(api_container):
     assert not published, f"the API container publishes {published}"
 
 
-@pytest.mark.req("NFR-13")
+@pytest.mark.req("NFR-12")
 def test_the_image_holds_the_package_of_the_checkout(api_container):
     """The suite tests the checked-out code, not a package built from another checkout.
 

@@ -162,6 +162,7 @@ It only matters when you change a dependency or what a serving module imports, b
 `make test-integration` runs `tests/integration/` against a running stack, through nginx, the way a client reaches the API: the image as built, the proxy's rules and limits, the healthcheck and the restart policy ([Deployment](docs/docs/deployment.md#integration-tests)).
 `make test` leaves it out, because it needs the stack: start it with `make stack` after `dvc pull`, run the suite, and stop it with `make stack-down`.
 Run it when you change the API, the `Dockerfile`, `deploy/` or the dependencies; CI's `Integration (Compose stack)` job runs it on every pull request that touches them.
+Its `docker_host` tests fail when the image does not hold the checkout's `recommenditos` package; the `Dockerfile` builds that package from the build context in every build and bypasses uv's cache for it, because the cache is shared by every build on the machine and would otherwise hand over a wheel built from another worktree ([#180](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/180)).
 
 CI's `Promotion gate` job is a required check on every pull request, and it only has work to do on one that changes `dvc.lock`, the pull request that promotes a model ([EDN-12](reports/edn.md)).
 Such a pull request fails it unless the committed `metrics.json` has `gate_passed: true` and names the model being promoted, `report.candidate_variant` in `params.yaml`, as its `deployable_variant`.

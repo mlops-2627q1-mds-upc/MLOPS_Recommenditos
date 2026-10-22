@@ -34,9 +34,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Then the package itself, installed non-editable, so the environment holds it
 # and the source tree stays in this stage. flit reads README.md and LICENSE.
 # `--reinstall-package` (which implies `--refresh-package`) builds the wheel from
-# this context every time: the cache mount is shared by every build on the
-# machine, and every checkout's project sits at /app with the same version, so
-# uv would otherwise install a wheel it built from another checkout (#180).
+# this context every time. The cache mount is shared by every build on the
+# machine and every checkout's project sits at /app, so when pyproject.toml, the
+# cache key uv checks for a local project, matches another checkout's, uv would
+# install the wheel it built from that checkout (#180).
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY recommenditos ./recommenditos
 RUN --mount=type=cache,target=/root/.cache/uv \
