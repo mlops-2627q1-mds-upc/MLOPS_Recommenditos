@@ -4,12 +4,17 @@ The request is `PartialListing`, the body of `/v1/price-range`, plus `k`, so a
 client sends the same car to both endpoints.
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from recommenditos.api.comparables import DEFAULT_K, MAX_K, ComparablesIndex
-from recommenditos.api.schemas.common import MODEL_EXAMPLE, FieldWarning, ModelInfo
+from recommenditos.api.schemas.common import (
+    _WHOLE_NUMBER,
+    MODEL_EXAMPLE,
+    FieldWarning,
+    ModelInfo,
+)
 from recommenditos.api.schemas.partial_listing import PartialListing
 
 #: The version and size of the index in `ComparablesIndexInfo`'s example.
@@ -19,12 +24,16 @@ INDEX_EXAMPLE: dict[str, Any] = {"version": "9993b933797d905b2b6271b03bac50ee", 
 class ComparablesRequest(PartialListing):
     """A car described as for `/v1/price-range`, and how many listings to return."""
 
-    k: int = Field(
-        default=DEFAULT_K,
-        ge=1,
-        le=MAX_K,
-        description=f"How many listings to return at most, 1 to {MAX_K}; {DEFAULT_K} if left out.",
-    )
+    k: Annotated[
+        int,
+        Field(
+            ge=1,
+            le=MAX_K,
+            description=f"How many listings to return at most, 1 to {MAX_K}; {DEFAULT_K} if "
+            "left out.",
+        ),
+        _WHOLE_NUMBER,
+    ] = DEFAULT_K
 
     model_config = ConfigDict(
         json_schema_extra={

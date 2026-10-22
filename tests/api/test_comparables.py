@@ -161,6 +161,16 @@ def test_fr09_k_defaults_to_5_and_is_capped_at_20(
         assert pointers(problem) == ["#/k"]
 
 
+@pytest.mark.req("FR-09", "FR-03")
+def test_fr09_k_is_a_whole_number_like_the_other_integer_fields(client: TestClient, car: dict):
+    make = {"make": car["make"]}
+
+    assert len(answered(client.post(COMPARABLES, json=make | {"k": 5.0}))) == 5
+    for k in ("5", True, 5.5):
+        problem = assert_problem(client.post(COMPARABLES, json=make | {"k": k}), 422)
+        assert pointers(problem) == ["#/k"]
+
+
 @pytest.mark.req("FR-09")
 def test_fr09_a_field_sent_as_null_is_a_field_left_out(client: TestClient, car: dict):
     nulls = {"make": car["make"], "model": car["model"], "registration_date": None}
