@@ -3,10 +3,13 @@ name: Retrain
 # FR-15: a person who reacts to a monitoring finding, or to a stale `dvc.lock`
 # (#193), retrains here instead of on a laptop (EDN-92, issue #201). The run
 # reproduces the pipeline from `main` on a GitHub-hosted runner, logs to the
-# DagsHub MLflow, pushes the artefacts to the DagsHub DVC remote and opens a
-# draft promotion pull request with the new `dvc.lock`. Nothing merges by itself
-# (EDN-12): a person marks the pull request ready, which starts CI and with it the
-# Promotion gate, and merges it.
+# DagsHub MLflow, pushes the artefacts to the DagsHub DVC remote and pushes the
+# new `dvc.lock` to a branch. Its summary holds the evidence and a link that opens
+# the promotion pull request with its title and body filled in. A person opens
+# it, which is EDN-12's approval step and starts CI with the Promotion gate, and
+# merges it; nothing merges by itself. The workflow does not open the pull
+# request itself: one opened with GITHUB_TOKEN would start no CI, and the
+# repository does not let Actions create pull requests (EDN-92).
 #
 # Started by hand only (EDN-12 rules out a schedule), and only from `main`: the
 # `dagshub` environment holds a token that can write, and its branch policy
@@ -65,7 +68,6 @@ jobs:
     environment: dagshub
     permissions:
       contents: write
-      pull-requests: write
     env:
       BRANCH: retrain/run-${{ github.run_number }}
     steps:
@@ -165,20 +167,7 @@ jobs:
             -c user.email="41898299+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "chore: retrain the pipeline on GitHub Actions" -m "$REASON"
 
-      - name: Write the pull request
-        if: steps.changed.outputs.lock == 'true'
-        env:
-          REASON: ${{ inputs.reason }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          uv run python -m tools.retrain_promotion body --base origin/main \
-            --runs "$RUNNER_TEMP/promotion/runs.json" --reason "$REASON" --run-url "$RUN_URL" --out-dir "$RUNNER_TEMP/promotion"
-          cat "$RUNNER_TEMP/promotion/body.md" >> "$GITHUB_STEP_SUMMARY"
-
-      # A pull request opened with GITHUB_TOKEN triggers no workflow, so CI would
-      # never report its required checks. It is opened as a draft, and the person
-      # who marks it ready triggers CI (`ready_for_review` in ci.yml).
-      - name: Push the branch and open the draft pull request
+      - name: Push the branch
         if: steps.changed.outputs.lock == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -186,5 +175,15 @@ jobs:
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
             push origin "HEAD:refs/heads/$BRANCH"
-          gh pr create --draft --base main --head "$BRANCH" \
-            --title "$(cat "$RUNNER_TEMP/promotion/title.txt")" --body-file "$RUNNER_TEMP/promotion/body.md"
+
+      - name: Write the evidence and the pull request link to the summary
+        if: steps.changed.outputs.lock == 'true'
+        env:
+          REASON: ${{ inputs.reason }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          uv run python -m tools.retrain_promotion summary --base origin/main \
+            --runs "$RUNNER_TEMP/promotion/runs.json" --reason "$REASON" --run-url "$RUN_URL" \
+            --repo-url "$REPO_URL" --branch "$BRANCH" --out-dir "$RUNNER_TEMP/promotion"
+          cat "$RUNNER_TEMP/promotion/summary.md" >> "$GITHUB_STEP_SUMMARY"

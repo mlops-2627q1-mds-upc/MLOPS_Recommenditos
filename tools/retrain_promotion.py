@@ -1,21 +1,23 @@
-"""The promotion pull request of a retrain on GitHub Actions (FR-15, issue #201).
+"""The evidence and the pull request link of a retrain on GitHub Actions (FR-15, #201).
 
     python -m tools.retrain_promotion tag-runs --base <git ref> --out <runs.json>
-    python -m tools.retrain_promotion body --base <git ref> --runs <runs.json> \
-        --reason <text> --run-url <url> --out-dir <dir>
+    python -m tools.retrain_promotion summary --base <git ref> --runs <runs.json> \
+        --reason <text> --run-url <url> --repo-url <url> --branch <name> --out-dir <dir>
 
 `.github/workflows/retrain.yml` runs `dvc repro` on a GitHub-hosted runner and
-opens a pull request with the new `dvc.lock`. This module writes what that pull
-request says, so that a reviewer decides on the evidence without opening the run:
+pushes the new `dvc.lock` to a branch. A person opens the promotion pull request
+from that branch, which is EDN-12's approval step (EDN-92). This module writes
+what the person decides on:
 
-- `tag-runs` marks the MLflow runs the retrain trained as trained on a GitHub runner, and
-  their energy figures as an estimate for that machine: CodeCarbon falls back to
-  the TDP of the runner's server CPU, so they are not comparable with the laptop
-  figures NFR-10 is judged on (EDN-92). It also writes the run links for `body`.
-  It is the one command here that needs the tracking server.
-- `body` writes the title and the body: the model version, the gate verdict of
-  NFR-01 as the Promotion gate check will see it, the metrics of every variant
-  beside the committed ones, and NFR-06's comparison with them.
+- `tag-runs` marks the MLflow runs the retrain trained as trained on a GitHub
+  runner, and their energy figures as an estimate for that machine: CodeCarbon
+  falls back to the TDP of the runner's server CPU, so they are not comparable
+  with the laptop figures NFR-10 is judged on (EDN-92). It also writes the run
+  links for `summary`. It is the one command here that needs the tracking server.
+- `summary` writes the job summary: a link that opens the pull request with its
+  title and a short body filled in, then the evidence: the model version, the
+  gate verdict of NFR-01 as the Promotion gate check will see it, the metrics of
+  every variant beside the committed ones, and NFR-06's comparison with them.
 
 The model version is the MD5 `dvc.lock` records for `models/<candidate>`, which
 is what `/health` reports (`recommenditos.api.serving.bundle_version`).
@@ -29,8 +31,8 @@ from pathlib import Path
 import platform
 import subprocess
 import sys
+from urllib.parse import urlencode
 
-import mlflow
 import yaml
 
 from tools import promotion_gate
@@ -52,7 +54,10 @@ SHARE_MAX = 1.5
 MACHINE_TAG = "trained_on"
 ENERGY_TAG = "energy_estimate"
 
-#: How many leaves outside the tolerance the body lists before it only counts them.
+#: The longest reason the pull request link carries; the summary has it whole.
+MAX_REASON_IN_LINK = 300
+
+#: How many leaves outside the tolerance the summary lists before it only counts them.
 MAX_LISTED = 15
 
 
@@ -161,7 +166,7 @@ def render(
     runs: dict,
     root: Path | None = None,
 ) -> tuple[str, str]:
-    """The title and the body of the promotion pull request for the workspace at `root`."""
+    """The title of the promotion pull request and the evidence for the workspace at `root`."""
     root = root or PROJ_ROOT
     params = yaml.safe_load((root / "params.yaml").read_text("utf-8"))
     candidate = promotion_gate.promoted_variant(params)
@@ -193,7 +198,7 @@ def render(
         "",
         "## Gate of NFR-01",
         "",
-        f"The Promotion gate check **{gate}** for this pull request.",
+        f"The Promotion gate check **{gate}** for the promotion pull request.",
         (
             f"`gate_passed` is `{json.dumps(metrics.get('gate_passed'))}`, the deployable "
             f"variant is `{metrics.get('deployable_variant')}`, and "
@@ -236,18 +241,36 @@ def render(
             f"carry the tags `{MACHINE_TAG}` and `{ENERGY_TAG}`."
         ),
         "",
-        "## Before merging",
+        "## After opening the pull request",
         "",
         (
-            "- [ ] Mark this pull request ready for review: that starts CI, including the "
-            "Promotion gate (a pull request the workflow opens triggers no workflow itself)."
-        ),
-        (
-            "- [ ] Read the metrics and the reproduction above; merging promotes and deploys "
-            "the model (EDN-08, EDN-12). Nothing merges automatically."
+            "CI runs on it, the Promotion gate included. Merging it promotes and deploys the "
+            "model (EDN-08, EDN-12); nothing merges by itself. To drop the retrain, delete "
+            "the branch instead."
         ),
     ]
     return title, "\n".join(lines) + "\n"
+
+
+def compare_link(*, repo_url: str, branch: str, title: str, reason: str, run_url: str) -> str:
+    """The link that opens the pull request from `branch`, its title and body filled in.
+
+    The body is short and points to the run, whose summary holds the evidence: a
+    URL much over 2,000 characters is not opened everywhere, and the evidence is
+    several times that. Opening the pull request is the person's approval step,
+    and a pull request a person opens starts CI, which one opened with the
+    workflow's own token would not.
+    """
+    if len(reason) > MAX_REASON_IN_LINK:
+        reason = reason[: MAX_REASON_IN_LINK - 3].rstrip() + "..."
+    body = (
+        f"Retrained by {run_url}.\n\n"
+        f"**Why:** {reason.strip() or '(no reason given)'}\n\n"
+        "The model version, the metrics before and after with their MLflow runs, the gate "
+        f"verdict of NFR-01 and NFR-06's comparison are in the run's summary: {run_url}\n"
+    )
+    query = urlencode({"expand": "1", "title": title, "body": body})
+    return f"{repo_url.rstrip('/')}/compare/main...{branch}?{query}"
 
 
 def reproduction(base: str, variants: list[str], root: Path) -> list[str]:
@@ -309,6 +332,11 @@ def tag_runs(out: Path, base: str, root: Path | None = None) -> dict:
     keeps its tags.
     """
     root = root or PROJ_ROOT
+    # Imported here, so that `summary` neither loads MLflow nor prints its agent hint
+    # into the job log; `recommenditos.tracking` silences the hint the same way.
+    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
+    import mlflow  # noqa: PLC0415
+
     # From the environment, as the stages read it, and not `mlflow.get_tracking_uri()`,
     # which `recommenditos.tracking` points at a refusing sentinel when it is unset.
     uri = os.environ.get("MLFLOW_TRACKING_URI", "").rstrip("/")
@@ -345,12 +373,14 @@ def main(argv: list[str] | None = None) -> int:
     tag = commands.add_parser("tag-runs", help="tag the variants' MLflow runs, write their links")
     tag.add_argument("--base", required=True, help="git ref of the committed outputs")
     tag.add_argument("--out", type=Path, required=True)
-    body = commands.add_parser("body", help="write the title and body of the pull request")
-    body.add_argument("--base", required=True, help="git ref of the committed outputs")
-    body.add_argument("--runs", type=Path, help="the file `tag-runs` wrote")
-    body.add_argument("--reason", default="")
-    body.add_argument("--run-url", default="")
-    body.add_argument("--out-dir", type=Path, required=True)
+    report = commands.add_parser("summary", help="write the evidence and the pull request link")
+    report.add_argument("--base", required=True, help="git ref of the committed outputs")
+    report.add_argument("--runs", type=Path, help="the file `tag-runs` wrote")
+    report.add_argument("--reason", default="")
+    report.add_argument("--run-url", default="")
+    report.add_argument("--repo-url", required=True, help="https://github.com/<owner>/<repo>")
+    report.add_argument("--branch", required=True, help="the branch the retrain pushed")
+    report.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args(argv)
 
     if args.command == "tag-runs":
@@ -358,11 +388,24 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{variant}: {entry['url']}")
         return 0
     runs = json.loads(args.runs.read_text("utf-8")) if args.runs and args.runs.exists() else {}
-    title, text = render(base=args.base, reason=args.reason, run_url=args.run_url, runs=runs)
+    title, evidence = render(base=args.base, reason=args.reason, run_url=args.run_url, runs=runs)
+    link = compare_link(
+        repo_url=args.repo_url,
+        branch=args.branch,
+        title=title,
+        reason=args.reason,
+        run_url=args.run_url,
+    )
+    summary = (
+        f"## Promotion ready on `{args.branch}`\n\n"
+        f"**[Open the promotion pull request]({link})** - opening it is the approval step "
+        "of EDN-12 and starts CI.\n\n"
+        f"Title: `{title}`\n\n{evidence}"
+    )
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    (args.out_dir / "title.txt").write_text(title + "\n", "utf-8")
-    (args.out_dir / "body.md").write_text(text, "utf-8")
+    (args.out_dir / "summary.md").write_text(summary, "utf-8")
     print(title)
+    print(link)
     return 0
 
 

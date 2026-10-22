@@ -9,12 +9,14 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+from urllib.parse import parse_qs, urlsplit
 
 import mlflow
 import pytest
 from tools.retrain_promotion import (
     ENERGY_TAG,
     MACHINE_TAG,
+    compare_link,
     main,
     model_version,
     outside_tolerance,
@@ -164,16 +166,43 @@ def test_a_rejected_model_is_announced_as_failing_the_gate(repo):
 
 
 @pytest.mark.req("FR-15")
-def test_the_command_writes_the_title_and_the_body(repo, monkeypatch, tmp_path_factory):
+def test_the_summary_links_to_a_prefilled_pull_request_and_holds_the_evidence(
+    repo, monkeypatch, tmp_path_factory
+):
     retrain(repo, mdape=0.0670, gate_passed=True, model_md5="d" * 32)
     out = tmp_path_factory.mktemp("promotion")
     monkeypatch.setattr("tools.retrain_promotion.PROJ_ROOT", repo)
     monkeypatch.chdir(repo)
+    arguments = ["summary", "--base", "main", "--out-dir", str(out), "--reason", "test"]
+    arguments += ["--repo-url", "https://github.com/o/r", "--branch", "retrain/run-7"]
+    arguments += ["--run-url", "https://github.com/o/r/actions/runs/1"]
 
-    assert main(["body", "--base", "main", "--out-dir", str(out), "--reason", "test"]) == 0
+    assert main(arguments) == 0
 
-    assert (out / "title.txt").read_text("utf-8").startswith(f"chore: promote {CANDIDATE}")
-    assert "## Reproduction (NFR-06)" in (out / "body.md").read_text("utf-8")
+    summary = (out / "summary.md").read_text("utf-8")
+    link = summary.split("](", 1)[1].split(")", 1)[0]
+    query = parse_qs(urlsplit(link).query)
+    assert link.startswith("https://github.com/o/r/compare/main...retrain/run-7?")
+    assert query["expand"] == ["1"]
+    assert query["title"] == [
+        f"chore: promote {CANDIDATE} model dddddddd from a retrain on GitHub Actions"
+    ]
+    assert "https://github.com/o/r/actions/runs/1" in query["body"][0]
+    assert "## Reproduction (NFR-06)" in summary
+
+
+@pytest.mark.req("FR-15")
+def test_the_link_stays_short_whatever_the_reason():
+    link = compare_link(
+        repo_url="https://github.com/o/r",
+        branch="retrain/run-7",
+        title="chore: promote x",
+        reason="a monitoring finding " * 200,
+        run_url="https://github.com/o/r/actions/runs/1",
+    )
+
+    assert len(link) < 2000
+    assert parse_qs(urlsplit(link).query)["body"][0].count("...") == 1
 
 
 @pytest.mark.req("FR-15", "NFR-10")
