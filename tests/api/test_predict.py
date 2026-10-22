@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 import shutil
 import threading
+import time
 
 from fastapi.testclient import TestClient
 from hypothesis import HealthCheck, given, settings
@@ -18,6 +19,7 @@ import pytest
 from tests.api.helpers import assert_problem, pointers
 
 from recommenditos.api.app import create_app
+from recommenditos.api.schemas.partial_listing import PartialListing
 from recommenditos.api.schemas.predict import Valuation, ValuationRequest
 from recommenditos.api.serving import (
     COUNTRIES,
@@ -675,13 +677,33 @@ def test_fr08_the_documented_example_reproduces_its_estimate():
 
 
 @pytest.mark.req("NFR-02", "NFR-03")
-def test_nfr02_a_process_scores_one_request_at_a_time(served: ServedModel, listing: dict):
-    """A valuation waits while another holds the model, instead of taking turns at the GIL."""
-    request = ValuationRequest(**listing)
-    finished = threading.Event()
-    worker = threading.Thread(target=lambda: (served.value(request), finished.set()))
-    with served._scoring:
-        worker.start()
-        assert not finished.wait(timeout=0.5)
-    worker.join(timeout=30)
-    assert finished.is_set()
+@pytest.mark.parametrize(
+    ("method", "schema"), [("value", ValuationRequest), ("price_range", PartialListing)]
+)
+def test_nfr02_a_process_scores_one_request_at_a_time(
+    method: str, schema: type, served: ServedModel, listing: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """Concurrent requests are scored one after another, instead of taking turns at the GIL."""
+    request = schema(**listing)
+    active, peak, guard = [0], [0], threading.Lock()
+    scored = f"_{method}"
+    original = getattr(ServedModel, scored)
+
+    def tracked(self: ServedModel, request):
+        with guard:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.05)
+        try:
+            return original(self, request)
+        finally:
+            with guard:
+                active[0] -= 1
+
+    monkeypatch.setattr(ServedModel, scored, tracked)
+    callers = [threading.Thread(target=getattr(served, method), args=(request,)) for _ in range(4)]
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join(timeout=30)
+    assert peak[0] == 1

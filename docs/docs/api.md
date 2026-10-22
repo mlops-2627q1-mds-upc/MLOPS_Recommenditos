@@ -48,16 +48,23 @@ curl -s -X POST http://127.0.0.1:8000/v1/predict -H 'content-type: application/j
 
 ## Performance
 
-A request is scored on one thread: `python -m recommenditos.api`, and so the image, sets `OMP_NUM_THREADS=1` for its workers unless the environment sets it already.
+Each worker process scores one request at a time, in the order the requests arrive, on a thread of its own (`ServedModel` hands every valuation and price range to it).
+The request threads of uvicorn's pool wait for their answer there without using CPU.
+Scored in the request threads themselves, concurrent requests took turns at the GIL every few milliseconds, and every request's latency grew to that of all of them.
+In one process with 8 callers in a closed loop on the laptop (issue #179), that cost 86 ms of CPU per valuation against 50 ms with the scoring thread, and p99 was 677 ms against 550 ms.
+A plain lock serialises the requests too, but it is not fair: a thread that releases it can take it straight back, and p99 reached 4.7 s.
+The trade-off is that one process uses at most about one core for scoring, so the API scales by workers (`WEB_CONCURRENCY`), each with about 240 MiB of memory, and this pays off when there are about as many workers as vCPUs.
+At 10 requests per second in one process, with cores to spare, p95 was 64 ms with the scoring thread and 78 ms without it.
+
+`python -m recommenditos.api`, and so the image, sets `OMP_NUM_THREADS=1` for its workers unless the environment sets it already.
 LightGBM's default is one OpenMP thread per core, and `Booster.predict` ignores the `num_threads` that `booster.txt` records.
-For one row that parallelism only adds threads that wait: a valuation took 73 ms and 339 ms of CPU with the default, and 50 ms and 51 ms of CPU on one thread with the explanation summed in NumPy, and under concurrent requests the threads of every request and every worker competed for the same cores (issue #179).
+In a worker's scoring thread one OpenMP thread costs 47 ms of CPU per valuation against 50 ms with the default, and each worker then no longer holds an OpenMP team for every thread that ever scored (137 to 345 threads per worker under load).
 The answers are the same either way; the FR-06 parity test compares the API's prices with the pipeline's, which predicts with the default.
 Batch scoring in the pipeline keeps the default, and so does an app started another way, such as the tests' `TestClient`.
 
-What is left of a valuation's 50 ms is about 18 ms to build the one-row matrix (`build_matrix` and the schema's casts, the code the pipeline uses too), about 20 ms for LightGBM's SHAP export behind the explanation, and the price itself.
-Most of it is Python and holds the GIL, so a worker process scores one request at a time (`ServedModel` holds a lock while it scores): concurrent requests in uvicorn's thread pool otherwise took turns at the GIL every few milliseconds, which cost about 40 % more CPU per request and stretched every request's latency to that of all of them.
-In the laptop measurement of issue #179, one worker saturated at about 20 requests per second of the load test's mix, at one core; more throughput needs more workers (`WEB_CONCURRENCY`), each with about 240 MiB of memory.
-[Load testing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143) measures what the VM sustains.
+A valuation takes about 50 ms: about 18 ms to build the one-row matrix (`build_matrix` and the schema's casts, the code the pipeline uses too), about 20 ms for LightGBM's SHAP export behind the explanation, and the price itself.
+The explanation's per-field sums run on the NumPy array, 0.1 ms against 7 ms through pandas.
+In the laptop measurement, one worker saturated at about 20 requests per second of the load test's mix; [Load testing](load-testing.md) measures what the VM sustains.
 
 ## Endpoints
 

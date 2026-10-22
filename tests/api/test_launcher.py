@@ -11,6 +11,9 @@ from recommenditos.api import __main__ as launcher
 def started(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """The uvicorn command lines `main` would have run, with nothing started."""
     runs: list[list[str]] = []
+    # `setenv` first, so that monkeypatch restores the variable's absence after
+    # the launcher's `setdefault` set it.
+    monkeypatch.setenv("OMP_NUM_THREADS", "unset by the test")
     monkeypatch.setattr(launcher, "prepare_multiprocess_dir", lambda: None)
     monkeypatch.setattr(launcher.uvicorn.main, "main", lambda args, prog_name: runs.append(args))
     return runs
@@ -21,7 +24,7 @@ def test_nfr02_the_launcher_gives_lightgbm_one_thread(
     started: list[list[str]], monkeypatch: pytest.MonkeyPatch
 ):
     """Workers inherit `OMP_NUM_THREADS=1`, so a prediction does not spread over every core."""
-    monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
+    monkeypatch.delenv("OMP_NUM_THREADS")
     launcher.main(["--port", "8000"])
     assert os.environ["OMP_NUM_THREADS"] == launcher.OMP_THREADS == "1"
     assert started[0][-2:] == ["--port", "8000"]

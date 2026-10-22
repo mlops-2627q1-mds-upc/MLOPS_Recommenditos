@@ -18,12 +18,13 @@ grouped by request field, so a bundle that has none cannot be served.
 """
 
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
-import threading
 from typing import Any
 
 import numpy as np
@@ -155,12 +156,18 @@ class ServedModel:
     allowed: Mapping[str, tuple[str, ...]]
     #: Per input field the model reads, the matrix columns it became.
     fields: Mapping[str, tuple[str, ...]]
-    #: Held while the model scores a request, so one request at a time is scored
-    #: per process. Concurrent requests in uvicorn's thread pool otherwise take
-    #: turns at the GIL every few milliseconds, and each one's latency grows to
-    #: that of all of them (issue #179); waiting on a lock costs no CPU.
-    _scoring: threading.Lock = field(
-        default_factory=threading.Lock, init=False, repr=False, compare=False
+    #: The one thread that scores this process's requests, in the order they
+    #: arrive. A request thread of uvicorn's pool hands its request over and
+    #: waits, which costs no CPU; scored in the request threads themselves,
+    #: concurrent requests took turns at the GIL every few milliseconds. A lock
+    #: would serialise them too, but it is not fair: a thread that releases it
+    #: can take it straight back, and in a closed loop of 8 callers a request
+    #: then waited up to 5 s (issue #179).
+    _scorer: ThreadPoolExecutor = field(
+        default_factory=lambda: ThreadPoolExecutor(max_workers=1, thread_name_prefix="scorer"),
+        init=False,
+        repr=False,
+        compare=False,
     )
 
     @classmethod
@@ -246,8 +253,7 @@ class ServedModel:
 
     def value(self, request: ValuationRequest) -> Estimate:
         """The price of `request` in EUR, its explanation, and the warnings for it."""
-        with self._scoring:
-            return self._value(request)
+        return self._scorer.submit(copy_context().run, self._value, request).result()
 
     def _value(self, request: ValuationRequest) -> Estimate:
         matrix = self.matrix(request)
@@ -282,8 +288,7 @@ class ServedModel:
         self, request: PartialListing
     ) -> tuple[PriceRangeEstimate, list[tuple[str, str]]]:
         """The price range of `request` (FR-07), and the fields it reported as unseen."""
-        with self._scoring:
-            return self._price_range(request)
+        return self._scorer.submit(copy_context().run, self._price_range, request).result()
 
     def _price_range(
         self, request: PartialListing
