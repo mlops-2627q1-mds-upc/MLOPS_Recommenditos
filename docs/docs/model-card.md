@@ -401,7 +401,7 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
   The training and validation L1 that `fit_variant` writes into the model record are predicted with `Booster.predict`, which ignores the setting and uses LightGBM's default of one OpenMP thread per core: 16.2 s of CPU time on other threads in 2.5 s for `lgbm-extended`, and 10.0 s in 1.5 s for `lgbm-basic`.
   Those threads do useful work and change no number: at `OMP_NUM_THREADS=1` the two L1 are identical, and the step takes 15.4 s and 9.5 s instead.
   `b1` runs on OpenBLAS's pool of one thread per core, in the Ridge solver and in the predictions, and gains no time from it (the Ridge item below says what it changes): 4.2 s of CPU time on other threads in a span of 1.32 s, against 1.09 s at `OPENBLAS_NUM_THREADS=1`.
-  CodeCarbon's own sampling adds about 1 % of CPU time.
+  CodeCarbon's own sampling adds at most about 1 % of CPU time: the threads that ended inside the span used 1.78 s with the tracker against 0.03 s without it for `lgbm-basic` (1.0 %), and 0.28 s against 0.05 s for `lgbm-extended` (0.5 %).
   The measured CPU time over wall time is therefore 4.2 for `b1`, 1.07 for `lgbm-basic`, whose span is mostly its single-threaded price range, and 1.65 for `lgbm-extended`; with both variables at 1 it is 1.00 for all three.
 - **LightGBM:** `deterministic=True` and `force_row_wise=True`, so the histogram construction is not chosen by data size and thread count.
   Documented insurance rather than a measured fix, and worth being exact about: with both flags **off** the trees are still identical across 1, 2, 4 and 8 threads, so the flags are not what makes the result thread-independent here.
