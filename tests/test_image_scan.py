@@ -165,10 +165,18 @@ def test_the_committed_trivyignore_is_well_formed():
 
 
 def dockerfile_images() -> list[str]:
+    """The images the Dockerfiles' `FROM` lines pull, leaving out the lines that
+    start from an earlier stage of the same file."""
     images = []
     for dockerfile in (PROJ_ROOT / "Dockerfile", PROJ_ROOT / "reports" / "latex" / "Dockerfile"):
-        text = dockerfile.read_text(encoding="utf-8")
-        images += [line.split()[1] for line in text.splitlines() if line.startswith("FROM ")]
+        stages = set()
+        for line in dockerfile.read_text(encoding="utf-8").splitlines():
+            if line.startswith("FROM "):
+                words = line.split()
+                if words[1] not in stages:
+                    images.append(words[1])
+                if len(words) == 4 and words[2].upper() == "AS":
+                    stages.add(words[3])
     return images
 
 
