@@ -134,13 +134,13 @@ For every other commit, one job:
 2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache;
 3. fails if the image is larger than 1 GB (NFR-04);
 4. starts the Compose stack with it and runs the [integration suite](#integration-tests) with no expected-version override, so `/health` has to report the hashes `dvc.lock` records;
-5. pushes `:<commit SHA>` and moves `:latest` to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
-6. writes the pushed tags, the digest, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
+5. scans the API image and the nginx image with trivy and fails on a HIGH or CRITICAL vulnerability that has a fix available ([Vulnerabilities and dependency updates](#vulnerabilities-and-dependency-updates));
+6. pushes `:<commit SHA>` and moves `:latest` to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
+7. writes the pushed tags, the digest, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
 
 Only the `dvc pull` step sees the DagsHub token.
 It is a secret of the GitHub Environment `dagshub`, which only `main` may use, and the step writes it into `.dvc/config.local`, as on a laptop, and deletes that file when it ends.
 The job's token may read the repository and write packages, nothing more.
-The trivy scan of [#199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199) goes between the tests and the push.
 
 The builder stage's layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged skips the `uv sync` of the third-party dependencies.
 The runtime stage copies the whole environment as one layer of 536 MB (`docker history`) that holds the `recommenditos` package too, so a change to the package or the lock rebuilds and pushes that layer; a model promotion, which changes only `dvc.lock`, reuses it and rebuilds only the bundle's 45 MB layer.
