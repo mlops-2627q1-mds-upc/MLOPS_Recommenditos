@@ -25,7 +25,7 @@ import urllib.request
 from fastapi.testclient import TestClient
 from loguru import logger
 import pytest
-from tests.api.helpers import free_port, stop_service
+from tests.api.helpers import SKIP_UVICORN_WORKERS_ON_WINDOWS, free_port, stop_service
 
 from recommenditos.api.logs import LOG_FORMAT_ENV_VAR, json_sink, log_format, text_format
 from recommenditos.api.metrics import UNMATCHED_PATH
@@ -53,18 +53,6 @@ ANSWER_FIELDS = {
 CLIENT_ADDRESS = "203.0.113.7"
 
 STARTUP_SECONDS = 120
-
-#: uvicorn 0.54 binds the port in its supervisor without listening on it, and on
-#: Windows each worker shares the socket into itself and calls `listen()` on it.
-#: When the workers start at the same moment, about one start in twenty on CI's
-#: Windows runner, one of them fails with "OSError: [WinError 10022]". The
-#: supervisor replaces it, but the worker's traceback is printed by
-#: `multiprocessing`, not logged, so it is not JSON. The image runs Linux, where
-#: the same test with two workers runs.
-UVICORN_WINDOWS_WORKER_RACE = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="uvicorn's workers race on listen() on Windows (WinError 10022)",
-)
 
 
 @pytest.fixture
@@ -204,7 +192,7 @@ def _parsed(text: str) -> list[dict[str, Any]]:
 
 
 @pytest.mark.req("FR-11", "NFR-08")
-@pytest.mark.parametrize("workers", [1, pytest.param(2, marks=UVICORN_WINDOWS_WORKER_RACE)])
+@pytest.mark.parametrize("workers", [1, pytest.param(2, marks=SKIP_UVICORN_WORKERS_ON_WINDOWS)])
 def test_fr11_the_service_logs_one_json_object_per_line(
     bundle: Path, listing: dict, tmp_path: Path, workers: int
 ):

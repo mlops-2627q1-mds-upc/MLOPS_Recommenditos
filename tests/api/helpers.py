@@ -9,10 +9,23 @@ import sys
 from typing import Any
 
 from httpx2 import Response
+import pytest
 
 from recommenditos.api.errors import PROBLEM_MEDIA_TYPE
 from recommenditos.api.middleware import REQUEST_ID_HEADER
 from recommenditos.api.prediction_log import AnswerRecord, SqliteStore
+
+#: For a test that starts the service with several uvicorn workers. uvicorn 0.54
+#: binds the port in its supervisor without listening on it, and on Windows each
+#: worker shares the socket into itself and calls `listen()` on it. When the
+#: workers start at the same moment, about one start in twenty on CI's Windows
+#: runner, one of them fails with "OSError: [WinError 10022]"; the supervisor
+#: replaces it and prints its traceback, which is not part of the JSON log. The
+#: image runs Linux, and the Linux CI job runs these tests.
+SKIP_UVICORN_WORKERS_ON_WINDOWS = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="uvicorn's workers race on listen() on Windows (WinError 10022); Linux CI runs it",
+)
 
 #: The members every problem carries (RFC 9457), and the one a 422 adds.
 PROBLEM_MEMBERS = {"type", "title", "status", "detail", "instance"}
