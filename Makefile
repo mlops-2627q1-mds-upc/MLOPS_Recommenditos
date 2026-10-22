@@ -108,6 +108,11 @@ metrics:
 API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
 
+## Write the API's OpenAPI document to docs/docs/openapi.json (after every API contract change)
+.PHONY: openapi
+openapi:
+	$(PYTHON_INTERPRETER) -m tools.openapi_snapshot
+
 ## Run the API locally with uvicorn on http://127.0.0.1:8000 (docs at /docs)
 .PHONY: api
 api:

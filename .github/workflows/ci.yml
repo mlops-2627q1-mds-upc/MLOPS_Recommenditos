@@ -65,6 +65,9 @@ jobs:
               # request that changes only a copy has to run it.
               - "reports/figures/**"
               - "reports/latex/figures/**"
+              # The committed OpenAPI document: a test asserts it is the one the
+              # app serves, so an edit to the file alone has to run it.
+              - "docs/docs/openapi.json"
               - ".github/workflows/ci.yml"
             # The serving job runs `make test-serving`, so a change to that target
             # alone has to run it too.

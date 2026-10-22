@@ -6,12 +6,20 @@ parameter, an example for every response, and every error documented as an RFC
 9457 problem.
 """
 
+import copy
+import json
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from tools.openapi_snapshot import SNAPSHOT
 
+from recommenditos.api.app import openapi_contract
 from recommenditos.api.errors import PROBLEM_MEDIA_TYPE
+from recommenditos.api.schemas.common import ListingFields
 from recommenditos.api.serving import ServedModel
+from recommenditos.config import PROJ_ROOT
 
 _METHODS = {"get", "put", "post", "delete", "patch"}
 
@@ -129,3 +137,68 @@ def test_fr12_the_documented_values_are_the_served_models(app: FastAPI, served: 
     assert properties["make"]["enum"] == list(served.allowed["make"])
     drive_train = next(branch for branch in properties["drive_train"]["anyOf"] if "enum" in branch)
     assert drive_train["enum"] == list(served.model.input_schema.levels["drive_train"])
+
+
+@pytest.mark.req("FR-16")
+def test_fr16_the_committed_openapi_document_is_the_one_the_app_serves(
+    app: FastAPI, served: ServedModel
+):
+    """docs/docs/openapi.json, which the docs site renders, is the served contract.
+
+    The served document differs from it only by the `enum`s of the checked
+    listing fields, which come from the loaded bundle, so that a retrain does
+    not change the committed contract.
+    """
+    committed = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    served_contract = _without_allowed_values(app.openapi(), served)
+
+    assert served_contract == openapi_contract(), (
+        "the served document differs from `openapi_contract()` by more than the bundle's "
+        "allowed values; finish the document in `recommenditos.api.app._contract`"
+    )
+    differences = _differences(committed, served_contract)
+    snapshot = SNAPSHOT.relative_to(PROJ_ROOT).as_posix()
+    assert not differences, (
+        f"{snapshot} is not the OpenAPI document the app serves; run `make openapi` and "
+        f"commit the file. It differs at the JSON pointers: {', '.join(differences[:10])}"
+        + (f" and {len(differences) - 10} more" if len(differences) > 10 else "")
+    )
+
+
+def _without_allowed_values(document: dict[str, Any], served: ServedModel) -> dict[str, Any]:
+    """`document` without the `enum`s `create_app` adds: on the string branches of a
+    checked field, in the schemas of `ListingFields` and its subclasses."""
+    document = copy.deepcopy(document)
+    listings = {model.__name__ for model in _subclasses(ListingFields)}
+    for name, schema in document["components"]["schemas"].items():
+        if name not in listings:
+            continue
+        for field in served.allowed:
+            prop = schema.get("properties", {}).get(field)
+            for branch in prop.get("anyOf", [prop]) if prop else []:
+                if branch.get("type") == "string":
+                    branch.pop("enum", None)
+    return document
+
+
+def _subclasses(cls: type) -> set[type]:
+    found: set[type] = set(cls.__subclasses__())
+    for sub in list(found):
+        found |= _subclasses(sub)
+    return found
+
+
+def _differences(committed: Any, served: Any, pointer: str = "") -> list[str]:
+    """The JSON pointers (RFC 6901) at which `committed` and `served` differ."""
+    if isinstance(committed, dict) and isinstance(served, dict):
+        differences = []
+        for key in sorted(committed.keys() | served.keys()):
+            child = f"{pointer}/{key.replace('~', '~0').replace('/', '~1')}"
+            if key not in served:
+                differences.append(f"{child} (only in the file)")
+            elif key not in committed:
+                differences.append(f"{child} (only in the app)")
+            else:
+                differences += _differences(committed[key], served[key], child)
+        return differences
+    return [] if committed == served else [pointer or "/"]

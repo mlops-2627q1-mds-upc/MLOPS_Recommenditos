@@ -7,3 +7,8 @@ site_author: Team Recommenditos
 extra_javascript:
   - path: javascripts/mermaid-init.js
     type: module
+plugins:
+  - search
+  # Renders docs/openapi.json on the API reference page with Swagger UI, whose
+  # assets the plugin ships, so the site builds and works offline.
+  - swagger-ui-tag

@@ -166,6 +166,7 @@ notebook = [
 # The documentation site under `docs/`, which CI builds with `--strict`.
 docs = [
     "mkdocs",
+    "mkdocs-swagger-ui-tag>=0.8.1",
 ]
 # The test suite. A group of its own rather than part of `dev`, because the
 # serving check installs exactly this on top of the runtime list, and every
