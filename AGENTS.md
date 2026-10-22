@@ -26,6 +26,11 @@ An untyped third-party import gets a per-module override in `pyproject.toml`, ne
 mypy cannot see pandas, so it says nothing on column names or dtypes.
 Details: the Type checking section of [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Pipeline
+
+A change to any file a DVC stage depends on makes `dvc.lock` stale until `dvc repro` re-runs that stage, even in a pull request that is not about the pipeline: `recommenditos/config.py` and `recommenditos/schema.py` are dependencies of every stage.
+What that pull request has to do, and where a new stage puts its outputs: [Working on a stage](docs/docs/pipeline.md#working-on-a-stage).
+
 ## Project brief
 
 [docs/docs/project-brief.md](docs/docs/project-brief.md) holds the project goal, the verified data facts, the modelling and architecture plan and the open decisions.
@@ -64,6 +69,7 @@ The course grades how we make engineering decisions and how we use AI in them, s
 4. **Record it.** Once decided, and if the user wants it recorded, add an entry to [reports/edn.md](reports/edn.md) following the template there, which also sets the shape and the word limit of an entry.
    An entry is short: the decision, the alternatives that were really weighed with the reason each lost, the deciding argument, who decided, and what AI contributed and what the team checked, changed or rejected.
    Link the evidence (issue, PR, commit, experiment) and do not retell it.
+   When an entry has to be cut to fit the word limit, keep what it says about AI's contribution and what the team checked, and compare the cut entry with the previous one before you commit it.
    When a decision is revised, update its entry so that it states the current decision, and do not add a second entry for it.
 
 [reports/edn.md](reports/edn.md) is the working source of the EDN.
