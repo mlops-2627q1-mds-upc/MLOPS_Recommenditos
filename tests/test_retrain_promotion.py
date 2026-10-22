@@ -177,24 +177,30 @@ def test_the_command_writes_the_title_and_the_body(repo, monkeypatch, tmp_path_f
 
 
 @pytest.mark.req("FR-15", "NFR-10")
-def test_every_variant_run_is_labelled_as_trained_on_the_runner(repo, monkeypatch):
+def test_only_the_runs_retrained_on_the_runner_are_labelled_as_such(repo, monkeypatch):
     # A local store, run from the temporary repository so its artifacts land there.
     uri = f"sqlite:///{(repo / 'mlflow.db').as_posix()}"
     monkeypatch.setenv("MLFLOW_TRACKING_URI", uri)
     monkeypatch.chdir(repo)
     client = mlflow.MlflowClient(tracking_uri=uri)
     experiment = client.create_experiment("retrain-test")
-    for name in VARIANTS:
-        run_id = client.create_run(experiment).info.run_id
-        record = repo / "reports" / "metrics" / f"{name}.json"
-        record.write_text(json.dumps({"mlflow_run_id": run_id}), encoding="utf-8")
+    laptop_run = client.create_run(experiment).info.run_id
+    record = repo / "reports" / "metrics" / "b0.json"
+    record.write_text(json.dumps({"mlflow_run_id": laptop_run}), encoding="utf-8")
+    git(repo, "commit", "-qam", "b0 trained on a laptop")
+    git(repo, "checkout", "-q", "-b", "retrain/run-2")
+    # The retrain fits the candidate only, so b0's record still names the laptop's run.
+    runner_run = client.create_run(experiment).info.run_id
+    record = repo / "reports" / "metrics" / f"{CANDIDATE}.json"
+    record.write_text(json.dumps({"mlflow_run_id": runner_run}), encoding="utf-8")
 
-    runs = tag_runs(repo / "runs.json", root=repo)
+    runs = tag_runs(repo / "runs.json", "retrain/run-1", root=repo)
 
+    tags = client.get_run(runner_run).data.tags
+    assert tags[MACHINE_TAG].startswith("GitHub-hosted runner")
+    assert "not NFR-10's laptop reference" in tags[ENERGY_TAG]
+    assert MACHINE_TAG not in client.get_run(laptop_run).data.tags
     for name in VARIANTS:
-        tags = client.get_run(runs[name]["run_id"]).data.tags
-        assert tags[MACHINE_TAG].startswith("GitHub-hosted runner")
-        assert "not NFR-10's laptop reference" in tags[ENERGY_TAG]
         assert runs[name]["url"].endswith(
             f"/#/experiments/{experiment}/runs/{runs[name]['run_id']}"
         )

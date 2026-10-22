@@ -466,7 +466,7 @@ The run:
 
 1. pulls the committed artefacts from the DVC remote and runs `dvc repro` with tracking required, so every training run is in the DagsHub MLflow and the run fails rather than training untracked;
 2. stops with nothing to promote when `dvc.lock` did not change;
-3. copies the stage figures over the report's copies, tags every variant's MLflow run with the machine it trained on, and pushes the artefacts to the DVC remote;
+3. copies the stage figures over the report's copies, tags the MLflow runs it trained with the machine, and pushes the artefacts to the DVC remote;
 4. commits the outputs to a branch `retrain/run-<n>` and opens a draft pull request whose title names the model version (the MD5 `dvc.lock` records for `models/<candidate>`, which `/health` reports) and whose body gives the reason, the gate verdict as the Promotion gate check will see it, the metrics of every variant beside the committed ones with their MLflow runs, and NFR-06's comparison with the committed metrics.
 
 A pull request opened with the workflow's `GITHUB_TOKEN` starts no workflow, so CI does not run on it by itself.

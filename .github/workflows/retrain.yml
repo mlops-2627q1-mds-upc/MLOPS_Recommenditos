@@ -135,7 +135,8 @@ jobs:
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_USER_TOKEN }}
         run: |
           mkdir -p "$RUNNER_TEMP/promotion"
-          uv run python -m tools.retrain_promotion tag-runs --out "$RUNNER_TEMP/promotion/runs.json"
+          uv run python -m tools.retrain_promotion tag-runs --base origin/main \
+            --out "$RUNNER_TEMP/promotion/runs.json"
 
       - name: Push the artefacts to the DVC remote
         if: steps.changed.outputs.lock == 'true'

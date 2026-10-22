@@ -1,6 +1,6 @@
 """The promotion pull request of a retrain on GitHub Actions (FR-15, issue #201).
 
-    python -m tools.retrain_promotion tag-runs --out <runs.json>
+    python -m tools.retrain_promotion tag-runs --base <git ref> --out <runs.json>
     python -m tools.retrain_promotion body --base <git ref> --runs <runs.json> \
         --reason <text> --run-url <url> --out-dir <dir>
 
@@ -8,8 +8,8 @@
 opens a pull request with the new `dvc.lock`. This module writes what that pull
 request says, so that a reviewer decides on the evidence without opening the run:
 
-- `tag-runs` marks each variant's MLflow run as trained on a GitHub runner, and
-  its energy figures as an estimate for that machine: CodeCarbon falls back to
+- `tag-runs` marks the MLflow runs the retrain trained as trained on a GitHub runner, and
+  their energy figures as an estimate for that machine: CodeCarbon falls back to
   the TDP of the runner's server CPU, so they are not comparable with the laptop
   figures NFR-10 is judged on (EDN-92). It also writes the run links for `body`.
   It is the one command here that needs the tracking server.
@@ -301,8 +301,13 @@ def machine() -> str:
     return f"GitHub-hosted runner {image}, {cpu}, {os.cpu_count()} vCPU"
 
 
-def tag_runs(out: Path, root: Path | None = None) -> dict:
-    """Tag every variant's run with the machine and write the run links to `out`."""
+def tag_runs(out: Path, base: str, root: Path | None = None) -> dict:
+    """Tag the runs this retrain trained with the machine, and write every run's link to `out`.
+
+    A variant whose run id is the one `base` commits was not retrained here: only a
+    later stage reran, and `evaluate` appended to the run a laptop made. That run
+    keeps its tags.
+    """
     root = root or PROJ_ROOT
     # From the environment, as the stages read it, and not `mlflow.get_tracking_uri()`,
     # which `recommenditos.tracking` points at a refusing sentinel when it is unset.
@@ -322,8 +327,10 @@ def tag_runs(out: Path, root: Path | None = None) -> dict:
         if not run_id:
             raise RuntimeError(f"{variant} has no MLflow run: was tracking on for the retrain?")
         run = client.get_run(run_id)
-        for key, value in tags.items():
-            client.set_tag(run_id, key, value)
+        old_text = committed(base, f"reports/metrics/{variant}.json", root)
+        if not old_text or json.loads(old_text).get("mlflow_run_id") != run_id:
+            for key, value in tags.items():
+                client.set_tag(run_id, key, value)
         runs[variant] = {
             "run_id": run_id,
             "url": f"{uri}/#/experiments/{run.info.experiment_id}/runs/{run_id}",
@@ -336,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
     tag = commands.add_parser("tag-runs", help="tag the variants' MLflow runs, write their links")
+    tag.add_argument("--base", required=True, help="git ref of the committed outputs")
     tag.add_argument("--out", type=Path, required=True)
     body = commands.add_parser("body", help="write the title and body of the pull request")
     body.add_argument("--base", required=True, help="git ref of the committed outputs")
@@ -346,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "tag-runs":
-        for variant, entry in tag_runs(args.out).items():
+        for variant, entry in tag_runs(args.out, args.base).items():
             print(f"{variant}: {entry['url']}")
         return 0
     runs = json.loads(args.runs.read_text("utf-8")) if args.runs and args.runs.exists() else {}
