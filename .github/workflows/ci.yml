@@ -17,6 +17,14 @@ concurrency:
 permissions:
   contents: read
 
+# Every setup-uv step with a cache saves it on a push to main only, never on a
+# pull request. A pull request's cache is scoped to its own merge ref and no other
+# run can restore it, but each one counts against the repository's 10 GB limit, and
+# GitHub evicts the least recently used entries to stay under it. Main's
+# entries, the ones every pull request restores, get evicted with them. A pull
+# request still restores main's cache; when it changes uv.lock or pyproject.toml
+# the key misses and it installs cold.
+
 # The Linux jobs name their image, ubuntu-24.04, rather than ubuntu-latest, which
 # GitHub moves to Ubuntu 26 from 2026-10-19 (actions/runner-images#14748). Every
 # run then uses the image the jobs were written and tested on, and moving to a new
@@ -119,6 +127,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
       - uses: pre-commit/action@v3.0.1
         env:
@@ -182,6 +191,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
         if: needs.changes.outputs.code == 'true'
       - run: uv run pytest
@@ -223,6 +233,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
         if: needs.changes.outputs.code == 'true'
       - run: uv run pytest
@@ -247,6 +258,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
           # A cache of its own: this job downloads a fraction of what the others
           # do, and under their key it could save that fraction as the cache
           # every other job then restores.
@@ -293,6 +305,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
         if: needs.changes.outputs.stack == 'true'
       - name: Fit a synthetic lgbm-basic bundle and comparables index where the Dockerfile expects them
@@ -349,6 +362,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
       # Writes the matrix first and fails afterwards, so the two steps below
       # still publish the table that explains why the job is red.
@@ -509,6 +523,7 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+          save-cache: ${{ github.event_name == 'push' }}
       - run: uv sync --locked
         if: needs.changes.outputs.docs == 'true'
       - run: uv run mkdocs build --strict
