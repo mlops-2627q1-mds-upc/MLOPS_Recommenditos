@@ -134,7 +134,8 @@ It is a secret of the GitHub Environment `dagshub`, which only `main` may use, a
 The job's token may read the repository and write packages, nothing more.
 The trivy scan of [#199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199) goes between the tests and the push.
 
-RUNTIME
+The layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged reuses the layer of the third-party dependencies, the largest one, and rebuilds only the package and the bundle; the job summary states each run's runtime.
+Built locally with the job's steps on 2026-10-22, the image was 704 MB and passed the 27 tests of the integration suite against the hashes `dvc.lock` records.
 
 The package is public, so the VM and anyone else pull it without a credential; the image holds no secret and no personal data, as the API key is passed at run time.
 GHCR creates a new package as private, so after the first push an organisation owner makes it public once: the organisation's **Packages** tab, `mlops_recommenditos/api`, **Package settings**, **Change visibility**, **Public**.
