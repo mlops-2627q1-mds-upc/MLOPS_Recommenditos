@@ -21,13 +21,18 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# One publication at a time, never cancelled: a cancelled run would leave its
-# commit without an image. GitHub keeps at most one run waiting behind the
-# running one, so of several quick merges the newest is built; the others keep
-# their CI result and no image.
+# One publication at a time, in the order the runs arrive, and never cancelled: a
+# cancelled run would leave its commit without an image while nothing turns red.
+# Without `queue: max`, GitHub keeps one waiting run per group and cancels it when
+# the next arrives, so a docs-only merge right behind a code merge would cancel
+# the code merge's build. A run whose CI finished out of order is still built;
+# the push step keeps :latest on the newer commit. actionlint 1.7.12 does not know
+# the `queue` key yet (GitHub changelog 2026-05-07, "GitHub Actions concurrency
+# groups now allow larger queues").
 concurrency:
   group: cd
   cancel-in-progress: false
+  queue: max
 
 permissions: {}
 
@@ -83,7 +88,8 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed=$(git diff --name-only HEAD^ HEAD)
+          # --no-renames: a code file moved into docs/ counts as a deleted code file.
+          changed=$(git diff --name-only --no-renames HEAD^ HEAD)
           deploying=$(grep -Ev '^(docs/|reports/|[^/]+\.md$)' <<< "$changed" || true)
           if [ -n "$deploying" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
@@ -168,8 +174,9 @@ jobs:
             org.opencontainers.image.version=${{ env.SHA }}
             org.opencontainers.image.created=${{ env.CREATED }}
             org.opencontainers.image.title=Recommenditos API
-          # Layers in the GitHub Actions cache: an unchanged uv.lock reuses the
-          # environment's layer, so a model promotion rebuilds only the bundle's.
+          # Layers in the GitHub Actions cache: an unchanged uv.lock skips the
+          # dependency install, and a model promotion rebuilds only the bundle's
+          # layer (docs/docs/deployment.md#continuous-delivery).
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Check the image size (NFR-04, at most 1 GB)

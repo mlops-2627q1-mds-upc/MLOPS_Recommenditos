@@ -134,7 +134,9 @@ It is a secret of the GitHub Environment `dagshub`, which only `main` may use, a
 The job's token may read the repository and write packages, nothing more.
 The trivy scan of [#199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199) goes between the tests and the push.
 
-The layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged reuses the layer of the third-party dependencies, the largest one, and rebuilds only the package and the bundle; the job summary states each run's runtime.
+The builder stage's layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged skips the `uv sync` of the third-party dependencies.
+The runtime stage copies the whole environment as one layer of 536 MB (`docker history`) that holds the `recommenditos` package too, so a change to the package or the lock rebuilds and pushes that layer; a model promotion, which changes only `dvc.lock`, reuses it and rebuilds only the bundle's 45 MB layer.
+The job summary states each run's runtime.
 Built locally with the job's steps on 2026-10-22, the image was 704 MB and passed the 27 tests of the integration suite against the hashes `dvc.lock` records.
 
 The package is public, so the VM and anyone else pull it without a credential; the image holds no secret and no personal data, as the API key is passed at run time.
