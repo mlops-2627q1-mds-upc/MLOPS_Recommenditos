@@ -26,12 +26,14 @@ clean:
 	find . -type d -name "__pycache__" -delete
 
 
-## Lint using ruff and hadolint (use `make format` to do formatting)
+## Lint using ruff, hadolint, actionlint and shellcheck (use `make format` to do formatting)
 .PHONY: lint
 lint: typecheck
 	uv run ruff format --check
 	uv run ruff check
 	uv run pre-commit run hadolint --all-files
+	uv run pre-commit run actionlint --all-files
+	uv run pre-commit run shellcheck --all-files
 
 ## Type-check recommenditos/ and tools/ with mypy (configured in pyproject.toml)
 .PHONY: typecheck

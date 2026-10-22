@@ -1,0 +1,9 @@
+# actionlint, run by its pre-commit hook (.pre-commit-config.yaml).
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      # `concurrency.queue`, which CD sets, is valid since 2026-05-07 (GitHub
+      # changelog: "GitHub Actions concurrency groups now allow larger queues"),
+      # and actionlint 1.7.12, the latest release, predates it. Remove this
+      # entry once a release knows the key.
+      - unexpected key "queue" for "concurrency" section

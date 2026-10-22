@@ -75,12 +75,12 @@ jobs:
     steps:
       # No token in .git/config while stage code runs; the push below passes it
       # for that one command.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       # Restores main's cache and never saves one, like every job but a push to
       # main (ci.yml).
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           python-version: "3.12"
           enable-cache: true
