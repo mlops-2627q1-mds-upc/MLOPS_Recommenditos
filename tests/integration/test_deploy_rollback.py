@@ -16,6 +16,7 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import time
 
 import httpx2
 import pytest
@@ -233,5 +234,9 @@ def test_the_rollback_finishes_when_the_client_goes_away(drill: Stack) -> None:
     assert drill.env_tag() == GOOD
     assert drill.running_image() == f"{REPOSITORY}:{GOOD}"
     assert drill.health().status_code == 200
-    log = (drill.directory / "deploy-last-run.log").read_text(encoding="utf-8")
-    assert log.strip().splitlines()[-1] == f"running: {GOOD}"
+    # tee may still be writing the log when bash has exited.
+    log = drill.directory / "deploy-last-run.log"
+    deadline = time.monotonic() + 10
+    while not log.read_text(encoding="utf-8").endswith(f"running: {GOOD}\n"):
+        assert time.monotonic() < deadline, log.read_text(encoding="utf-8")
+        time.sleep(0.1)

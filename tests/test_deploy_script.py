@@ -34,7 +34,6 @@ REFUSED = [
     "deploy latest",
     f"deploy {SHA[:12]}",
     f"deploy {SHA.upper()}",
-    f"deploy {SHA[:-1]}é",
     f"status\ndeploy {SHA}",
     "bash",
     "rollback now",
@@ -43,15 +42,31 @@ REFUSED = [
 
 ACCEPTED = [f"deploy {SHA}", "rollback", "status"]
 
+#: A locale whose ranges include letters such as é in a-f, where a pattern
+#: compared without LC_ALL=C would take `é` for a hex digit.
+WIDE_LOCALE = "en_US.UTF-8"
 
-def run_over_ssh(stack_dir: Path, command: str) -> subprocess.CompletedProcess[str]:
-    """deploy.sh as sshd starts it for the restricted key, in a locale whose ranges
-    include letters such as é in a-f, as en_US.UTF-8's do."""
+
+def locale_available(name: str) -> bool:
+    """Whether the system has `name`; bash falls back to C silently otherwise."""
+    if shutil.which("locale") is None:
+        return False
+    listed = subprocess.run(
+        ["locale", "-a"], capture_output=True, text=True, timeout=30, check=False
+    )
+    wanted = name.lower().replace("-", "")
+    return any(line.lower().replace("-", "") == wanted for line in listed.stdout.splitlines())
+
+
+def run_over_ssh(
+    stack_dir: Path, command: str, locale: str = "C.UTF-8"
+) -> subprocess.CompletedProcess[str]:
+    """deploy.sh as sshd starts it for the restricted key."""
     environment = {
         **os.environ,
         "STACK_DIR": str(stack_dir),
         "SSH_ORIGINAL_COMMAND": command,
-        "LC_ALL": "en_US.UTF-8",
+        "LC_ALL": locale,
     }
     return subprocess.run(
         ["bash", str(PROJ_ROOT / "deploy" / "deploy.sh")],
@@ -85,3 +100,16 @@ def test_the_three_commands_get_past_the_check(tmp_path: Path, command: str):
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "run bootstrap.sh first" in result.stdout
+
+
+@pytest.mark.req("NFR-15")
+@pytest.mark.skipif(
+    not locale_available(WIDE_LOCALE),
+    reason=f"{WIDE_LOCALE} is not installed, and in C the check would pass without LC_ALL=C",
+)
+def test_a_letter_outside_hex_is_refused_whatever_the_callers_locale(tmp_path: Path):
+    (tmp_path / ".env").write_text("API_IMAGE_TAG=good\n", encoding="utf-8")
+
+    result = run_over_ssh(tmp_path, f"deploy {SHA[:-1]}é", locale=WIDE_LOCALE)
+
+    assert result.returncode == 64, result.stdout + result.stderr
