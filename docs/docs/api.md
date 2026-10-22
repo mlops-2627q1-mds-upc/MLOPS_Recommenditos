@@ -144,7 +144,7 @@ Both are inside NFR-02's 200 ms for `/predict`, which the load test on the targe
 
 `/v1/price-range` answers UC2, a buyer asking what a car should cost: only `make` is required (FR-02), and any other field of `/v1/predict`'s request may be added.
 A field that is given is checked by the same rules as in `/v1/predict` (FR-03, FR-04), and an unseen `model` or country is answered with a warning (FR-05); a field left out, or sent as `null`, reaches the model as absent.
-The request body is `PartialListing` in `schemas/partial_listing.py`, which `/v1/comparables` will take as well.
+The request body is `PartialListing` in `schemas/partial_listing.py`, which `/v1/comparables` takes as well.
 
 ```json
 {"price_eur": 15606.57, "lower_eur": 12790.57, "upper_eur": 27480.29, "confidence_level": 0.9,
@@ -179,10 +179,13 @@ It answers with listings of the training and validation data, never of `ES` (EDN
 A listing is comparable when it has the request's `make` and `model`, its age differs by at most 2 years from the car's and its mileage by at most 25 % of the car's (FR-09).
 The listing's age is its age on the snapshot date, the age its price was asked at; the car's is its age today, as the model computes it.
 The snapshot is from 2025-11-08, so the window today lies about a year earlier in registration date than the car's own: a car registered in 2020 matches listings registered from about 2017 to 2021.
-The closest mileage comes first, then the closest age, then the index's own order, so the same request always gets the same listings.
+The closest mileage comes first, then the closest age, then the index's own order, so the same request gets the same listings on the same day; the car's age, and with it the window, moves with the date.
 A field the request leaves out sets no filter and adds no distance: a request with only `make` gets listings of every model of the make, one without a mileage is ordered by age alone.
 No filter is relaxed, so a car outside every window gets an empty list; a `model` of which the index holds no listing for the make gets one too, with a warning that says so.
 Fields other than these four are checked like everywhere else and do not change which listings come back.
+
+The example of the OpenAPI document, a BMW 320 registered 2019-06 with 60,000 km and `k` 3, gets three listings of 2018 to 2020 with 59,000 to 60,000 km.
+The Golf of P1 above gets an empty list: of the 70,172 listings, 54 are Volkswagen Golfs, and none of them lies within the car's age and mileage window.
 
 The answer names the index it searched, `index.version` and `index.listings`, as `/health` does: the version is the md5 `dvc.lock` records for `data/processed/comparables.parquet`, which the `comparables` stage writes ([pipeline](pipeline.md#stages)).
 A service whose `RECOMMENDITOS_COMPARABLES_FILE` names no file values listings, answers `/v1/comparables` with a 503 problem and reports `"comparables": null` on `/health`.
@@ -195,7 +198,7 @@ That is inside NFR-02's 300 ms, which the load test on the target VM checks.
 ### Model version and request ID
 
 The model version is the hash DVC records for the bundle directory in `dvc.lock`, so `GET /health` and `dvc.lock` can be compared directly.
-Every response carries an `X-Request-ID` header; `/predict` and `/price-range` repeat it as `request_id`, and a problem names it in `instance`.
+Every response carries an `X-Request-ID` header; `/predict`, `/price-range` and `/comparables` repeat it as `request_id`, and a problem names it in `instance`.
 The service generates it for every request and never takes it from the client; every line of the [service log](#logs) written while the request is answered carries it.
 
 ## Metrics

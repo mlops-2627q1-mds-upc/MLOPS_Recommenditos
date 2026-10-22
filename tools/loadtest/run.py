@@ -57,8 +57,10 @@ VALUATION_ENDPOINTS = tuple(P95_TARGET_MS)
 #: The share of the target rate a run must achieve to count as sustaining it.
 RATE_REACHED = 0.95
 #: Locust users per request per second of the target rate. Each user waits for
-#: its answer, so at 4 users per unit of rate the rate holds until an answer
-#: takes 4 s; with one user per unit it would drop as soon as one took 1 s.
+#: its answer, so the time between its sends is the longer of its exponential
+#: gap and the answer: at 4 users per unit of rate a run keeps 95 % of the rate
+#: until answers take about 1.4 s, at one user per unit only until about 0.34 s
+#: (docs/docs/load-testing.md).
 USERS_PER_RATE = 4
 #: How often CodeCarbon integrates its power samples, as in `energy.py`.
 MEASURE_POWER_SECS = 15
@@ -354,7 +356,9 @@ def run(args: argparse.Namespace, work: Path) -> dict[str, Any]:
         result["energy_run"] = measure_energy(work, "run", load)
     result["machine"]["load_average_after"] = load_average()
 
-    stats = measure.read_locust_json(Path(f"{out}-locust.json"), result["duration_s"])
+    locust_json = Path(f"{out}-locust.json")
+    measure.end_with_newline(locust_json)
+    stats = measure.read_locust_json(locust_json, result["duration_s"])
     result["locust"] = {n: {**asdict(s), "error_rate": s.error_rate} for n, s in stats.items()}
     achieved = stats["Aggregated"].rate_per_s
     result["throughput"] = {

@@ -10,6 +10,7 @@ import random
 import pandas as pd
 import pytest
 from tools.loadtest import measure
+from tools.loadtest.arrivals import Arrivals
 from tools.loadtest.bodies import to_body
 from tools.loadtest.plan import build_plan
 from tools.loadtest.run import seconds
@@ -174,3 +175,61 @@ def test_the_log_check_passes_only_with_one_record_per_answer():
 )
 def test_durations_are_read_in_locust_format(text, expected):
     assert seconds(text) == expected
+
+
+def _send_times(users: int, rate: float, duration: float, answer: float, seed: int) -> list[float]:
+    """When `users` users started together at 0 send, each answer taking `answer` seconds."""
+    rng = random.Random(seed)  # noqa: S311 - simulated send times, no secret
+    sends = []
+    for _ in range(users):
+        arrivals = Arrivals(rate / users, rng)
+        now = 0.0
+        while (now := now + arrivals.next_wait(now)) < duration:
+            sends.append(now)
+            now += answer
+    return sorted(sends)
+
+
+def test_users_started_together_do_not_send_together():
+    # NFR-03's 20 requests/s from 80 users that Locust starts within a second:
+    # with a fixed gap all 80 first requests went out within that second, and
+    # again every 4 s.
+    rng = random.Random(7)  # noqa: S311 - simulated send times, no secret
+    firsts = [Arrivals(20 / 80, rng).next_wait(0.0) for _ in range(80)]
+    assert max(firsts) - min(firsts) > 4
+    assert sum(first < 1 for first in firsts) < 40
+
+    sends = _send_times(users=80, rate=20, duration=60, answer=0.1, seed=7)
+    per_tenth = [0] * 600
+    for send in sends:
+        per_tenth[int(send * 10)] += 1
+    # 2 requests per 100 ms on average; a burst of all users would put 80 in one.
+    assert max(per_tenth) <= 10
+
+
+def test_the_users_together_keep_the_total_rate():
+    sends = _send_times(users=80, rate=20, duration=60, answer=0.1, seed=11)
+    assert len(sends) / 60 == pytest.approx(20, rel=0.05)
+
+
+def test_a_user_sends_at_once_after_an_answer_slower_than_its_gap():
+    arrivals = Arrivals(rate=1000.0, rng=random.Random(3))  # noqa: S311
+    gaps = random.Random(3)  # noqa: S311 - the same draws, to know the gaps
+    first, _, third = (gaps.expovariate(1000.0) for _ in range(3))
+    assert arrivals.next_wait(0.0) == first
+    late = first + 5.0
+    assert arrivals.next_wait(late) == 0.0
+    # The next gap counts from the late send, not from the send it planned, so
+    # the user does not catch up with a burst after a slow answer.
+    assert arrivals.next_wait(late) == pytest.approx(third)
+
+
+@pytest.mark.parametrize(
+    ("written", "kept"),
+    [(b'{"a": 1}', b'{"a": 1}\n'), (b'{"a": 1}\n', b'{"a": 1}\n'), (b"", b"")],
+)
+def test_the_locust_json_ends_with_one_newline(tmp_path, written, kept):
+    path = tmp_path / "run-locust.json"
+    path.write_bytes(written)
+    measure.end_with_newline(path)
+    assert path.read_bytes() == kept

@@ -101,11 +101,11 @@ def test_fr10_the_openapi_document_declares_the_key(app: FastAPI):
 
 
 # --------------------------------------------------------------------------
-# FR-10: storing a price and joining it (FR-14)
+# FR-10: storing a price and joining it to its answer, which FR-14 builds on
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.req("FR-10", "FR-14")
+@pytest.mark.req("FR-10")
 def test_fr10_a_stored_price_joins_its_answer_by_request_id(
     client: TestClient, listing: dict, log_file: Path
 ):

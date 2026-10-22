@@ -9,10 +9,12 @@ repository root:
 
 At start it reads the target's `/openapi.json` and calls only the valuation
 endpoints the target serves (`tools/loadtest/plan.py`). The total rate is
-`--rate` requests per second, shared evenly by the `-u` users; a user waits
-for its answer before it sends the next request, so a slow target gets fewer
-requests rather than a growing queue. Every request with a 4xx or 5xx answer
-counts as a failure.
+`--rate` requests per second, shared evenly by the `-u` users. Each user sends
+after exponential gaps, its first request included (`tools/loadtest/arrivals.py`),
+so the requests arrive spread in time rather than in bursts of all users. A
+user waits for its answer before it sends the next request, so a slow target
+gets fewer requests rather than a growing queue. Every request with a 4xx or
+5xx answer counts as a failure.
 
 `--request-ids` names a file that receives the `X-Request-ID` of every
 successful valuation, one per line, for the prediction-log check of NFR-03.
@@ -22,13 +24,14 @@ from http import HTTPStatus
 import json
 from pathlib import Path
 import random
+import time
 from typing import Any
 from urllib.request import urlopen
 
 from locust import HttpUser, events, task
 from locust.env import Environment
-from locust.user.wait_time import constant_throughput
 
+from tools.loadtest.arrivals import Arrivals
 from tools.loadtest.plan import Plan, build_plan
 
 #: The request bodies `tools/loadtest/bodies.py` writes by default.
@@ -94,12 +97,15 @@ class Seller(HttpUser):
     """A client of the valuation endpoints, at its share of `--rate`."""
 
     def on_start(self) -> None:
-        self.rng = random.Random()  # noqa: S311 - picks request bodies, no secret
+        self.rng = random.Random()  # noqa: S311 - picks bodies and gaps, no secret
         options = _options(self.environment)
-        self.pace = constant_throughput(options.rate / options.num_users)
+        self.arrivals = Arrivals(options.rate / options.num_users, self.rng)
+        # Wait before the first request too, so users started together do not
+        # send together. Locust's own wait, which a stopping test interrupts.
+        self.wait()
 
     def wait_time(self) -> float:
-        return self.pace(self)
+        return self.arrivals.next_wait(time.monotonic())
 
     @task
     def value_a_listing(self) -> None:

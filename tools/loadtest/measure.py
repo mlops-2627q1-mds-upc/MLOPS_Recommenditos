@@ -134,6 +134,16 @@ def _stats(
     )
 
 
+def end_with_newline(path: Path) -> None:
+    """End a text file with a newline, as the repository's end-of-file check asks.
+
+    Locust writes its `--json-file` output without one.
+    """
+    content = path.read_bytes()
+    if content and not content.endswith(b"\n"):
+        path.write_bytes(content + b"\n")
+
+
 def read_locust_json(path: Path, seconds: float) -> dict[str, EndpointStats]:
     """Locust's `--json-file` output, by request name, with `Aggregated` as the total.
 
