@@ -162,9 +162,14 @@ The runtime stage copies the environment in two layers, with the bundle and the 
 2. the model bundle, 45 MB, and the comparables index, 2 MB, which a model promotion changes;
 3. the `recommenditos` package, 1.5 MB, laid over the dependencies' environment.
 
-Docker rebuilds every layer above a changed one, so a code change rebuilds and pushes only the package's layer, 0.6 MB compressed, and the VM pulls only that.
-While the environment was a single layer with the package in it, a code change pushed that layer and the two above it, 183 MB compressed.
-A model promotion, which changes only `dvc.lock`, rebuilds the three upper layers, 48 MB.
+Docker rebuilds every layer above a changed one, so a code change rebuilds only the package's layer and a model promotion, which changes only `dvc.lock`, the three upper layers.
+The sizes above are uncompressed; the transfers below are compressed, as the registry stores them.
+
+CD uploads every layer of the image again on each run, about 230 MB in about 19 s (CD run [39938399277](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39938399277)), because an image loaded into the runner's Docker has no record of which layers the registry already holds.
+Those uploads are byte-identical to the layers GHCR already has, so GHCR stores nothing new, and the VM pulls only the layers whose digests changed: about 0.6 MB for a code change and about 17 MB for a model promotion.
+A local run with two fresh Docker 28.0.4 daemons, the runner's version, and a shared build cache confirmed this on 2026-10-23: both pushes uploaded all 12 layers, with the same 12 digests.
+An upgrade of Docker on the runner may change how it compresses and so every digest once, which costs the VM one full pull.
+While the environment was a single layer with the package in it, a code change changed that layer and the two above it, 183 MB compressed for the VM to pull.
 The job summary states each run's runtime.
 Built locally with the job's steps on 2026-10-22, the image was 704 MB and passed the 27 tests of the integration suite against the hashes `dvc.lock` records.
 

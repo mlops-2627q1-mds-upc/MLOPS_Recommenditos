@@ -7,8 +7,9 @@
 # dependencies into a virtual environment with uv, the `builder` stage adds the
 # project, and the runtime stage copies both and the bundle onto the same slim
 # Python image, without uv, the build cache or the source tree. The runtime stage
-# copies the dependencies and the project in separate layers, so a code change
-# pushes and pulls a layer of about 1.5 MB, not the whole environment.
+# copies the dependencies and the project in separate layers, so after a code
+# change the VM pulls a layer of about 0.6 MB compressed, not the whole
+# environment.
 #
 # Every image is pinned by digest as well as by tag, so a rebuild starts from
 # the bytes the last scan saw (NFR-09). Dependabot moves tag and digest together
@@ -97,8 +98,8 @@ RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
 # layer above a changed one: the dependencies, which only a change to the lock
 # or to pyproject.toml rebuilds; the bundle and the index, which a model
 # promotion changes; and last the project's files, laid over the dependencies,
-# so a code change rebuilds and pushes only that layer, which holds the
-# healthcheck's script too.
+# so a code change rebuilds only that layer, which holds the healthcheck's
+# script too, and the VM pulls only that one.
 COPY --from=dependencies /app/.venv /app/.venv
 COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # FR-09's index, beside the bundle, where the API looks for it; `/health`
