@@ -3,10 +3,12 @@
 # `models/<variant>` and `data/processed/comparables.parquet` are present.
 # docs/docs/deployment.md says how it is built, run and deployed.
 #
-# Two stages, after uv's Docker guide: the builder installs the project into a
-# virtual environment with uv, and the runtime stage copies that environment
-# and the bundle onto the same slim Python image, without uv, the build cache or
-# the source tree.
+# After uv's Docker guide: the `dependencies` stage installs the third-party
+# dependencies into a virtual environment with uv, the `builder` stage adds the
+# project, and the runtime stage copies both and the bundle onto the same slim
+# Python image, without uv, the build cache or the source tree. The runtime stage
+# copies the dependencies and the project in separate layers, so a code change
+# pushes and pulls a layer of about 1.5 MB, not the whole environment.
 #
 # Every image is pinned by digest as well as by tag, so a rebuild starts from
 # the bytes the last scan saw (NFR-09). Dependabot moves tag and digest together
@@ -16,7 +18,7 @@
 # A pinned uv, so that a rebuild resolves nothing differently from CI.
 FROM ghcr.io/astral-sh/uv:0.11.11@sha256:798712e57f879c5393777cbda2bb309b29fcdeb0532129d4b1c3125c5385975a AS uv
 
-FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2 AS builder
+FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2 AS dependencies
 
 COPY --from=uv /uv /bin/uv
 
@@ -29,13 +31,17 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# The dependencies first, in a layer of their own that only a change to the lock
-# invalidates. `--no-default-groups` leaves out every dependency group: the
-# image holds `[project] dependencies`, the serving runtime, and nothing else.
+# The dependencies, in a stage of its own that only a change to the lock or to
+# pyproject.toml invalidates. `--no-default-groups` leaves out every dependency
+# group: the image holds `[project] dependencies`, the serving runtime, and
+# nothing else.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-default-groups --no-install-project
+
+
+FROM dependencies AS builder
 
 # Then the package itself, installed non-editable, so the environment holds it
 # and the source tree stays in this stage. flit reads README.md and LICENSE.
@@ -46,8 +52,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # install the wheel it built from that checkout (#180).
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY recommenditos ./recommenditos
+# The wheel's files are then copied, with their bytecode and their parent
+# directories, to /project, under the same paths, for the runtime stage to lay
+# over the dependencies; the healthcheck's module also to /app/healthcheck.py,
+# for the HEALTHCHECK to run as a script. The wheel installs nothing else, no
+# script and no other top-level package; the RECORD check fails the build when
+# that changes, and when it cannot read RECORD (grep exits with 1 only when it
+# read the file and printed no line).
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-default-groups --no-editable --reinstall-package recommenditos
+    uv sync --locked --no-default-groups --no-editable --reinstall-package recommenditos \
+    && site="$(/app/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
+    && { grep -v -e '^recommenditos/' -e '^recommenditos-[^/]*\.dist-info/' "$site"/recommenditos-*.dist-info/RECORD; test $? -eq 1; } \
+    && mkdir /project \
+    && cp -a --parents "$site"/recommenditos "$site"/recommenditos-*.dist-info /project/ \
+    && cp -a "$site"/recommenditos/api/healthcheck.py /project/app/healthcheck.py
 
 
 FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2
@@ -74,11 +92,18 @@ RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
 
 # Owned by root and only readable by the service user: the API writes nothing
 # into its own code or model.
-COPY --from=builder /app/.venv /app/.venv
+# Ordered from the least to the most often changed, as Docker rebuilds every
+# layer above a changed one: the dependencies, which only a change to the lock
+# or to pyproject.toml rebuilds; the bundle and the index, which a model
+# promotion changes; and last the project's files, laid over the dependencies,
+# so a code change rebuilds and pushes only that layer, which holds the
+# healthcheck's script too.
+COPY --from=dependencies /app/.venv /app/.venv
 COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # FR-09's index, beside the bundle, where the API looks for it; `/health`
 # reports its md5, which is what dvc.lock records for it.
 COPY data/processed/comparables.parquet /app/models/comparables.parquet
+COPY --from=builder /project/app /app
 
 # PROMETHEUS_MULTIPROC_DIR: where every uvicorn worker writes its metrics, so
 # that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
@@ -104,9 +129,12 @@ EXPOSE 8000
 # After the start period, a probe whose two attempts of 6 s both go unanswered
 # also ends the hung server, so that the restart policy brings it back; that
 # needs an init in front of the server, which Compose's `init: true` adds
-# (recommenditos/api/healthcheck.py, NFR-05, EDN-93).
+# (recommenditos/api/healthcheck.py, NFR-05, EDN-93). The module runs as a
+# script, without `site` (-S) and isolated from the environment (-I): it needs
+# only the standard library, and importing the package's __init__ and
+# site-packages would cost a probe about twice its CPU time, every 5 s.
 HEALTHCHECK --interval=5s --timeout=15s --start-period=60s --start-interval=1s --retries=3 \
-    CMD ["python", "-m", "recommenditos.api.healthcheck"]
+    CMD ["python", "-I", "-S", "/app/healthcheck.py"]
 
 # The launcher empties PROMETHEUS_MULTIPROC_DIR, then starts uvicorn with the app
 # factory; WEB_CONCURRENCY sets the number of workers (one by default).

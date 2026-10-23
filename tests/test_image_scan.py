@@ -164,11 +164,45 @@ def test_the_committed_trivyignore_is_well_formed():
     assert ignore_file_problems((PROJ_ROOT / ".trivyignore").read_text(encoding="utf-8")) == []
 
 
+def from_images(dockerfile: str) -> list[str]:
+    """The images a Dockerfile's `FROM` lines pull, leaving out the lines that
+    start from an earlier stage of the same file. Docker reads instructions,
+    `AS` and stage names in any case."""
+    images: list[str] = []
+    stages: set[str] = set()
+    for line in dockerfile.splitlines():
+        words = line.split()
+        if not words or words[0].upper() != "FROM":
+            continue
+        words = [word for word in words[1:] if not word.startswith("--")]
+        if words[0].lower() not in stages:
+            images.append(words[0])
+        if len(words) == 3 and words[1].upper() == "AS":
+            stages.add(words[2].lower())
+    return images
+
+
+@pytest.mark.req("NFR-09")
+@pytest.mark.parametrize(
+    ("dockerfile", "images"),
+    [
+        ("FROM python:3.12-slim AS builder\nFROM builder AS runtime\n", ["python:3.12-slim"]),
+        ("from python:3.12-slim as Builder\nfrom builder\n", ["python:3.12-slim"]),
+        (
+            "  FROM --platform=$BUILDPLATFORM uv:1 AS uv\nFROM python:3.12\n",
+            ["uv:1", "python:3.12"],
+        ),
+        ("RUN echo FROM nothing\n# FROM a comment\n", []),
+    ],
+)
+def test_from_images_finds_every_pulled_image(dockerfile, images):
+    assert from_images(dockerfile) == images
+
+
 def dockerfile_images() -> list[str]:
     images = []
     for dockerfile in (PROJ_ROOT / "Dockerfile", PROJ_ROOT / "reports" / "latex" / "Dockerfile"):
-        text = dockerfile.read_text(encoding="utf-8")
-        images += [line.split()[1] for line in text.splitlines() if line.startswith("FROM ")]
+        images += from_images(dockerfile.read_text(encoding="utf-8"))
     return images
 
 

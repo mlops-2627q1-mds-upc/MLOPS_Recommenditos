@@ -180,8 +180,9 @@ jobs:
             org.opencontainers.image.created=${{ env.CREATED }}
             org.opencontainers.image.title=Recommenditos API
           # Layers in the GitHub Actions cache: an unchanged uv.lock skips the
-          # dependency install, and a model promotion rebuilds only the bundle's
-          # layer (docs/docs/deployment.md#continuous-delivery).
+          # dependency install, a code change rebuilds only the package's layer
+          # and a model promotion the bundle's, the index's and the package's
+          # (docs/docs/deployment.md#continuous-delivery).
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Check the image size (NFR-04, at most 1 GB)

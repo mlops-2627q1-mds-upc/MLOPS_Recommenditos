@@ -35,7 +35,8 @@ What each part guarantees:
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
   It also copies FR-09's comparables index, `data/processed/comparables.parquet`, to `/app/models/comparables.parquet` beside the bundle, where `RECOMMENDITOS_COMPARABLES_FILE` points the API, and `/health` reports the md5 `dvc.lock` records for that file as the index's version.
-  The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` runs `python -m recommenditos.api.healthcheck`, which asks `/health` with Python's `urllib`, so the image needs no curl.
+  The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` runs `recommenditos/api/healthcheck.py`, copied to `/app/healthcheck.py`, which asks `/health` with Python's `urllib`, so the image needs no curl.
+  It runs as a script with `python -I -S`, so a probe imports neither the package's `__init__` nor anything from site-packages: that halves its CPU time, which matters at one probe every 5 s.
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
   With more than one worker, a single worker whose event loop blocks goes unnoticed: the others still answer `/health`, so the healthcheck passes while the requests that worker accepted hang, and uvicorn's supervisor replaces a worker only when it stops answering its ping, which runs in a thread of its own.
   The API therefore runs one worker until the load test on the VM ([#143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143)) settles the count ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
@@ -154,8 +155,16 @@ Only the `dvc pull` step sees the DagsHub token.
 It is a secret of the GitHub Environment `dagshub`, which only `main` may use, and the step writes it into `.dvc/config.local`, as on a laptop, and deletes that file when it ends.
 The job's token may read the repository and write packages, nothing more.
 
-The builder stage's layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged skips the `uv sync` of the third-party dependencies.
-The runtime stage copies the whole environment as one layer of 536 MB (`docker history`) that holds the `recommenditos` package too, so a change to the package or the lock rebuilds and pushes that layer; a model promotion, which changes only `dvc.lock`, reuses it and rebuilds only the bundle's 45 MB layer.
+The build stages' layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged skips the `uv sync` of the third-party dependencies.
+The runtime stage copies the environment in two layers, with the bundle and the index between them, ordered from the least to the most often changed (`docker history`, measured on 2026-10-23):
+
+1. the third-party dependencies, 535 MB, which only a change to `uv.lock` or `pyproject.toml` rebuilds;
+2. the model bundle, 45 MB, and the comparables index, 2 MB, which a model promotion changes;
+3. the `recommenditos` package, 1.5 MB, laid over the dependencies' environment.
+
+Docker rebuilds every layer above a changed one, so a code change rebuilds and pushes only the package's layer, 0.6 MB compressed, and the VM pulls only that.
+While the environment was a single layer with the package in it, a code change pushed that layer and the two above it, 183 MB compressed.
+A model promotion, which changes only `dvc.lock`, rebuilds the three upper layers, 48 MB.
 The job summary states each run's runtime.
 Built locally with the job's steps on 2026-10-22, the image was 704 MB and passed the 27 tests of the integration suite against the hashes `dvc.lock` records.
 

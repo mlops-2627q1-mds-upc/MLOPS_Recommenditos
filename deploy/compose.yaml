@@ -102,9 +102,10 @@ services:
       - prediction-log:/var/lib/recommenditos
     # The test is the image's HEALTHCHECK (recommenditos/api/healthcheck.py).
     # Probed every second while the API starts, so nginx and `--wait` see it
-    # healthy as soon as it is, then every 5 s. After the start period, a probe
-    # that gets no answer in two attempts of 6 s ends the hung server, which
-    # comes back within NFR-05's 30 s (EDN-93); the timeout leaves room for both.
+    # healthy as soon as it is, then every 5 s. Once the API has answered, or
+    # after the start period, a probe that gets no answer in two attempts of 6 s
+    # ends the hung server, which comes back within NFR-05's 30 s (EDN-93); the
+    # timeout leaves room for both attempts.
     healthcheck:
       interval: 5s
       timeout: 15s
