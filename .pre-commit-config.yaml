@@ -19,23 +19,37 @@ repos:
       - id: check-merge-conflict
       - id: mixed-line-ending
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.8
-    hooks:
-      - id: ruff-check
-        args: ["--fix"]
-      - id: ruff-format
-
+  # ruff runs from the project's environment, so the hooks, `make lint` and the
+  # other CI jobs all use the ruff pinned in uv.lock. A `rev:` on ruff-pre-commit
+  # would be a second pin that Dependabot's uv group does not move, and the two
+  # versions would drift until a hook disagreed with CI about formatting.
+  # The ids, `--force-exclude` (so `extend-exclude` applies to the paths pre-commit
+  # passes) and the file types are those of ruff-pre-commit's `ruff-check` and
+  # `ruff-format` hooks. `uv run` is the one entry that is the same on Linux,
+  # macOS and Windows.
+  #
   # EDN-83: mypy over `recommenditos/` and `tools/`, configured in pyproject.toml.
-  # A local hook that runs the project's own environment, because mypy resolves
-  # the imports against the installed packages and an isolated hook environment
-  # would leave every one of them unresolved. `uv run` is the one entry that is
-  # the same on Linux, macOS and Windows. It checks the whole configured tree on
-  # every run, not the staged files, since a change in one module can break the
-  # types of another. CI runs this hook in the `Lint & format` job after a
-  # `uv sync`, so the job a merge requires fails on a type error.
+  # Also a local hook that runs the project's own environment, because mypy
+  # resolves the imports against the installed packages and an isolated hook
+  # environment would leave every one of them unresolved. It checks the whole
+  # configured tree on every run, not the staged files, since a change in one
+  # module can break the types of another. CI runs these hooks in the
+  # `Lint & format` job after a `uv sync --locked`, so the job a merge requires
+  # fails on a lint, format or type error.
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        require_serial: true
       - id: mypy
         name: mypy
         entry: uv run mypy
