@@ -104,4 +104,4 @@ else
     echo ".env created from .env.template: fill it in before the first deploy"
 fi
 
-echo "== Done. Next: load an image and start the stack (docs/docs/deployment.md, Deploy)."
+echo "== Done. Next: deploy an image with deploy.sh, which pulls it from GHCR (docs/docs/deployment.md, Deploy)."

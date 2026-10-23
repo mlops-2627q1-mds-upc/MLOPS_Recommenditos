@@ -66,7 +66,7 @@ What each part guarantees:
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
-- **Docker** keeps each container's log in at most five files of 10 MB, so the two logs take at most 100 MB of the VM's disk (NFR-04); the API's 50 MB hold about 120,000 requests of history.
+- **Docker** keeps each container's log in at most five files of 10 MB, so the two logs take at most 100 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
 
 ## Run it locally
 
@@ -89,7 +89,7 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 
 | What | Measured | Target |
 |------|----------|--------|
-| Image size (`docker image inspect`, uncompressed) | 702 MB, measured on 2026-10-21 with the three interval boosters of [#158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158) | at most 1 GB (NFR-04) |
+| Image size (`docker image inspect`, uncompressed) | 704 MB (704,252,357 B), measured on 2026-10-23 with the three interval boosters of [#158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158) | at most 1 GB (NFR-04) |
 | API container memory, idle after the smoke check (`docker stats`), measured on 2026-10-22 | 248 MiB with one worker; 539 MiB with two, a 52 MiB supervisor and two workers (nginx: 7 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
@@ -365,7 +365,7 @@ Run the [load test on the VM](load-testing.md#run-it-on-the-vm): its results set
 ## Without sudo or without Docker
 
 `bootstrap.sh` needs root for all four of its steps.
-If Docker is already installed and our account is in the `docker` group, none of them is needed: copy `compose.yaml` and `nginx.conf` into a directory of our own, copy `.env.template` there as `.env` and fill it in, and deploy as above, under our account.
+If Docker is already installed and our account is in the `docker` group, none of them is needed: copy `compose.yaml`, `nginx.conf` and `deploy.sh` (executable) into a directory of our own, copy `.env.template` there as `.env` and fill it in, and deploy as above, under our account.
 If Docker is installed and we are not in the group, we ask the lecturer to add us; rootless Docker would also work, but it needs the `uidmap` package and subordinate IDs that only an admin can provide, and it cannot publish a port below 1024, so `HTTP_PORT` would move to 8080 or above.
 If there is no Docker and no sudo, the fallback is the course demo's recipe in our home directory: uv installs Python and `uv sync --locked --no-default-groups` the runtime, the bundle is copied with `scp`, uvicorn runs on an unprivileged port under `systemd --user` or a `@reboot` cron entry, and nginx, without root, runs on an unprivileged port as well.
 That loses the image as the unit we test and deploy, so we would ask for Docker before building it.
