@@ -72,10 +72,10 @@ milestones:
       - NFR-03
       # The running system's security, without the repository's secret hygiene,
       # which moved to NFR-15 and M3. Its first evidence is the body-limit
-      # test against the API. Its image scan, Dockerfile review and the check from
-      # outside the VM need the image and the deployment of M5; booked M4 as
-      # decided with that split, so the delivery review is what notices if they
-      # are still missing then.
+      # test against the API. Its image scan runs in CI and CD now; the Dockerfile
+      # review and the check from outside the VM need the deployment of M5;
+      # booked M4 as decided with that split, so the delivery review is what
+      # notices if they are still missing then.
       - NFR-09
       # Energy efficiency is an M3 practice and the emissions half is M3 work,
       # done in issue #38 and named by a test, but the specification's evidence

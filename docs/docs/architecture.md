@@ -57,19 +57,16 @@ flowchart TB
     b_dagshub[("<b>DagsHub</b><br/>DVC remote, MLflow")]
     b_dvc["<b>DVC pipeline</b><br/>[dvc repro]"]
     b_ci["<b>CI</b> [GitHub Actions]<br/>tests, Serving runtime,<br/>Promotion gate, Integration"]
-    b_laptop["<b>Team laptop</b><br/>make image<br/>until M5"]
-    b_cd["<b>CD</b> [GitHub Actions]<br/>M5"]
+    b_laptop["<b>Team laptop</b><br/>make image<br/>fallback"]
+    b_cd["<b>CD</b> [GitHub Actions]<br/>build, push, deploy"]
     b_image[("<b>API image</b><br/>runtime, model bundle,<br/>comparables index")]
 
     b_dvc <-->|"data, models, runs"| b_dagshub
     b_dvc -->|"dvc.lock, metrics.json<br/>in a pull request"| b_ci
-    b_ci -.->|"merge to main"| b_cd
+    b_ci -->|"merge to main"| b_cd
     b_dvc -->|"models/lgbm-basic"| b_laptop
     b_laptop -->|"docker build"| b_image
-    b_cd -.->|"dvc pull, build, push to GHCR"| b_image
-
-    classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class b_cd later
+    b_cd -->|"dvc pull, build, push to GHCR"| b_image
 ```
 
 | Container | Responsibility | State, code |
@@ -86,7 +83,7 @@ flowchart TB
 | **DVC pipeline** | Turns the raw listings into the model bundle, its metrics and the gate's verdict | Built, `dvc.yaml`, [pipeline](pipeline.md) |
 | **DagsHub** | DVC remote for data and models; hosted MLflow for every run | Built, [data versioning](data-versioning.md) |
 | **CI** (GitHub Actions) | On every pull request: lint, tests on Linux and Windows, Serving runtime, Promotion gate, integration tests through nginx | Built, `.github/workflows/ci.yml` |
-| **CD** (GitHub Actions, GHCR) | On a merge to `main`: builds and pushes the image, deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying is off until the VM is configured ([Deployment](deployment.md#turn-continuous-deployment-on)) |
+| **CD** (GitHub Actions, GHCR) | On a merge to `main`, `cd.yml` builds and pushes the image; `deploy.yml` then deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying is off until the VM is configured ([Deployment](deployment.md#turn-continuous-deployment-on)) |
 
 The API calls no other service at request time: no DagsHub, no MLflow.
 The state it keeps outside the image is the prediction log on its volume and the workers' metric files in a tmpfs, so a worker or the whole container can be restarted or replaced without losing a request's context.
@@ -94,24 +91,25 @@ The state it keeps outside the image is the prediction log on its volume and the
 ## Physical view: deployment
 
 ```mermaid
-flowchart TB
+flowchart LR
     d_user["<b>Client</b>"]
     d_uptime["<b>Better Uptime</b><br/>M6"]
-    d_laptop["<b>Team laptop</b><br/>until M5"]
-    d_ghcr[("<b>GHCR</b><br/>M5")]
+    d_laptop["<b>Team laptop</b><br/>fallback"]
+    d_ghcr[("<b>GHCR</b>")]
 
-    subgraph d_vm["FIB Virtech VM#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;"]
+    subgraph d_vm["FIB Virtech VM"]
+        direction LR
         d_proxyc["<b>proxy</b><br/>nginx-unprivileged:1.30<br/>listens on 8080"]
-        d_apic["<b>api</b><br/>recommenditos-api:sha<br/>user 10001, port 8000"]
+        d_apic["<b>api</b><br/>API_IMAGE:sha<br/>user 10001, port 8000"]
         d_m6["<b>prometheus, grafana,<br/>drift job</b><br/>M6"]
-        d_tmpfs[("<b>tmpfs</b><br/>/tmp/prometheus")]
+        d_tmpfs[("<b>tmpfs</b><br/>/tmp, /tmp/prometheus")]
         d_vol[("<b>volume</b> prediction-log<br/>/var/lib/recommenditos")]
     end
 
     d_user -->|"HTTP, host port 80"| d_proxyc
     d_uptime -.->|"/health"| d_proxyc
-    d_laptop -->|"docker save #124; ssh docker load"| d_apic
-    d_ghcr -.->|"docker compose pull"| d_apic
+    d_laptop -->|"docker save, ssh, docker load"| d_apic
+    d_ghcr -.->|"deploy.sh pulls, off until the lab"| d_apic
     d_proxyc -->|"api:8000"| d_apic
     d_m6 -.->|"/metrics"| d_apic
     d_apic --- d_tmpfs
@@ -119,7 +117,7 @@ flowchart TB
     d_m6 -.->|"reads"| d_vol
 
     classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class d_uptime,d_ghcr,d_m6 later
+    class d_uptime,d_m6 later
 ```
 
 - **The VM.** One FIB Virtech VM for the semester ([EDN-17][edn]); we get access at the lab on 2026-10-27, so its size, operating system and reachable ports are unverified until then, and the [lab checklist](deployment.md#lab-checklist) is how we find out.
@@ -145,7 +143,7 @@ flowchart TB
 | Versioned client contract | `/v1` routers; `/`, `/health`, `/metrics` at the root | An incompatible change can ship as `/v2` beside `/v1`; monitors and Prometheus find the operational endpoints where they look for them | - |
 | Training-only libraries kept out of serving | `[project] dependencies` against dependency groups | MLflow, `shap` and MAPIE stay out of the image, which keeps it under NFR-04's 1 GB (702 MB measured for EDN-87); `make test-serving` fails on a serving import from a group | [EDN-47][edn], [EDN-11][edn], [EDN-85][edn] |
 | Promotion as a gated merge | Required CI check `Promotion gate` | A pull request that changes `dvc.lock` fails unless its committed verdict passes NFR-01's gate, so promoting a model is a reviewed merge; the SC-04 waiver for `lgbm-basic` is versioned in `params.yaml` | [EDN-12][edn], [EDN-62][edn], [EDN-06][edn] |
-| Health-checked containers with a restart policy | Image `HEALTHCHECK`, `restart: unless-stopped` | A crashed API is back within NFR-05's 30 s, and nginx answers 503 meanwhile; a hung but living API is only marked unhealthy until M5 | [EDN-10][edn] |
+| Health-checked containers with a restart policy | Image `HEALTHCHECK`, `restart: unless-stopped` | A crashed or hung API is back within NFR-05's 30 s, and nginx answers 503 meanwhile; for a hang, the healthcheck kills the server behind Docker's init (`init: true`) | [EDN-10][edn], [EDN-93][edn] |
 
 ## What the design leaves out
 
