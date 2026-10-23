@@ -2,8 +2,9 @@
 #
 # Locally, from the repository root after `dvc pull`:
 #     docker compose -f deploy/compose.yaml up -d --build --wait     (make stack)
-# On the VM, from the deploy user's home, where this file, nginx.conf and .env sit
-# and the image was loaded beforehand:
+# On the VM, from /opt/recommenditos, where this file, nginx.conf and .env sit,
+# deploy.sh pulls the image from GHCR and starts it (`docker load` stays the
+# fallback); by hand, with the image on the VM:
 #     docker compose up -d --wait
 #
 # Values come from `.env` beside this file (template: .env.template); without

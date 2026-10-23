@@ -57,19 +57,16 @@ flowchart TB
     b_dagshub[("<b>DagsHub</b><br/>DVC remote, MLflow")]
     b_dvc["<b>DVC pipeline</b><br/>[dvc repro]"]
     b_ci["<b>CI</b> [GitHub Actions]<br/>tests, Serving runtime,<br/>Promotion gate, Integration"]
-    b_laptop["<b>Team laptop</b><br/>make image<br/>until M5"]
-    b_cd["<b>CD</b> [GitHub Actions]<br/>M5"]
+    b_laptop["<b>Team laptop</b><br/>make image<br/>fallback"]
+    b_cd["<b>CD</b> [GitHub Actions]<br/>build, push, deploy"]
     b_image[("<b>API image</b><br/>runtime, model bundle,<br/>comparables index")]
 
     b_dvc <-->|"data, models, runs"| b_dagshub
     b_dvc -->|"dvc.lock, metrics.json<br/>in a pull request"| b_ci
-    b_ci -.->|"merge to main"| b_cd
+    b_ci -->|"merge to main"| b_cd
     b_dvc -->|"models/lgbm-basic"| b_laptop
     b_laptop -->|"docker build"| b_image
-    b_cd -.->|"dvc pull, build, push to GHCR"| b_image
-
-    classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class b_cd later
+    b_cd -->|"dvc pull, build, push to GHCR"| b_image
 ```
 
 | Container | Responsibility | State, code |
@@ -97,21 +94,21 @@ The state it keeps outside the image is the prediction log on its volume and the
 flowchart TB
     d_user["<b>Client</b>"]
     d_uptime["<b>Better Uptime</b><br/>M6"]
-    d_laptop["<b>Team laptop</b><br/>until M5"]
-    d_ghcr[("<b>GHCR</b><br/>M5")]
+    d_laptop["<b>Team laptop</b><br/>fallback"]
+    d_ghcr[("<b>GHCR</b>")]
 
     subgraph d_vm["FIB Virtech VM#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;"]
         d_proxyc["<b>proxy</b><br/>nginx-unprivileged:1.30<br/>listens on 8080"]
-        d_apic["<b>api</b><br/>recommenditos-api:sha<br/>user 10001, port 8000"]
+        d_apic["<b>api</b><br/>API_IMAGE:sha<br/>user 10001, port 8000"]
         d_m6["<b>prometheus, grafana,<br/>drift job</b><br/>M6"]
-        d_tmpfs[("<b>tmpfs</b><br/>/tmp/prometheus")]
+        d_tmpfs[("<b>tmpfs</b><br/>/tmp, /tmp/prometheus")]
         d_vol[("<b>volume</b> prediction-log<br/>/var/lib/recommenditos")]
     end
 
     d_user -->|"HTTP, host port 80"| d_proxyc
     d_uptime -.->|"/health"| d_proxyc
     d_laptop -->|"docker save #124; ssh docker load"| d_apic
-    d_ghcr -.->|"docker compose pull"| d_apic
+    d_ghcr -.->|"deploy.sh pulls the tag<br/>(off until the lab)"| d_apic
     d_proxyc -->|"api:8000"| d_apic
     d_m6 -.->|"/metrics"| d_apic
     d_apic --- d_tmpfs
@@ -119,7 +116,7 @@ flowchart TB
     d_m6 -.->|"reads"| d_vol
 
     classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class d_uptime,d_ghcr,d_m6 later
+    class d_uptime,d_m6 later
 ```
 
 - **The VM.** One FIB Virtech VM for the semester ([EDN-17][edn]); we get access at the lab on 2026-10-27, so its size, operating system and reachable ports are unverified until then, and the [lab checklist](deployment.md#lab-checklist) is how we find out.
