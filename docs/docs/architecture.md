@@ -83,7 +83,7 @@ flowchart TB
 | **DVC pipeline** | Turns the raw listings into the model bundle, its metrics and the gate's verdict | Built, `dvc.yaml`, [pipeline](pipeline.md) |
 | **DagsHub** | DVC remote for data and models; hosted MLflow for every run | Built, [data versioning](data-versioning.md) |
 | **CI** (GitHub Actions) | On every pull request: lint, tests on Linux and Windows, Serving runtime, Promotion gate, integration tests through nginx | Built, `.github/workflows/ci.yml` |
-| **CD** (GitHub Actions, GHCR) | On a merge to `main`: builds and pushes the image, deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying is off until the VM is configured ([Deployment](deployment.md#turn-continuous-deployment-on)) |
+| **CD** (GitHub Actions, GHCR) | On a merge to `main`, `cd.yml` builds and pushes the image; `deploy.yml` then deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying is off until the VM is configured ([Deployment](deployment.md#turn-continuous-deployment-on)) |
 
 The API calls no other service at request time: no DagsHub, no MLflow.
 The state it keeps outside the image is the prediction log on its volume and the workers' metric files in a tmpfs, so a worker or the whole container can be restarted or replaced without losing a request's context.
@@ -91,13 +91,14 @@ The state it keeps outside the image is the prediction log on its volume and the
 ## Physical view: deployment
 
 ```mermaid
-flowchart TB
+flowchart LR
     d_user["<b>Client</b>"]
     d_uptime["<b>Better Uptime</b><br/>M6"]
     d_laptop["<b>Team laptop</b><br/>fallback"]
     d_ghcr[("<b>GHCR</b>")]
 
-    subgraph d_vm["FIB Virtech VM#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;#nbsp;"]
+    subgraph d_vm["FIB Virtech VM"]
+        direction LR
         d_proxyc["<b>proxy</b><br/>nginx-unprivileged:1.30<br/>listens on 8080"]
         d_apic["<b>api</b><br/>API_IMAGE:sha<br/>user 10001, port 8000"]
         d_m6["<b>prometheus, grafana,<br/>drift job</b><br/>M6"]
@@ -107,8 +108,8 @@ flowchart TB
 
     d_user -->|"HTTP, host port 80"| d_proxyc
     d_uptime -.->|"/health"| d_proxyc
-    d_laptop -->|"docker save #124; ssh docker load"| d_apic
-    d_ghcr -.->|"deploy.sh pulls the tag<br/>(off until the lab)"| d_apic
+    d_laptop -->|"docker save, ssh, docker load"| d_apic
+    d_ghcr -.->|"deploy.sh pulls, off until the lab"| d_apic
     d_proxyc -->|"api:8000"| d_apic
     d_m6 -.->|"/metrics"| d_apic
     d_apic --- d_tmpfs
