@@ -54,7 +54,8 @@ COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY recommenditos ./recommenditos
 # The wheel's files are then copied, with their bytecode and their parent
 # directories, to /project, under the same paths, for the runtime stage to lay
-# over the dependencies. The wheel installs nothing else, no script and no other
+# over the dependencies; the healthcheck's module also to /app/healthcheck.py,
+# for the HEALTHCHECK to run as a script. The wheel installs nothing else, no script and no other
 # top-level package; the RECORD check fails the build when that changes, and
 # when it cannot read RECORD (grep exits with 1 only when it read the file and
 # printed no line).
@@ -63,7 +64,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && site="$(/app/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
     && { grep -v -e '^recommenditos/' -e '^recommenditos-[^/]*\.dist-info/' "$site"/recommenditos-*.dist-info/RECORD; test $? -eq 1; } \
     && mkdir /project \
-    && cp -a --parents "$site"/recommenditos "$site"/recommenditos-*.dist-info /project/
+    && cp -a --parents "$site"/recommenditos "$site"/recommenditos-*.dist-info /project/ \
+    && cp -a "$site"/recommenditos/api/healthcheck.py /project/app/healthcheck.py
 
 
 FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2
@@ -94,13 +96,14 @@ RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
 # layer above a changed one: the dependencies, which only a change to the lock
 # or to pyproject.toml rebuilds; the bundle and the index, which a model
 # promotion changes; and last the project's files, laid over the dependencies,
-# so a code change rebuilds and pushes only that layer.
+# so a code change rebuilds and pushes only that layer, which holds the
+# healthcheck's script too.
 COPY --from=dependencies /app/.venv /app/.venv
 COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # FR-09's index, beside the bundle, where the API looks for it; `/health`
 # reports its md5, which is what dvc.lock records for it.
 COPY data/processed/comparables.parquet /app/models/comparables.parquet
-COPY --from=builder /project/app/.venv /app/.venv
+COPY --from=builder /project/app /app
 
 # PROMETHEUS_MULTIPROC_DIR: where every uvicorn worker writes its metrics, so
 # that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
@@ -126,9 +129,12 @@ EXPOSE 8000
 # After the start period, a probe whose two attempts of 6 s both go unanswered
 # also ends the hung server, so that the restart policy brings it back; that
 # needs an init in front of the server, which Compose's `init: true` adds
-# (recommenditos/api/healthcheck.py, NFR-05, EDN-93).
+# (recommenditos/api/healthcheck.py, NFR-05, EDN-93). The module runs as a
+# script, without `site` (-S) and isolated from the environment (-I): it needs
+# only the standard library, and importing the package's __init__ and
+# site-packages would cost a probe about twice its CPU time, every 5 s.
 HEALTHCHECK --interval=5s --timeout=15s --start-period=60s --start-interval=1s --retries=3 \
-    CMD ["python", "-m", "recommenditos.api.healthcheck"]
+    CMD ["python", "-I", "-S", "/app/healthcheck.py"]
 
 # The launcher empties PROMETHEUS_MULTIPROC_DIR, then starts uvicorn with the app
 # factory; WEB_CONCURRENCY sets the number of workers (one by default).

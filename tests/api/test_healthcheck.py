@@ -1,4 +1,4 @@
-"""`python -m recommenditos.api.healthcheck`: when the probe ends a hung server (NFR-05).
+"""The image's healthcheck, recommenditos/api/healthcheck.py: when it ends a hung server (NFR-05).
 
 The integration suite drills the whole path, a frozen server that Docker
 restarts (tests/integration/test_deployed_recovery.py); these tests pin the
@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import re
 import socket
+import subprocess
+import sys
 import threading
 
 import pytest
@@ -219,3 +221,16 @@ def test_nfr05_the_image_and_compose_use_the_probes_timings():
         healthcheck.INTERVAL_S + healthcheck.ATTEMPTS * healthcheck.TIMEOUT_S + RESTART_S
     )
     assert worst_case_s <= 30
+
+
+@pytest.mark.req("NFR-05")
+def test_nfr05_the_probe_runs_as_a_script_without_site_packages():
+    """The image runs the module as `python -I -S /app/healthcheck.py`: it has to load
+    from the standard library alone, and the HEALTHCHECK has to run that copy."""
+    dockerfile = (PROJ_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert 'CMD ["python", "-I", "-S", "/app/healthcheck.py"]' in dockerfile
+    script = f"import runpy; runpy.run_path({str(Path(healthcheck.__file__))!r}, run_name='probe')"
+    loaded = subprocess.run(
+        [sys.executable, "-I", "-S", "-c", script], capture_output=True, text=True, check=False
+    )
+    assert loaded.returncode == 0, loaded.stderr

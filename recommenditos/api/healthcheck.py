@@ -1,4 +1,4 @@
-"""The container's healthcheck: `python -m recommenditos.api.healthcheck`.
+"""The container's healthcheck: the image runs this file as `/app/healthcheck.py`.
 
 Docker runs it as the image's HEALTHCHECK, every 5 s once the API is up. It
 asks `/health` up to twice. When neither attempt gets an answer and the
@@ -19,7 +19,8 @@ one that shares the host's PID namespace, where PID 1 is the host's init and
 every process of the machine would be in reach. Without the init the probe
 still fails, so Docker marks the container unhealthy, but nothing restarts it.
 
-Standard library only, so that a probe stays cheap.
+Standard library only, so that a probe stays cheap: the image runs it with
+`python -I -S`, without site-packages and the package's `__init__`.
 """
 
 from collections.abc import Callable
@@ -95,8 +96,9 @@ def container_uptime_s(proc: Path = PROC) -> float:
 
 def mark_healthy(marker: Path = MARKER) -> None:
     """Record that the API answered while the current PID 1 runs."""
-    started = str(init_started_ticks())
-    with contextlib.suppress(OSError):  # no writable /tmp: the start period applies
+    # No readable /proc/1/stat or no writable /tmp: the start period applies.
+    with contextlib.suppress(OSError):
+        started = str(init_started_ticks())
         if not marker.exists() or marker.read_text(encoding="ascii") != started:
             marker.write_text(started, encoding="ascii")
 
