@@ -1,22 +1,25 @@
-"""The stack recovers by itself from a crash of the API process (NFR-05).
+"""The stack recovers by itself from a crash or a hang of the API (NFR-05).
 
-The uvicorn process is killed with SIGKILL from the host's PID namespace, as the
-kernel's OOM killer or a segfault would end it. `docker kill` would not test
-this: Docker counts it as a manual stop, and `restart: unless-stopped` then
-leaves the container down. The kill runs in a throwaway container of the API's
-own image with the host's PID namespace, so it needs neither sudo nor another
-image.
+For the crash, the uvicorn process, not Docker's init in front of it, is killed
+with SIGKILL from the host's PID namespace, as the kernel's OOM killer or a
+segfault would end it. `docker kill` would not test this: Docker counts it as a
+manual stop, and `restart: unless-stopped` then leaves the container down. For
+the hang, the server's processes are stopped with SIGSTOP as soon as the API is
+healthy: they live on and hold the port, so a connection is accepted and never
+answered, as with a blocked event loop.
+Both signals are sent from a throwaway container of the API's own image with
+the host's PID namespace, so they need neither sudo nor another image.
 """
 
 import time
 
 import httpx2
 import pytest
-from tests.integration.conftest import docker
+from tests.integration.conftest import Container, docker
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 
-#: NFR-05: back within 30 seconds of a crash.
+#: NFR-05: back within 30 seconds of a crash or a hang.
 RECOVERY_S = 30
 
 #: The API's tmpfs mounts (deploy/compose.yaml) with the owner and mode they keep
@@ -31,13 +34,12 @@ def test_the_api_is_healthy_again_within_30_s_of_a_crash(
     client, api_container, record_testsuite_property
 ):
     before = api_container.inspect()
-    pid, restarts, image = before["State"]["Pid"], before["RestartCount"], before["Image"]
-    assert pid > 0, "the API container has no running process"
+    restarts, image = before["RestartCount"], before["Image"]
+    server = _server_processes(api_container)
+    assert server, "the API container runs no server process"
 
-    docker(
-        "run", "--rm", "--pid=host", "--user=0", "--network=none", "--entrypoint=python", image,
-        "-c", f"import os, signal; os.kill({pid}, signal.SIGKILL)",
-    )  # fmt: skip
+    # The server's own process, the first of its tree, not the init in front of it.
+    _signal(image, server[:1], "SIGKILL")
     killed_at = time.monotonic()
 
     status = None
@@ -61,3 +63,81 @@ def test_the_api_is_healthy_again_within_30_s_of_a_crash(
     api_container.exec("python", "-c", "import tempfile; tempfile.TemporaryFile().close()")
     # In the JUnit file, which CI and `make test-integration` write.
     record_testsuite_property("recovery_s", round(recovered_after, 1))
+
+
+@pytest.mark.req("NFR-05")
+def test_the_api_is_healthy_again_within_30_s_of_a_hang(
+    client, api_container, record_testsuite_property, request
+):
+    _wait_until_healthy(api_container)
+    image = api_container.inspect()["Image"]
+    frozen = _server_processes(api_container)
+    assert frozen, "the API container runs no server process"
+    # Thawed again if nothing replaced them, so the stack can be stopped as usual.
+    request.addfinalizer(lambda: _signal(image, frozen, "SIGCONT"))
+
+    _signal(image, frozen, "SIGSTOP")
+    frozen_at = time.monotonic()
+
+    status = None
+    while time.monotonic() - frozen_at < RECOVERY_S:
+        try:
+            status = client.get("/health", timeout=2).status_code
+        except httpx2.TransportError:
+            status = None
+        if status == 200:
+            break
+        time.sleep(0.5)
+    recovered_after = time.monotonic() - frozen_at
+
+    assert status == 200, (
+        f"/health still answers {status} {recovered_after:.1f} s after the API hung; "
+        "nothing restarts a hung API"
+    )
+    record_testsuite_property("hang_recovery_s", round(recovered_after, 1))
+
+
+def _wait_until_healthy(container: Container) -> None:
+    """Wait until Docker has seen the API healthy since its last start, as soon as it has.
+
+    The crash test before this one restarts the container. The hang then comes
+    right after the API turned healthy, the earliest moment a missing answer is
+    a hang rather than a start in progress, and the latest one to be ended.
+    """
+    deadline = time.monotonic() + RECOVERY_S * 3
+    while container.inspect()["State"]["Health"]["Status"] != "healthy":
+        assert time.monotonic() < deadline, "the API did not turn healthy"
+        time.sleep(0.2)
+
+
+def _server_processes(container: Container) -> list[int]:
+    """The host PIDs of the server: the image's command first, then every process it started.
+
+    An init that Docker or the image puts in front of the command is left
+    running, as is a healthcheck probe, which is no child of the command.
+    """
+    command = " ".join(container.inspect()["Config"]["Cmd"])
+    rows = docker("top", container.id, "-eo", "pid,ppid,args").splitlines()[1:]
+    fields = (row.split(None, 2) for row in rows)
+    processes = [(int(pid), int(ppid), args) for pid, ppid, args in fields]
+    server = [pid for pid, _, args in processes if args == command]
+    for parent in server:  # grows while it runs: children, then theirs
+        server += [pid for pid, ppid, _ in processes if ppid == parent]
+    return server
+
+
+def _signal(image: str, pids: list[int], name: str) -> None:
+    """Send the signal `name` to host processes from a throwaway root container."""
+    script = (
+        "import os, signal\n"
+        f"for pid in {pids}:\n"
+        "    try:\n"
+        f"        os.kill(pid, signal.{name})\n"
+        "    except ProcessLookupError:\n"
+        "        pass\n"
+    )
+    docker(
+        "run", "--rm", "--pid=host", "--user=0", "--network=none", "--no-healthcheck",
+        "--entrypoint=python", image,
+        "-c", script,
+    )  # fmt: skip
