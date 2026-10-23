@@ -121,6 +121,7 @@ make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
 
 `make lint` runs the same ruff rules and the same mypy check as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
+The ruff and mypy hooks are local hooks that run through `uv run`, so they use the ruff and mypy versions pinned in `uv.lock`, the ones Dependabot's uv group moves; the hooks need the synced environment (`uv sync`).
 
 ### Security rules
 
