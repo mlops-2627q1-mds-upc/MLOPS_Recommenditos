@@ -55,10 +55,10 @@ COPY recommenditos ./recommenditos
 # The wheel's files are then copied, with their bytecode and their parent
 # directories, to /project, under the same paths, for the runtime stage to lay
 # over the dependencies; the healthcheck's module also to /app/healthcheck.py,
-# for the HEALTHCHECK to run as a script. The wheel installs nothing else, no script and no other
-# top-level package; the RECORD check fails the build when that changes, and
-# when it cannot read RECORD (grep exits with 1 only when it read the file and
-# printed no line).
+# for the HEALTHCHECK to run as a script. The wheel installs nothing else, no
+# script and no other top-level package; the RECORD check fails the build when
+# that changes, and when it cannot read RECORD (grep exits with 1 only when it
+# read the file and printed no line).
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-default-groups --no-editable --reinstall-package recommenditos \
     && site="$(/app/.venv/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
