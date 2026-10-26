@@ -20,7 +20,7 @@
 # the pin.
 FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
 
-FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2 AS dependencies
+FROM python:3.12-slim-trixie@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704 AS dependencies
 
 COPY --from=uv /uv /bin/uv
 
@@ -70,7 +70,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && cp -a "$site"/recommenditos/api/healthcheck.py /project/app/healthcheck.py
 
 
-FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2
+FROM python:3.12-slim-trixie@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
 
 # The bundle to serve. `/health` reports the DVC hash of this directory, so it is
 # copied whole and unchanged, and FR-12's check compares it with dvc.lock.
