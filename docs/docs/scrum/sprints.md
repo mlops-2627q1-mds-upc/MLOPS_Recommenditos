@@ -305,8 +305,24 @@ Lukas could not attend, so Kevin stood in as scrum master.
 
 **The FIB Virtech VM (#134).**
 The team read through the FIB Virtech setup guide together, and Kevin posted the findings on [#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134#issuecomment-6439525384) with a summary of each setup step to test.
-Mark, Michal, and Kevin are available to set up the VM, and Mark does the first setup steps on 2026-10-28.
+Mark, Michal, and Kevin are available to set up the VM and now own #134, and Mark does the first setup steps on 2026-10-28.
 Everyone else helps whenever needed.
+
+**Sprint 5 review.**
+The team did not review what sprint 5 delivered, because the course required nothing before the next laboratory: FastAPI and deployment have not been covered in class yet.
+
+**Sprint 5 retrospective.**
+The presentation slides went well.
+The retrospective produced no new tickets, because none was needed.
+
+**Sprint 6 goals.**
+The sprint runs from 2026-10-28 to 2026-11-03.
+
+- Milestone 4: set up the VM ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134)), deploy the API to it behind the reverse proxy ([#142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142)), load test it ([#143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143)), and write report section 2.4 ([#145](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/145)).
+- Milestone 5: decide how CI reaches the VM, since a GitHub-hosted runner cannot reach it over SSH (an EDN decision), and deploy from CI with a rollback ([#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198)).
+- Scrum records: close sprint 4 ([#146](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/146)) and sprint 5 ([#202](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/202)).
+
+Still open: who owns each issue besides #134 and #202, and which option CD uses.
 
 **Feedback from the professor.**
 The EDN has to document the AI interaction evidence in more detail: the literal prompt, or the core prompt, paraphrased where the literal one is not available.
