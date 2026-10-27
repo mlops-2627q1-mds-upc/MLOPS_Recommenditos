@@ -32,7 +32,7 @@ How to add an entry:
   - **Alternatives considered**: only alternatives we really weighed, one line each with the reason it lost; one is enough, and more than three is rare;
   - **Rationale**: the deciding argument, in about 60 words and with one or two numbers, each checked against its source; link the analysis and do not retell it;
   - **Assessment of the AI contribution**: what AI contributed and what we checked, changed, or rejected, in about 45 words;
-  - **AI interaction evidence**: the session and its topic, or one quoted prompt, in about 20 words;
+  - **AI interaction evidence**: the session's date and topic and the prompt that led to the decision, in double quotes: word for word when we have it, otherwise its core, marked "(paraphrased)"; the professor asked on 2026-10-27 for this much detail, a session and topic alone is not enough, and entries recorded before that date keep their evidence as it is;
   - **Other evidence**: about four links.
 - When a decision is revised, edit its entry so that it states the current decision, and say in one note line above the fields what changed and when.
   Do not add a second entry for the same decision.
@@ -1337,7 +1337,7 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 - **AI involvement:** Select all that apply: No AI involvement | Information seeking | Alternative generation | Alternative assessment | Recommendation | Solution generation | Other (describe)
 - **Response to AI:** If AI contributed, select one: Accepted | Accepted with modifications | Rejected | Used as input for further analysis | Other (describe)
 - **Assessment of the AI contribution:** If AI contributed: what it contributed and what we checked, changed, or rejected, in about 45 words.
-- **AI interaction evidence:** The session and its topic, or one quoted prompt.
+- **AI interaction evidence:** Claude Code session of YYYY-MM-DD on the topic, prompt "the literal prompt, or its core (paraphrased)".
 - **Other evidence:** About four links: issue, PR, analysis result, document.
 - **In LaTeX:** no
 ```

@@ -299,6 +299,20 @@ Recorded on day 5 of the sprint from the merged and open pull requests.
 
 **Still open for the delivery:** the slides link and Michal's and Mark's mail domains on the report's cover, and the project board link, which returns 404 to a reader who is not logged in (#123).
 
+## Sprint 5 meeting (2026-10-27)
+
+Lukas could not attend, so Kevin stood in as scrum master.
+
+**The FIB Virtech VM (#134).**
+The team read through the FIB Virtech setup guide together, and Kevin posted the findings on [#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134#issuecomment-6439525384) with a summary of each setup step to test.
+Mark, Michal, and Kevin are available to set up the VM, and Mark does the first setup steps on 2026-10-28.
+Everyone else helps whenever needed.
+
+**Feedback from the professor.**
+The EDN has to document the AI interaction evidence in more detail: the literal prompt, or the core prompt, paraphrased where the literal one is not available.
+The guidance in [reports/edn.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md) and in `AGENTS.md` now asks for that.
+It applies to new entries only, and the entries recorded before 2026-10-27 do not have to be adapted.
+
 ## Retrospective notes
 
 ### Sprint 1
