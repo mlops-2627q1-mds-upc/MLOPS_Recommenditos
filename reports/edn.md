@@ -1294,7 +1294,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI laid out the options for reaching the VM and for the private package and recommended the chosen ones; @lukas2510 decided both as recommended.
   AI then wrote the workflow, the install script and the guard test, and probed the sudoers rule in the container.
 - **AI interaction evidence:** Claude Code session of 2026-10-30 on deploying to the VM, prompt "the SSH port is not reachable from outside, how does CD reach the VM now" (paraphrased).
-- **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [`deploy.yml`](../.github/workflows/deploy.yml), [deployment docs](../docs/docs/deployment.md#turn-continuous-deployment-on).
+- **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [PR #237](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/237), [`deploy.yml`](../.github/workflows/deploy.yml), [deployment docs](../docs/docs/deployment.md#turn-continuous-deployment-on).
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
