@@ -12,9 +12,13 @@ name: Deploy
 # run nothing but deploy.sh through sudo, so those jobs check nothing out and
 # only call it. Everything else runs on GitHub-hosted runners, the smoke check
 # too, which keeps the outside view NFR-12 asks for. A public repository's
-# self-hosted runner must never run code from a pull request:
-# tests/test_workflow_runners.py fails when any other workflow targets it, or
-# when this one gains a trigger beside workflow_run and workflow_dispatch.
+# self-hosted runner must never run code from a fork's pull request, which
+# runs the workflow files of its own merge commit: what stops that is the
+# repository's setting that a team member approves every fork pull request's
+# workflows, after reading its changes to .github/. tests/test_workflow_runners.py
+# keeps main clean: it fails when any other workflow targets the runner, or
+# when this one gains a trigger beside workflow_run of main and
+# workflow_dispatch, which only people with write access can start.
 #
 # Off until it is configured (deployment.md#turn-continuous-deployment-on): the
 # repository variable DEPLOY_TO_VM turns it on with the value `true`. Otherwise
@@ -218,9 +222,11 @@ jobs:
         run: |
           deploy=true
           if [ "$GITHUB_EVENT_NAME" = workflow_run ] && [ -n "$RUNNING" ] && [ "$RUNNING" != "$TAG" ]; then
-            if relation=$(curl -fsS -m 30 -H "Authorization: Bearer $GH_TOKEN" \
-                -H "Accept: application/vnd.github+json" \
-                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$TAG...$RUNNING?per_page=1" \
+            # The header comes through a pipe from the builtin printf, so the
+            # token is on no command line other users of the VM could read.
+            if relation=$(printf 'Authorization: Bearer %s\n' "$GH_TOKEN" \
+                | curl -fsS -m 30 -H @- -H "Accept: application/vnd.github+json" \
+                  "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$TAG...$RUNNING?per_page=1" \
                 | jq -r .status); then
               if [ "$relation" = ahead ]; then
                 deploy=false
@@ -341,6 +347,9 @@ jobs:
               else
                 result="the smoke check failed, and putting the previous tag back failed too: ${ROLLBACK_SAID:-the runner on the VM did not answer}"
               fi
+              ;;
+            success/cancelled)
+              result="deployed, but the smoke check was cancelled, so the deployment is unverified and nothing was rolled back: run the workflow again with this SHA, or \`make smoke\` by hand"
               ;;
             failure/*)
               if [ "$DEPLOYED" = true ]; then

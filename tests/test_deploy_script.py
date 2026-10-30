@@ -186,8 +186,8 @@ esac
 """
 
 
-@pytest.mark.req("NFR-15")
-def test_the_registry_token_reaches_docker_login_on_stdin_and_nothing_keeps_it(tmp_path: Path):
+def fake_docker_stack(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
+    """A stack directory, the fake docker's log, and the environment that puts it first."""
     stack = tmp_path / "stack"
     stack.mkdir()
     (stack / ".env").write_text(f"API_IMAGE_TAG={'1' * 40}\n", encoding="utf-8")
@@ -197,16 +197,20 @@ def test_the_registry_token_reaches_docker_login_on_stdin_and_nothing_keeps_it(t
     docker.write_text(FAKE_DOCKER, encoding="utf-8")
     docker.chmod(0o755)
     log = tmp_path / "docker.log"
+    log.touch()
+    environment = {
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_DOCKER_LOG": str(log),
+        "TMPDIR": str(tmp_path),
+    }
+    return stack, log, environment
 
-    result = run_directly(
-        stack,
-        ["deploy", SHA, FLAG],
-        extra_environment={
-            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-            "FAKE_DOCKER_LOG": str(log),
-            "TMPDIR": str(tmp_path),
-        },
-    )
+
+@pytest.mark.req("NFR-15")
+def test_the_registry_token_reaches_docker_login_on_stdin_and_nothing_keeps_it(tmp_path: Path):
+    stack, log, environment = fake_docker_stack(tmp_path)
+
+    result = run_directly(stack, ["deploy", SHA, FLAG], extra_environment=environment)
 
     calls = log.read_text(encoding="utf-8")
     assert result.returncode == 1, result.stdout + result.stderr
@@ -221,3 +225,16 @@ def test_the_registry_token_reaches_docker_login_on_stdin_and_nothing_keeps_it(t
     for path in stack.iterdir():
         assert SENTINEL not in path.read_text(encoding="utf-8"), path.name
     assert SENTINEL not in result.stdout + result.stderr
+
+
+@pytest.mark.req("NFR-15")
+def test_no_login_happens_when_the_throwaway_configuration_cannot_be_made(tmp_path: Path):
+    """An empty DOCKER_CONFIG would make docker keep the login in ~/.docker."""
+    stack, log, environment = fake_docker_stack(tmp_path)
+    environment["TMPDIR"] = str(tmp_path / "missing")
+
+    result = run_directly(stack, ["deploy", SHA, FLAG], extra_environment=environment)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "could not create a Docker configuration" in result.stdout
+    assert "argv: login" not in log.read_text(encoding="utf-8")

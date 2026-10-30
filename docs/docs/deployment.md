@@ -319,15 +319,18 @@ That runner is the production machine, so it may do as little as possible:
   sudo passes the arguments without a shell and drops the caller's environment, and `deploy.sh` refuses every other shape of arguments (`tests/test_deploy_script.py`).
   In an Ubuntu 20.04 container with sudo 1.8.31, the VM's release, the rule refused every other command tried on 2026-10-30: another program, another target user, `-s`, `-i`, `-e`, `-E`, and setting `STACK_DIR`, `BASH_ENV` or `LD_PRELOAD`.
 - Its jobs check nothing out and run no code from the repository; the smoke check, which needs the repository and uv, runs on a GitHub-hosted runner.
-- The repository is public, so a pull request from a fork could ask for the runner's label.
-  `tests/test_workflow_runners.py` fails when any workflow but `deploy.yml` targets a self-hosted runner, or when a workflow that does has a trigger other than `workflow_run` of `main` and `workflow_dispatch`, both of which run main's copy of the workflow; the Actions settings of step 3 are the second layer.
+- The repository is public, so a pull request from a fork could add a job for the runner's label; such a pull request runs the workflow files of its own merge commit.
+  What stops it is the setting of step 1: a team member approves every fork pull request's workflows before they run, after reading its changes to `.github/`.
+  `tests/test_workflow_runners.py` keeps `main` clean: it fails when any workflow but `deploy.yml` targets a self-hosted runner, or when a workflow that does has a trigger other than `workflow_run` of `main`, which runs main's copy of the workflow, and `workflow_dispatch`, which runs the copy of the ref chosen by someone with write access.
 
 How much memory the idle runner takes on the VM's 3.8 GiB is not measured yet; `systemctl status 'actions.runner.*'` on the VM shows it.
 When the runner is offline, the deploy job waits in the queue for up to 24 hours before it fails, and later runs wait behind it; the same command shows whether it runs.
 
 After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by hand:
 
-1. **The runner.** On a laptop, create a registration token, which is valid for one hour, then copy `deploy/` to the VM and install the runner; the script asks for the token and reads it without echo, so it appears on no command line:
+1. **Approval of fork pull requests**, before the runner exists: under **Settings**, **Actions**, **General**, **Approval for running fork pull request workflows from contributors**, choose **Require approval for all external contributors**, so no fork's workflow runs before a team member has read it.
+   `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/permissions/fork-pr-contributor-approval --jq .approval_policy` answers `all_external_contributors` once it is set.
+2. **The runner.** On a laptop, create a registration token, which is valid for one hour, then copy `deploy/` to the VM and install the runner; the script asks for the token and reads it without echo, so it appears on no command line:
 
     ```bash
     gh api -X POST repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runners/registration-token --jq .token
@@ -339,9 +342,8 @@ After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by ha
     A second run asks for no token once the runner is registered.
     The runner updates itself, so the pinned release is only the one it starts from.
     It then shows as **Idle** under **Settings**, **Actions**, **Runners**.
-2. **The Environment `production`:** create it (**Settings**, **Environments**, **New environment**), or open it if a run has already created it, and limit **Deployment branches and tags** to `main`; `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/environments --jq '.environments[] | [.name, (.deployment_branch_policy | tostring)]'` shows both.
+3. **The Environment `production`:** create it (**Settings**, **Environments**, **New environment**), or open it if a run has already created it, and limit **Deployment branches and tags** to `main`; `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/environments --jq '.environments[] | [.name, (.deployment_branch_policy | tostring)]'` shows both.
    It holds no secret: the deploy job pulls with its own token.
-3. **The Actions settings:** under **Settings**, **Actions**, **General**, require approval for workflows from fork pull requests of all external contributors, so no fork's workflow runs before a team member has read it.
 4. **The variables** (**Settings**, **Secrets and variables**, **Actions**, **Variables**): `SMOKE_URL`, the VM's public URL `http://<vm-host>:<port>` that `make smoke` checks, and then the switch `DEPLOY_TO_VM` = `true`.
 5. **The first run:** run the workflow by hand with the SHA of the newest image, then check its summary and the [rollback drill](#every-deploy) on the VM: deploy a tag whose image does not start, or one whose smoke check fails, and link the run that put the previous tag back in [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198).
 

@@ -1287,7 +1287,7 @@ How to add an entry:
   - The VM pulling on a timer: no deployment record, no gate, no rollback after a failed smoke check.
   - A personal token in the VM's Docker configuration: a lasting credential on a shared VM.
 - **Rationale:** From outside the UPC network, SSH to the VM timed out while its HTTP port answered (#134), so only an outbound connection from the VM works.
-  Keeping repository code off the runner keeps a public repository's pull requests away from production; a test fails any other workflow that targets the runner.
+  No repository code runs on the runner; a fork pull request's workflows run only after a team member approved them, and a test keeps every other workflow on `main` off the runner.
   In an Ubuntu 20.04 container, the VM's release, sudo 1.8.31 refused every other command tried.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted

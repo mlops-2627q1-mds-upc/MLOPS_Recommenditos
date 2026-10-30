@@ -105,7 +105,9 @@ pull() {
         API_IMAGE_TAG=$tag compose pull --quiet api
         return
     fi
-    config=$(mktemp -d)
+    # Not `set -e` here (pull runs as a condition): an empty DOCKER_CONFIG would
+    # make Docker keep the login in ~/.docker.
+    config=$(mktemp -d) && [[ -d $config ]] || { say "could not create a Docker configuration for the login"; return 1; }
     if printf '%s\n' "$registry_token" |
         DOCKER_CONFIG=$config docker login ghcr.io --username github-actions --password-stdin >/dev/null 2>&1; then
         API_IMAGE_TAG=$tag DOCKER_CONFIG=$config compose pull --quiet api || status=$?

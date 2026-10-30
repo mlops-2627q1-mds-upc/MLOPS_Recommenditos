@@ -99,12 +99,15 @@ if [[ -f $RUNNER_DIR/.runner ]]; then
     echo "already registered: $(jq -r '.agentName' "$RUNNER_DIR/.runner" 2>/dev/null || echo "see $RUNNER_DIR/.runner")"
 else
     if [[ -t 0 ]]; then
-        read -r -s -p "Registration token (gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token): " token
+        read -r -s -p "Registration token (gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token): " token || true
         echo
     else
-        read -r token
+        read -r token || true
     fi
-    [[ -n $token ]] || { echo "No registration token given." >&2; exit 1; }
+    if [[ -z ${token:-} ]]; then
+        echo "No registration token on standard input: create one with gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token" >&2
+        exit 1
+    fi
     # The runner reads the token from ACTIONS_RUNNER_INPUT_TOKEN, so it stays off
     # every command line, where `ps` would show it. config.sh refuses to run as
     # root; runuser keeps this environment.
