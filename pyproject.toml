@@ -210,7 +210,8 @@ loadtest = [
 # installs that group, and Schemathesis brings requests and werkzeug,
 # which a serving import could then lean on unnoticed.
 contract = [
-    "schemathesis>=4.32.2",
+    # 4.32.7 or newer: older releases read `Node._nodeid`, which pytest 9.2 removed.
+    "schemathesis>=4.32.7",
 ]
 
 [tool.uv]
