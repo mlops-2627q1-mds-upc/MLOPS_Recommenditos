@@ -173,11 +173,14 @@ While the environment was a single layer with the package in it, a code change c
 The job summary states each run's runtime.
 Built locally with the job's steps on 2026-10-22, the image was 704 MB and passed the 27 tests of the integration suite against the hashes `dvc.lock` records.
 
-The package is public, so the VM and anyone else pull it without a credential; the image holds no secret and no personal data, as the API key is passed at run time.
-GHCR creates a new package as private, so after the first push an organisation owner makes it public once: the organisation's **Packages** tab, `mlops_recommenditos/api`, **Package settings**, **Change visibility**, **Public**.
-After that, any commit's image can be checked from anywhere:
+The package is private: the organisation does not allow public packages (the visibility dialog says "Setting is disabled by organization administrators", 2026-10-30).
+The image holds no secret and no personal data, as the API key is passed at run time, but pulling it takes a token that may read packages.
+The VM keeps none: the Deploy workflow's job on the VM hands its own token, which expires with the job, to `deploy.sh` for one pull ([Every deploy](#every-deploy), [EDN-94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+That token may read the package because CD's token created it, which gives this repository access to it (**Package settings**, **Manage Actions access**).
+A team member checks a commit's image with the GitHub CLI's token, which may read packages (`gh auth status` lists `read:packages`):
 
 ```bash
+gh auth token | docker login ghcr.io -u <github-user> --password-stdin
 docker pull ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<SHA>
 docker inspect --format '{{json .Config.Labels}}' ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<SHA>
 ```
@@ -186,8 +189,8 @@ docker inspect --format '{{json .Config.Labels}}' ghcr.io/mlops-2627q1-mds-upc/m
 
 ### How the image gets there
 
-[Continuous delivery](#continuous-delivery) pushes the image of every merge to GHCR, and the VM pulls it from there: `deploy/deploy.sh` on the VM pulls the commit's tag and starts it.
-The VM therefore needs Docker and four files, and none of the repository, uv, DVC or a DagsHub token, which would otherwise sit on a shared university machine.
+[Continuous delivery](#continuous-delivery) pushes the image of every merge to GHCR, and the VM pulls it from there: `deploy/deploy.sh` on the VM pulls the commit's tag, logged in with a token it is handed for that pull, and starts it.
+The VM therefore needs Docker, the stack's four files and the [runner](#turn-continuous-deployment-on), and none of the repository, uv, DVC, a DagsHub token or a lasting registry credential, which would otherwise sit on a shared university machine.
 It also keeps the DVC cache and the build cache off the VM's 20 GB disk (NFR-04).
 When GHCR cannot be reached, a laptop builds the image and streams it to the VM with `docker save | ssh docker load` instead ([Every deploy](#every-deploy)).
 
@@ -223,23 +226,28 @@ Set FR-10's API key in the same `.env` (`RECOMMENDITOS_API_KEY`, generated on th
 
 The `Deploy` workflow ([`.github/workflows/deploy.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/deploy.yml)) deploys every image that [continuous delivery](#continuous-delivery) pushes, once it is [turned on](#turn-continuous-deployment-on) (NFR-13).
 It starts when a CD run on `main` finishes, and only if that run passed and pushed an image: a commit that changes only `docs/`, `reports/` or top-level Markdown files builds none and deploys nothing.
-It deploys the image's commit SHA tag, never `:latest`, in one job of the GitHub Environment `production`:
+It deploys the image's commit SHA tag, never `:latest`, in five jobs.
+The two that act on the VM run on the self-hosted runner there, which may run nothing but `deploy.sh` ([Turn continuous deployment on](#turn-continuous-deployment-on)); the other three run on GitHub-hosted runners:
 
-1. reads the tag the VM runs, and skips the commit if the VM already runs a newer one that contains it, which happens when the CD runs of two merges finish in the opposite order (the rule that keeps `:latest` moving forward);
-2. runs `deploy.sh deploy <SHA>` on the VM, which pulls the image, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag again and the run fails;
-3. runs `make smoke` from the runner against the VM's public address, the outside view the proxy rules are about; if it fails, `deploy.sh rollback` starts the previous tag again and the run fails;
-4. writes the deployed commit, the outcome and the tag that runs now into the job summary.
+1. **Prepare** names the commit from the CD run's title (`CD of <SHA>`), and checks that `SMOKE_URL` is set and that CD pushed an image for the commit.
+2. **Deploy on the VM**, the job of the GitHub Environment `production`, reads the tag the VM runs, and skips the commit if the VM already runs a newer one that contains it, which happens when the CD runs of two merges finish in the opposite order (the rule that keeps `:latest` moving forward); GitHub's compare API answers that, since the runner has no clone.
+   It then runs `deploy.sh deploy <SHA> --registry-token-stdin`, which logs in to GHCR with the job's token, pulls the image, deletes the login, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag again and the run fails.
+3. **Smoke check** checks out the deployed commit and runs `make smoke` against `SMOKE_URL`, the VM's public address, from outside the VM, the outside view the proxy rules are about.
+   It starts once the deploy job has ended, so the new tag serves for as long as this job takes to start and install the environment before it is checked.
+4. **Put the previous tag back** runs on the VM only when the smoke check failed: `deploy.sh rollback` starts the previous tag again and the run fails.
+5. **Write the summary** writes the deployed commit, the outcome and the tag that runs now into the run's summary.
 
 Deploys never overlap and are never cancelled: the workflow's runs queue in the order they arrive (`concurrency` with `queue: max`), and `deploy.sh` holds a lock on the VM, so a deploy by hand waits for a running one.
-The job checks out the deployed commit, so the smoke suite holds `/health` to that commit's `dvc.lock` (FR-12).
+The smoke job checks out the deployed commit, so the smoke suite holds `/health` to that commit's `dvc.lock` (FR-12).
 
 A manual run (**Actions**, **Deploy**, **Run workflow** on `main`) deploys the full commit SHA it is given, an older one too: that is how an earlier version is redeployed on purpose, for example after a promoted model regressed (FR-15).
 Any tag CD pushed can be deployed this way, since GHCR keeps them all.
 
-`deploy.sh` is also how a deploy runs by hand, on the VM as `recommenditos` or over SSH:
+`deploy.sh` is also how a deploy runs by hand, over SSH from the UPC network or its VPN, or on the VM as `recommenditos`.
+The package is private, so a pull needs a token on standard input, here the GitHub CLI's; `deploy.sh` keeps it for the one pull and writes it nowhere:
 
 ```bash
-ssh recommenditos@<vm> ./deploy.sh deploy <full commit SHA>
+gh auth token | ssh recommenditos@<vm> ./deploy.sh deploy <full commit SHA> --registry-token-stdin
 make smoke SMOKE_URL=http://<vm-host>:<port>
 ```
 
@@ -249,7 +257,7 @@ Run it from outside the VM, because the proxy rules it checks are about requests
 The rollback is rehearsed against the local stack by `tests/integration/test_deploy_rollback.py`, part of `make test-integration` and CI's integration job.
 It copies the VM's stack directory (`compose.yaml`, `nginx.conf`, `.env` and `deploy.sh`) into a temporary directory and runs it as a second Compose project on a port of its own.
 It deploys the image under test, then the same image with a server that exits as soon as it starts, and checks that the first tag is back in `.env`, runs and answers through the proxy; a second test checks `deploy.sh rollback`, the step that follows a failed smoke check.
-A third test closes `deploy.sh`'s output as soon as it starts the broken tag, as a cancelled run or a lost SSH connection would, and checks that the rollback still finishes; a fourth checks that a deploy removes the image of the tag two deploys back and keeps the rest.
+A third test closes `deploy.sh`'s output as soon as it starts the broken tag, as a cancelled run or a closed terminal would, and checks that the rollback still finishes; a fourth checks that a deploy removes the image of the tag two deploys back and keeps the rest.
 The drill's tags are full commit SHAs, the only tags `deploy.sh` accepts.
 On a laptop on 2026-10-22, `deploy.sh deploy` of the broken tag returned 7 s after it started, with the previous tag serving again, and the four tests took 62 s.
 CI's integration job runs beside the `Tests` job, which took 5 minutes on the pull request that added the drill, so the drill does not lengthen a CI run.
@@ -285,7 +293,7 @@ On the VM, as `recommenditos`:
 ```bash
 ./deploy.sh status                           # the tag that runs, its health and the previous tag
 ./deploy.sh rollback                         # start the previous tag again
-./deploy.sh deploy <full commit SHA>         # start any tag CD pushed
+./deploy.sh deploy <full commit SHA>         # start a tag whose image is on the VM; to pull one, see Every deploy
 cat deploy-history.log                       # every deploy and rollback, with its time and outcome
 cat deploy-last-run.log                      # the whole output of the last deploy or rollback
 docker compose ps                            # state and health of both containers
@@ -297,35 +305,46 @@ After a successful deploy, `deploy.sh` removes the images of the tags it deploye
 
 ### Turn continuous deployment on
 
-The `Deploy` workflow is off until the repository variable `DEPLOY_VIA` is set: until then each run is green and its summary says that deploying is off.
-Its deploying job, the one in the Environment `production`, runs only once it is on.
+The `Deploy` workflow is off until the repository variable `DEPLOY_TO_VM` is `true`: until then each run is green and its summary says that deploying is off.
+Its jobs on the VM run only once it is on.
 GitHub's documentation says that running a workflow that references a missing environment creates it, without any protection; whether a skipped job does that too is not documented, so `production` may already exist, empty, after the first run.
-Once `DEPLOY_VIA` is set, a missing variable or secret fails the run with a line naming it.
-The workflow reaches the VM over SSH from a GitHub-hosted runner, option A of [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198); if the [lab checklist](#lab-checklist) finds the VM's SSH port unreachable from outside, a self-hosted runner on the VM replaces the step `Reach the VM` and the job's `runs-on`, and nothing else.
+Once `DEPLOY_TO_VM` is `true`, a missing `SMOKE_URL` fails the run with a line naming it.
 
-After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by hand, and once the GHCR package `mlops_recommenditos/api` is public (see [Continuous delivery](#continuous-delivery)), since the VM pulls without a credential; `docker manifest inspect ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:latest` answers without logging in once it is:
+The VM's SSH port answers only from the UPC network and its VPN ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134)), so a GitHub-hosted runner cannot reach the VM.
+The jobs that act on the VM therefore run on a self-hosted runner on the VM itself, which connects out to GitHub over HTTPS and needs no inbound connection ([EDN-94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+That runner is the production machine, so it may do as little as possible:
 
-1. **The deploy key.** Generate a key pair for CD alone, on a laptop: `ssh-keygen -t ed25519 -N '' -C recommenditos-cd -f cd_key`.
-   Append its public half to `/opt/recommenditos/.ssh/authorized_keys` on the VM, restricted to `deploy.sh`, so it can do nothing but deploy, roll back and report the tag (NFR-15):
+- It runs as its own user `github-runner`, which is not in the `docker` group, since that group is root on the VM.
+- Its only sudo right is one rule: run `/opt/recommenditos/deploy.sh` as `recommenditos` with `deploy <SHA>` (and the token flag), `rollback` or `status`.
+  sudo passes the arguments without a shell and drops the caller's environment, and `deploy.sh` refuses every other shape of arguments (`tests/test_deploy_script.py`).
+  In an Ubuntu 20.04 container with sudo 1.8.31, the VM's release, the rule refused every other command tried on 2026-10-30: another program, another target user, `-s`, `-i`, `-e`, `-E`, and setting `STACK_DIR`, `BASH_ENV` or `LD_PRELOAD`.
+- Its jobs check nothing out and run no code from the repository; the smoke check, which needs the repository and uv, runs on a GitHub-hosted runner.
+- The repository is public, so a pull request from a fork could add a job for the runner's label; such a pull request runs the workflow files of its own merge commit.
+  What stops it is the setting of step 1: a team member approves every fork pull request's workflows before they run, after reading its changes to `.github/`.
+  `tests/test_workflow_runners.py` keeps `main` clean: it fails when any workflow but `deploy.yml` targets a self-hosted runner, or when a workflow that does has a trigger other than `workflow_run` of `main`, which runs main's copy of the workflow, and `workflow_dispatch`, which runs the copy of the ref chosen by someone with write access.
 
-    ```text
-    command="/opt/recommenditos/deploy.sh",restrict ssh-ed25519 AAAA... recommenditos-cd
+How much memory the idle runner takes on the VM's 3.8 GiB is not measured yet; `systemctl status 'actions.runner.*'` on the VM shows it.
+When the runner is offline, the deploy job waits in the queue for up to 24 hours before it fails, and later runs wait behind it; the same command shows whether it runs.
+
+After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by hand:
+
+1. **Approval of fork pull requests**, before the runner exists: under **Settings**, **Actions**, **General**, **Approval for running fork pull request workflows from contributors**, choose **Require approval for all external contributors**, so no fork's workflow runs before a team member has read it.
+   `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/permissions/fork-pr-contributor-approval --jq .approval_policy` answers `all_external_contributors` once it is set.
+2. **The runner.** On a laptop, create a registration token, which is valid for one hour, then copy `deploy/` to the VM and install the runner; the script asks for the token and reads it without echo, so it appears on no command line:
+
+    ```bash
+    gh api -X POST repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runners/registration-token --jq .token
+    scp -r deploy <admin>@<vm>:
+    ssh -t <admin>@<vm> sudo bash deploy/install-runner.sh
     ```
 
-    sshd passes the command the workflow asks for to `deploy.sh` in `SSH_ORIGINAL_COMMAND`, and `deploy.sh` refuses anything but `deploy <tag>`, `rollback` and `status`; `restrict` turns off port, agent and X11 forwarding and the terminal.
-2. **The host key**, pinned so the runner connects to the VM and nothing else: `ssh-keyscan -p <ssh-port> <vm-host>` from a trusted network, compared with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the VM.
-3. **The Environment `production`:** create it (**Settings**, **Environments**, **New environment**), or open it if a run has already created it, and limit **Deployment branches and tags** to `main`; `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/environments --jq '.environments[] | [.name, (.deployment_branch_policy | tostring)]'` shows both. It holds:
-
-    | Name | Kind | Value |
-    |------|------|-------|
-    | `VM_SSH_KEY` | secret | the private half, `cd_key`; then delete the local copy |
-    | `VM_HOST` | variable | the VM's public host name or address |
-    | `VM_SSH_PORT` | variable | the forwarded SSH port, if it is not 22 |
-    | `VM_USER` | variable | `recommenditos` is the default; set it only if it differs |
-    | `VM_KNOWN_HOSTS` | variable | the lines of step 2 |
-    | `SMOKE_URL` | variable | `http://<vm-host>:<port>`, the address `make smoke` checks |
-
-4. **The switch:** the repository variable `DEPLOY_VIA` = `ssh` (**Settings**, **Secrets and variables**, **Actions**, **Variables**).
+    `install-runner.sh` is idempotent: it creates the user `github-runner`, downloads a pinned release of `actions/runner` and checks its SHA-256, installs the packages the runner needs, registers it with the label `recommenditos-vm`, installs it as a systemd service that starts at boot, and writes the sudoers rule after `visudo -cf` has accepted it; its last step runs `deploy.sh status` through that rule.
+    A second run asks for no token once the runner is registered.
+    The runner updates itself, so the pinned release is only the one it starts from.
+    It then shows as **Idle** under **Settings**, **Actions**, **Runners**.
+3. **The Environment `production`:** create it (**Settings**, **Environments**, **New environment**), or open it if a run has already created it, and limit **Deployment branches and tags** to `main`; `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/environments --jq '.environments[] | [.name, (.deployment_branch_policy | tostring)]'` shows both.
+   It holds no secret: the deploy job pulls with its own token.
+4. **The variables** (**Settings**, **Secrets and variables**, **Actions**, **Variables**): `SMOKE_URL`, the VM's public URL `http://<vm-host>:<port>` that `make smoke` checks, and then the switch `DEPLOY_TO_VM` = `true`.
 5. **The first run:** run the workflow by hand with the SHA of the newest image, then check its summary and the [rollback drill](#every-deploy) on the VM: deploy a tag whose image does not start, or one whose smoke check fails, and link the run that put the previous tag back in [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198).
 
 ## Lab checklist

@@ -76,7 +76,7 @@ class Stack:
     def deploy_sh_and_hang_up(self, *arguments: str) -> int:
         """Run deploy.sh and close its output once it starts the new tag.
 
-        That is what a cancelled workflow run or a lost SSH connection does to it.
+        That is what a cancelled workflow run or a closed terminal does to it.
         """
         environment = {
             name: value
