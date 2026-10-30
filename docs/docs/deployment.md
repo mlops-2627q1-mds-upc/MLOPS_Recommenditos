@@ -483,5 +483,6 @@ The actions are pinned by commit SHA with the release in a comment, which Depend
 
 - Continuous deployment to the VM: the `Deploy` workflow and `deploy.sh` with its rollback are built and rehearsed against the local stack ([Every deploy](#every-deploy)), and run on the VM since 2026-10-30.
   The bootstrap, the first deploy, CD through the self-hosted runner, the rollback drill by hand and NFR-05's reboot check are done ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), measurements in [The stack](#the-stack)) (NFR-13, FR-15).
-  The pipeline's smoke-failure drill: run <link>.
+  In the pipeline's smoke-failure drill ([run 41135373351](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/41135373351)), `SMOKE_URL` pointed at a closed port while the merge of #234 deployed `fad73a7`: the smoke check failed and the rollback job put `a09f496` back 46 s after the deploy.
+  A rollback leaves no previous tag, because the deploy before it removed the image two deploys back, so a second rollback in a row needs a deploy first.
 - The containers are hardened ([#200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200)): a read-only root file system, no capabilities, `no-new-privileges`, and limits on memory and processes, as [the Compose bullet above](#the-stack) describes and the integration suite checks.
