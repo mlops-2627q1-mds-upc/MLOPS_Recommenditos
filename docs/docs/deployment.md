@@ -3,18 +3,15 @@ Deployment
 
 The API runs as a Docker Compose stack of two containers: the API image, which holds the serving runtime and one model bundle, and nginx in front of it.
 The same stack runs on a laptop and on the FIB Virtech VM ([EDN-87](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-This page says what the stack guarantees, how to run it locally, how CI builds and publishes the image, how to set up a fresh VM and deploy to it, and what to check at the lab session where we get the VM.
+This page says what the stack guarantees, how to run it locally, how CI builds and publishes the image, what the VM is, how to set up a fresh VM and deploy to it, and the checklist that was run on the VM.
 Milestone 5 adds CI/CD, the image scan and the hardening on top of this stack ([Continuous delivery](#continuous-delivery), [What M5 adds](#what-m5-adds)).
 
-> **Unverified: everything about the VM.**
-> We get access to the VM at the lab on 2026-10-27.
-> Its operating system, size, sudo rights, installed software and which ports are reachable from outside are all unknown until then.
-> Everything below that depends on them is written for a fresh Ubuntu or Debian VM with sudo, and the [lab checklist](#lab-checklist) is how we find out.
+The VM is described in [The VM](#the-vm), with the facts verified on it on 2026-10-30 ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134)).
 
 ## The stack
 
 ```
-client --HTTP--> proxy (nginx, host port 8080 locally, 80 on the VM)
+client --HTTP--> proxy (nginx, host port 8080, on a laptop and on the VM)
                    |-- /feedback, /metrics: 403, never forwarded
                    '-- everything else --> api:8000 (uvicorn, one model bundle)
                                           only reachable inside the Compose network
@@ -46,6 +43,8 @@ What each part guarantees:
   The API needed one writable path more than its metric files: a tmpfs on `/tmp`, where SQLite writes a sort too large for its cache and Python's `tempfile` writes; without it a large query of the prediction log fails with "disk I/O error".
   nginx's unprivileged image writes only its pid file and buffered bodies, all under `/tmp`, which is a tmpfs too.
   Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, at least 1.2 times the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements, and the VM's [load test](load-testing.md#run-it-on-the-vm) re-checks them.
+  On the VM, Docker does not enforce the no-swap part: the kernel runs cgroup v1 without `swapaccount=1`, and Docker warns "No swap limit support" and ignores `memswap_limit`.
+  That has no effect today, because the VM has no swap; it would matter if swap were added.
   In a container that exceeds its memory limit, the kernel kills the largest process: usually a worker, which uvicorn's supervisor or nginx's master replaces, and when it is the main process, Docker restarts the container as after a crash.
   The proxy starts once the API's healthcheck passes, and both containers restart on their own after a crash and after a reboot of the VM (`restart: unless-stopped`, NFR-05).
   The API writes its prediction log and the feedback to the named volume `prediction-log`, mounted at `/var/lib/recommenditos`, so they survive a new image; M6's drift job mounts the same volume ([EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [API docs](api.md#the-prediction-log-and-the-feedback)).
@@ -94,6 +93,25 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
 | SIGSTOP of the API's processes (a hang) to the next 200 from `/health` through nginx, measured on 2026-10-23 with the hardening of #200 | 19.4 to 20.8 s in 4 runs, the hang placed right after the API turned healthy, the latest point for a probe to catch it; at most about 21 s (5 s interval, two attempts of 6 s, about 4 s to restart) | within 30 s (NFR-05) |
+
+Measured on the VM on 2026-10-30 (1 vCPU, 3.8 GiB, Docker 28.1.1), with the stack and the runner up:
+
+| What | Measured | Target |
+|------|----------|--------|
+| Image size (`docker image inspect`) | API 704 MB, nginx-unprivileged 60 MB | at most 1 GB (NFR-04) |
+| Streaming the API image from a laptop (`docker save \| gzip \| ssh docker load`, the first deploy) | 103 s | - |
+| API container memory, idle after the smoke check (`docker stats`) | 252 MiB of its 768 MiB limit, 8 processes; nginx 3 MiB of 64 MiB | below 1 GB under load (NFR-04) |
+| `dockerd` and `containerd` | 116 MiB | - |
+| The idle runner (`ps`, resident set) | about 135 MiB: Runner.Listener 87, RunnerService.js 44, runsvc.sh 3 | - |
+| `free -h` | about 474 MiB used, 3.1 GiB available, no swap | - |
+| `df -h /` | 3.8 GB used, 16 GB free | at least 4 GB free (NFR-04) |
+| `deploy.sh deploy` in the pipeline ([run 41132206289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/41132206289), commit a09f496) | 7 s from start to "runs"; the smoke check from the public internet passed 17 tests | - |
+| `deploy.sh deploy` of an image that does not start (tag `deadbeef...`, by hand) | exit 1 after 8.2 s, about 7 s of 503; `.deploy-previous` unchanged | - |
+| Reboot (`sudo reboot`) to the first 200 from `/health` through nginx, polled every 0.3 s over SSH | 19.8 s after `uptime -s`; about 26 s from the `reboot` command | within 30 s of the VM being up (NFR-05) |
+
+The reboot, in detail: systemd took 14.3 s to start (3.1 s kernel, 11.3 s userspace), the containers started at 11.4 s, and nginx answered 503 for about 6 s while uvicorn loaded the model.
+The API kept its container IP, so nginx's 10 s re-resolve did not delay it; whether it would when the IP changes after a boot was not measured.
+The runner was back online, both containers had restart count 0, and the prediction log was unchanged.
 
 The crash test kills the uvicorn process from the host, as the kernel's OOM killer or a segfault would: `docker run --rm --pid=host alpine kill -9 $(docker top recommenditos-api-1 -eo pid,args | awk '$4 == "recommenditos.api" {print $1}')`.
 The process is found with `docker top`, because `docker inspect`'s `State.Pid` is now Docker's init in front of it.
@@ -187,6 +205,26 @@ docker inspect --format '{{json .Config.Labels}}' ghcr.io/mlops-2627q1-mds-upc/m
 
 ## Deploy to the VM
 
+### The VM
+
+Verified on 2026-10-30 by the first bootstrap and deploy ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134)):
+
+- FIB Virtech (OpenNebula), template `sense VPN`, internal IP 172.16.4.52.
+  Ubuntu 20.04.6 LTS, kernel 5.4.0-66, x86_64, 1 vCPU, 3.8 GiB RAM, no swap, a 20 GB disk (18 GB free before Docker), cgroup v1 and `overlay2`.
+  The Ubuntu 24 template could not be created: its minimum disk exceeds the account's storage limit.
+  We have sudo as `alumne`.
+  There are no backups, and the VM is erased at the end of term.
+- Docker Engine 28.1.1 and the compose plugin 2.35.1, the newest packages in Docker's apt repository for `focal`.
+- SSH: `nattech.fib.upc.edu` port 22052 reaches the VM's port 22, from the UPC network or UPClink only, not from the public internet.
+- HTTP: `nattech.fib.upc.edu` ports 40520 to 40529 reach the VM's ports 8080 to 8089, from the public internet.
+  The API's public URL is `http://nattech.fib.upc.edu:40520`, so the stack's `HTTP_PORT` is 8080.
+- The NAT does not serve the public ports to the VM itself, nor to clients on the UPC network or UPClink: the answer is "Empty reply from server".
+  A check from a laptop on UPClink therefore needs an SSH tunnel, `ssh -p 22052 <admin>@nattech.fib.upc.edu -N -L 18080:127.0.0.1:8080`, then `make smoke SMOKE_URL=http://127.0.0.1:18080`, or a poll over SSH on the VM.
+  A check from outside needs the public internet; the Deploy workflow's smoke job runs there.
+- There is no TLS: the host name is shared, and port 80 is not forwarded.
+- The SSH commands on this page need the port: `ssh -p 22052`, `scp -P 22052`.
+  A `Host` entry with `HostName nattech.fib.upc.edu` and `Port 22052` in `~/.ssh/config` makes `<vm>` work as written.
+
 ### How the image gets there
 
 [Continuous delivery](#continuous-delivery) pushes the image of every merge to GHCR, and the VM pulls it from there: `deploy/deploy.sh` on the VM pulls the commit's tag, logged in with a token it is handed for that pull, and starts it.
@@ -196,12 +234,12 @@ When GHCR cannot be reached, a laptop builds the image and streams it to the VM 
 
 ### First time: bootstrap a fresh VM
 
-From the repository root on your laptop, with `<admin>@<vm>` the account the lecturer gives us (it needs sudo):
+From the repository root on your laptop, with `<admin>@<vm>` the account the lecturer gave us (`alumne`, with sudo) and the SSH port of [The VM](#the-vm):
 
 ```bash
-ssh-copy-id <admin>@<vm>                                   # once, if you log in with a password
-scp -r deploy <admin>@<vm>:
-ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
+ssh-copy-id -p 22052 <admin>@<vm>                          # once, if you log in with a password
+scp -P 22052 -r deploy <admin>@<vm>:
+ssh -t -p 22052 <admin>@<vm> sudo bash deploy/bootstrap.sh
 ```
 
 Run the same two commands to bring a changed `bootstrap.sh`, `compose.yaml`, `nginx.conf` or `deploy.sh` to the VM: `scp -r deploy <vm>:` replaces the files of `~/deploy`, whereas a named target directory that already exists, such as `<vm>:some-dir`, would receive a nested `some-dir/deploy/` and leave the old files in place.
@@ -213,10 +251,10 @@ Run the same two commands to bring a changed `bootstrap.sh`, `compose.yaml`, `ng
 3. lets every SSH key of the account that ran it log in as `recommenditos`, so that every later step is `ssh recommenditos@<vm>` without sudo;
 4. copies `compose.yaml`, `nginx.conf`, `.env.template` and `deploy.sh` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists.
 
-Then set the port the [lab checklist](#lab-checklist) found reachable:
+The `.env` starts from the template with `HTTP_PORT=8080`, the VM port that the public port 40520 reaches ([The VM](#the-vm)); check it:
 
 ```bash
-ssh recommenditos@<vm> 'nano .env'      # HTTP_PORT=80, or the forwarded port
+ssh -p 22052 recommenditos@<vm> 'grep HTTP_PORT .env'
 ```
 
 The `docker` group is root-equivalent on that machine; only the deploy user and the admins belong in it.
@@ -259,7 +297,7 @@ It copies the VM's stack directory (`compose.yaml`, `nginx.conf`, `.env` and `de
 It deploys the image under test, then the same image with a server that exits as soon as it starts, and checks that the first tag is back in `.env`, runs and answers through the proxy; a second test checks `deploy.sh rollback`, the step that follows a failed smoke check.
 A third test closes `deploy.sh`'s output as soon as it starts the broken tag, as a cancelled run or a closed terminal would, and checks that the rollback still finishes; a fourth checks that a deploy removes the image of the tag two deploys back and keeps the rest.
 The drill's tags are full commit SHAs, the only tags `deploy.sh` accepts.
-On a laptop on 2026-10-22, `deploy.sh deploy` of the broken tag returned 7 s after it started, with the previous tag serving again, and the four tests took 62 s.
+On a laptop on 2026-10-22, `deploy.sh deploy` of the broken tag returned 7 s after it started, with the previous tag serving again, and the four tests took 62 s; on the VM on 2026-10-30 the same drill by hand took 8.2 s ([measurements](#the-stack)).
 CI's integration job runs beside the `Tests` job, which took 5 minutes on the pull request that added the drill, so the drill does not lengthen a CI run.
 
 **Fallback without GHCR.** From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`, the image is built locally, given the name the VM's `.env` expects and streamed to the VM:
@@ -281,9 +319,9 @@ Without either, save to a file instead: `docker save -o api.tar $IMAGE:$TAG`, `s
 A change to `compose.yaml`, `nginx.conf` or `deploy.sh` reaches the VM by running the [bootstrap](#first-time-bootstrap-a-fresh-vm) again, then starting the stack again:
 
 ```bash
-scp -r deploy <admin>@<vm>:
-ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
-ssh recommenditos@<vm> docker compose up -d --wait
+scp -P 22052 -r deploy <admin>@<vm>:
+ssh -t -p 22052 <admin>@<vm> sudo bash deploy/bootstrap.sh
+ssh -p 22052 recommenditos@<vm> docker compose up -d --wait
 ```
 
 ### Roll back, inspect, clean up
@@ -323,7 +361,7 @@ That runner is the production machine, so it may do as little as possible:
   What stops it is the setting of step 1: a team member approves every fork pull request's workflows before they run, after reading its changes to `.github/`.
   `tests/test_workflow_runners.py` keeps `main` clean: it fails when any workflow but `deploy.yml` targets a self-hosted runner, or when a workflow that does has a trigger other than `workflow_run` of `main`, which runs main's copy of the workflow, and `workflow_dispatch`, which runs the copy of the ref chosen by someone with write access.
 
-How much memory the idle runner takes on the VM's 3.8 GiB is not measured yet; `systemctl status 'actions.runner.*'` on the VM shows it.
+On 2026-10-30 the idle runner took about 135 MiB of the VM's 3.8 GiB (resident set: Runner.Listener 87 MiB, RunnerService.js 44, runsvc.sh 3); `systemctl status 'actions.runner.*'` on the VM shows it.
 When the runner is offline, the deploy job waits in the queue for up to 24 hours before it fails, and later runs wait behind it; the same command shows whether it runs.
 
 After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by hand:
@@ -334,12 +372,14 @@ After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by ha
 
     ```bash
     gh api -X POST repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runners/registration-token --jq .token
-    scp -r deploy <admin>@<vm>:
-    ssh -t <admin>@<vm> sudo bash deploy/install-runner.sh
+    scp -P 22052 -r deploy <admin>@<vm>:
+    ssh -t -p 22052 <admin>@<vm> sudo bash deploy/install-runner.sh
     ```
 
     `install-runner.sh` is idempotent: it creates the user `github-runner`, downloads a pinned release of `actions/runner` and checks its SHA-256, installs the packages the runner needs, registers it with the label `recommenditos-vm`, installs it as a systemd service that starts at boot, and writes the sudoers rule after `visudo -cf` has accepted it; its last step runs `deploy.sh status` through that rule.
+    It reads the token first, before any apt step, so a token piped on standard input is not swallowed by apt; with a terminal, it asks without echo.
     A second run asks for no token once the runner is registered.
+    On focal, `installdependencies.sh` prints about 20 harmless `E: Unable to locate package` lines (libicu67 to libicu80, libssl3, liblttng-ust1) for the package names of other releases.
     The runner updates itself, so the pinned release is only the one it starts from.
     It then shows as **Idle** under **Settings**, **Actions**, **Runners**.
 3. **The Environment `production`:** create it (**Settings**, **Environments**, **New environment**), or open it if a run has already created it, and limit **Deployment branches and tags** to `main`; `gh api repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/environments --jq '.environments[] | [.name, (.deployment_branch_policy | tostring)]'` shows both.
@@ -349,39 +389,47 @@ After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by ha
 
 ## Lab checklist
 
-At the lab session on 2026-10-27, whoever gets access records the answers in #134 and, for the three questions, in the [specification](specification.md#decisions-pending-confirmation).
+The checklist was run on the VM on 2026-10-30 and its answers are in [#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134) and in the [specification](specification.md#decisions-pending-confirmation).
+Run it again on a new VM.
 
 **1. What the VM is.** On the VM:
 
-| What | Command | What we assume until then |
-|------|---------|---------------------------|
-| Operating system | `cat /etc/os-release` | Ubuntu or Debian |
+| What | Command | Result on 2026-10-30 |
+|------|---------|----------------------|
+| Operating system | `cat /etc/os-release` | Ubuntu 20.04.6 LTS |
 | CPU architecture | `uname -m` | `x86_64`, the architecture a laptop builds for |
-| CPU cores | `nproc` | - |
-| RAM | `free -h` | 4 GB (EDN-17) |
-| Disk | `df -h /` | 20 GB (EDN-17) |
-| sudo | `sudo -v && echo yes` | yes |
-| Docker | `docker --version; docker compose version` | not installed |
+| CPU cores | `nproc` | 1 |
+| RAM | `free -h` | 3.8 GiB (EDN-17 assumed 4 GB) |
+| Disk | `df -h /` | 20 GB, 18 GB free before Docker (EDN-17) |
+| sudo | `sudo -v && echo yes` | yes, as `alumne` |
+| Docker | `docker --version; docker compose version` | not installed; 28.1.1 and 2.35.1 after the bootstrap |
 | Outbound HTTPS, which the bootstrap needs | `curl -sI https://download.docker.com \| head -1` | allowed |
-| Private or public address | `ip -4 addr show scope global` and `curl -s https://ifconfig.me` | behind NAT |
+| Private or public address | `ip -4 addr show scope global` and `curl -s https://ifconfig.me` | internal 172.16.4.52, behind NAT |
 
 **2. The three questions of #134.**
 
 - *Is the VM reachable from the public internet, and on which ports?*
   Ask the lecturer which ports are forwarded.
-  For each port, start a listener on the VM, `sudo python3 -m http.server <port>`, and request it from a machine outside the UPC network, such as a laptop on a phone's hotspot: `curl -m 5 -sI http://<vm-host>:<port>/`.
+  For each port, start a listener on the VM from an empty directory, with a timeout, as your own user: `cd "$(mktemp -d)" && timeout 300 python3 -m http.server <port>`; do not use `sudo`, which would serve the directory as root.
+  Request it from a machine outside the UPC network, such as a laptop on a phone's hotspot: `curl -m 5 -sI http://<vm-host>:<port>/`.
   An answer means the port is reachable; a timeout means it is not.
+  Stop the listener afterwards: a listener left in `alumne`'s home directory served it on port 8080 from 14:59 to 19:02 CET on 2026-10-30 and kept the first deploy's proxy from binding the port.
   Afterwards, the same `curl` against `/health` once the stack runs.
+  Result: ports 40520 to 40529 reach the VM's 8080 to 8089 from the public internet.
 - *Is there a host name we control enough to get a certificate for?*
   `hostname -f` on the VM, and `host <public address>` from outside, show the names that point to it.
   A certificate from Let's Encrypt needs port 80 of that name to reach the VM, so this is only yes if the first answer includes port 80 and the name is ours or the lecturer's to use.
+  Result: no, the host name is shared and port 80 is not forwarded.
 - *Can a GitHub-hosted runner reach the VM over SSH (NFR-13)?*
   A GitHub-hosted runner is one more machine on the public internet, so test from outside the UPC network as above: `ssh -o ConnectTimeout=5 -p <ssh-port> <admin>@<vm-host> true`.
   If that only works from inside the UPC network or through its VPN, the answer is no, and CD falls back to a self-hosted runner on the VM.
+  Result: no, the SSH port answers only from the UPC network and UPClink.
 
 **3. Deploy and check.**
 Run the [bootstrap](#first-time-bootstrap-a-fresh-vm) and the [first deploy](#every-deploy), then the smoke check from outside the UPC network.
-Finally check NFR-05's reboot case: `sudo reboot`, and time until `curl http://<vm-host>:<port>/health` answers 200 again; the 30 s count from when the VM is up, which `uptime -s` tells afterwards.
+Finally check NFR-05's reboot case: `sudo reboot`, and time until `/health` answers 200 again; the 30 s count from when the VM is up, which `uptime -s` tells afterwards.
+From UPClink the public URL does not answer ([The VM](#the-vm)), so poll over SSH through the proxy, or from the public internet.
+Result on 2026-10-30: 19.8 s after `uptime -s` ([measurements](#the-stack)).
 
 **4. Load test.**
 Run the [load test on the VM](load-testing.md#run-it-on-the-vm): its results settle the targets of NFR-02 to NFR-04.
@@ -433,5 +481,8 @@ The actions are pinned by commit SHA with the release in a comment, which Depend
 
 ## What M5 adds
 
-- Continuous deployment to the VM: the `Deploy` workflow and `deploy.sh` with its rollback are built and rehearsed against the local stack ([Every deploy](#every-deploy)); turning them on needs the VM ([Turn continuous deployment on](#turn-continuous-deployment-on)), and so does the rollback drill on the VM itself and NFR-05's reboot check (NFR-13, FR-15).
+- Continuous deployment to the VM: the `Deploy` workflow and `deploy.sh` with its rollback are built and rehearsed against the local stack ([Every deploy](#every-deploy)), and run on the VM since 2026-10-30.
+  The bootstrap, the first deploy, CD through the self-hosted runner, the rollback drill by hand and NFR-05's reboot check are done ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), measurements in [The stack](#the-stack)) (NFR-13, FR-15).
+  In the pipeline's smoke-failure drill ([run 41135373351](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/41135373351)), `SMOKE_URL` pointed at a closed port while the merge of #234 deployed `fad73a7`: the smoke check failed and the rollback job put `a09f496` back 46 s after the deploy.
+  A rollback leaves no previous tag, because the deploy before it removed the image two deploys back, so a second rollback in a row needs a deploy first.
 - The containers are hardened ([#200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200)): a read-only root file system, no capabilities, `no-new-privileges`, and limits on memory and processes, as [the Compose bullet above](#the-stack) describes and the integration suite checks.

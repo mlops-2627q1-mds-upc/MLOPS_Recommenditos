@@ -91,7 +91,7 @@ A laptop run is a dry run of the procedure and is labelled as one: [`reports/loa
 
 ## Run it on the VM
 
-After the lab session of 2026-10-27, once the stack is deployed ([Deployment](deployment.md)).
+Once the stack is deployed ([Deployment](deployment.md)); it has run on the VM since 2026-10-30.
 
 **Where Locust runs.**
 On the VM itself, against `http://localhost:<HTTP_PORT>`.

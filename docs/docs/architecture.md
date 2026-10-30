@@ -106,7 +106,7 @@ flowchart LR
         d_vol[("<b>volume</b> prediction-log<br/>/var/lib/recommenditos")]
     end
 
-    d_user -->|"HTTP, host port 80"| d_proxyc
+    d_user -->|"HTTP, host port 8080"| d_proxyc
     d_uptime -.->|"/health"| d_proxyc
     d_laptop -->|"docker save, ssh, docker load"| d_apic
     d_ghcr -.->|"deploy.sh pulls, off until the lab"| d_apic
@@ -120,10 +120,10 @@ flowchart LR
     class d_uptime,d_m6 later
 ```
 
-- **The VM.** One FIB Virtech VM for the semester ([EDN-17][edn]); we get access at the lab on 2026-10-27, so its size, operating system and reachable ports are unverified until then, and the [lab checklist](deployment.md#lab-checklist) is how we find out.
+- **The VM.** One FIB Virtech VM for the semester ([EDN-17][edn]); its size, operating system and reachable ports were verified on 2026-10-30 ([The VM](deployment.md#the-vm)).
   The 4 GB of RAM and 20 GB of disk are what the course announced and what NFR-04 budgets for.
 - **The stack.** Docker Compose runs the project `recommenditos` from `/opt/recommenditos` with two containers today: `proxy`, the only one with a published port, and `api`, reachable only inside the Compose network ([EDN-87][edn]).
-  The host port is `HTTP_PORT` in the stack's `.env`: 80 on the VM, 8080 on a laptop, where `make stack` runs the same stack.
+  The host port is `HTTP_PORT` in the stack's `.env`: 8080 on the VM and on a laptop, where `make stack` runs the same stack.
   Both containers restart after a crash and after a reboot, and `proxy` starts once the API's health check passes (NFR-05).
 - **Storage.** The workers' metric files live in a tmpfs, the temporary files of SQLite and Python in another one on `/tmp`, and the prediction log on the named volume `prediction-log`, which survives a new image and which the drift job will mount; all are owned by the service user.
   Everything else in the API container is the image, mounted read-only ([Deployment](deployment.md#the-stack)).

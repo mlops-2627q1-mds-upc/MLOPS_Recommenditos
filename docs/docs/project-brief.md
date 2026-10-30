@@ -223,7 +223,7 @@ Model loading **[decided]**, [EDN-08](https://github.com/mlops-2627q1-mds-upc/ML
 Promoting a model is a normal merge to `main`, matching GitHub Flow; MLflow stays the experiment-tracking and audit record of which run was chosen (see [specification](specification.md) FR-12).
 Deployment target **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): the FIB Virtech VM the course provides (4 GB RAM, 20 GB disk, one semester), which is what every target in the [specification](specification.md) is written for.
 It is tight on 4 GB, and that is planned for rather than left open: NFR-04 gives the drift job its own scheduled container, caps Prometheus by retention size and the logs by rotation, and keeps 4 GB of disk free.
-Nobody has access yet; if that is still true at the M4a lab on 2026-10-27, we raise it with the teachers instead of planning on further.
+The VM has been in use since 2026-10-30: 1 vCPU, 3.8 GiB RAM, 20 GB disk ([Deployment](deployment.md#the-vm)).
 Prediction log and feedback storage **[decided]**, [EDN-86](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): one SQLite file in WAL mode on a volume the API's workers and the drift job's container share, behind a store interface so that PostgreSQL stays a local change.
 The drift job reads it with SQL and joins the two by request ID (FR-14); a database server would cost a service, a secret and memory on the 4 GB VM for a multi-host setup we do not have.
 How it is written exactly once and rotated is in the [API docs](api.md#the-prediction-log-and-the-feedback).
