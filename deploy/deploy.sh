@@ -7,19 +7,33 @@
 #     deploy.sh rollback        run the tag that ran before the last deploy again
 #     deploy.sh status          print the tag that runs now and its health
 #
+#     deploy.sh deploy <SHA> --registry-token-stdin
+#                               the same, logged in to ghcr.io for the pull with the
+#                               token on the first line of standard input
+#
 # `deploy` pulls the image unless the VM has it, sets API_IMAGE_TAG in `.env`,
 # starts the stack with `docker compose up -d --wait` and asks the proxy for
-# /health. When the image cannot be pulled, nothing changes. When the stack does
+# /health. The GHCR package is private (the organisation allows no public
+# ones), so the Deploy workflow passes its job's short-lived GITHUB_TOKEN on
+# standard input: the script logs in to ghcr.io in a Docker configuration of its
+# own for that one pull and deletes it right after, so no credential stays on
+# the VM, and the token appears in no argument, environment or log. Without the
+# flag it pulls without a login; a deploy of an image that is on the VM
+# already, such as one loaded with `docker load`, pulls nothing, and neither
+# does a rollback. When the image cannot be pulled, nothing changes. When the stack does
 # not become healthy, the previous tag goes back into `.env` and starts again,
 # and the script exits 1 (2 if the previous tag does not come back either).
 # `rollback` is for a failure found afterwards: the Deploy workflow calls it when
 # the smoke check from outside fails. The last output line of every command is
 # `running: <tag>`, the tag `.env` holds when the script ends.
 #
-# The workflow reaches it over SSH with a key that may run nothing else: its
-# authorized_keys entry starts with `command="/opt/recommenditos/deploy.sh"`,
-# and sshd passes the requested command in SSH_ORIGINAL_COMMAND, which this
-# script checks word by word instead of handing it to a shell.
+# The Deploy workflow's self-hosted runner on the VM runs it through sudo as
+# the deploy user, and may run nothing else: the sudoers rule that
+# install-runner.sh writes names this script and its three commands. sudo
+# hands the arguments over as they are, without a shell, and the script
+# refuses any other shape before it touches anything. sudo also resets the
+# environment, so the overrides below apply only when the script is called
+# directly.
 #
 # Overridable for the local drill (tests/integration/test_deploy_rollback.py):
 #   STACK_DIR       where compose.yaml and .env are (default: this script's directory)
@@ -28,11 +42,13 @@
 set -euo pipefail
 # The tag check below compares bytes, whatever the caller's locale.
 export LC_ALL=C
-# A deploy or rollback runs to its end when the client goes away, a cancelled
-# workflow run or a lost connection: with SIGPIPE and SIGHUP ignored, a write to
-# the closed connection fails instead of killing the script between the new tag
-# and the rollback. Its output also goes to deploy-last-run.log (see the end).
-trap '' PIPE HUP
+# A deploy or rollback runs to its end when the caller goes away, a cancelled
+# or timed-out workflow run or a closed terminal: the runner stops a cancelled
+# step with SIGINT and then SIGTERM, which sudo passes on, and with these
+# signals and SIGPIPE and SIGHUP ignored, a write to the closed output fails
+# instead of killing the script between the new tag and the rollback. Its
+# output also goes to deploy-last-run.log (see the end).
+trap '' PIPE HUP INT TERM
 
 STACK_DIR=${STACK_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
 WAIT_TIMEOUT=${WAIT_TIMEOUT:-180}
@@ -54,7 +70,7 @@ out() { printf '%s\n' "$*" 2>/dev/null || true; }
 say() { out "deploy.sh: $*"; }
 
 usage() {
-    printf 'usage: deploy.sh deploy <full commit SHA> | rollback | status\n' >&2 || true
+    printf 'usage: deploy.sh deploy <full commit SHA> [--registry-token-stdin] | rollback | status\n' >&2 || true
     exit 64
 }
 
@@ -73,6 +89,33 @@ set_tag() {
 }
 
 compose() { docker compose --project-directory "$STACK_DIR" "$@"; }
+
+# Pulls the image $2 of tag $1; with a registry token, logged in to ghcr.io in a
+# throwaway Docker configuration. The token goes to `docker login` through a
+# pipe from the shell's builtin printf, so it is no process's argument.
+pull() {
+    local tag=$1 image=$2 config status=0
+    if [[ -z $registry_token ]]; then
+        API_IMAGE_TAG=$tag compose pull --quiet api
+        return
+    fi
+    if [[ $image != ghcr.io/* ]]; then
+        # The token is a GitHub token: it goes to GitHub's registry or nowhere.
+        say "$image is not on ghcr.io, so it is pulled without the registry token"
+        API_IMAGE_TAG=$tag compose pull --quiet api
+        return
+    fi
+    config=$(mktemp -d)
+    if printf '%s\n' "$registry_token" |
+        DOCKER_CONFIG=$config docker login ghcr.io --username github-actions --password-stdin >/dev/null 2>&1; then
+        API_IMAGE_TAG=$tag DOCKER_CONFIG=$config compose pull --quiet api || status=$?
+    else
+        say "logging in to ghcr.io with the registry token failed"
+        status=1
+    fi
+    rm -rf "$config"
+    return "$status"
+}
 
 image_of() {
     # The image reference Compose resolves for the api service with tag $1.
@@ -150,7 +193,7 @@ deploy() {
     image=$(image_of "$tag")
     if docker image inspect "$image" >/dev/null 2>&1; then
         say "$image is on the VM already"
-    elif ! API_IMAGE_TAG=$tag compose pull --quiet api; then
+    elif ! pull "$tag" "$image"; then
         record "deploy $tag pull-failed"
         say "pulling $image failed; nothing changed"
         out "running: $current"
@@ -202,22 +245,27 @@ rollback() {
     exit 2
 }
 
-# Over SSH with the restricted key, the command comes from SSH_ORIGINAL_COMMAND;
-# one line, split into words without glob expansion, then the same checks as for
-# arguments.
-if [[ $# -eq 0 && -n ${SSH_ORIGINAL_COMMAND:-} ]]; then
-    [[ $SSH_ORIGINAL_COMMAND != *$'\n'* ]] || usage
-    read -r -a words <<<"$SSH_ORIGINAL_COMMAND"
-    set -- "${words[@]}"
-fi
-
+# The three commands, each with exactly its arguments.
+registry_token=
 case "${1:-} $#" in
-    "deploy 2") [[ $2 =~ $TAG_PATTERN ]] || { say "not a full commit SHA: '$2'"; exit 64; } ;;
+    "deploy 2" | "deploy 3")
+        [[ $# -eq 2 || $3 == --registry-token-stdin ]] || usage
+        [[ $2 =~ $TAG_PATTERN ]] || { say "not a full commit SHA: '$2'"; exit 64; }
+        if [[ $# -eq 3 ]]; then
+            # One line of visible characters, read before anything else happens.
+            IFS= read -r -t 10 registry_token || true
+            [[ $registry_token =~ ^[[:graph:]]{1,4096}$ ]] ||
+                { registry_token=; say "no registry token on the first line of standard input"; exit 64; }
+        fi
+        ;;
     "rollback 1" | "status 1") ;;
     *) usage ;;
 esac
 
 [[ -f $ENV_FILE ]] || { say "no $ENV_FILE: run bootstrap.sh first"; exit 1; }
+# sudo keeps the caller's working directory, which the deploy user may not be
+# allowed to enter; nothing below depends on it.
+cd "$STACK_DIR"
 # One deploy at a time on this VM, whoever starts it.
 exec 9>"$STACK_DIR/.deploy.lock"
 flock -w 600 9 || { say "another deploy has held the lock for 10 minutes"; exit 1; }

@@ -6,19 +6,29 @@ name: Deploy
 # deploying and the rolling back; docs/docs/deployment.md#every-deploy
 # describes both.
 #
+# How it reaches the VM (EDN-94): the VM's SSH port answers only from the UPC
+# network (#134), so the jobs that act on the VM run on a self-hosted runner
+# there, labelled recommenditos-vm (deploy/install-runner.sh). That runner may
+# run nothing but deploy.sh through sudo, so those jobs check nothing out and
+# only call it. Everything else runs on GitHub-hosted runners, the smoke check
+# too, which keeps the outside view NFR-12 asks for. A public repository's
+# self-hosted runner must never run code from a pull request:
+# tests/test_workflow_runners.py fails when any other workflow targets it, or
+# when this one gains a trigger beside workflow_run and workflow_dispatch.
+#
 # Off until it is configured (deployment.md#turn-continuous-deployment-on): the
-# repository variable DEPLOY_VIA names how the runner reaches the VM, `ssh` from
-# a GitHub-hosted runner today. Without it, a run only writes a summary line
-# saying so and is green. The deploying job runs in the GitHub Environment
-# `production`. GitHub's documentation says that running a workflow that
-# references a missing environment creates it, unprotected; whether a skipped
-# job does so too is not documented, so whoever sets DEPLOY_VIA first creates
-# the environment, or opens it if it exists, and limits it to main.
+# repository variable DEPLOY_TO_VM turns it on with the value `true`. Otherwise
+# a run only writes a summary line saying so and is green. The deploying job
+# runs in the GitHub Environment `production`. GitHub's documentation says that
+# running a workflow that references a missing environment creates it,
+# unprotected; whether a skipped job does so too is not documented, so whoever
+# turns CD on first creates the environment, or opens it if it exists, and
+# limits it to main.
 #
 # Started by a finished CD run, so it deploys only an image CD has pushed, and
 # always the SHA tag of the commit that run built, never :latest. That commit is
 # not the CD run's head_sha, which is main's tip when the CD run started; CD
-# names its runs "CD of <SHA>" (`run-name` in cd.yml), and the first step reads
+# names its runs "CD of <SHA>" (`run-name` in cd.yml), and the first job reads
 # the SHA from there. CI, CD and this workflow are the three levels of
 # `workflow_run` GitHub allows in a chain.
 # A manual run (Actions, Deploy, Run workflow on main) deploys the commit SHA it
@@ -47,48 +57,49 @@ concurrency:
 
 permissions: {}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   off:
     name: Continuous deployment is off
-    if: ${{ !vars.DEPLOY_VIA }}
+    if: ${{ vars.DEPLOY_TO_VM != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Say what is missing
         run: |
-          msg="Not deployed: the repository variable DEPLOY_VIA is not set, so continuous deployment to the VM is off. docs/docs/deployment.md#turn-continuous-deployment-on lists what turning it on takes."
+          msg="Not deployed: the repository variable DEPLOY_TO_VM is not \`true\`, so continuous deployment to the VM is off. docs/docs/deployment.md#turn-continuous-deployment-on lists what turning it on takes."
           echo "::notice::$msg"
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
 
-  deploy:
-    name: Deploy to the VM and check it
+  prepare:
+    name: Name the commit and check the configuration
     if: >-
-      vars.DEPLOY_VIA
+      vars.DEPLOY_TO_VM == 'true'
       && ((github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion == 'success'
           && github.event.workflow_run.head_repository.full_name == github.repository)
         || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    # The VM's address, its host key and the deploy key are variables and a
-    # secret of this environment (NFR-15); only main may deploy to it.
-    environment:
-      name: production
-      url: ${{ vars.SMOKE_URL }}
+    timeout-minutes: 5
     permissions:
       # `actions: read` to look up which jobs the CD run ran.
       actions: read
-      contents: read
-    env:
-      DEPLOY_VIA: ${{ vars.DEPLOY_VIA }}
-      SMOKE_URL: ${{ vars.SMOKE_URL }}
+    outputs:
+      tag: ${{ steps.name.outputs.tag }}
+      # A manual run skips the check of CD's jobs and deploys what it is given.
+      deploy: ${{ steps.pushed.outputs.deploy || 'true' }}
+      started-at: ${{ steps.start.outputs.at }}
     steps:
       - name: Note the start time
-        run: echo "STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+        id: start
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Name the commit to deploy
         # The manual run's input, or the SHA in the CD run's title ("CD of <SHA>").
-        shell: bash
+        id: name
         env:
           INPUT_TAG: ${{ inputs.tag }}
           CD_TITLE: ${{ github.event.workflow_run.display_title }}
@@ -104,48 +115,39 @@ jobs:
               exit 1
             fi
           fi
-          # Checked before it reaches $GITHUB_ENV, which a newline would extend.
+          # Checked before it reaches $GITHUB_OUTPUT, which a newline would extend.
           if ! [[ $tag =~ ^[0-9a-f]{40}$ ]]; then
             msg="'$tag' is not a full commit SHA, which is what CD tags images with."
             echo "::error::$msg"
             echo "$msg" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Check the configuration
-        shell: bash
+        # The runner's registration cannot be checked from here (listing a
+        # repository's runners needs an admin token): without a runner labelled
+        # recommenditos-vm online, the deploy job waits in the queue for up to
+        # 24 hours, and every later run waits behind it.
         env:
-          VM_HOST: ${{ vars.VM_HOST }}
-          VM_KNOWN_HOSTS: ${{ vars.VM_KNOWN_HOSTS }}
-          HAS_KEY: ${{ secrets.VM_SSH_KEY != '' }}
+          SMOKE_URL: ${{ vars.SMOKE_URL }}
         run: |
-          fail() {
-            echo "::error::$1"
-            echo "$1" >> "$GITHUB_STEP_SUMMARY"
+          if ! [[ $SMOKE_URL =~ ^https?://[^[:space:]]+$ ]]; then
+            msg="DEPLOY_TO_VM is true, but the repository variable SMOKE_URL is '$SMOKE_URL', not the VM's public http(s) URL (deployment.md#turn-continuous-deployment-on)."
+            echo "::error::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
             exit 1
-          }
-          if [ "$DEPLOY_VIA" != ssh ]; then
-            fail "DEPLOY_VIA is '$DEPLOY_VIA', and this workflow reaches the VM only over SSH (\`ssh\`) so far: a self-hosted runner replaces the step 'Reach the VM' (deployment.md)."
-          fi
-          missing=()
-          [ -n "$VM_HOST" ] || missing+=("variable VM_HOST")
-          [ -n "$VM_KNOWN_HOSTS" ] || missing+=("variable VM_KNOWN_HOSTS")
-          [ -n "$SMOKE_URL" ] || missing+=("variable SMOKE_URL")
-          [ "$HAS_KEY" = true ] || missing+=("secret VM_SSH_KEY")
-          if [ ${#missing[@]} -gt 0 ]; then
-            fail "DEPLOY_VIA is set, but the environment 'production' lacks: ${missing[*]} (deployment.md#turn-continuous-deployment-on)."
           fi
 
       - name: Check that CD pushed an image for this commit
-        # A commit that changes only docs/, reports/ or top-level Markdown builds
-        # no image (NFR-13), and its CD run is green all the same.
+        # A commit that changes only docs/, reports/ or top-level Markdown files
+        # builds no image (NFR-13), and its CD run is green all the same.
         if: github.event_name == 'workflow_run'
         id: pushed
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           CD_RUN: ${{ github.event.workflow_run.id }}
+          TAG: ${{ steps.name.outputs.tag }}
           # The name of the job in cd.yml that pushes the image.
           PUSH_JOB: Build, test and push the API image
         run: |
@@ -165,128 +167,186 @@ jobs:
               ;;
           esac
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.pushed.outputs.deploy != 'false'
-        with:
-          # The deployed commit: the smoke suite holds /health to its dvc.lock.
-          ref: ${{ env.TAG }}
-          # Every branch's history, to compare the commit with the one that runs.
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        if: steps.pushed.outputs.deploy != 'false'
-        with:
-          python-version: "3.12"
-          enable-cache: true
-          save-cache: false
-      # Before the deploy, so the smoke check follows it without a gap.
-      - run: uv sync --locked
-        if: steps.pushed.outputs.deploy != 'false'
-
-      # -- How this runner reaches the VM ------------------------------------
-      # Option A of #198: SSH from this GitHub-hosted runner. It puts a command
-      # `vm` on the PATH that runs deploy/deploy.sh on the VM with its
-      # arguments; every later step uses only `vm`. The key may run nothing but
-      # deploy.sh (`command=` in the VM's authorized_keys), and the host key is
-      # pinned in VM_KNOWN_HOSTS, so a man in the middle fails the connection.
-      # Option B, a self-hosted runner on the VM, replaces this step with one
-      # that makes `vm` run /opt/recommenditos/deploy.sh directly, and
-      # `runs-on` with the runner's label.
-      - name: Reach the VM
-        if: steps.pushed.outputs.deploy != 'false'
-        shell: bash
-        env:
-          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-          VM_KNOWN_HOSTS: ${{ vars.VM_KNOWN_HOSTS }}
-          VM_HOST: ${{ vars.VM_HOST }}
-          VM_SSH_PORT: ${{ vars.VM_SSH_PORT || '22' }}
-          VM_USER: ${{ vars.VM_USER || 'recommenditos' }}
+  deploy:
+    name: Deploy on the VM
+    needs: prepare
+    if: needs.prepare.outputs.deploy == 'true'
+    # The runner on the VM: it may only run deploy.sh as the deploy user, with
+    # `sudo -n -u recommenditos /opt/recommenditos/deploy.sh` and one of its
+    # three commands (the sudoers rule of install-runner.sh).
+    runs-on: [self-hosted, recommenditos-vm]
+    # A pull, up to 10 minutes for deploy.sh's lock, and two --wait of 3 minutes.
+    timeout-minutes: 30
+    # Only main may deploy to this environment.
+    environment:
+      name: production
+      url: ${{ vars.SMOKE_URL }}
+    permissions:
+      # To compare the commit with the one that runs, through the API.
+      contents: read
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      DEPLOY_SH: /opt/recommenditos/deploy.sh
+    outputs:
+      before: ${{ steps.before.outputs.running }}
+      deployed: ${{ steps.order.outputs.deploy }}
+      now: ${{ steps.result.outputs.now }}
+      said: ${{ steps.result.outputs.said }}
+    steps:
+      - name: Read the tag the VM runs
+        id: before
         run: |
-          install -m 700 -d ~/.ssh "$RUNNER_TEMP/bin"
-          (umask 077 && printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key)
-          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts_vm
-          cat > "$RUNNER_TEMP/bin/vm" <<EOF
-          #!/usr/bin/env bash
-          exec ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \\
-            -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts_vm \\
-            -o ConnectTimeout=20 -p "$VM_SSH_PORT" "$VM_USER@$VM_HOST" "\$@"
-          EOF
-          chmod 755 "$RUNNER_TEMP/bin/vm"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      # -----------------------------------------------------------------------
+          running=$(sudo -n -u recommenditos "$DEPLOY_SH" status | sed -n 's/^running: //p' | tail -n 1)
+          # Checked before it reaches $GITHUB_OUTPUT, which a newline would extend.
+          [[ $running =~ ^[0-9a-f]{40}$ ]] || running=
+          echo "running=$running" >> "$GITHUB_OUTPUT"
 
       - name: Skip a commit older than the one that runs
         # :latest's rule from cd.yml: when the CD runs of two merges finish in
         # the opposite order, the older commit must not replace the newer one.
-        # A manual run deploys whatever it is given.
-        if: steps.pushed.outputs.deploy != 'false'
+        # A manual run deploys whatever it is given. The API compares the two
+        # commits, since this runner has no clone: "ahead" means the running
+        # commit contains this one. When it cannot answer, the commit deploys.
         id: order
-        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNNING: ${{ steps.before.outputs.running }}
         run: |
-          running=$(vm status | sed -n 's/^running: //p' | tail -n 1)
-          echo "BEFORE=${running:-nothing}" >> "$GITHUB_ENV"
-          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && [ -n "$running" ] && [ "$running" != "$TAG" ] \
-            && git merge-base --is-ancestor "$TAG" "$running" 2>/dev/null; then
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Not deployed: the VM runs \`$running\`, a newer commit that contains \`$TAG\`." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          deploy=true
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && [ -n "$RUNNING" ] && [ "$RUNNING" != "$TAG" ]; then
+            if relation=$(curl -fsS -m 30 -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/compare/$TAG...$RUNNING?per_page=1" \
+                | jq -r .status); then
+              if [ "$relation" = ahead ]; then
+                deploy=false
+                echo "Not deployed: the VM runs \`$RUNNING\`, a newer commit that contains \`$TAG\`." >> "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "::warning::GitHub could not compare $TAG with $RUNNING, so the commit deploys without the check."
+            fi
           fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
 
       - name: Deploy, and put the previous tag back if the stack does not come up
         if: steps.order.outputs.deploy == 'true'
         id: deploy
-        shell: bash
-        run: vm deploy "$TAG" | tee "$RUNNER_TEMP/deploy.log"
+        run: sudo -n -u recommenditos "$DEPLOY_SH" deploy "$TAG" | tee "$RUNNER_TEMP/deploy.log"
 
-      - name: Smoke check from outside the VM (NFR-12)
-        if: steps.order.outputs.deploy == 'true'
-        id: smoke
+      - name: Report the outcome
+        if: always() && steps.deploy.outcome != 'skipped'
+        id: result
+        run: |
+          now=$(sed -n 's/^running: //p' "$RUNNER_TEMP/deploy.log" 2>/dev/null | tail -n 1)
+          [[ $now =~ ^[0-9a-f]{40}$ ]] || now=
+          said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/deploy.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' - || true)
+          echo "now=$now" >> "$GITHUB_OUTPUT"
+          echo "said=$said" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    name: Smoke check from outside the VM (NFR-12)
+    needs: [prepare, deploy]
+    if: needs.deploy.outputs.deployed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The deployed commit: the smoke suite holds /health to its dvc.lock.
+          ref: ${{ needs.prepare.outputs.tag }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          save-cache: false
+      - run: uv sync --locked
+      - name: Run the smoke suite against the VM's public URL
+        env:
+          SMOKE_URL: ${{ vars.SMOKE_URL }}
         run: make smoke SMOKE_URL="$SMOKE_URL"
 
+  rollback:
+    name: Put the previous tag back
+    needs: [deploy, smoke]
+    if: always() && needs.smoke.result == 'failure'
+    runs-on: [self-hosted, recommenditos-vm]
+    timeout-minutes: 15
+    permissions: {}
+    outputs:
+      now: ${{ steps.result.outputs.now }}
+      said: ${{ steps.result.outputs.said }}
+    steps:
       - name: Put the previous tag back
-        if: failure() && steps.smoke.outcome == 'failure'
-        id: rollback
-        shell: bash
-        run: vm rollback | tee "$RUNNER_TEMP/rollback.log"
+        run: sudo -n -u recommenditos /opt/recommenditos/deploy.sh rollback | tee "$RUNNER_TEMP/rollback.log"
 
-      - name: Write the job summary
-        if: always() && steps.order.outputs.deploy == 'true'
-        shell: bash
-        env:
-          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
-          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
-          ROLLBACK_OUTCOME: ${{ steps.rollback.outcome }}
+      - name: Report the outcome
+        if: always()
+        id: result
         run: |
-          now=$(vm status | sed -n 's/^running: //p' | tail -n 1 || true)
-          case "$DEPLOY_OUTCOME/$SMOKE_OUTCOME" in
+          now=$(sed -n 's/^running: //p' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 1)
+          [[ $now =~ ^[0-9a-f]{40}$ ]] || now=
+          said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' - || true)
+          echo "now=$now" >> "$GITHUB_OUTPUT"
+          echo "said=$said" >> "$GITHUB_OUTPUT"
+
+  summary:
+    name: Write the summary
+    needs: [prepare, deploy, smoke, rollback]
+    # Whenever the run got as far as the VM and did not skip the commit there.
+    if: >-
+      always() && needs.prepare.result == 'success' && needs.prepare.outputs.deploy == 'true'
+      && needs.deploy.outputs.deployed != 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      STARTED_AT: ${{ needs.prepare.outputs.started-at }}
+      SMOKE_URL: ${{ vars.SMOKE_URL }}
+      BEFORE: ${{ needs.deploy.outputs.before }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      DEPLOYED: ${{ needs.deploy.outputs.deployed }}
+      DEPLOY_NOW: ${{ needs.deploy.outputs.now }}
+      DEPLOY_SAID: ${{ needs.deploy.outputs.said }}
+      SMOKE_RESULT: ${{ needs.smoke.result }}
+      ROLLBACK_RESULT: ${{ needs.rollback.result }}
+      ROLLBACK_NOW: ${{ needs.rollback.outputs.now }}
+      ROLLBACK_SAID: ${{ needs.rollback.outputs.said }}
+    steps:
+      - name: Write the run summary
+        run: |
+          now=$DEPLOY_NOW
+          case "$DEPLOY_RESULT/$SMOKE_RESULT" in
             success/success) result="deployed" ;;
             success/failure)
-              if [ "$ROLLBACK_OUTCOME" = success ]; then
+              now=$ROLLBACK_NOW
+              if [ "$ROLLBACK_RESULT" = success ]; then
                 result="the smoke check failed, so the previous tag was put back"
               else
-                said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' -)
-                result="the smoke check failed, and putting the previous tag back failed too: ${said:-the VM did not answer}"
+                result="the smoke check failed, and putting the previous tag back failed too: ${ROLLBACK_SAID:-the runner on the VM did not answer}"
               fi
               ;;
             failure/*)
-              said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/deploy.log" | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' -)
-              result="the deploy failed: ${said:-deploy.sh said nothing}"
+              if [ "$DEPLOYED" = true ]; then
+                result="the deploy failed: ${DEPLOY_SAID:-deploy.sh said nothing}"
+              else
+                result="the deploy job failed before it deployed: see its log"
+              fi
               ;;
-            *) result="stopped before the deploy finished ($DEPLOY_OUTCOME, smoke $SMOKE_OUTCOME)" ;;
+            *) result="stopped before the deploy finished (deploy job: $DEPLOY_RESULT, smoke check: $SMOKE_RESULT)" ;;
           esac
+          elapsed=$(( $(date +%s) - STARTED_AT ))
           {
             echo "### Deploy of \`$TAG\`"
             echo
             echo "| | |"
             echo "|---|---|"
             echo "| Result | $result |"
-            echo "| Ran before | \`$BEFORE\` |"
-            echo "| **Runs now** | \`${now:-unknown, the VM did not answer}\` |"
+            echo "| Ran before | \`${BEFORE:-nothing}\` |"
+            echo "| **Runs now** | \`${now:-unknown, see the jobs on the VM}\` |"
             echo "| Smoke check against | $SMOKE_URL |"
-            echo "| Job runtime | $(( ($(date +%s) - STARTED_AT) / 60 )) min $(( ($(date +%s) - STARTED_AT) % 60 )) s |"
+            echo "| Run time | $(( elapsed / 60 )) min $(( elapsed % 60 )) s |"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Remove the deploy key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key

@@ -1,4 +1,10 @@
 # actionlint, run by its pre-commit hook (.pre-commit-config.yaml).
+self-hosted-runner:
+  # The runner on the VM that the Deploy workflow deploys through
+  # (deploy/install-runner.sh, EDN-94). tests/test_workflow_runners.py keeps
+  # every other workflow off it.
+  labels:
+    - recommenditos-vm
 paths:
   .github/workflows/**/*.{yml,yaml}:
     ignore:
