@@ -5,3 +5,9 @@
 #
 #   # Only in the builder stage's uv, which the runtime image does not contain.
 #   CVE-2026-12345 exp:2026-12-31
+
+# nginx image, brotli-libs 1.2.0-r1 (fixed in 1.2.1-r0, not yet in nginx-unprivileged:1.30-alpine): nginx does not link libbrotli (ldd) and has no brotli module, only libcurl and freetype use it, and nothing in the container runs either. Until upstream rebuilds; Dependabot moves the digest.
+CVE-2026-111497 exp:2026-11-13
+
+# nginx image, curl and libcurl 8.22.0-r0 (fixed in 8.23.0-r0, not yet in nginx-unprivileged:1.30-alpine): needs curl to upload over HTTP/2 to a server that sends RST_STREAM, and nothing in the proxy container runs curl (no healthcheck, no entrypoint script, nginx does not link libcurl). Until upstream rebuilds; Dependabot moves the digest.
+CVE-2026-92392 exp:2026-11-13
