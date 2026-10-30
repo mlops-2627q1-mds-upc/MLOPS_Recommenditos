@@ -1199,20 +1199,22 @@ How to add an entry:
 - **Other evidence:** [Issue #193](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/193), [PR #183](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/183), [PR #205](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/205), [`tools/stale_lock.py`](../tools/stale_lock.py).
 - **In LaTeX:** yes
 
-### EDN-91: A green CI run on `main` publishes the API image to a public GHCR package
+### EDN-91: A green CI run on `main` publishes the API image to GHCR
+
+> **Revised on 2026-10-30**: the package stays private, because the organisation does not allow public packages; the VM pulls with the deploy job's token (EDN-94).
 
 - **Date:** 2026-10-22
 - **Milestone:** M5: Model Packaging
 - **Activity / Topic:** CI/CD, Containerization, Security
 - **Participants:** @lukas2510 decided ([issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197))
 - **Decision:** A workflow of its own, `cd.yml`, runs after CI passed on a push to `main` that changes more than documentation.
-  It pulls the model with a DagsHub token from the GitHub Environment `dagshub`, which only `main` may use, tests the image as a Compose stack, and pushes it to a public GHCR package.
+  It pulls the model with a DagsHub token from the GitHub Environment `dagshub`, which only `main` may use, tests the image as a Compose stack, and pushes it to a private GHCR package.
 - **Alternatives considered:**
   - A read-only DagsHub account for CI: one more account, against a threat a three-person team with branch protection does not face.
-  - A private package with a read token on the VM: a credential on a shared university machine, for an image without secrets or personal data.
+  - A public package: the organisation's settings do not allow one.
   - A job in `ci.yml`: the secret would sit in the workflow pull requests run, and the job would have to wait for every other job.
 - **Rationale:** DagsHub tokens have no read-only scope, so the protection is where the token can be used: one step of one job, after a push to `main`, never on a pull request (NFR-15).
-  The API key reaches the container at run time, so the public image holds only code and the model the model card describes.
+  The API key reaches the container at run time, so the image holds only code and the model the model card describes.
   Built locally with the workflow's steps, the image is 704 MB (NFR-04: 1 GB) and passes the 27 integration tests against `dvc.lock`'s hashes.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
@@ -1268,6 +1270,31 @@ How to add an entry:
   AI then wrote the probe and a hang drill that fails on the old stack and passes on the new one.
 - **AI interaction evidence:** Claude Code session of 2026-10-22 on Milestone 5: the measured options for restarting a hung API.
 - **Other evidence:** [Issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185), [deployment docs](../docs/docs/deployment.md), [`healthcheck.py`](../recommenditos/api/healthcheck.py), [hang drill](../tests/integration/test_deployed_recovery.py).
+- **In LaTeX:** yes
+
+### EDN-94: CD deploys through a runner on the VM that may only run `deploy.sh`
+
+- **Date:** 2026-10-30
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** CI/CD, Deployment, Security
+- **Participants:** @lukas2510 decided ([issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198))
+- **Decision:** A self-hosted runner on the VM, as a user outside the `docker` group, runs the deploy and rollback jobs; sudo lets it run `deploy.sh` with its three commands and nothing else.
+  The smoke check runs on a GitHub-hosted runner against the public URL.
+  The deploy job hands its own token to `deploy.sh` on standard input for one GHCR pull.
+- **Alternatives considered:**
+  - SSH from a GitHub-hosted runner: the VM's SSH port answers only from the UPC network.
+  - The smoke check on the VM runner too: needs the repository and Python on a 1-core VM and gives no outside view.
+  - The VM pulling on a timer: no deployment record, no gate, no rollback after a failed smoke check.
+  - A personal token in the VM's Docker configuration: a lasting credential on a shared VM.
+- **Rationale:** From outside the UPC network, SSH to the VM timed out while its HTTP port answered (#134), so only an outbound connection from the VM works.
+  Keeping repository code off the runner keeps a public repository's pull requests away from production; a test fails any other workflow that targets the runner.
+  In an Ubuntu 20.04 container, the VM's release, sudo 1.8.31 refused every other command tried.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the options for reaching the VM and for the private package and recommended the chosen ones; @lukas2510 decided both as recommended.
+  AI then wrote the workflow, the install script and the guard test, and probed the sudoers rule in the container.
+- **AI interaction evidence:** Claude Code session of 2026-10-30 on deploying to the VM, prompt "the SSH port is not reachable from outside, how does CD reach the VM now" (paraphrased).
+- **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [`deploy.yml`](../.github/workflows/deploy.yml), [deployment docs](../docs/docs/deployment.md#turn-continuous-deployment-on).
 - **In LaTeX:** yes
 
 ## Retired and merged IDs

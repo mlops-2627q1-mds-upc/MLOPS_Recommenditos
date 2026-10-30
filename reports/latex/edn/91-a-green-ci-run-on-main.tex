@@ -2,22 +2,23 @@
 % Do not edit: change reports/edn.md and run `make edn`.
 \ednentry{
   id = {EDN-91},
-  title = {A green CI run on \texorpdfstring{\texttt{main}}{main} publishes the API image to a public GHCR package},
+  title = {A green CI run on \texorpdfstring{\texttt{main}}{main} publishes the API image to GHCR},
+  note = {\textbf{Revised on 2026-10-30}: the package stays private, because the organisation does not allow public packages; the VM pulls with the deploy job's token (EDN-94).},
   date = {2026-10-22},
   milestone = {M5: Model Packaging},
   topic = {CI/CD, Containerization, Security},
   participants = {@lukas2510 decided (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197}{issue \#197})},
   decision = {A workflow of its own, \texttt{cd.\allowbreak{}yml}, runs after CI passed on a push to \texttt{main} that changes more than documentation.
-It pulls the model with a DagsHub token from the GitHub Environment \texttt{dagshub}, which only \texttt{main} may use, tests the image as a Compose stack, and pushes it to a public GHCR package.},
+It pulls the model with a DagsHub token from the GitHub Environment \texttt{dagshub}, which only \texttt{main} may use, tests the image as a Compose stack, and pushes it to a private GHCR package.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item A read-only DagsHub account for CI: one more account, against a threat a three-person team with branch protection does not face.
-\item A private package with a read token on the VM: a credential on a shared university machine, for an image without secrets or personal data.
+\item A public package: the organisation's settings do not allow one.
 \item A job in \texttt{ci.\allowbreak{}yml}: the secret would sit in the workflow pull requests run, and the job would have to wait for every other job.
 \end{itemize}
 \par
 \emph{Why:} DagsHub tokens have no read-only scope, so the protection is where the token can be used: one step of one job, after a push to \texttt{main}, never on a pull request (NFR-15).
-The API key reaches the container at run time, so the public image holds only code and the model the model card describes.
+The API key reaches the container at run time, so the image holds only code and the model the model card describes.
 Built locally with the workflow's steps, the image is 704 MB (NFR-04: 1 GB) and passes the 27 integration tests against \texttt{dvc.\allowbreak{}lock}'s hashes.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted},

@@ -128,6 +128,7 @@ flowchart LR
 - **Storage.** The workers' metric files live in a tmpfs, the temporary files of SQLite and Python in another one on `/tmp`, and the prediction log on the named volume `prediction-log`, which survives a new image and which the drift job will mount; all are owned by the service user.
   Everything else in the API container is the image, mounted read-only ([Deployment](deployment.md#the-stack)).
 - **How the image gets there.** CD builds the image in GitHub Actions and pushes it to GHCR, and `deploy/deploy.sh` on the VM pulls the commit's tag and starts it, so the VM needs neither the repository, DVC nor a DagsHub token ([Deployment](deployment.md#how-the-image-gets-there)).
+  The Deploy workflow's jobs on the VM run on a self-hosted runner there, which may run nothing but `deploy.sh` and hands it the job's token for the private package; the smoke check runs from outside ([EDN-94][edn]).
   Rolling back is starting the previous tag, which `deploy.sh` does on its own when a new tag does not come up healthy; a laptop can still stream an image with `docker save | ssh docker load`.
 
 ## Patterns

@@ -83,6 +83,8 @@ else
     install -d -m 750 -o "$RUNNER_USER" -g "$RUNNER_USER" "$RUNNER_DIR"
     tar -xzf "$download/$tarball" -C "$RUNNER_DIR"
     chown -R "$RUNNER_USER:$RUNNER_USER" "$RUNNER_DIR"
+    # tar sets the directory's mode from the archive.
+    chmod 750 "$RUNNER_DIR"
 fi
 # The .NET libraries the runner needs (libicu, libssl, libkrb5, liblttng-ust,
 # zlib), with the runner's own script, which knows the package names of each

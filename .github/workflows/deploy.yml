@@ -184,6 +184,10 @@ jobs:
     permissions:
       # To compare the commit with the one that runs, through the API.
       contents: read
+      # To pull the image from the private GHCR package: the organisation
+      # allows no public packages, so deploy.sh logs in with this job's token
+      # for the one pull (EDN-94).
+      packages: read
     env:
       TAG: ${{ needs.prepare.outputs.tag }}
       DEPLOY_SH: /opt/recommenditos/deploy.sh
@@ -229,9 +233,18 @@ jobs:
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
 
       - name: Deploy, and put the previous tag back if the stack does not come up
+        # The job's token goes to deploy.sh on standard input, through the
+        # shell's builtin printf, so no command line shows it; sudo drops this
+        # step's environment, and deploy.sh deletes the Docker login after the
+        # pull. The token expires when the job ends.
         if: steps.order.outputs.deploy == 'true'
         id: deploy
-        run: sudo -n -u recommenditos "$DEPLOY_SH" deploy "$TAG" | tee "$RUNNER_TEMP/deploy.log"
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s\n' "$REGISTRY_TOKEN" \
+            | sudo -n -u recommenditos "$DEPLOY_SH" deploy "$TAG" --registry-token-stdin \
+            | tee "$RUNNER_TEMP/deploy.log"
 
       - name: Report the outcome
         if: always() && steps.deploy.outcome != 'skipped'
