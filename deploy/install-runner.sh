@@ -21,8 +21,8 @@
 #     ssh -t <admin>@<vm> sudo bash deploy/install-runner.sh
 #
 # Registering needs a registration token, which is valid for one hour; the
-# script reads it from standard input, without echo when that is a terminal, so
-# it appears on no command line. Create one on a laptop with
+# script reads it from standard input before it installs anything, without echo
+# when that is a terminal, so it appears on no command line. Create one on a laptop with
 #
 #     gh api -X POST repos/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runners/registration-token --jq .token
 #
@@ -59,6 +59,23 @@ if ! id "$DEPLOY_USER" >/dev/null 2>&1 || [[ ! -x $DEPLOY_SCRIPT ]]; then
     exit 1
 fi
 
+# The registration token comes first, before any apt step: apt, debconf and the
+# runner's installdependencies.sh may read standard input and would swallow a
+# token piped in. Every step after this one that can read it gets /dev/null.
+token=
+if [[ ! -f $RUNNER_DIR/.runner ]]; then
+    if [[ -t 0 ]]; then
+        read -r -s -p "Registration token (gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token): " token || true
+        echo
+    else
+        read -r token || true
+    fi
+    if [[ -z $token ]]; then
+        echo "No registration token on standard input: create one with gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token" >&2
+        exit 1
+    fi
+fi
+
 echo "== 1. The runner's user $RUNNER_USER"
 if ! id "$RUNNER_USER" >/dev/null 2>&1; then
     useradd --system --create-home --home-dir "$RUNNER_HOME" --shell /usr/sbin/nologin "$RUNNER_USER"
@@ -89,25 +106,15 @@ fi
 # The .NET libraries the runner needs (libicu, libssl, libkrb5, liblttng-ust,
 # zlib), with the runner's own script, which knows the package names of each
 # release; jq reads the GitHub API's answers in the Deploy workflow.
-"$RUNNER_DIR/bin/installdependencies.sh"
+"$RUNNER_DIR/bin/installdependencies.sh" </dev/null
 if ! command -v jq >/dev/null; then
-    apt-get install -y jq
+    apt-get install -y jq </dev/null
 fi
 
 echo "== 3. Registration with $REPOSITORY"
 if [[ -f $RUNNER_DIR/.runner ]]; then
     echo "already registered: $(jq -r '.agentName' "$RUNNER_DIR/.runner" 2>/dev/null || echo "see $RUNNER_DIR/.runner")"
 else
-    if [[ -t 0 ]]; then
-        read -r -s -p "Registration token (gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token): " token || true
-        echo
-    else
-        read -r token || true
-    fi
-    if [[ -z ${token:-} ]]; then
-        echo "No registration token on standard input: create one with gh api -X POST repos/$REPOSITORY/actions/runners/registration-token --jq .token" >&2
-        exit 1
-    fi
     # The runner reads the token from ACTIONS_RUNNER_INPUT_TOKEN, so it stays off
     # every command line, where `ps` would show it. config.sh refuses to run as
     # root; runuser keeps this environment.

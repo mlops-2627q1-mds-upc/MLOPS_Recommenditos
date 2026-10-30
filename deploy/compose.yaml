@@ -44,7 +44,9 @@ x-hardening: &hardening
 # is usually a worker, which the server's master (uvicorn's supervisor, nginx's
 # master) replaces; when the main process dies, Docker restarts the container
 # (`restart: unless-stopped`, NFR-05). A tmpfs is memory and counts against its
-# container's limit.
+# container's limit. On the FIB VM (cgroup v1 without swapaccount=1) Docker
+# warns "No swap limit support" and does not enforce memswap_limit; the VM has
+# no swap, so that has no effect today.
 
 services:
   api:
@@ -121,7 +123,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    # The only published port: 8080 locally, HTTP_PORT (80) on the VM. nginx
+    # The only published port: HTTP_PORT, 8080 locally and on the VM. nginx
     # itself listens on 8080 as a non-root user inside the container.
     ports:
       - "${HTTP_PORT:-8080}:8080"
