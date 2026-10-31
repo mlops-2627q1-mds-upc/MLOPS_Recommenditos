@@ -416,7 +416,7 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
   On the real snapshot at one thread (2026-10-31), the laptop's i5-10210U and a GitHub runner's AMD EPYC 7763 both fitted coefficient md5 `c4a62da2...` and pipeline md5 `fd4ecd87...` on Haswell; Sandybridge and Prescott each gave other coefficients, again equal on both CPUs, and the AVX-512 kernel crashes a CPU without AVX-512.
   The fit takes about 1.1 s on every kernel.
   `tests/test_model.py` fits the fixture in separate processes: two on Haswell agree, one on Sandybridge differs and is refused without the escape hatch below.
-  The pin reaches x86-64 CPUs with AVX2 and FMA, which every machine we train on has; Windows is checked only by that test in CI.
+  The pin reaches x86-64 CPUs with AVX2 and FMA, which every machine we train on has; on Windows that test passes in CI, so the variable is honoured there too, while the real snapshot was not fitted on Windows.
   A CPU without AVX2 or a non-x86 machine, such as a Mac with Apple silicon, has no Haswell kernel: there the fit runs only with `RECOMMENDITOS_ANY_OPENBLAS_KERNEL=1` and gives a `b1` that differs from the one `dvc.lock` records.
   The test suite sets that variable for its own process, which loads numpy before any test runs.
   The committed `b1` (coefficient md5 `36204956...`) comes from the retrain of PR #255 on an AMD EPYC 9V45 with AVX-512, most likely on the AVX-512 kernel (not verified), so the first retrain with the pin moves `b1` once more, to `c4a62da2...`.

@@ -519,5 +519,5 @@ Known gaps
   Its fit runs on one BLAS thread (#215), which makes it independent of the core count (issue #113), and on OpenBLAS's Haswell kernel, which makes it independent of the CPU model: `train` and `tune` set `OPENBLAS_CORETYPE=Haswell` before numpy loads, and the laptop and a GitHub runner's AMD EPYC 7763 then fit the same pipeline, md5 `fd4ecd87...` ([model card](model-card.md#determinism)).
   The fit refuses any other kernel, which a process gets when it loaded numpy before the variable was set, when the variable names another kernel, on a CPU without AVX2 and on a non-x86 machine such as a Mac with Apple silicon.
   `RECOMMENDITOS_ANY_OPENBLAS_KERNEL=1` fits anyway, for example in a notebook, with a `b1` that differs from the one `dvc.lock` records.
-  Windows is checked only by the fixture test in CI.
+  On Windows the fixture test of the pin passes in CI; the real snapshot was not fitted there.
   The committed `b1` was retrained on an AVX-512 CPU before the pin, so the first retrain with it changes `b1` once more.
