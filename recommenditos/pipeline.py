@@ -35,7 +35,7 @@ def load_params(path: Path = PARAMS_FILE) -> dict[str, Any]:
 
 def read_frame(path: Path, schema: Schema) -> pd.DataFrame:
     """Read a Parquet artefact and check it against its contract."""
-    frame = _restore_nullable_dtypes(pd.read_parquet(path), schema, pq.read_schema(path))
+    frame = _restore_nullable_dtypes(pd.read_parquet(path), schema, path)
     schema.validate(frame)
     logger.info(f"Read {len(frame):,} rows from {path} as {schema.name!r}.")
     return frame
@@ -49,20 +49,22 @@ def _arrow_counterparts(declared: pd.api.extensions.ExtensionDtype) -> set[pa.Da
     return set() if numpy_dtype is None else {pa.from_numpy_dtype(numpy_dtype)}
 
 
-def _restore_nullable_dtypes(
-    frame: pd.DataFrame, schema: Schema, arrow_schema: pa.Schema
-) -> pd.DataFrame:
+def _restore_nullable_dtypes(frame: pd.DataFrame, schema: Schema, path: Path) -> pd.DataFrame:
     """`frame` with the pandas-only nullable dtypes its contract declares restored.
 
     `write_parquet` keeps no pandas metadata, and the Arrow schema in the file
     cannot tell a nullable pandas dtype from its default one: an Arrow boolean
     column reads back as numpy `bool`, or `object` when it holds nulls, whether
     it was written from `bool` or `boolean`. Those dtypes are the ones whose
-    missing value is `pd.NA`, the equipment flags among them. A column is cast
-    only when the file stores it as the Arrow type of the declared dtype, so
-    that a float or integer column declared `boolean` is not made to pass: it is
-    left alone and `validate` reports it.
+    missing value is `pd.NA`, the equipment flags among them. A column is
+    restored only when the file stores it as the Arrow type of the declared
+    dtype, so that a float or integer column declared `boolean` is not made to
+    pass: it is left alone and `validate` reports it. The column is rebuilt from
+    Arrow, not cast from what pandas made of it, because pandas reads an integer
+    column with nulls as float64 and a cast from there rounds above 2**53.
     """
+    arrow_schema = pq.read_schema(path)
+    restorable = {}
     for column in schema.columns:
         declared = pd.api.types.pandas_dtype(column.dtype)
         if column.name not in frame or getattr(declared, "na_value", None) is not pd.NA:
@@ -71,7 +73,11 @@ def _restore_nullable_dtypes(
         if str(frame[column.name].dtype) != column.dtype and stored in _arrow_counterparts(
             declared
         ):
-            frame[column.name] = frame[column.name].astype(declared)
+            restorable[column.name] = declared
+    if restorable:
+        table = pq.read_table(path, columns=list(restorable))
+        for name, declared in restorable.items():
+            frame[name] = pd.Series(declared.__from_arrow__(table.column(name)), index=frame.index)
     return frame
 
 

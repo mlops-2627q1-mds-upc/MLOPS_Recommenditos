@@ -144,6 +144,19 @@ def test_a_column_stored_as_arrow_boolean_is_restored_to_boolean(tmp_path, value
     assert read["flag"].tolist() == pd.array(values, dtype="boolean").tolist()
 
 
+def test_a_nullable_integer_column_keeps_values_above_two_to_the_53(tmp_path):
+    # pandas reads an int64 column with nulls as float64, which rounds
+    # 2**53 + 1 to 2**53, so the column has to be rebuilt from Arrow.
+    path = tmp_path / "ints.parquet"
+    write_parquet(pd.DataFrame({"count": pd.array([2**53 + 1, None], dtype="Int64")}), path)
+    schema = Schema(name="ints", columns=(Column("count", "Int64", True, "A count."),))
+
+    read = read_frame(path, schema)
+
+    assert str(read["count"].dtype) == "Int64"
+    assert read["count"].tolist() == [2**53 + 1, pd.NA]
+
+
 def _bytes(path: Path) -> bytes:
     return path.read_bytes()
 
