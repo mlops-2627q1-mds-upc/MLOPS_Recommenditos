@@ -110,6 +110,14 @@ def test_a_listing_without_a_required_field_gives_no_body():
     assert to_body({**LISTING, "power_kw": float("nan")}) is None
 
 
+@pytest.mark.parametrize("missing", [pd.NaT, pd.NA, None, float("nan")])
+def test_every_pandas_missing_value_is_a_missing_field(missing):
+    assert to_body({**LISTING, "registration_date": missing}) is None
+    body = to_body({**LISTING, "gears": missing, "weight_kg": missing})
+    assert body is not None
+    assert "gears" not in body and "weight_kg" not in body
+
+
 def test_the_shares_within_the_targets_come_from_the_difference_of_two_scrapes():
     metrics = ApiMetrics(ModelInfo(variant="lgbm-basic", version="abc", trained_at=None))
     metrics.observe_request("POST", "/v1/predict", 200, 0.1)  # before the run, within both

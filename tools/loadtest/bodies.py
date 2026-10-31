@@ -23,7 +23,6 @@ import argparse
 import ast
 from collections.abc import Iterator
 import json
-import math
 from pathlib import Path
 import re
 from typing import Any
@@ -51,7 +50,8 @@ _INTEGER = {"nr_prev_owners", "gears", "nr_seats", "nr_doors", "cylinders", "cyl
 
 
 def _missing(value: Any) -> bool:
-    return value is None or (isinstance(value, float) and math.isnan(value))
+    """None, NaN, `pd.NaT` or `pd.NA`; a list (the equipment fields) is never missing."""
+    return bool(pd.api.types.is_scalar(value) and pd.isna(value))
 
 
 def _weight_kg(text: str) -> int | None:
