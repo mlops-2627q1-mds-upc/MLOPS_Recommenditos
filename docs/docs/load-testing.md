@@ -94,40 +94,60 @@ A laptop run is a dry run of the procedure and is labelled as one: [`reports/loa
 Once the stack is deployed ([Deployment](deployment.md)); it has run on the VM since 2026-10-30.
 
 **Where Locust runs.**
-On the VM itself, against `http://localhost:<HTTP_PORT>`.
+On the VM itself, against the proxy at `http://localhost:8080` (the stack's `HTTP_PORT`).
 `docker stats`, the `/metrics` scrape and the prediction log need the VM's Docker daemon, and CodeCarbon measures the machine it runs on.
-Locust then shares the VM's CPU with the stack; the report gives its CPU beside the API container's.
+It could not run elsewhere anyway: the public URL does not answer from the UPC network or UPClink, and the SSH port does not answer from the public internet ([The VM](deployment.md#the-vm)).
+Locust then shares the VM's one vCPU with the stack; the report gives its CPU beside the API container's.
 Its latency then contains no network, which is what NFR-02's "on the target VM" asks for.
 
-**Setup on the VM**, as the deploy user, once: a checkout of the public repository, without any DagsHub token, and an environment with Locust and CodeCarbon alone.
+Every command below runs from a laptop on the UPC network or UPClink, over SSH as the deploy user, whose home is the stack's directory `/opt/recommenditos`.
+
+**Setup on the VM**, once: uv in the deploy user's home, a checkout of the public repository at the commit the VM runs, without any DagsHub token, and an environment with Locust and CodeCarbon alone (about 320 MB).
+The installer puts uv into `~/.local/bin`, which a non-interactive `ssh` command does not have on its `PATH`, so the commands call it by its path.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-git clone https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git loadtest
-cd loadtest && uv sync --locked --only-group loadtest
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+ssh -p 22052 recommenditos@nattech.fib.upc.edu './deploy.sh status'    # the tag that runs: its commit SHA
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'git clone https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git loadtest &&
+    cd loadtest && git checkout <SHA> && ~/.local/bin/uv sync --locked --only-group loadtest &&
+    mkdir -p data/interim/loadtest'
 ```
 
-The bodies come from the laptop, which has the data: `make loadtest-bodies`, then `scp data/interim/loadtest/bodies.jsonl recommenditos@<vm>:loadtest/data/interim/loadtest/` (create the directory first).
-The VM needs neither DVC nor the data.
+The bodies come from the laptop, which has the data; the VM needs neither DVC nor the data:
+
+```bash
+make loadtest-bodies
+scp -P 22052 data/interim/loadtest/bodies.jsonl recommenditos@nattech.fib.upc.edu:loadtest/data/interim/loadtest/
+```
 
 **The runs.**
-Two runs of 20 requests/s for 5 minutes, both against the image the VM serves:
+Two runs of 20 requests/s for 5 minutes, both against the image the VM serves; check with `./deploy.sh status` before and after each run that the tag did not change, since a deploy in between would mix two images:
 
-1. With the worker count the VM is meant to serve with (`WEB_CONCURRENCY` in the stack's `.env`, 1 by default): NFR-02, NFR-03's throughput and error rate, NFR-04 and NFR-10.
+1. With the worker count the VM is meant to serve with (`WEB_CONCURRENCY` in `/opt/recommenditos/.env`, 1 by default): NFR-02, NFR-03's throughput and error rate, NFR-04 and NFR-10.
 2. With `WEB_CONCURRENCY=2` in `.env` and `docker compose up -d --wait`: NFR-03's exactly-once check, and whether a second worker changes latency and memory.
 
-Each from the checkout, with `uv run --no-sync` so that uv does not install the other groups:
+Each from the checkout, with `uv run --no-sync` so that uv does not install the other groups.
+A run takes about 6.5 minutes with the idle baseline; started with `nohup`, it survives a dropped SSH connection or VPN:
 
 ```bash
-uv run --no-sync python -m tools.loadtest.run --host http://localhost:80 --rate 20 --duration 5m \
-    --out reports/loadtest/vm-<date>-workers-<n> \
-    --note "VM run: <nproc> vCPUs, <free -h total> RAM, Locust on the VM, <anything else running>."
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'cd loadtest && nohup ~/.local/bin/uv run --no-sync python -m tools.loadtest.run \
+    --host http://localhost:8080 --rate 20 --duration 5m --out reports/loadtest/vm-<date>-workers-<n> \
+    --note "VM run: <nproc> vCPUs, <free -h total> RAM, Locust on the VM, <anything else running>." \
+    > ~/loadtest-<n>.log 2>&1 &'
 ```
 
-Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with.
+Before and after each run, also take the API container's `RestartCount` and start time (`docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' recommenditos-api-1`).
+`docker compose up -d` creates a new container when `.env` changes, so compare within one run.
+
+Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with, run `docker compose up -d --wait` again and check `./deploy.sh status` says healthy.
 
 **What to record.**
-Copy the three files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note.
+Copy the three files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note:
+
+```bash
+scp -P 22052 'recommenditos@nattech.fib.upc.edu:loadtest/reports/loadtest/vm-<date>-*' reports/loadtest/
+```
+
 The prediction log keeps the run's records; they are 2 x 6,000 requests of about 750 bytes, far below its 2 GB cap; the report's start time and duration mark them, so M6's drift job can leave them out.
 
 **What follows.**
