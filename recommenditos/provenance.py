@@ -181,8 +181,11 @@ def _dvc_repo(root: Path) -> Iterator[Repo]:
     repository on `D:` fails with `ValueError: path is on mount 'D:', start on
     mount 'C:'`, and `train` would lose its tracking over it (#84). GitHub's
     Windows runners are laid out exactly so, with the checkout on `D:` and the
-    temporary directory on `C:`. The stages are single-threaded, so changing the
-    directory for the length of the read affects nothing else.
+    temporary directory on `C:`. The current directory belongs to the process,
+    not to a thread, and changing it for the length of the read is safe because
+    every caller reads before its MLflow run starts and before any fit, when no
+    other thread of the stage opens a file: the thread pools of OpenBLAS and
+    LightGBM only compute.
     """
     with chdir(root), Repo(str(root)) as repo:
         yield repo

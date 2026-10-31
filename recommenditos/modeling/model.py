@@ -57,6 +57,7 @@ from sklearn.impute import MissingIndicator, SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import FeatureUnion, Pipeline, make_pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
+from threadpoolctl import threadpool_limits
 
 from recommenditos.data.build_features import FeatureSpace, equipment_feature_name
 from recommenditos.pipeline import write_json
@@ -916,10 +917,11 @@ class RidgeModel(Model):
     def fit(
         cls, metadata: dict, data: TrainingData, *, seed: int, num_threads: int
     ) -> "RidgeModel":
-        """Fit the pipeline. Neither the seed nor the threads are read.
+        """Fit the pipeline. Neither the seed nor `num_threads` is read.
 
-        Nothing in the pipeline consumes randomness, and `solver="lsqr"` is
-        single-threaded by construction, which is the point of choosing it.
+        Nothing in the pipeline consumes randomness. The fit runs on one BLAS
+        thread whatever `num_threads` says (`_one_blas_thread`), so the
+        coefficients do not depend on the core count of the machine.
         """
         tuning = cls._tuning(metadata)
         # Through an instance, because the column split and the alignment are
@@ -931,14 +933,18 @@ class RidgeModel(Model):
             alpha=tuning["alpha"],
             min_category_rows=tuning["min_category_rows"],
         )
-        pipeline.fit(model._align(data.train), data.train["log_price"].to_numpy(dtype="float64"))
+        with _one_blas_thread():
+            pipeline.fit(
+                model._align(data.train), data.train["log_price"].to_numpy(dtype="float64")
+            )
         model.pipeline = pipeline
         return model
 
     def _predict_log_price(self, aligned: pd.DataFrame) -> np.ndarray:
         if self.pipeline is None:
             raise RuntimeError("the pipeline exists after `fit` or `load`")
-        return np.asarray(self.pipeline.predict(aligned), dtype="float64")
+        with _one_blas_thread():
+            return np.asarray(self.pipeline.predict(aligned), dtype="float64")
 
     def _save_payload(self, directory: Path) -> None:
         # joblib rather than a hand-written format: the fitted state is the
@@ -949,6 +955,25 @@ class RidgeModel(Model):
     @classmethod
     def _load_payload(cls, directory: Path, metadata: dict, space: FeatureSpace) -> "RidgeModel":
         return cls(metadata, space, joblib.load(directory / _PIPELINE_FILE))
+
+
+def _one_blas_thread() -> threadpool_limits:
+    """One BLAS thread for the Ridge baseline's fit and predictions (NFR-06, issue #215).
+
+    OpenBLAS sizes its pool to the machine's cores, and LSQR's reductions are
+    summed in a different order for each thread count, so without the limit
+    `b1`'s coefficients, and its hash in `dvc.lock`, depend on the core count of
+    the machine that fits it. One thread is the count every machine can honour,
+    and it is faster on the real snapshot too: 1.09 s against 1.32 s at 8
+    threads for the measured fit (issue #113). Nothing shows that it makes them
+    the same across CPU models: at the default thread counts, `b1` differed
+    between the laptop and a GitHub runner's AMD EPYC (#201).
+
+    A fresh limit for every call, because `threadpool_limits` acts on the
+    libraries loaded when it is entered and restores the previous counts on exit,
+    so nothing outside the Ridge's own calls runs on fewer threads.
+    """
+    return threadpool_limits(limits=1, user_api="blas")
 
 
 def _ridge_pipeline(
@@ -1002,16 +1027,12 @@ def _ridge_pipeline(
                 ),
             ),
             # `lsqr`, not the default `auto`: `auto` picks a solver by the shape
-            # and sparsity of the matrix, and a dense one goes through BLAS,
-            # whose reduction order depends on the thread count. scipy's LSQR is
-            # iterative and single-threaded, so nothing about it can vary with
-            # the machine (NFR-06).
-            #
-            # Insurance documented by the libraries rather than a measured fix,
-            # and worth being exact about: the coefficients came out
-            # byte-identical across separate processes at 1 and 8 BLAS threads
-            # with `auto` as well, on this data. Keeping `lsqr` costs nothing and
-            # removes the dependency; it was not shown to be necessary here.
+            # and sparsity of the matrix, so the solver itself could change with
+            # the data. LSQR does not make the fit thread-independent: its
+            # vector norms and products go through OpenBLAS, whose pool has one
+            # thread per core, and the coefficients differed at 1, 2, 4 and 8
+            # threads (issue #113, `reports/analysis/ridge_blas_threads.py`).
+            # `RidgeModel` therefore fits and predicts under `_one_blas_thread`.
             ("ridge", Ridge(alpha=alpha, solver="lsqr")),
         ]
     )

@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from tests.conftest import PII_COLUMNS, VARIANTS, params_override, project_params, train_variants
+from threadpoolctl import threadpool_limits
 import yaml
 
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
@@ -1161,6 +1162,41 @@ def test_a_bundle_whose_two_halves_disagree_is_refused(damage: str, tmp_path: Pa
 
     with pytest.raises(ModelError, match="disagree"):
         load_model(bundle)
+
+
+#: Enough training rows for OpenBLAS to split LSQR's vector reductions across its
+#: threads: without the limit, `b1`'s coefficients differ between 1, 2 and 4
+#: threads at this size, and the fixture alone is too small to show it.
+_BLAS_THREADED_ROWS = 20_000
+
+
+@pytest.mark.req("NFR-06")
+def test_the_ridge_coefficients_do_not_depend_on_the_blas_threads_available(
+    matrices: dict, supported_makes: tuple[str, ...]
+):
+    """`b1` fits on one BLAS thread however many the process allows (#215).
+
+    Without the limit inside `RidgeModel`, LSQR's norms run on every thread
+    OpenBLAS is allowed, each count sums them in a different order, and the
+    coefficients differ at every count, which made `b1`'s hash in `dvc.lock`
+    depend on the machine's core count (#113). The fixture's rows are repeated
+    until the vectors are long enough for OpenBLAS to split them; on fewer rows
+    it uses one thread anyway and the test could not fail. It fails with the
+    limit removed on an 8-core laptop; on a machine with one core it cannot.
+    """
+    data = train.read_matrices(matrices["features"], "basic", supported_makes)
+    repeats = -(-_BLAS_THREADED_ROWS // len(data.train))
+    rows = pd.concat([data.train] * repeats, ignore_index=True)
+    data = TrainingData(data.space, rows, data.validation, supported_makes)
+
+    coefficients = {}
+    for threads in (1, 2, 4):
+        with threadpool_limits(limits=threads, user_api="blas"):
+            model = fit_variant("b1", train_variants()["b1"], data, seed=1, num_threads=1)
+        coefficients[threads] = model.pipeline[-1].coef_.tobytes()
+
+    differing = [threads for threads, coef in coefficients.items() if coef != coefficients[1]]
+    assert not differing, f"the coefficients at {differing} BLAS threads differ from those at 1"
 
 
 def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: dict):
