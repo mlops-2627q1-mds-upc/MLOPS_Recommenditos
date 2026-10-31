@@ -1182,7 +1182,8 @@ def test_the_ridge_coefficients_do_not_depend_on_the_blas_threads_available(
     depend on the machine's core count (#113). The fixture's rows are repeated
     until the vectors are long enough for OpenBLAS to split them; on fewer rows
     it uses one thread anyway and the test could not fail. It fails with the
-    limit removed on an 8-core laptop; on a machine with one core it cannot.
+    limit removed at any core count, a single CPU included, because the outer
+    `threadpool_limits(limits=4)` raises OpenBLAS's pool whatever the CPUs allow.
     """
     data = train.read_matrices(matrices["features"], "basic", supported_makes)
     repeats = -(-_BLAS_THREADED_ROWS // len(data.train))

@@ -75,15 +75,15 @@ dependencies = [
     # serving seam reaches that module through `build_features`.
     "pyyaml",
     "scikit-learn",
+    # `model.py` runs `b1`'s fit and predictions on one BLAS thread (#215), and
+    # serving imports that module. It arrives with scikit-learn anyway, declared
+    # for the same reason as joblib. The floor is the version it was tested with.
+    "threadpoolctl>=3.7.0",
     # Every stage module declares its command line when it is imported, and the
     # serving seam imports two of them: `model.py` reads the feature space through
     # `build_features`, which imports `split_data`. Keeping typer here (7 MB with
     # rich and Pygments) is cheaper than splitting those modules, which would
     # break EDN-28's one module per stage and the `deps` dvc.yaml names for them.
-    # `model.py` runs `b1`'s fit and predictions on one BLAS thread (#215), and
-    # serving imports that module. It arrives with scikit-learn anyway, declared
-    # for the same reason as joblib. The floor is the version it was tested with.
-    "threadpoolctl>=3.7.0",
     "typer",
     # The ASGI server that runs the API (`make api`, and the image).
     "uvicorn>=0.54.0",
