@@ -103,10 +103,10 @@ Its latency then contains no network, which is what NFR-02's "on the target VM" 
 Every command below runs from a laptop on the UPC network or UPClink, over SSH as the deploy user, whose home is the stack's directory `/opt/recommenditos`.
 
 **Setup on the VM**, once: uv in the deploy user's home, a checkout of the public repository at the commit the VM runs, without any DagsHub token, and an environment with Locust and CodeCarbon alone (about 320 MB).
-The installer puts uv into `~/.local/bin`, which a non-interactive `ssh` command does not have on its `PATH`, so the commands call it by its path.
+The installer puts uv into `~/.local/bin`; `UV_NO_MODIFY_PATH=1` keeps it from editing the shell profiles, and the commands call uv by its path.
 
 ```bash
-ssh -p 22052 recommenditos@nattech.fib.upc.edu 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh'
 ssh -p 22052 recommenditos@nattech.fib.upc.edu './deploy.sh status'    # the tag that runs: its commit SHA
 ssh -p 22052 recommenditos@nattech.fib.upc.edu 'git clone https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git loadtest &&
     cd loadtest && git checkout <SHA> && ~/.local/bin/uv sync --locked --only-group loadtest &&
@@ -149,6 +149,28 @@ scp -P 22052 'recommenditos@nattech.fib.upc.edu:loadtest/reports/loadtest/vm-<da
 ```
 
 The prediction log keeps the run's records; they are 2 x 6,000 requests of about 750 bytes, far below its 2 GB cap; the report's start time and duration mark them, so M6's drift job can leave them out.
+
+**Results of 2026-10-31.**
+Both runs were made against image 902de35, with Locust on the VM: [one worker](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-1.md) and [two workers](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-2.md).
+
+| Figure | 1 worker | 2 workers | Target |
+|--------|----------|-----------|--------|
+| Achieved rate, errors | 19.61 of 20 requests/s, 0 of 5,883 | 19.87 of 20 requests/s, 0 of 5,960 | 95 % of 20/s, below 1 % (NFR-03) |
+| `/v1/predict` p50 / p95 / p99 (Locust) | 65 / 210 / 340 ms | 78 / 240 / 440 ms | p95 at most 200 ms (NFR-02) |
+| `/v1/predict` answers within 200 ms (`/metrics`) | 94.7 % | 93.3 % | 95 % (NFR-02) |
+| `/v1/price-range` p95 | 170 ms | 230 ms | at most 300 ms (NFR-02) |
+| `/v1/comparables` p95 | 16 ms | 20 ms | at most 300 ms (NFR-02) |
+| API container memory, max (`docker stats`) | 295 MiB | 609 MiB | below 1 GB (NFR-04); the limit is 768 MiB |
+| API container CPU, mean / max | 61 % / 96 % of the one vCPU | 60 % / 96 % | - |
+| Locust's CPU, mean | 2 % | 2 % | - |
+| Energy per request, total / above idle | 0.59 / 0.058 J | 0.59 / 0.060 J | reported, no target (NFR-10) |
+| Prediction log | 5,883 records, exactly once | 5,960 records, exactly once | exactly once (NFR-03) |
+| API `RestartCount` before / after | 0 / 0 | 0 / 0 | unchanged |
+
+`/v1/predict` misses NFR-02's 200 ms at the 95th percentile with either worker count, by 10 ms with one worker; the other two endpoints and NFR-03 and NFR-04 meet their targets.
+A second worker adds no CPU on one vCPU: it doubles the memory and makes the tail slower.
+Locust's 2 % is confirmed by `ps`: 6 s of CPU time over the 299 s the process ran.
+CodeCarbon took a TDP of 4 W from its table for the VM's CPU ("Intel Core Processor (Broadwell, no TSX, IBRS)"), so its CPU term is low; 86 to 87 % of each run's energy is the constant 10 W it assumes for the RAM.
 
 **What follows.**
 With both runs committed, the team confirms or adjusts the targets of NFR-02 to NFR-04 against the measurements, the specification is updated, and the decision is recorded in the EDN as EDN-88, with the choice of Locust (issue #143).

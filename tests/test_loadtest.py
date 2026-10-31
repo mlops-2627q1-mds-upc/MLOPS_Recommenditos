@@ -233,3 +233,15 @@ def test_the_locust_json_ends_with_one_newline(tmp_path, written, kept):
     path.write_bytes(written)
     measure.end_with_newline(path)
     assert path.read_bytes() == kept
+
+
+@pytest.mark.parametrize(
+    ("image", "written"),
+    [
+        (f"ghcr.io/o/api:{'902de35a' * 5}", "ghcr.io/o/api:902de35a902d"),
+        ("recommenditos-api:latest", "recommenditos-api:latest"),
+        ("ghcr.io/o/api:902de35", "ghcr.io/o/api:902de35"),
+    ],
+)
+def test_a_full_commit_sha_tag_is_shortened_in_the_report(image, written):
+    assert measure.short_image(image) == written

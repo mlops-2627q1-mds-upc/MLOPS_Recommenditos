@@ -1,0 +1,138 @@
+{
+  "label": "vm-2026-10-31-workers-1",
+  "note": "VM run: 1 vCPU, 3.8Gi RAM, no swap, Ubuntu 20.04, Locust on the VM against the proxy on localhost:8080, image 902de35, WEB_CONCURRENCY=1, nothing else running besides the stack and the idle GitHub Actions runner.",
+  "started_at": "2026-10-31T10:10:35+00:00",
+  "host": "http://localhost:8080",
+  "rate_per_s": 20.0,
+  "duration_s": 300,
+  "users": 80,
+  "machine": {
+    "hostname": "shazam",
+    "cpus": 1,
+    "load_average_before": [
+      0.12,
+      0.21,
+      0.13
+    ],
+    "load_average_after": [
+      0.88,
+      0.72,
+      0.39
+    ]
+  },
+  "container": {
+    "image": "ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:902de35ad225",
+    "workers": 1,
+    "prediction_log": "/var/lib/recommenditos/prediction-log.sqlite3"
+  },
+  "energy_idle": {
+    "seconds": 60.00010458900215,
+    "energy_j": 624.6088375444501,
+    "cpu_energy_j": 24.616951954388785,
+    "ram_energy_j": 599.9918855900614,
+    "cpu_power_method": "cpu_load, Intel Core Processor (Broadwell, no TSX, IBRS), TDP 4 W"
+  },
+  "locust_process": {
+    "cpu_mean_percent": 2.165562913907285,
+    "cpu_max_percent": 16.0
+  },
+  "energy_run": {
+    "seconds": 302.0350682540011,
+    "energy_j": 3486.735668800781,
+    "cpu_energy_j": 466.4048826206509,
+    "ram_energy_j": 3020.33078618013,
+    "cpu_power_method": "cpu_load, Intel Core Processor (Broadwell, no TSX, IBRS), TDP 4 W"
+  },
+  "locust": {
+    "/v1/predict": {
+      "requests": 3548,
+      "failures": 0,
+      "p50_ms": 65.0,
+      "p95_ms": 210.0,
+      "p99_ms": 340.0,
+      "rate_per_s": 11.826666666666666,
+      "error_rate": 0.0
+    },
+    "/v1/price-range": {
+      "requests": 1174,
+      "failures": 0,
+      "p50_ms": 52.0,
+      "p95_ms": 170.0,
+      "p99_ms": 320.0,
+      "rate_per_s": 3.9133333333333336,
+      "error_rate": 0.0
+    },
+    "/v1/comparables": {
+      "requests": 1161,
+      "failures": 0,
+      "p50_ms": 5.0,
+      "p95_ms": 16.0,
+      "p99_ms": 23.0,
+      "rate_per_s": 3.87,
+      "error_rate": 0.0
+    },
+    "Aggregated": {
+      "requests": 5883,
+      "failures": 0,
+      "p50_ms": 52.0,
+      "p95_ms": 180.0,
+      "p99_ms": 310.0,
+      "rate_per_s": 19.61,
+      "error_rate": 0.0
+    }
+  },
+  "throughput": {
+    "achieved_per_s": 19.61,
+    "target_per_s": 20.0,
+    "reached": true
+  },
+  "energy_per_request_j": 0.5926798689105526,
+  "energy_per_request_above_idle_j": 0.05822056801947503,
+  "docker_stats": {
+    "samples": 120,
+    "memory_max_bytes": 309120204.8,
+    "memory_mean_bytes": 290839156.05333334,
+    "cpu_mean_percent": 60.674166666666665,
+    "cpu_max_percent": 95.52
+  },
+  "metrics": {
+    "/health": {
+      "answers": 55.0,
+      "within_200ms": 1.0,
+      "within_300ms": 1.0
+    },
+    "/metrics": {
+      "answers": 1.0,
+      "within_200ms": 1.0,
+      "within_300ms": 1.0
+    },
+    "/openapi.json": {
+      "answers": 1.0,
+      "within_200ms": 1.0,
+      "within_300ms": 1.0
+    },
+    "/v1/comparables": {
+      "answers": 1161.0,
+      "within_200ms": 1.0,
+      "within_300ms": 1.0
+    },
+    "/v1/predict": {
+      "answers": 3548.0,
+      "within_200ms": 0.9470124013528749,
+      "within_300ms": 0.9853438556933484
+    },
+    "/v1/price-range": {
+      "answers": 1174.0,
+      "within_200ms": 0.9599659284497445,
+      "within_300ms": 0.9880749574105622
+    }
+  },
+  "prediction_log": {
+    "answered": 5883,
+    "logged": 5883,
+    "missing": 0,
+    "unexpected": 0,
+    "duplicated": 0,
+    "exactly_once": true
+  }
+}

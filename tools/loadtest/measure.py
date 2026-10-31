@@ -201,6 +201,17 @@ def check_log(answered: Iterable[str], logged: Iterable[str]) -> LogCheck:
     )
 
 
+def short_image(image: str) -> str:
+    """The image name with a full commit SHA tag cut to 12 characters.
+
+    The VM runs images tagged with the full SHA, and a 40-hex string after
+    `api:` is what gitleaks' generic API key rule reports, which would block the
+    commit of a report; CONTRIBUTING.md (Secrets) asks for a short SHA instead
+    of an allowlist entry. Twelve characters still name one commit.
+    """
+    return re.sub(r":([0-9a-f]{12})[0-9a-f]{28}$", r":\1", image)
+
+
 def markdown_table(header: Iterable[str], rows: Iterable[Iterable[object]]) -> str:
     header = list(header)
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]

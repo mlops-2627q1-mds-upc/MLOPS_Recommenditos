@@ -246,7 +246,7 @@ class ContainerProbe:
         inspected = json.loads(docker("inspect", self.container))[0]
         env = dict(pair.split("=", 1) for pair in inspected["Config"]["Env"])
         return {
-            "image": inspected["Config"]["Image"],
+            "image": measure.short_image(inspected["Config"]["Image"]),
             "workers": int(env.get("WEB_CONCURRENCY", "1")),
             "prediction_log": env.get(PREDICTION_LOG_ENV_VAR, ""),
         }
