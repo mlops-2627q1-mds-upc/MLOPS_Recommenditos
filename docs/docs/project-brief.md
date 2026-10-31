@@ -196,7 +196,7 @@ Alternatives considered: linear, kNN, random forest, tabular NNs, hierarchical B
 
 ## 5. Target architecture
 
-The [architecture page](architecture.md) draws this as a C4 container view and a deployment view, and names the patterns and the decisions behind them.
+The [architecture page](architecture.md) draws this as a use-case diagram, a logical view that marks the ML components and the ML lifecycle, a C4 container view, a class diagram of the serving code, sequence diagrams of `/v1/predict` and `/v1/feedback`, and a deployment view, and names the patterns and the decisions behind them.
 
 ```
 client --> nginx (gateway) --> FastAPI (model bundle: LightGBM boosters, which give
