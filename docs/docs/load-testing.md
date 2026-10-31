@@ -2,7 +2,7 @@ Load testing
 ============
 
 The load test sends the traffic of NFR-03 to a running stack and measures what the [specification](specification.md) asks of it: latency (NFR-02), throughput and errors, and exactly-once logging with two workers (NFR-03), the API container's memory (NFR-04) and the energy per request (NFR-10).
-Its results on the VM settle the targets of NFR-02 to NFR-04, which are proposed estimates until then ([decision 1](specification.md#decisions-pending-confirmation), issue #143).
+Its results on the VM settled the targets of NFR-02 to NFR-04 on 2026-10-31 ([decision 1](specification.md#decisions-pending-confirmation), [EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), issue #143).
 
 The tool is [Locust](https://locust.io/): it is Python, it is on the course's tools list, and M6 can reuse it to replay the `ES` listings.
 k6 was considered and would add a JavaScript toolchain.
@@ -36,7 +36,7 @@ The [first laptop dry run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recomme
 A user waits for its answer before it sends the next request, so a slow target gets fewer requests per second rather than a growing queue.
 The time between a user's sends is then the longer of its gap and the answer, and the share of the rate a run achieves is `m / (R + m * exp(-R / m))` on average, with `m` the mean gap of 4 s and `R` the answer time: 99.9 % at 200 ms, 97 % at 1 s, 95 % at about 1.4 s, 90 % at 2 s and 73 % at 4 s.
 A simulation of 80 users at 20 requests/s over 600 s with `tools/loadtest/arrivals.py` agrees within its noise.
-The 95 % verdict below thus fails from answers of about 1.4 s, long after NFR-02's 200 and 300 ms.
+The 95 % verdict below thus fails from answers of about 1.4 s, long after NFR-02's 250 and 300 ms.
 The report therefore states the achieved rate, the answers divided by the duration, against the target, and counts the target as sustained when at least 95 % of it was achieved.
 The number of requests a run sends is random, with a standard deviation of 1.3 % of the target over NFR-03's 5 minutes at 20 requests/s, which puts the 95 % threshold four standard deviations below the target; over a 60 s dry run it is 2.9 %.
 At the end of the run, each user finishes the request it is waiting for.
@@ -48,7 +48,7 @@ The counts and percentiles come from Locust's `--json-file` statistics, which Lo
 | Figure | Source | Requirement |
 |--------|--------|-------------|
 | Requests, achieved rate against the target, error rate, p50, p95 and p99 latency per endpoint | Locust, at the client | NFR-02, NFR-03 |
-| Share of answers within 200 ms and 300 ms per endpoint | Two scrapes of `/metrics` inside the API container, before and after the run | NFR-02 |
+| Share of answers within 250 ms and 300 ms per endpoint | Two scrapes of `/metrics` inside the API container, before and after the run | NFR-02 |
 | API container memory (max and mean) and CPU | `docker stats`, sampled about every 2 s | NFR-04 |
 | Locust's own CPU, which competes with the API's when both run on one machine | psutil, every 2 s | - |
 | Energy per request, in total and above an idle baseline | CodeCarbon over the run and over an idle period before it | NFR-10 |
@@ -94,41 +94,84 @@ A laptop run is a dry run of the procedure and is labelled as one: [`reports/loa
 Once the stack is deployed ([Deployment](deployment.md)); it has run on the VM since 2026-10-30.
 
 **Where Locust runs.**
-On the VM itself, against `http://localhost:<HTTP_PORT>`.
+On the VM itself, against the proxy at `http://localhost:8080` (the stack's `HTTP_PORT`).
 `docker stats`, the `/metrics` scrape and the prediction log need the VM's Docker daemon, and CodeCarbon measures the machine it runs on.
-Locust then shares the VM's CPU with the stack; the report gives its CPU beside the API container's.
+It could not run elsewhere anyway: the public URL does not answer from the UPC network or UPClink, and the SSH port does not answer from the public internet ([The VM](deployment.md#the-vm)).
+Locust then shares the VM's one vCPU with the stack; the report gives its CPU beside the API container's.
 Its latency then contains no network, which is what NFR-02's "on the target VM" asks for.
 
-**Setup on the VM**, as the deploy user, once: a checkout of the public repository, without any DagsHub token, and an environment with Locust and CodeCarbon alone.
+Every command below runs from a laptop on the UPC network or UPClink, over SSH as the deploy user, whose home is the stack's directory `/opt/recommenditos`.
+
+**Setup on the VM**, once: uv in the deploy user's home, a checkout of the public repository at the commit the VM runs, without any DagsHub token, and an environment with Locust and CodeCarbon alone (about 320 MB).
+The installer puts uv into `~/.local/bin`; `UV_NO_MODIFY_PATH=1` keeps it from editing the shell profiles, and the commands call uv by its path.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-git clone https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git loadtest
-cd loadtest && uv sync --locked --only-group loadtest
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh'
+ssh -p 22052 recommenditos@nattech.fib.upc.edu './deploy.sh status'    # the tag that runs: its commit SHA
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'git clone https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos.git loadtest &&
+    cd loadtest && git checkout <SHA> && ~/.local/bin/uv sync --locked --only-group loadtest &&
+    mkdir -p data/interim/loadtest'
 ```
 
-The bodies come from the laptop, which has the data: `make loadtest-bodies`, then `scp data/interim/loadtest/bodies.jsonl recommenditos@<vm>:loadtest/data/interim/loadtest/` (create the directory first).
-The VM needs neither DVC nor the data.
+The bodies come from the laptop, which has the data; the VM needs neither DVC nor the data:
+
+```bash
+make loadtest-bodies
+scp -P 22052 data/interim/loadtest/bodies.jsonl recommenditos@nattech.fib.upc.edu:loadtest/data/interim/loadtest/
+```
 
 **The runs.**
-Two runs of 20 requests/s for 5 minutes, both against the image the VM serves:
+Two runs of 20 requests/s for 5 minutes, both against the image the VM serves; check with `./deploy.sh status` before and after each run that the tag did not change, since a deploy in between would mix two images:
 
-1. With the worker count the VM is meant to serve with (`WEB_CONCURRENCY` in the stack's `.env`, 1 by default): NFR-02, NFR-03's throughput and error rate, NFR-04 and NFR-10.
+1. With the worker count the VM is meant to serve with (`WEB_CONCURRENCY` in `/opt/recommenditos/.env`, 1 by default): NFR-02, NFR-03's throughput and error rate, NFR-04 and NFR-10.
 2. With `WEB_CONCURRENCY=2` in `.env` and `docker compose up -d --wait`: NFR-03's exactly-once check, and whether a second worker changes latency and memory.
 
-Each from the checkout, with `uv run --no-sync` so that uv does not install the other groups:
+Each from the checkout, with `uv run --no-sync` so that uv does not install the other groups.
+A run takes about 6.5 minutes with the idle baseline; started with `nohup`, it survives a dropped SSH connection or VPN:
 
 ```bash
-uv run --no-sync python -m tools.loadtest.run --host http://localhost:80 --rate 20 --duration 5m \
-    --out reports/loadtest/vm-<date>-workers-<n> \
-    --note "VM run: <nproc> vCPUs, <free -h total> RAM, Locust on the VM, <anything else running>."
+ssh -p 22052 recommenditos@nattech.fib.upc.edu 'cd loadtest && nohup ~/.local/bin/uv run --no-sync python -m tools.loadtest.run \
+    --host http://localhost:8080 --rate 20 --duration 5m --out reports/loadtest/vm-<date>-workers-<n> \
+    --note "VM run: <nproc> vCPUs, <free -h total> RAM, Locust on the VM, <anything else running>." \
+    > ~/loadtest-<n>.log 2>&1 &'
 ```
 
-Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with.
+Before and after each run, also take the API container's `RestartCount` and start time (`docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' recommenditos-api-1`).
+`docker compose up -d` creates a new container when `.env` changes, so compare within one run.
+
+Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with, run `docker compose up -d --wait` again and check `./deploy.sh status` says healthy.
 
 **What to record.**
-Copy the three files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note.
+Copy the three files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note:
+
+```bash
+scp -P 22052 'recommenditos@nattech.fib.upc.edu:loadtest/reports/loadtest/vm-<date>-*' reports/loadtest/
+```
+
 The prediction log keeps the run's records; they are 2 x 6,000 requests of about 750 bytes, far below its 2 GB cap; the report's start time and duration mark them, so M6's drift job can leave them out.
 
-**What follows.**
-With both runs committed, the team confirms or adjusts the targets of NFR-02 to NFR-04 against the measurements, the specification is updated, and the decision is recorded in the EDN as EDN-88, with the choice of Locust (issue #143).
+**Results of 2026-10-31.**
+Both runs were made against image 902de35, with Locust on the VM: [one worker](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-1.md) and [two workers](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-2.md).
+
+| Figure | 1 worker | 2 workers | Target |
+|--------|----------|-----------|--------|
+| Achieved rate, errors | 19.61 of 20 requests/s, 0 of 5,883 | 19.87 of 20 requests/s, 0 of 5,960 | 95 % of 20/s, below 1 % (NFR-03) |
+| `/v1/predict` p50 / p95 / p99 (Locust) | 65 / 210 / 340 ms | 78 / 240 / 440 ms | p95 at most 250 ms, 200 ms when measured (NFR-02) |
+| `/v1/predict` answers within 200 ms (`/metrics`) | 94.7 % | 93.3 % | 95 %, NFR-02's target when measured |
+| `/v1/price-range` p95 | 170 ms | 230 ms | at most 300 ms (NFR-02) |
+| `/v1/comparables` p95 | 16 ms | 20 ms | at most 300 ms (NFR-02) |
+| API container memory, max (`docker stats`) | 295 MiB | 609 MiB | below 1 GB (NFR-04); the limit is 768 MiB |
+| API container CPU, mean / max | 61 % / 96 % of the one vCPU | 60 % / 96 % | - |
+| Locust's CPU, mean | 2 % | 2 % | - |
+| Energy per request, total / above idle | 0.59 / 0.058 J | 0.59 / 0.060 J | reported, no target (NFR-10) |
+| Prediction log | 5,883 records, exactly once | 5,960 records, exactly once | exactly once (NFR-03) |
+| API `RestartCount` before / after | 0 / 0 | 0 / 0 | unchanged |
+
+`/v1/predict` missed NFR-02's target of the time, 200 ms at the 95th percentile, with either worker count, by 10 ms with one worker; the other two endpoints and NFR-03 and NFR-04 met their targets.
+The team raised the `/predict` target to 250 ms and kept one worker ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); the two reports state the verdicts against 200 ms, as `run.py` judged them then.
+A second worker adds no CPU on one vCPU: it doubles the memory and makes the tail slower.
+Locust's 2 % is confirmed by `ps`: 6 s of CPU time over the 299 s the process ran.
+CodeCarbon took a TDP of 4 W from its table for the VM's CPU ("Intel Core Processor (Broadwell, no TSX, IBRS)"), so its CPU term is low; 86 to 87 % of each run's energy is the constant 10 W it assumes for the RAM.
+
+**The decision.**
+On 2026-10-31 the team raised NFR-02's `/predict` target to 250 ms, confirmed NFR-03, NFR-04 and NFR-10 as measured, and kept one API worker in production ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), issue #143).

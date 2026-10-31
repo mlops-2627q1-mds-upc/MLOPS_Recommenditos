@@ -1154,7 +1154,28 @@ How to add an entry:
 - **Other evidence:** [Issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142), [PR #162](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/162), [deployment docs](../docs/docs/deployment.md), [`compose.yaml`](../deploy/compose.yaml), [`nginx.conf`](../deploy/nginx.conf).
 - **In LaTeX:** yes
 
-### EDN-88: The latency, throughput and resource targets after the load test (#143)
+### EDN-88: The `/predict` p95 target is 250 ms on the one-vCPU VM, served by one worker (#143)
+
+- **Date:** 2026-10-31
+- **Milestone:** M4: Model Deployment
+- **Activity / Topic:** Performance Testing, Deployment
+- **Participants:** @lukas2510 decided ([issue #143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143))
+- **Decision:** A Locust load test on the VM, 20 requests/s for 5 minutes, settles NFR-02 to NFR-04 and NFR-10.
+  NFR-02's `/predict` target rises from 200 to 250 ms at the 95th percentile; the other endpoints' 300 ms and NFR-03, NFR-04 and NFR-10 are confirmed as measured.
+  Production runs one API worker.
+- **Alternatives considered:**
+  - Keep 200 ms and optimise `/predict`: the miss is 10 ms in the tail of one shared vCPU, not in the typical answer.
+  - Two workers: no CPU to add on one vCPU, and twice the memory.
+  - k6 instead of Locust: adds a JavaScript toolchain, while Locust is Python and can replay M6's `ES` listings.
+- **Rationale:** With one worker `/predict` answered in 65 ms at the median and 210 ms at p95, with 98.5 % within 300 ms, and no request of 5,883 failed.
+  Two workers made the tail slower (p95 240 ms) and the memory peak 609 MiB instead of 295 MiB, and with them a hung worker escapes the healthcheck (EDN-93).
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI ran both runs on the VM, checked that the image and the container did not change during them, and recommended each option; @lukas2510 chose each option from the measured values the AI presented.
+  AI checked Locust's own CPU with `ps` before relying on it.
+- **AI interaction evidence:** Claude Code session of 2026-10-31 on the load test on the VM, question "NFR-02: The /predict target (p95 at most 200 ms) is missed narrowly on the 1-core VM with 210 ms. What to do?" (translated from German), answered with the recommended option.
+- **Other evidence:** [Issue #143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143), [PR #244](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/244), [one worker](loadtest/vm-2026-10-31-workers-1.md), [two workers](loadtest/vm-2026-10-31-workers-2.md), [load test docs](../docs/docs/load-testing.md).
+- **In LaTeX:** yes
 
 ### EDN-89: How the UC2 intervals handle makes whose coverage misses the band (#108)
 

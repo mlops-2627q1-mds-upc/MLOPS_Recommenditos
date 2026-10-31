@@ -36,13 +36,14 @@ What each part guarantees:
   It runs as a script with `python -I -S`, so a probe imports neither the package's `__init__` nor anything from site-packages: that halves its CPU time, which matters at one probe every 5 s.
   It starts with `python -m recommenditos.api`, which empties `PROMETHEUS_MULTIPROC_DIR` (`/tmp/prometheus`, a tmpfs in Compose) and starts uvicorn; `WEB_CONCURRENCY` sets the number of workers (Compose passes it from `.env`, 1 by default), and `/metrics` adds up their figures ([API docs](api.md#metrics)).
   With more than one worker, a single worker whose event loop blocks goes unnoticed: the others still answer `/health`, so the healthcheck passes while the requests that worker accepted hang, and uvicorn's supervisor replaces a worker only when it stops answering its ping, which runs in a thread of its own.
-  The API therefore runs one worker until the load test on the VM ([#143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143)) settles the count ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  The API therefore runs one worker ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), and the load test on the VM kept it there: on the VM's one vCPU a second worker added no throughput, a slower tail and twice the memory ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [results](load-testing.md#run-it-on-the-vm)).
 - **Compose** publishes only the proxy's port.
   Both containers run with a read-only root file system, without any Linux capability and with `no-new-privileges` (NFR-09), so they write only to their tmpfs mounts and the API also to its volume.
   Neither needed a capability back or any other exception.
   The API needed one writable path more than its metric files: a tmpfs on `/tmp`, where SQLite writes a sort too large for its cache and Python's `tempfile` writes; without it a large query of the prediction log fails with "disk I/O error".
   nginx's unprivileged image writes only its pid file and buffered bodies, all under `/tmp`, which is a tmpfs too.
-  Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, at least 1.2 times the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements, and the VM's [load test](load-testing.md#run-it-on-the-vm) re-checks them.
+  Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, at least 1.2 times the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements.
+  The VM's [load test](load-testing.md#run-it-on-the-vm) of 2026-10-31 measured at most 295 MiB with one worker and 609 MiB with two.
   On the VM, Docker does not enforce the no-swap part: the kernel runs cgroup v1 without `swapaccount=1`, and Docker warns "No swap limit support" and ignores `memswap_limit`.
   That has no effect today, because the VM has no swap; it would matter if swap were added.
   In a container that exceeds its memory limit, the kernel kills the largest process: usually a worker, which uvicorn's supervisor or nginx's master replaces, and when it is the main process, Docker restarts the container as after a crash.
@@ -108,6 +109,8 @@ Measured on the VM on 2026-10-30 (1 vCPU, 3.8 GiB, Docker 28.1.1), with the stac
 | `deploy.sh deploy` in the pipeline ([run 41132206289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/41132206289), commit a09f496) | 7 s from start to "runs"; the smoke check from the public internet passed 17 tests | - |
 | `deploy.sh deploy` of an image that does not start (tag `deadbeef...`, by hand) | exit 1 after 8.2 s, about 7 s of 503; `.deploy-previous` unchanged | - |
 | Reboot (`sudo reboot`) to the first 200 from `/health` through nginx, polled every 0.3 s over SSH | 19.8 s after `uptime -s`; about 26 s from the `reboot` command | within 30 s of the VM being up (NFR-05) |
+| SIGSTOP of the API's server process (a hang) to the next 200 from `/health` through nginx, polled every 0.3 s on the VM, while the stack served normally, 2026-10-31 | 19.0 s; a second run restarted the container 15 s after the SIGSTOP (its first 200 was not recorded); each run adds one to the restart count | within 30 s (NFR-05) |
+| [Load test](load-testing.md#run-it-on-the-vm) on 2026-10-31, 20 requests/s for 5 minutes, Locust on the VM, image 902de35 | One worker: `/v1/predict` p95 210 ms, no errors, API at most 295 MiB and 61 % of the vCPU on average. Two workers: p95 240 ms, at most 609 MiB; restart count unchanged in both | NFR-02, NFR-03, NFR-04 |
 
 The reboot, in detail: systemd took 14.3 s to start (3.1 s kernel, 11.3 s userspace), the containers started at 11.4 s, and nginx answered 503 for about 6 s while uvicorn loaded the model.
 The API kept its container IP, so nginx's 10 s re-resolve did not delay it; whether it would when the IP changes after a boot was not measured.

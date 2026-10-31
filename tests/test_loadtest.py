@@ -114,14 +114,14 @@ def test_the_shares_within_the_targets_come_from_the_difference_of_two_scrapes()
     metrics = ApiMetrics(ModelInfo(variant="lgbm-basic", version="abc", trained_at=None))
     metrics.observe_request("POST", "/v1/predict", 200, 0.1)  # before the run, within both
     before = measure.latency_buckets(metrics.exposition().decode())
-    for latency in (0.05, 0.15, 0.25, 0.35):
+    for latency in (0.05, 0.15, 0.28, 0.35):
         metrics.observe_request("POST", "/v1/predict", 200, latency)
     metrics.observe_request("POST", "/v1/predict", 422, 0.01)
     metrics.observe_request("GET", "/health", 200, 0.01)
 
     shares = measure.latency_shares(before, measure.latency_buckets(metrics.exposition().decode()))
 
-    assert shares["/v1/predict"] == {"answers": 5, "within_200ms": 0.6, "within_300ms": 0.8}
+    assert shares["/v1/predict"] == {"answers": 5, "within_250ms": 0.6, "within_300ms": 0.8}
     assert shares["/health"]["answers"] == 1
 
 
@@ -233,3 +233,15 @@ def test_the_locust_json_ends_with_one_newline(tmp_path, written, kept):
     path.write_bytes(written)
     measure.end_with_newline(path)
     assert path.read_bytes() == kept
+
+
+@pytest.mark.parametrize(
+    ("image", "written"),
+    [
+        (f"ghcr.io/o/api:{'902de35a' * 5}", "ghcr.io/o/api:902de35a902d"),
+        ("recommenditos-api:latest", "recommenditos-api:latest"),
+        ("ghcr.io/o/api:902de35", "ghcr.io/o/api:902de35"),
+    ],
+)
+def test_a_full_commit_sha_tag_is_shortened_in_the_report(image, written):
+    assert measure.short_image(image) == written

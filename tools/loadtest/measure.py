@@ -17,7 +17,7 @@ import re
 LATENCY_METRIC = "http_request_duration_seconds"
 
 #: NFR-02's p95 targets in seconds, which are bucket bounds of that histogram.
-TARGETS_S = (0.2, 0.3)
+TARGETS_S = (0.25, 0.3)
 
 _SAMPLE = re.compile(
     r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(?P<labels>.*)\})?\s+(?P<value>\S+)"
@@ -201,6 +201,17 @@ def check_log(answered: Iterable[str], logged: Iterable[str]) -> LogCheck:
     )
 
 
+def short_image(image: str) -> str:
+    """The image name with a full commit SHA tag cut to 12 characters.
+
+    The VM runs images tagged with the full SHA, and a 40-hex string after
+    `api:` is what gitleaks' generic API key rule reports, which would block the
+    commit of a report; CONTRIBUTING.md (Secrets) asks for a short SHA instead
+    of an allowlist entry. Twelve characters still name one commit.
+    """
+    return re.sub(r":([0-9a-f]{12})[0-9a-f]{28}$", r":\1", image)
+
+
 def markdown_table(header: Iterable[str], rows: Iterable[Iterable[object]]) -> str:
     header = list(header)
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
@@ -215,6 +226,6 @@ def percent(value: float) -> str:
 def mapping_rows(figures: Mapping[str, Mapping[str, float]]) -> list[list[object]]:
     """Rows of the `/metrics` shares table, one per route."""
     return [
-        [path, int(f["answers"]), percent(f["within_200ms"]), percent(f["within_300ms"])]
+        [path, int(f["answers"]), percent(f["within_250ms"]), percent(f["within_300ms"])]
         for path, f in figures.items()
     ]
