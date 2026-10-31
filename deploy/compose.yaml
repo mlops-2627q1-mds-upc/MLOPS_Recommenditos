@@ -90,7 +90,9 @@ services:
     # in reports/loadtest/ measured 566 MiB), and 634 MiB in the cgroup's
     # `memory.peak`, which includes the start-up and reclaimable page cache. One
     # worker, the default, holds 248 MiB idle against two workers' 539 MiB
-    # (docs/docs/deployment.md). Re-check against the VM run of #143.
+    # (docs/docs/deployment.md). On the VM at 20 requests/s for 5 minutes (#143)
+    # the API peaked at 295 MiB with one worker and 609 MiB with two, so the limit
+    # stays (EDN-88).
     mem_limit: 768m
     memswap_limit: 768m
     # Processes and threads: 33 at most in the same load tests (`pids.peak`). Each worker can

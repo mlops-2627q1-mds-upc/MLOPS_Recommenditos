@@ -2,7 +2,7 @@ Load testing
 ============
 
 The load test sends the traffic of NFR-03 to a running stack and measures what the [specification](specification.md) asks of it: latency (NFR-02), throughput and errors, and exactly-once logging with two workers (NFR-03), the API container's memory (NFR-04) and the energy per request (NFR-10).
-Its results on the VM settle the targets of NFR-02 to NFR-04, which are proposed estimates until then ([decision 1](specification.md#decisions-pending-confirmation), issue #143).
+Its results on the VM settled the targets of NFR-02 to NFR-04 on 2026-10-31 ([decision 1](specification.md#decisions-pending-confirmation), [EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), issue #143).
 
 The tool is [Locust](https://locust.io/): it is Python, it is on the course's tools list, and M6 can reuse it to replay the `ES` listings.
 k6 was considered and would add a JavaScript toolchain.
@@ -36,7 +36,7 @@ The [first laptop dry run](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recomme
 A user waits for its answer before it sends the next request, so a slow target gets fewer requests per second rather than a growing queue.
 The time between a user's sends is then the longer of its gap and the answer, and the share of the rate a run achieves is `m / (R + m * exp(-R / m))` on average, with `m` the mean gap of 4 s and `R` the answer time: 99.9 % at 200 ms, 97 % at 1 s, 95 % at about 1.4 s, 90 % at 2 s and 73 % at 4 s.
 A simulation of 80 users at 20 requests/s over 600 s with `tools/loadtest/arrivals.py` agrees within its noise.
-The 95 % verdict below thus fails from answers of about 1.4 s, long after NFR-02's 200 and 300 ms.
+The 95 % verdict below thus fails from answers of about 1.4 s, long after NFR-02's 250 and 300 ms.
 The report therefore states the achieved rate, the answers divided by the duration, against the target, and counts the target as sustained when at least 95 % of it was achieved.
 The number of requests a run sends is random, with a standard deviation of 1.3 % of the target over NFR-03's 5 minutes at 20 requests/s, which puts the 95 % threshold four standard deviations below the target; over a 60 s dry run it is 2.9 %.
 At the end of the run, each user finishes the request it is waiting for.
@@ -48,7 +48,7 @@ The counts and percentiles come from Locust's `--json-file` statistics, which Lo
 | Figure | Source | Requirement |
 |--------|--------|-------------|
 | Requests, achieved rate against the target, error rate, p50, p95 and p99 latency per endpoint | Locust, at the client | NFR-02, NFR-03 |
-| Share of answers within 200 ms and 300 ms per endpoint | Two scrapes of `/metrics` inside the API container, before and after the run | NFR-02 |
+| Share of answers within 250 ms and 300 ms per endpoint | Two scrapes of `/metrics` inside the API container, before and after the run | NFR-02 |
 | API container memory (max and mean) and CPU | `docker stats`, sampled about every 2 s | NFR-04 |
 | Locust's own CPU, which competes with the API's when both run on one machine | psutil, every 2 s | - |
 | Energy per request, in total and above an idle baseline | CodeCarbon over the run and over an idle period before it | NFR-10 |
@@ -156,8 +156,8 @@ Both runs were made against image 902de35, with Locust on the VM: [one worker](h
 | Figure | 1 worker | 2 workers | Target |
 |--------|----------|-----------|--------|
 | Achieved rate, errors | 19.61 of 20 requests/s, 0 of 5,883 | 19.87 of 20 requests/s, 0 of 5,960 | 95 % of 20/s, below 1 % (NFR-03) |
-| `/v1/predict` p50 / p95 / p99 (Locust) | 65 / 210 / 340 ms | 78 / 240 / 440 ms | p95 at most 200 ms (NFR-02) |
-| `/v1/predict` answers within 200 ms (`/metrics`) | 94.7 % | 93.3 % | 95 % (NFR-02) |
+| `/v1/predict` p50 / p95 / p99 (Locust) | 65 / 210 / 340 ms | 78 / 240 / 440 ms | p95 at most 250 ms, 200 ms when measured (NFR-02) |
+| `/v1/predict` answers within 200 ms (`/metrics`) | 94.7 % | 93.3 % | 95 %, NFR-02's target when measured |
 | `/v1/price-range` p95 | 170 ms | 230 ms | at most 300 ms (NFR-02) |
 | `/v1/comparables` p95 | 16 ms | 20 ms | at most 300 ms (NFR-02) |
 | API container memory, max (`docker stats`) | 295 MiB | 609 MiB | below 1 GB (NFR-04); the limit is 768 MiB |
@@ -167,10 +167,11 @@ Both runs were made against image 902de35, with Locust on the VM: [one worker](h
 | Prediction log | 5,883 records, exactly once | 5,960 records, exactly once | exactly once (NFR-03) |
 | API `RestartCount` before / after | 0 / 0 | 0 / 0 | unchanged |
 
-`/v1/predict` misses NFR-02's 200 ms at the 95th percentile with either worker count, by 10 ms with one worker; the other two endpoints and NFR-03 and NFR-04 meet their targets.
+`/v1/predict` missed NFR-02's target of the time, 200 ms at the 95th percentile, with either worker count, by 10 ms with one worker; the other two endpoints and NFR-03 and NFR-04 met their targets.
+The team raised the `/predict` target to 250 ms and kept one worker ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); the two reports state the verdicts against 200 ms, as `run.py` judged them then.
 A second worker adds no CPU on one vCPU: it doubles the memory and makes the tail slower.
 Locust's 2 % is confirmed by `ps`: 6 s of CPU time over the 299 s the process ran.
 CodeCarbon took a TDP of 4 W from its table for the VM's CPU ("Intel Core Processor (Broadwell, no TSX, IBRS)"), so its CPU term is low; 86 to 87 % of each run's energy is the constant 10 W it assumes for the RAM.
 
-**What follows.**
-With both runs committed, the team confirms or adjusts the targets of NFR-02 to NFR-04 against the measurements, the specification is updated, and the decision is recorded in the EDN as EDN-88, with the choice of Locust (issue #143).
+**The decision.**
+On 2026-10-31 the team raised NFR-02's `/predict` target to 250 ms, confirmed NFR-03, NFR-04 and NFR-10 as measured, and kept one API worker in production ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), issue #143).

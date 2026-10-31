@@ -7,7 +7,7 @@ Runs `locustfile.py` against `--host` and, on the Docker host of the stack it
 targets, measures what the run did to the API container:
 
 - error rate and p50, p95, p99 latency per endpoint, from Locust (NFR-02, NFR-03);
-- the share of answers within 200 ms and 300 ms per endpoint, from two scrapes of
+- the share of answers within 250 ms and 300 ms per endpoint, from two scrapes of
   `/metrics` inside the API container, before and after (NFR-02);
 - the API container's memory and CPU, sampled with `docker stats` (NFR-04);
 - energy per request, estimated by CodeCarbon on this machine over the run, and
@@ -49,7 +49,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LOCUSTFILE = Path(__file__).with_name("locustfile.py")
 
 #: Targets the report states beside each figure (docs/docs/specification.md).
-P95_TARGET_MS = {"/v1/predict": 200.0, "/v1/price-range": 300.0, "/v1/comparables": 300.0}
+P95_TARGET_MS = {"/v1/predict": 250.0, "/v1/price-range": 300.0, "/v1/comparables": 300.0}
 #: NFR-03: less than 1 % errors.
 ERROR_RATE = 0.01
 MEMORY_TARGET_BYTES = 1e9
@@ -423,7 +423,7 @@ def _latency(result: dict[str, Any]) -> list[str]:
     ]
     if "metrics" in result:
         valuation = {p: f for p, f in result["metrics"].items() if p in VALUATION_ENDPOINTS}
-        header = ["Endpoint", "Answers", "Within 200 ms", "Within 300 ms"]
+        header = ["Endpoint", "Answers", "Within 250 ms", "Within 300 ms"]
         lines += [
             "",
             "## Share of answers within NFR-02's targets (`/metrics`, server side)",

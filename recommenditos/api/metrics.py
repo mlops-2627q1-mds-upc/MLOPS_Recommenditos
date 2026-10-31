@@ -55,7 +55,7 @@ MULTIPROC_DIR_ENV_VAR = "PROMETHEUS_MULTIPROC_DIR"
 #: The media type of the text exposition format.
 CONTENT_TYPE = CONTENT_TYPE_LATEST
 
-#: Latency bucket bounds in seconds. 0.2 s and 0.3 s are NFR-02's p95 targets,
+#: Latency bucket bounds in seconds. 0.25 s and 0.3 s are NFR-02's p95 targets,
 #: so the share of answers within each target is read from a bucket directly.
 LATENCY_BUCKETS = (0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.75, 1.0, 2.5)
 

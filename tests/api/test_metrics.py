@@ -127,7 +127,7 @@ def test_fr11_the_latency_histogram_has_bounds_at_nfr02s_targets(fresh: TestClie
         for name, labels in samples
         if name == "http_request_duration_seconds_bucket"
     }
-    assert {"0.2", "0.3"} <= bounds
+    assert {"0.25", "0.3"} <= bounds
 
 
 @pytest.mark.req("FR-11")
