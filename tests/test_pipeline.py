@@ -29,6 +29,7 @@ from recommenditos.data import (
 from recommenditos.data.split_data import SPLIT_NAMES
 from recommenditos.modeling import compare_energy, compare_segments, evaluate, train
 from recommenditos.modeling.compare_energy import ComparisonError
+from recommenditos.pipeline import read_frame
 from recommenditos.schema import (
     INTERIM_SCHEMA,
     PROCESSED_SCHEMA,
@@ -184,9 +185,7 @@ def test_every_stage_writes_a_contract_valid_frame(pipeline, params):
         # is the one their stage wrote beside them.
         schema = load_feature_schema(pipeline["features"] / feature_set, name=feature_set)
         for name in (*SPLIT_NAMES, "holdout_es"):
-            schema.validate(
-                pd.read_parquet(pipeline["features"] / feature_set / f"{name}.parquet")
-            )
+            read_frame(pipeline["features"] / feature_set / f"{name}.parquet", schema)
 
 
 @pytest.mark.req("NFR-08")

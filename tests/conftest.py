@@ -37,7 +37,8 @@ from recommenditos.config import (
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.energy import EMISSIONS_DIR
-from recommenditos.pipeline import load_params
+from recommenditos.pipeline import load_params, read_frame
+from recommenditos.schema import load_feature_schema
 
 # MLflow's usage telemetry off for the whole suite. MLflow decides at import time
 # whether it runs under a test, from PYTEST_CURRENT_TEST, and imports during
@@ -321,7 +322,10 @@ def test_frames(matrices: dict) -> dict:
     scores a model here scores it on the same rows the stage would.
     """
     return {
-        feature_set: pd.read_parquet(matrices["features"] / feature_set / "test.parquet")
+        feature_set: read_frame(
+            matrices["features"] / feature_set / "test.parquet",
+            load_feature_schema(matrices["features"] / feature_set, name=feature_set),
+        )
         for feature_set in feature_sets()
     }
 

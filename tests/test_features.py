@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 from recommenditos.data import build_features
-from recommenditos.pipeline import write_frame
+from recommenditos.pipeline import read_frame, write_frame
 from recommenditos.schema import (
     PROCESSED_SCHEMA,
     TARGET_NAMES,
@@ -187,7 +187,9 @@ def run_stage(tmp_path: Path, params: dict):
 
 
 def matrix(directory: Path, split: str = "train") -> pd.DataFrame:
-    return pd.read_parquet(directory / f"{split}.parquet")
+    """A matrix as the stages read it: through `read_frame`, against its own contract."""
+    schema = load_feature_schema(directory, name=directory.name)
+    return read_frame(directory / f"{split}.parquet", schema)
 
 
 # --------------------------------------------------------------------------

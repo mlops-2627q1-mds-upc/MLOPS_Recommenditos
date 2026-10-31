@@ -82,11 +82,11 @@ def write_parquet(frame: pd.DataFrame, path: Path) -> None:
     `DataFrame.to_parquet` stores a `pandas` key in the file's schema metadata
     that records, among the dtypes, the pandas version that wrote it. DVC hashes
     an output byte for byte, so a pandas upgrade changed the hash of every
-    Parquet output although no value had changed. Nothing reads that key back:
-    the Arrow schema Parquet keeps on its own restores every dtype a contract
-    declares (`str`, `float64`, `bool`, `datetime64[ns]` and `category` with its
-    levels), which `tests/test_parquet.py` checks, and `read_frame` validates
-    the result against the contract.
+    Parquet output although no value had changed. Nothing needs that key: the
+    Arrow schema Parquet keeps on its own restores `str`, `float64`, `bool`,
+    `datetime64[ns]` and `category` with its levels, `read_frame` casts the
+    nullable dtypes it cannot tell apart back to the contract's, and
+    `tests/test_parquet.py` checks both against what the metadata restored.
     """
     table = pa.Table.from_pandas(frame, preserve_index=False).replace_schema_metadata(None)
     pq.write_table(table, path)
