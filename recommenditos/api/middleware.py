@@ -24,8 +24,10 @@ from recommenditos.api.metrics import route_template
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
-#: NFR-09: request bodies are limited to 10 KB. A valuation request with every
-#: optional field and long equipment lists is about 2 KB.
+#: NFR-09: request bodies are limited to 10 KB. The largest real listing as a
+#: valuation request is 3.5 KB. The length bounds of the request schemas count
+#: characters, so they keep a body of ASCII text without escapes under the limit;
+#: multi-byte or escaped text within the bounds can still be larger.
 MAX_BODY_BYTES = 10 * 1024
 
 
