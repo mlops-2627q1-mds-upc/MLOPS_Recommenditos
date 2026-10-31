@@ -1,7 +1,14 @@
 Architecture
 ============
 
-This page shows how the price component is built in two views: the logical view, which containers there are and how they talk ([C4](https://c4model.com/) container level), and the physical view, where they run.
+This page shows how the price component is built, in five views:
+
+- the use cases: who uses the system for what;
+- the logical view: which components are part of the ML lifecycle, which containers there are and how they talk ([C4](https://c4model.com/) container level);
+- the class view: the main classes of the serving code;
+- the dynamic view: how a request travels through the stack;
+- the physical view: where the containers run.
+
 It then names the architectural patterns, what the design leaves out, and the decisions behind both, with their entries in the [Engineering Decision Notebook][edn] (EDN).
 What each part must do is in the [specification](specification.md); how to run the API and the stack is in [The API](api.md) and [Deployment](deployment.md).
 
@@ -14,11 +21,110 @@ Every element is in one of two states, and the diagrams draw them differently:
 
 A dashed line is a connection that does not exist yet.
 
-## Logical view: containers
+## Use cases
 
-The system has two halves that meet only in the API image: the containers that answer requests, and the pipeline and checks that build and deliver that image.
+Mermaid has no use-case diagram, so this one is a flowchart drawn as one: the actors stand outside the system boundary, the use cases are the rounded shapes inside it, and a plain line joins an actor to a use case it takes part in.
+It shows the three kinds of user the rest of the page serves: the end users of the public API, the team that changes the model and the code, and the monitoring that watches the running service.
+
+```mermaid
+flowchart LR
+    subgraph u_left[" "]
+        direction TB
+        u_seller["<b>Seller</b><br/>«actor», end user"]
+        u_buyer["<b>Buyer</b><br/>«actor», end user"]
+        u_team["<b>Team member</b><br/>«actor»"]
+        u_cd["<b>CD</b><br/>«actor», GitHub Actions"]
+        u_replay["<b>Replay job</b><br/>«actor», M6"]
+        u_monitor["<b>Monitoring</b><br/>«actor», Better Uptime,<br/>Prometheus, drift job, M6"]
+    end
+
+    subgraph u_system["Price component"]
+        u_uc1(["Value an owned car<br/>UC1, /v1/predict"])
+        u_uc2(["Get a price range<br/>UC2, /v1/price-range"])
+        u_comp(["Find comparable listings<br/>UC2, /v1/comparables"])
+        u_retrain(["Retrain and promote a model<br/>FR-15"])
+        u_gate(["Pass the promotion gate<br/>NFR-01"])
+        u_deploy(["Deploy or roll back an image<br/>NFR-13"])
+        u_feedback(["Report an observed price<br/>/v1/feedback"])
+        u_watch(["Check health, scrape metrics<br/>/health, /metrics"])
+        u_drift(["Report drift, error, coverage<br/>FR-14, M6"])
+    end
+
+    u_seller --- u_uc1
+    u_buyer --- u_uc2
+    u_buyer --- u_comp
+    u_team --- u_retrain
+    u_team --- u_deploy
+    u_cd --- u_deploy
+    u_retrain -.->|"«include»"| u_gate
+    u_replay --- u_feedback
+    u_monitor --- u_watch
+    u_monitor --- u_drift
+
+    classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
+    classDef bare fill:none,stroke:none
+    class u_replay,u_monitor,u_drift later
+    class u_left bare
+```
+
+- **End users.** A seller values a car they own (UC1); a buyer asks what a car with the fields they care about costs and which listings are like it (UC2); both reach the API only through nginx.
+- **The team.** Retraining and promotion are started by a person and pass the promotion gate before the merge (FR-15, [EDN-12][edn]); every merge to `main` is deployed by CD, which puts the previous tag back when the new one fails its smoke check (NFR-13).
+- **Monitoring and the replay job (M6).** There are no real users who report the price a car sold at, so the replay job sends the `ES` holdout's prices as feedback (NFR-11); monitoring checks `/health` and `/metrics`, and the drift job reports drift, error and interval coverage per window (FR-14).
+  The `/v1/feedback` endpoint is built; its only caller today is the integration suite, from inside the Compose network.
+
+## Logical view
+
+### ML and non-ML components
+
+An ML component trains, evaluates, holds, serves or monitors the model, and is drawn with a blue fill; the others would look the same in any web service with a database.
+The arrows follow the ML lifecycle around the loop: data to the training pipeline, the pipeline to a model bundle, the bundle through the promotion gate into serving, every answer into the prediction log, the observed prices back as feedback, and drift back to a person who retrains.
+
+```mermaid
+flowchart TB
+    subgraph l_train["Training and promotion"]
+        l_pipe["<b>Training pipeline</b><br/>[dvc repro] on the<br/>DVC-tracked listings"]
+        l_mlflow[("<b>Experiment tracking</b><br/>[MLflow on DagsHub]")]
+        l_bundle[("<b>Model bundle</b><br/>models/lgbm-basic,<br/>pinned by dvc.lock")]
+        l_gate{"<b>Promotion gate</b><br/>required CI check"}
+    end
+
+    subgraph l_serve["Serving and monitoring"]
+        l_api["<b>Price API</b><br/>[FastAPI] contract,<br/>validation, errors"]
+        l_served["<b>Served model</b><br/>[ServedModel] price,<br/>explanation, range"]
+        l_log[("<b>Prediction log, feedback</b><br/>[SQLite]")]
+        l_replay["<b>Replay job</b><br/>M6"]
+        l_drift["<b>Drift job</b><br/>[Alibi Detect]<br/>M6"]
+    end
+
+    l_client["<b>HTTP client</b>"]
+
+    l_pipe -->|"writes"| l_bundle
+    l_pipe -->|"params, metrics"| l_mlflow
+    l_bundle -->|"metrics.json"| l_gate
+    l_gate -->|"merge to main, CD bakes<br/>the bundle into the image"| l_api
+    l_client -->|"HTTP, via nginx"| l_api
+    l_replay -.->|"observed prices,<br/>/v1/feedback"| l_api
+    l_api -->|"scores with"| l_served
+    l_api -->|"one row per answer"| l_log
+    l_log -.->|"read, joined<br/>by request ID"| l_drift
+    l_drift -.->|"flags drift, a team member<br/>retrains: dvc repro, pull request"| l_pipe
+
+    classDef ml fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
+    classDef mlLater fill:#eef3f9,stroke:#6f93c0,color:#555,stroke-dasharray:6 4
+    classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
+    class l_pipe,l_mlflow,l_bundle,l_gate,l_served ml
+    class l_drift mlLater
+    class l_replay later
+```
+
+- **Model registry.** There is none at run time ([EDN-08][edn]): `dvc.lock` on `main` pins the bundle the image is built with, so merging a pull request that changes it promotes a model, and `/health` reports the bundle's `dvc.lock` hash (FR-12).
+- **Lineage.** `dvc.lock` ties the bundle to the data and code that produced it, and each model variant has one MLflow run across the pipeline's stages ([EDN-55][edn]).
+- **Retraining trigger.** The drift job (M6) flags drift; a person decides to retrain and opens the pull request, and the gate decides whether it may merge ([EDN-12][edn]).
+- **Inside the API.** Only `ServedModel` and the `LightGBMModel` it holds are ML; the routes, the validation, the error handling, the metrics and the prediction log are ordinary service code, which is why a model can be replaced without changing them.
 
 ### Runtime containers
+
+The system has two halves that meet only in the API image: the containers that answer requests, and the pipeline and checks that build and deliver that image.
 
 ```mermaid
 flowchart TB
@@ -87,6 +193,177 @@ flowchart TB
 
 The API calls no other service at request time: no DagsHub, no MLflow.
 The state it keeps outside the image is the prediction log on its volume and the workers' metric files in a tmpfs, so a worker or the whole container can be restarted or replaced without losing a request's context.
+
+## Class view: the serving code
+
+The main classes of `recommenditos/api/` and the model they load from `recommenditos/modeling/`, with the members the routes use; the ML classes have the blue fill of the logical view.
+The routes are functions, not classes, so they are drawn as one box: FastAPI hands each of them the objects the app holds through `Depends` (`api/dependencies.py`).
+
+```mermaid
+classDiagram
+    direction TB
+    class Routes["v1 routes"] {
+        <<api/routes>>
+        predict(listing) Valuation
+        price_range(car) PriceRange
+        comparables(car) Comparables
+        feedback(body) FeedbackReceipt
+    }
+    class ServedModel {
+        model: LightGBMModel
+        info: ModelInfo
+        load(directory)$
+        faults(body)
+        value(request) Estimate
+        price_range(request)
+    }
+    class ModelInfo {
+        variant
+        version
+        trained_at
+    }
+    class ComparablesIndex {
+        listings: DataFrame
+        load(path)$
+        search(query, k)
+    }
+    class ApiMetrics {
+        observe_request(...)
+        observe_valuation(...)
+        exposition()
+    }
+    class PredictionLog {
+        record(request, answer)
+    }
+    class PredictionStore {
+        <<interface>>
+        record_answer(AnswerRecord)
+        record_feedback(Feedback)
+        close()
+    }
+    class SqliteStore {
+        path
+        max_bytes
+        prune() int
+    }
+    class Model {
+        metadata
+        predict_eur(frame) Series
+        predict_interval_eur(frame)
+    }
+    class LightGBMModel {
+        booster
+        intervals
+        log_price_contributions(frame)
+    }
+    class FeatureSpace {
+        schema
+        load(directory, name)$
+    }
+
+    Routes ..> ServedModel : Depends
+    Routes ..> ComparablesIndex : Depends
+    Routes ..> ApiMetrics : Depends
+    Routes ..> PredictionLog : one per request
+    Routes ..> PredictionStore : feedback
+    ServedModel *-- LightGBMModel
+    ServedModel *-- ModelInfo
+    LightGBMModel --|> Model
+    Model o-- FeatureSpace : space
+    PredictionLog --> PredictionStore
+    PredictionStore <|.. SqliteStore
+
+    style ServedModel fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
+    style LightGBMModel fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
+    style Model fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
+    style FeatureSpace fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
+    style Routes fill:#ffffff,stroke:#333333,color:#000000
+    style ComparablesIndex fill:#ffffff,stroke:#333333,color:#000000
+    style ApiMetrics fill:#ffffff,stroke:#333333,color:#000000
+    style PredictionLog fill:#ffffff,stroke:#333333,color:#000000
+    style PredictionStore fill:#ffffff,stroke:#333333,color:#000000
+    style SqliteStore fill:#ffffff,stroke:#333333,color:#000000
+    style ModelInfo fill:#ffffff,stroke:#333333,color:#000000
+```
+
+- **`create_app`** (`api/app.py`) builds the app once per uvicorn worker: it loads the bundle with `ServedModel.load` and the comparables index, keeps them and the `ApiMetrics` in `app.state`, and its lifespan opens one `SqliteStore` per run of the app and closes it at shutdown.
+  A bundle that cannot be served, or a log that cannot be opened, fails the startup instead of the first request.
+- **`ServedModel`** (`api/serving.py`) is the boundary between the service and the model.
+  It calls `load_model` (`modeling/model.py`), which reads `model.json`, loads the `FeatureSpace` the model was trained on, and returns the `Model` subclass the bundle names; `ServedModel` accepts only a `LightGBMModel`, because only its boosters give the SHAP values of FR-08.
+  It scores every request of a worker on one thread, in arrival order (issue #179).
+- **`PredictionStore`** is the store interface: routes write through `PredictionLog`, which records one answer per request, and `/v1/feedback` calls `record_feedback`; `SqliteStore` is the only implementation ([EDN-86][edn]).
+- **`ApiMetrics`** (`api/metrics.py`) holds the Prometheus metrics that `/metrics` exposes (FR-11); `MetricsMiddleware` times every request with it.
+- **Left out:** `Settings` (`api/settings.py`, read once by `create_app`), the Pydantic schemas under `api/schemas/`, the four middleware classes (in the dynamic view below), and the `MedianBaselineModel` and `RidgeModel` subclasses of `Model`, which the pipeline trains as baselines and the API refuses.
+
+## Dynamic view: a request through the stack
+
+### Pricing a listing
+
+`POST /v1/predict` is the main path: it shows which component refuses a bad request, where the model runs, and why a client never gets an answer the prediction log does not hold (NFR-03).
+`/v1/price-range` and `/v1/comparables` follow the same path with their own route and `ServedModel.price_range` or `ComparablesIndex.search`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor client as HTTP client
+    box Compose network on the VM
+        participant proxy as nginx
+        participant api as API<br/>routes/predict.py
+        participant served as ServedModel
+        participant model as LightGBMModel
+        participant log as PredictionLog,<br/>SqliteStore
+    end
+
+    client->>proxy: POST /v1/predict
+    proxy->>api: to api:8000
+    Note over api: request ID, 10 KB limit (413),<br/>ValuationRequest (422)
+    api->>served: faults(listing)
+    served-->>api: none, or 422
+    api->>served: value(listing)
+    served->>model: predict_eur,<br/>log_price_contributions
+    model-->>served: price, SHAP values
+    served-->>api: Estimate
+    api->>log: record(listing, valuation)
+    alt the log cannot write
+        log-->>api: StoreError
+        api-->>proxy: 503 problem
+    else the row is written
+        log-->>api: done
+        api-->>proxy: 200 Valuation
+    end
+    proxy-->>client: the API's answer
+```
+
+Every error on this path is an RFC 9457 problem that names the request ID ([EDN-84][edn]), and nginx answers 503 itself while the API is down.
+
+### Storing an observed price
+
+`POST /v1/feedback` stores the price a listing was observed at against the answer's request ID, the delayed label FR-14 needs to compute the real error.
+nginx refuses it from outside, so it is called only from inside the Compose network and with the API key as a second layer ([EDN-13][edn]).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor outsider as Client outside the VM
+    box Compose network on the VM
+        participant proxy as nginx
+        participant replay as Replay job, M6
+        participant api as API<br/>routes/feedback.py
+        participant store as SqliteStore
+    end
+
+    outsider->>proxy: POST /v1/feedback
+    proxy-->>outsider: 403 problem
+    replay->>api: POST /v1/feedback to api:8000,<br/>X-API-Key, request ID, price
+    Note over api: no or a wrong key: 401
+    api->>store: record_feedback(Feedback)
+    store-->>api: FeedbackResult
+    api-->>replay: 201 stored, 200 same price again,<br/>404 unknown request, 409 conflict
+    Note over store: the drift job (M6) reads<br/>the view labelled_predictions
+```
+
+A 409 means that another price is stored for the answer, or that the answer gave no price, as one of `/v1/comparables` does.
+Until the replay job exists, `tests/integration/test_deployed_feedback.py` takes its place: it calls the endpoint from a sibling container with the key and reads the joined row from the log.
 
 ## Physical view: deployment
 
