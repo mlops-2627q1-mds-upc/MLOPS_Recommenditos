@@ -49,6 +49,13 @@ from recommenditos.pipeline import load_params
 # run, is enough. `setdefault`, so a contributor who wants it can still turn it on.
 os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
 
+# The Ridge baseline fits only on OpenBLAS's pinned kernel (`check_openblas_kernel`
+# in model.py), which a process gets only when OPENBLAS_CORETYPE is set before
+# numpy loads. This process loaded numpy above, on the kernel its CPU picks, and
+# no in-process test compares a fit with the one `dvc.lock` records, so the suite
+# fits on that kernel. `tests/test_model.py` checks the pin in fresh processes.
+os.environ.setdefault("RECOMMENDITOS_ANY_OPENBLAS_KERNEL", "1")
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _prediction_log_outside_the_repository(tmp_path_factory: pytest.TempPathFactory):

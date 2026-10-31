@@ -43,6 +43,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from importlib.metadata import version as distribution_version
 import json
+import os
 from pathlib import Path
 import platform
 from types import MappingProxyType
@@ -57,7 +58,7 @@ from sklearn.impute import MissingIndicator, SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import FeatureUnion, Pipeline, make_pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
-from threadpoolctl import threadpool_limits
+from threadpoolctl import threadpool_info, threadpool_limits
 
 from recommenditos.data.build_features import FeatureSpace, equipment_feature_name
 from recommenditos.pipeline import write_json
@@ -921,8 +922,11 @@ class RidgeModel(Model):
 
         Nothing in the pipeline consumes randomness. The fit runs on one BLAS
         thread whatever `num_threads` says (`_one_blas_thread`), so the
-        coefficients do not depend on the core count of the machine.
+        coefficients do not depend on the core count of the machine, and only on
+        OpenBLAS's `OPENBLAS_KERNEL`, so they do not depend on the CPU model
+        either (`check_openblas_kernel`).
         """
+        check_openblas_kernel()
         tuning = cls._tuning(metadata)
         # Through an instance, because the column split and the alignment are
         # the model's own and have to be the same at fit and at predict time.
@@ -965,15 +969,71 @@ def _one_blas_thread() -> threadpool_limits:
     `b1`'s coefficients, and its hash in `dvc.lock`, depend on the core count of
     the machine that fits it. One thread is the count every machine can honour,
     and it is faster on the real snapshot too: 1.09 s against 1.32 s at 8
-    threads for the measured fit (issue #113). Nothing shows that it makes them
-    the same across CPU models: at the default thread counts, `b1` differed
-    between the laptop and a GitHub runner's AMD EPYC (#201).
+    threads for the measured fit (issue #113). The CPU model is the kernel's
+    concern (`check_openblas_kernel`).
 
     A fresh limit for every call, because `threadpool_limits` acts on the
     libraries loaded when it is entered and restores the previous counts on exit,
     so nothing outside the Ridge's own calls runs on fewer threads.
     """
     return threadpool_limits(limits=1, user_api="blas")
+
+
+#: The OpenBLAS kernel `b1` is fitted on (NFR-06), whatever CPU runs the fit.
+#: `train` and `tune` set `OPENBLAS_CORETYPE` to it before numpy loads.
+OPENBLAS_KERNEL = "Haswell"
+
+#: Set to 1 to fit `b1` on whichever OpenBLAS kernel the process loaded.
+ANY_OPENBLAS_KERNEL_VARIABLE = "RECOMMENDITOS_ANY_OPENBLAS_KERNEL"
+
+
+def check_openblas_kernel() -> None:
+    """Refuse to fit `b1` on any OpenBLAS kernel but `OPENBLAS_KERNEL` (NFR-06).
+
+    LSQR's dot products and norms go through numpy's and scipy's OpenBLAS,
+    which picks a kernel for the CPU it runs on, and each kernel sums in its own
+    order: with one thread, the laptop's i5-10210U and a GitHub runner's AMD
+    EPYC 7763 fit byte-identical coefficients on the Haswell kernel and other,
+    again cross-CPU equal ones on Sandybridge or Prescott, while the AVX-512
+    kernel, which a CPU with AVX-512 may pick by itself, crashes a CPU without.
+    Haswell needs AVX2 and FMA, which every x86-64 machine we train on has, and
+    costs no fit time (spike of 2026-10-31).
+
+    OpenBLAS reads `OPENBLAS_CORETYPE` once, when the library loads, so a
+    process that imported numpy before setting it, a CPU without AVX2, a
+    non-x86 machine or a different value the user set all end up on another
+    kernel and would fit a `b1` that differs from the one `dvc.lock` records.
+    That fails here rather than in the lock. `ANY_OPENBLAS_KERNEL_VARIABLE`
+    fits anyway, with a warning, for a machine that has no Haswell kernel and
+    for the test suite, whose process loads numpy before any test runs.
+    """
+    kernels = sorted(
+        {
+            str(pool.get("architecture") or "unknown")
+            for pool in threadpool_info()
+            if pool.get("internal_api") == "openblas"
+        }
+    )
+    if kernels == [OPENBLAS_KERNEL]:
+        return
+    loaded = f"OpenBLAS's {', '.join(kernels)} kernel" if kernels else "no OpenBLAS"
+    if os.environ.get(ANY_OPENBLAS_KERNEL_VARIABLE) == "1":
+        logger.warning(
+            f"Fitting the Ridge baseline on {loaded} rather than {OPENBLAS_KERNEL} "
+            f"({ANY_OPENBLAS_KERNEL_VARIABLE}=1): its coefficients differ from those "
+            "of a fit on the pinned kernel."
+        )
+        return
+    raise RuntimeError(
+        f"The Ridge baseline is fitted on OpenBLAS's {OPENBLAS_KERNEL} kernel, so that "
+        f"every x86-64 CPU fits the same coefficients (NFR-06), but this process "
+        f"loaded {loaded}. OpenBLAS reads OPENBLAS_CORETYPE once, when numpy loads it: "
+        "fit through `dvc repro` or `python -m recommenditos.modeling.train`, which set "
+        f"it first, or start Python with OPENBLAS_CORETYPE={OPENBLAS_KERNEL}. On a "
+        "machine without that kernel (no AVX2, or not x86-64), set "
+        f"{ANY_OPENBLAS_KERNEL_VARIABLE}=1 to fit on the loaded one; the model then "
+        "differs from the one dvc.lock records."
+    )
 
 
 def _ridge_pipeline(
