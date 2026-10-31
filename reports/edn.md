@@ -1318,6 +1318,33 @@ How to add an entry:
 - **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [PR #237](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/237), [`deploy.yml`](../.github/workflows/deploy.yml), [deployment docs](../docs/docs/deployment.md#turn-continuous-deployment-on).
 - **In LaTeX:** yes
 
+### EDN-95: CI fails on fixable image vulnerabilities, and the containers run locked down
+
+- **Date:** 2026-10-22
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** CI/CD, Security, Containerization
+- **Participants:** @lukas2510 wrote issues #199 and #200 and merged their pull requests; the AI chose the scanner and the limits within them
+- **Decision:** trivy scans the API and nginx images in every integration run and in CD before the push.
+  It fails on HIGH or CRITICAL findings that have a fix and counts the others; `.trivyignore` takes a finding only with a reason and an expiry, which the scan tool enforces.
+  A canary scan of a 2023 image must fail.
+  Dependabot moves the digest-pinned images.
+  Both containers run read-only, without capabilities, with `no-new-privileges` and limits on memory and processes.
+- **Alternatives considered:**
+  - `aquasecurity/trivy-action`: its tags were moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)), so trivy is the release binary, pinned by SHA-256.
+  - Caching the vulnerability database: rebuilt every few hours, so a cache is stale.
+  - Our own nginx image with `apk upgrade`: a second image to maintain; two vulnerabilities upstream has not fixed sit in `.trivyignore` until 2026-11-13.
+  - Waiting for the VM load test (#143) for the API limit: laptop measurements now, re-checked there.
+- **Rationale:** Counting unfixed findings keeps a CVE Debian has not patched from blocking every pull request (NFR-09).
+  The canary fails the October 2023 Python image with 93 fixable findings, so a clean result means something; the API image has none.
+  The API peaked at 606 to 634 MiB under 20 requests/s; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB, and p95 stayed 140 to 170 ms before and 150 to 160 ms after.
+- **AI involvement:** Alternative generation, Alternative assessment, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI workers built the scan, the Dependabot file and the hardening, and measured the limits.
+  An independent review agent raised five should-fix points, all fixed; no human code review is recorded.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 that ran the AI workers on #199 and #200, opening prompt "use the orchestrate skill and solve M4. don't do the report yet, I want to do it at the end. also solve bugs that exist right now or come up meanwhile and are urgent" (translated from German).
+- **Other evidence:** [Issue #199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199), [issue #200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200), [PR #212](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/212), [PR #210](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/210), [deployment docs](../docs/docs/deployment.md#vulnerabilities-and-dependency-updates).
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
