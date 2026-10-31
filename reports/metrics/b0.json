@@ -4,7 +4,7 @@
   "data_source": "zenodo",
   "feature_set": "basic",
   "n_test_rows": 19665,
-  "mlflow_run_id": "72ce8bdf4b3943158a372b474ccc0244",
+  "mlflow_run_id": "afa66220a0fe4492a89c55492c90cd59",
   "mdape": 0.12162162162162182,
   "within_10pct": 0.4271039918637173,
   "within_20pct": 0.705161454360539,
@@ -49,7 +49,7 @@
       "within_10pct": 0.3899210145733675,
       "within_20pct": 0.6574702414061631,
       "mae_eur": 13019.189954388698,
-      "mape": 0.20630337074618296,
+      "mape": 0.20630337074618293,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -205,7 +205,7 @@
       "within_10pct": 0.47952345495160087,
       "within_20pct": 0.7997021593447505,
       "mae_eur": 8999.906552494416,
-      "mape": 0.12862577561773697,
+      "mape": 0.12862577561773694,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -231,7 +231,7 @@
       "within_10pct": 0.6265765765765766,
       "within_20pct": 0.9,
       "mae_eur": 9254.77454954955,
-      "mape": 0.10547981677043053,
+      "mape": 0.10547981677043054,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -282,7 +282,7 @@
       "mdape": 0.1252345215759859,
       "within_10pct": 0.4077669902912621,
       "within_20pct": 0.7175639894086496,
-      "mae_eur": 9055.164607237422,
+      "mae_eur": 9055.16460723742,
       "mape": 0.1723352290211775,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -309,7 +309,7 @@
       "within_10pct": 0.46494845360824744,
       "within_20pct": 0.7793814432989691,
       "mae_eur": 9707.523711340202,
-      "mape": 0.1312090988450459,
+      "mape": 0.13120909884504592,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -360,8 +360,8 @@
       "mdape": 0.07856021969399707,
       "within_10pct": 0.5822550831792976,
       "within_20pct": 0.8650646950092421,
-      "mae_eur": 5648.064695009242,
-      "mape": 0.10927782086982131,
+      "mae_eur": 5648.064695009243,
+      "mape": 0.10927782086982134,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -386,7 +386,7 @@
       "mdape": 0.1184745762711862,
       "within_10pct": 0.4421768707482993,
       "within_20pct": 0.7482993197278912,
-      "mae_eur": 12096.72448979593,
+      "mae_eur": 12096.724489795932,
       "mape": 0.1486620906828574,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
@@ -409,7 +409,7 @@
       "segment": "make",
       "level": "Aston Martin",
       "n": 84,
-      "mdape": 0.20767602787418749,
+      "mdape": 0.2076760278741874,
       "within_10pct": 0.2619047619047619,
       "within_20pct": 0.47619047619047616,
       "mae_eur": 52469.999999999985,
@@ -422,10 +422,10 @@
       "segment": "make",
       "level": "Volkswagen",
       "n": 81,
-      "mdape": 0.23619079386257516,
+      "mdape": 0.2361907938625753,
       "within_10pct": 0.25925925925925924,
       "within_20pct": 0.4444444444444444,
-      "mae_eur": 3844.981481481481,
+      "mae_eur": 3844.9814814814813,
       "mape": 0.5678377210635176,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
@@ -465,7 +465,7 @@
       "within_10pct": 0.4,
       "within_20pct": 0.7,
       "mae_eur": 2984.449999999998,
-      "mape": 0.16443013052839517,
+      "mape": 0.16443013052839514,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
     },
@@ -516,7 +516,7 @@
       "mdape": 0.09851641940323436,
       "within_10pct": 0.5069981583793739,
       "within_20pct": 0.7795580110497238,
-      "mae_eur": 7775.815101289138,
+      "mae_eur": 7775.815101289136,
       "mape": 0.13341523908005157,
       "counts_toward_sc04": false,
       "excluded_because": "target_conditioned"
