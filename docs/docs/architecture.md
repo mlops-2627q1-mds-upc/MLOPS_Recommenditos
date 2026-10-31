@@ -76,7 +76,7 @@ flowchart LR
 
 ### ML and non-ML components
 
-An ML component trains, evaluates, holds, serves or monitors the model, and is drawn with a blue fill; the others would look the same in any web service with a database.
+An ML component trains, evaluates, holds, serves or monitors the model, or holds the data the API answers from, and is drawn with a blue fill; the others would look the same in any web service with a database.
 The two boxes are the two halves of the ML lifecycle loop: data to the training pipeline, the pipeline to a model bundle and a comparables index, the verdict through the promotion gate and the merge into serving, every answer into the prediction log, the observed prices back as feedback, and drift back to a person who retrains.
 
 ```mermaid
@@ -121,7 +121,8 @@ flowchart TB
 ```
 
 - **Model registry.** There is none at run time ([EDN-08][edn]): `dvc.lock` on `main` pins the bundle the image is built with, so merging a pull request that changes it promotes a model, and `/health` reports the bundle's `dvc.lock` hash (FR-12).
-- **Comparables index.** Counts as an ML component: a data artefact the pipeline builds (stage `comparables`), pins in `dvc.lock` beside the bundle and `/v1/comparables` searches by similarity of make, model, age and mileage (FR-09).
+- **Comparables index.** The pipeline builds it (stage `comparables`) and pins it in `dvc.lock` beside the bundle, so it counts as an ML component.
+  `/v1/comparables` returns its listings of the same make and model within an age and mileage window, closest first (FR-09).
 - **Lineage.** `dvc.lock` ties the bundle to the data and code that produced it, and each model variant has one MLflow run across the pipeline's stages ([EDN-55][edn]).
 - **Retraining trigger.** The drift job (M6) flags drift; a person decides to retrain and starts the Retrain workflow (`.github/workflows/retrain.yml`) by hand, which runs `dvc repro` on a GitHub-hosted runner, logs to MLflow and pushes `dvc.lock` to a branch; the person opens the pull request from its link, and the gate decides whether it may merge ([EDN-12][edn], [EDN-92][edn]).
 - **Inside the API.** Only `ServedModel`, the `LightGBMModel` it holds and the `ComparablesIndex` are ML; the routes, the validation, the error handling, the metrics and the prediction log are ordinary service code, which is why a model can be replaced without changing them.
