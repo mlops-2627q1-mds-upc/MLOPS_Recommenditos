@@ -286,10 +286,11 @@ train:
   #
   # It pins LightGBM's boosting and nothing else in the measured fit (issue #113):
   # the training and validation L1 the model record carries are predicted with
-  # `Booster.predict`, which ignores it and uses one OpenMP thread per core, and
-  # `b1`'s Ridge solver runs on OpenBLAS's pool of one thread per core, which also
-  # makes its coefficients depend on the core count. That is why a fit's CPU time
-  # exceeds its wall time; the model card's Determinism section has the numbers.
+  # `Booster.predict`, which ignores it and uses one OpenMP thread per core. Until
+  # #215 `b1`'s Ridge solver also ran on OpenBLAS's pool of one thread per core,
+  # which made its coefficients depend on the core count; `RidgeModel` now pins
+  # that pool to one thread itself. That is why a fit's CPU time exceeds its wall
+  # time; the model card's Determinism section has the numbers.
   num_threads: 1
   # How CodeCarbon measures the fit (NFR-10, issue #38). Only the fit is
   # measured, and `recommenditos/modeling/energy.py` says what the figure is: on a

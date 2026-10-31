@@ -1,4 +1,4 @@
-"""Whether `b1`'s Ridge coefficients depend on the number of OpenBLAS threads (issue #113).
+"""Whether `b1`'s Ridge coefficients depend on the number of OpenBLAS threads (issues #113, #215).
 
 `fit_cpu_threads.py` found that the training and validation L1 of `b1` differ
 between a fit at OpenBLAS's default of one thread per core and one at
@@ -7,6 +7,11 @@ its own per thread count (the pool is sized when numpy loads), twice at 8, and
 prints the md5 of the pickled pipeline and of the coefficients, LSQR's iteration
 count and the validation L1, then the md5 of the coefficients of the committed
 `models/b1/pipeline.joblib`.
+
+Run on 2026-10-22 (#113), before `RidgeModel` limited its fit and predictions to
+one BLAS thread, the coefficients differed at every count. Since #215 every
+count should print the same line, and the committed model differs from them until
+a retrain replaces the one fitted at 8 threads.
 
 Nothing is written into the repository. Run from the repository root, with the
 matrices and `models/b1` pulled:

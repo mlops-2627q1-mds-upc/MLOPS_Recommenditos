@@ -3387,6 +3387,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
+    { name = "threadpoolctl" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
@@ -3454,6 +3455,7 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
+    { name = "threadpoolctl", specifier = ">=3.7.0" },
     { name = "typer" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]

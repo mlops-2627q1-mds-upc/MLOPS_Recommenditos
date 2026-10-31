@@ -25,9 +25,12 @@ from `fit_cpu_seconds`, the CPU time of the bracket `measure` takes around the f
 On the i5-10210U this was measured on (TDP 15 W, 8 logical CPUs), a single-threaded
 LightGBM fit in `codecarbon_validity.py` comes out at 11.75 to 11.80 W for every
 second it runs over repeated fits, and a process that only sleeps at 10.15 W. The
-real fits come out higher, 13 to 18 W for every second in the ladder run of
-2026-10-06, because they use more than one thread although `train.num_threads` is 1:
-their CPU time is 1.6 to 2.2 times their wall time. On a GitHub runner
+real fits come out higher, because `train.num_threads: 1` pins LightGBM's boosting
+and not the `Booster.predict` behind the training and validation L1 in the model
+record, which runs on one thread per core: measured on 2026-10-22, the CPU time of
+the measured span was 1.07 times its wall time for `lgbm-basic` and 1.65 times for
+`lgbm-extended` (issue #113). `b1` fits and predicts on one BLAS thread (#215).
+On a GitHub runner
 the same kind of fit is charged 79.8 W per second, because CodeCarbon divides the
 280 W TDP of a 64-core AMD EPYC 7763 by the four vCPUs the VM sees. So the energy
 of a fit is roughly its duration times a constant that depends on the machine and
