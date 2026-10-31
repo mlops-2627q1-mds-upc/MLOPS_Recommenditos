@@ -411,13 +411,22 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
   It does not make `b1` thread-independent: LSQR's vector operations go through OpenBLAS, whose pool has one thread per core unless `OPENBLAS_NUM_THREADS` says otherwise, and `train.num_threads` does not reach it.
   Fitted in separate processes at 1, 2, 4 and 8 OpenBLAS threads, the coefficients differed at every count, while two fits at 8 were byte-identical and equal to the `models/b1` committed then (`reports/analysis/ridge_blas_threads.py`, 2026-10-22); the validation L1 moved by at most 0.00002 between the counts.
   So `RidgeModel` fits and predicts under `threadpoolctl.threadpool_limits(1, "blas")` (#215): the same script then printed the same pipeline and coefficient md5 at every count, equal to the earlier fit at 1 thread (2026-10-31), and `tests/test_model.py` asserts it on the fixture.
+  One thread does not make the fit the same on every CPU, because OpenBLAS picks a kernel for the CPU it runs on and each kernel sums LSQR's dot products and norms in its own order.
+  So `b1` is fitted on OpenBLAS's Haswell kernel: `train` and `tune` set `OPENBLAS_CORETYPE=Haswell` before numpy loads, a value already set wins, and `RidgeModel.fit` refuses to fit when any loaded OpenBLAS reports another kernel (`check_openblas_kernel`).
+  On the real snapshot at one thread (2026-10-31), the laptop's i5-10210U and a GitHub runner's AMD EPYC 7763 both fitted coefficient md5 `c4a62da2...` and pipeline md5 `fd4ecd87...` on Haswell; Sandybridge and Prescott each gave other coefficients, again equal on both CPUs, and the AVX-512 kernel crashes a CPU without AVX-512.
+  The fit takes about 1.1 s on every kernel.
+  `tests/test_model.py` fits the fixture in separate processes: two on Haswell agree, one on Sandybridge differs and is refused without the escape hatch below.
+  The pin reaches x86-64 CPUs with AVX2 and FMA, which every machine we train on has; Windows is checked only by that test in CI.
+  A CPU without AVX2 or a non-x86 machine, such as a Mac with Apple silicon, has no Haswell kernel: there the fit runs only with `RECOMMENDITOS_ANY_OPENBLAS_KERNEL=1` and gives a `b1` that differs from the one `dvc.lock` records.
+  The test suite sets that variable for its own process, which loads numpy before any test runs.
+  The committed `b1` (coefficient md5 `36204956...`) comes from the retrain of PR #255 on an AMD EPYC 9V45 with AVX-512, most likely on the AVX-512 kernel (not verified), so the first retrain with the pin moves `b1` once more, to `c4a62da2...`.
 - **B0:** group medians only, and a median is order-independent, so the result does not depend on the row order Parquet hands back.
 - What holds, and is asserted by `tests/test_model.py`: two fits of the same variant on the same rows give bit-identical predictions and a byte-identical payload file.
   `model.json` is deliberately excluded, because it carries `trained_at` and the MLflow run id, which are provenance and cannot be stable.
-  What is **not** promised is bit-identical results across different LightGBM, scikit-learn or NumPy builds or across CPU architectures; NFR-06's "within 0.1 percentage points" is the promise that survives a toolchain change.
+  What is **not** promised is bit-identical results across different LightGBM, scikit-learn or NumPy builds, or for `b1` beyond x86-64 CPUs with AVX2 (Ridge item above); NFR-06's "within 0.1 percentage points" is the promise that survives a toolchain change.
   Measured across CPUs on 2026-10-22 ([#201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135)): on a GitHub runner's AMD EPYC the B0 lookup and both LightGBM boosters came out byte-identical to the laptop's, the Ridge pipeline of B1 did not.
   B1's MdAPE moved by 0.0007 percentage points, and some of its per-segment shares by up to 0.95 points on small segments; why `lsqr` differs between the two CPUs was not looked into.
-  Both fits then ran on one OpenBLAS thread per core, 8 on the laptop and 4 on the runner, which alone changes the coefficients (Ridge item above); whether the two CPUs agree at one thread is not measured yet.
+  Both fits then ran on one OpenBLAS thread per core, 8 on the laptop and 4 on the runner, which alone changes the coefficients; at one thread and on one OpenBLAS kernel the two CPUs agree (Ridge item above).
 
 ##### What a trained variant writes
 
