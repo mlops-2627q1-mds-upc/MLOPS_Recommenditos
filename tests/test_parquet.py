@@ -113,6 +113,37 @@ def test_the_reader_reports_a_column_it_cannot_restore_instead_of_raising(tmp_pa
         read_frame(path, schema)
 
 
+@pytest.mark.parametrize(
+    ("values", "stored"),
+    [
+        pytest.param([1.0, 0.0, float("nan")], "double", id="float"),
+        pytest.param([1, 0, 1], "int64", id="int"),
+    ],
+)
+def test_a_column_stored_as_another_arrow_type_is_not_cast_to_boolean(tmp_path, values, stored):
+    # `astype("boolean")` accepts these, so a cast keyed on the declared dtype
+    # alone would let a wrongly stored column through that `validate` rejects.
+    path = tmp_path / "wrong.parquet"
+    write_parquet(pd.DataFrame({"flag": values}), path)
+    assert str(pq.read_schema(path).field("flag").type) == stored
+    schema = Schema(name="flags", columns=(Column("flag", "boolean", True, "A flag."),))
+
+    with pytest.raises(ValueError, match="expected dtype boolean, got"):
+        read_frame(path, schema)
+
+
+@pytest.mark.parametrize("values", [[True, False, True], [True, None, False]])
+def test_a_column_stored_as_arrow_boolean_is_restored_to_boolean(tmp_path, values):
+    path = tmp_path / "flags.parquet"
+    write_parquet(pd.DataFrame({"flag": pd.array(values, dtype="boolean")}), path)
+    schema = Schema(name="flags", columns=(Column("flag", "boolean", True, "A flag."),))
+
+    read = read_frame(path, schema)
+
+    assert str(read["flag"].dtype) == "boolean"
+    assert read["flag"].tolist() == pd.array(values, dtype="boolean").tolist()
+
+
 def _bytes(path: Path) -> bytes:
     return path.read_bytes()
 
@@ -131,6 +162,7 @@ class _PandasVersion:
         return getattr(self._real, name)
 
 
+@pytest.mark.req("NFR-06")
 @pytest.mark.parametrize("version", ["0.0.1", "99.0.0"])
 def test_the_bytes_written_do_not_depend_on_the_pandas_version(tmp_path, monkeypatch, version):
     frame = write_frame(_all_dtypes_frame(), tmp_path / "now.parquet", ALL_DTYPES)
@@ -169,18 +201,27 @@ def _pipeline_outputs(matrices: dict, trained: dict) -> list[tuple[str, Path, Sc
     return outputs
 
 
-def test_the_raw_listings_read_back_as_the_old_writer_gave_them(raw_frame, tmp_path):
+def test_the_raw_listings_read_back_as_the_frame_written(raw_frame, tmp_path):
     path = tmp_path / "raw" / "listings.parquet"
-    write_frame(raw_frame, path, RAW_SCHEMA)
+    written = write_frame(raw_frame, path, RAW_SCHEMA)
 
-    expected = _as_the_old_writer_and_reader_gave_it(
-        read_frame(path, RAW_SCHEMA), tmp_path / "old.parquet"
+    read = read_frame(path, RAW_SCHEMA)
+
+    _assert_same_frame(read, written.reset_index(drop=True))
+    _assert_same_frame(
+        read, _as_the_old_writer_and_reader_gave_it(written, tmp_path / "old.parquet")
     )
-    _assert_same_frame(read_frame(path, RAW_SCHEMA), expected)
     assert _pandas_metadata(path) is None
 
 
 def test_every_stage_output_reads_back_as_the_old_writer_gave_it(matrices, trained, tmp_path):
+    """Each stage output carries no pandas metadata and reads back unchanged by the old path.
+
+    The fixtures hand over the files, not the frames that were written, so the
+    oracle here is `read_frame`'s own `validate` (every dtype and null rule of
+    the contract) plus the old writer's round trip of the frame read, which
+    shows that the read frame loses nothing the old path would have kept.
+    """
     outputs = _pipeline_outputs(matrices, trained)
     # The extended matrix is the one with nullable `boolean` columns, the dtype
     # Arrow alone cannot restore; without it this test would not cover them.
