@@ -28,7 +28,7 @@ Conventions for tracking granularity, the remote, and pipeline ownership live in
 ### Freeze window before a presentation
 
 Every merge to `main` builds the API image and pushes it to GHCR (`cd.yml`).
-Deploying it to the VM is wired (`deploy.yml`) and switched on after the lab ([requirements](docs/docs/requirements.md) NFR-13, [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198)), and NFR-05 commits to zero unplanned downtime during a presentation.
+Deploying it to the VM is wired (`deploy.yml`) and has been on since 2026-10-30 ([requirements](docs/docs/requirements.md) NFR-13, [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198)), and NFR-05 commits to zero unplanned downtime during a presentation.
 So in the 48 hours before a presentation, merge only what fixes something broken, and check `/health` afterwards.
 Everything else waits until the presentation is over.
 

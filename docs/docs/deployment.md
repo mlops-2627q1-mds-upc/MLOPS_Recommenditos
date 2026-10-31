@@ -265,7 +265,7 @@ Set FR-10's API key in the same `.env` (`RECOMMENDITOS_API_KEY`, generated on th
 
 ### Every deploy
 
-The `Deploy` workflow ([`.github/workflows/deploy.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/deploy.yml)) deploys every image that [continuous delivery](#continuous-delivery) pushes, once it is [turned on](#turn-continuous-deployment-on) (NFR-13).
+The `Deploy` workflow ([`.github/workflows/deploy.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/deploy.yml)) deploys every image that [continuous delivery](#continuous-delivery) pushes; it has been [on](#turn-continuous-deployment-on) since 2026-10-30 (NFR-13).
 It starts when a CD run on `main` finishes, and only if that run passed and pushed an image: a commit that changes only `docs/`, `reports/` or top-level Markdown files builds none and deploys nothing.
 It deploys the image's commit SHA tag, never `:latest`, in five jobs.
 The two that act on the VM run on the self-hosted runner there, which may run nothing but `deploy.sh` ([Turn continuous deployment on](#turn-continuous-deployment-on)); the other three run on GitHub-hosted runners:
@@ -346,13 +346,13 @@ After a successful deploy, `deploy.sh` removes the images of the tags it deploye
 
 ### Turn continuous deployment on
 
-The `Deploy` workflow is off until the repository variable `DEPLOY_TO_VM` is `true`: until then each run is green and its summary says that deploying is off.
-Its jobs on the VM run only once it is on.
+Continuous deployment has been on since 2026-10-30: the repository variable `DEPLOY_TO_VM` is `true`, and the steps below are what turning it on took, to repeat on a new VM ([EDN-94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+The `Deploy` workflow runs its jobs on the VM only while the variable is `true`; while it is not, each run is green and its summary says that deploying is off.
 GitHub's documentation says that running a workflow that references a missing environment creates it, without any protection; whether a skipped job does that too is not documented, so `production` may already exist, empty, after the first run.
-Once `DEPLOY_TO_VM` is `true`, a missing `SMOKE_URL` fails the run with a line naming it.
+While `DEPLOY_TO_VM` is `true`, a missing `SMOKE_URL` fails the run with a line naming it.
 
 The VM's SSH port answers only from the UPC network and its VPN ([#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134)), so a GitHub-hosted runner cannot reach the VM.
-The jobs that act on the VM therefore run on a self-hosted runner on the VM itself, which connects out to GitHub over HTTPS and needs no inbound connection ([EDN-94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+The jobs that act on the VM therefore run on a self-hosted runner on the VM itself, which connects out to GitHub over HTTPS and needs no inbound connection.
 That runner is the production machine, so it may do as little as possible:
 
 - It runs as its own user `github-runner`, which is not in the `docker` group, since that group is root on the VM.
