@@ -388,7 +388,8 @@ Status 413.
 The request body is larger than 10 KB (NFR-09).
 A declared `Content-Length` over the limit is refused before the body is read; a chunked body without one is counted as it arrives and refused as soon as it passes the limit.
 The largest of the 118,382 raw listings, sent as a valuation request with every field it has, is 3.5 KB.
-A body within the [length bounds](#endpoints) of every field fits in the limit, so a 413 means padding, escaped characters or a body that is not a listing.
+A body of ASCII text without escapes within the [length bounds](#endpoints) of every field fits in the limit, and real listings stay far below it.
+A bound counts characters and the limit counts bytes, so a 413 means padding, escaped characters, multi-byte UTF-8 text at the bounds (such as `é`, `€` or an emoji in every field) or a body that is not a listing.
 
 A 500 says nothing about its cause; the cause is in the [service log](#logs), as the `exception` of the line with the request ID that `instance` names.
 
@@ -443,7 +444,7 @@ An operation behind an API key, such as `/v1/feedback`, gets the test app's key,
 
 The OpenAPI document is what a client codes against, so the API keeps to it as written: a request body is strict, and `0` is not a boolean nor `"45000"` a number, while a whole float such as `4.0` is an integer, as JSON Schema defines one.
 A constraint the schema cannot state needs a hook in the test module.
-The 10 KB limit of NFR-09 needs none: the length bounds keep every generated valid body under it, so a 413 for one fails the test.
 The one so far is that `registration_date` must not lie after the current month (FR-03): the pattern states the lower bound, 1900-01, and the upper bound moves with the calendar.
+The 10 KB limit of NFR-09 needs none of that kind: the length bounds keep a generated valid ASCII body under it, and the test accepts a 413 for valid data only when the body as sent is larger than the limit, so a 413 for a body at or under it fails.
 The response schemas allow additional properties, so a field an answer gains without being documented is not caught; a documented field that changes its type or goes missing is.
 A generated feedback names a request ID the prediction log does not hold, so the stored, repeated and conflicting prices of `/v1/feedback` are left to `tests/api/test_feedback.py`.

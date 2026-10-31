@@ -29,8 +29,12 @@ month, so it is not counted as a valid request the API refused. The upper bound
 is tested by hand in `test_predict.py`.
 
 The 10 KB limit of NFR-09 is stated as length bounds on every string and list
-of a request body, so a generated valid body fits in it and a 413 for one fails
-the test (`test_request_bounds.py` holds the largest valid body under the limit).
+of a request body. A bound counts characters and the limit counts bytes, so a
+body fits in the limit for ASCII text without escapes only, and a generated valid
+body with multi-byte or escaped text can pass it. `accepts_valid_data_within_the_limit`
+takes a 413 for valid data only when the body as sent is larger than the limit;
+a 413 for a body at or under it fails the test (`test_request_bounds.py` holds the
+largest valid ASCII body under the limit).
 
 Known limitation: the response schemas allow additional properties, as
 pydantic writes them, so a field an answer gains without documentation is not
@@ -42,17 +46,54 @@ and 409 of a stored price are tested by hand in `test_feedback.py`.
 """
 
 from datetime import UTC, datetime
+from http import HTTPStatus
 
 from fastapi import FastAPI
+from hypothesis import HealthCheck, given, settings
 import pytest
+import requests
 import schemathesis
 from schemathesis import GenerationMode
+from schemathesis.checks import positive_data_acceptance
+from schemathesis.core.failures import FailureGroup
 from tests.api.conftest import API_KEY
+
+from recommenditos.api.middleware import MAX_BODY_BYTES
 
 #: Random requests per operation in the fuzzing phase, valid and invalid
 #: together. With the coverage phase, about 970 requests and 18 s for the six
 #: operations on a laptop CPU.
 MAX_EXAMPLES = 50
+
+
+def _sent_body_size(response: schemathesis.Response) -> int:
+    """The bytes of the request body as it was sent; none is 0."""
+    body = response.request.body
+    if body is None:
+        return 0
+    return len(body.encode() if isinstance(body, str) else body)
+
+
+def accepts_valid_data_within_the_limit(
+    ctx: schemathesis.CheckContext, response: schemathesis.Response, case: schemathesis.Case
+) -> bool | None:
+    """Schemathesis' `positive_data_acceptance`, except a 413 for a body over the limit.
+
+    The length bounds count characters and the 10 KB of NFR-09 counts bytes, so
+    the schema cannot promise that every schema-valid body fits: a body of
+    multi-byte or escaped text within every bound can be larger than 10 KB, and
+    a generator that finds one (Hypothesis' strategies change between versions)
+    would turn the test red without a change in this code. A 413 is therefore
+    accepted when the body as sent really is larger than `MAX_BODY_BYTES`. A 413
+    for a body at or under the limit is a defect and fails like any other
+    refusal of valid data.
+    """
+    if (
+        response.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        and _sent_body_size(response) > MAX_BODY_BYTES
+    ):
+        return None
+    return positive_data_acceptance(ctx, response, case)
 
 
 def _this_month() -> str:
@@ -111,4 +152,49 @@ schema = schemathesis.pytest.from_fixture("api_schema")
 @pytest.mark.req("FR-16")
 @schema.parametrize()
 def test_every_response_matches_the_documented_contract(case: schemathesis.Case) -> None:
-    case.call_and_validate()
+    case.call_and_validate(
+        excluded_checks=[positive_data_acceptance],
+        additional_checks=[accepts_valid_data_within_the_limit],
+    )
+
+
+def _positive_predict_case(api_schema: schemathesis.BaseSchema) -> schemathesis.Case:
+    """One generated valid `/v1/predict` request."""
+    operation = api_schema["/v1/predict"]["POST"]
+
+    @given(case=operation.as_strategy(generation_mode=GenerationMode.POSITIVE))
+    @settings(
+        max_examples=1, database=None, derandomize=True, suppress_health_check=list(HealthCheck)
+    )
+    def draw(case: schemathesis.Case) -> None:
+        drawn.append(case)
+
+    drawn: list[schemathesis.Case] = []
+    draw()
+    return drawn[0]
+
+
+def _answer_413(case: schemathesis.Case, body_size: int) -> schemathesis.Response:
+    """A 413 as if `case` had been sent with a body of `body_size` bytes."""
+    request = requests.Request("POST", "http://testserver/v1/predict", data=b" " * body_size)
+    return schemathesis.Response(
+        status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+        headers={"content-type": ["application/problem+json"]},
+        content=b"{}",
+        request=request.prepare(),
+        elapsed=0.0,
+        verify=True,
+    )
+
+
+@pytest.mark.req("NFR-09")
+def test_nfr09_a_413_is_accepted_for_valid_data_only_over_the_limit(
+    api_schema: schemathesis.BaseSchema,
+) -> None:
+    case = _positive_predict_case(api_schema)
+    check = [accepts_valid_data_within_the_limit]
+
+    case.validate_response(_answer_413(case, MAX_BODY_BYTES + 1), checks=check)
+    for size in (MAX_BODY_BYTES, 1):
+        with pytest.raises(FailureGroup, match="Valid data should have been accepted"):
+            case.validate_response(_answer_413(case, size), checks=check)

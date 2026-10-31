@@ -14,10 +14,13 @@ startup (FR-03, FR-04, FR-12), so a field like `make` is a plain string here and
 the served model checks it. `create_app` writes those values into the OpenAPI
 document as enums, so `/docs` shows them anyway.
 
-Every string and every equipment list has a maximum length, so that a body
-within every bound stays under the 10 KB limit of NFR-09 and the OpenAPI
-document states what that limit enforces. `tests/api/test_request_bounds.py` holds the
-largest such body under the limit.
+Every string and every equipment list has a maximum length, so that a body of
+ASCII text without escapes within every bound stays under the 10 KB limit of
+NFR-09 and the OpenAPI document states what that limit enforces. A bound counts
+characters and the limit bytes, so multi-byte or escaped text within the bounds
+can still make a body larger, which is a 413; no real listing comes near it (the
+largest is about 3.5 KB). `tests/api/test_request_bounds.py` holds the largest
+such ASCII body under the limit.
 
 `Problem` and `FieldError` are the error shape every endpoint shares (FR-16,
 EDN-84); `recommenditos/api/errors.py` builds and documents them.
@@ -46,8 +49,9 @@ EARLIEST_REGISTRATION = "1900-01"
 
 # The length bounds come from the 118,382 raw listings (`data/raw/listings.parquet`),
 # whose every value they accept. A string outside the equipment lists gets at
-# least twice its longest value: 23 characters for a category or a colour, 22 for
-# `model`, 121 for `model_version`. The equipment lists get at least 1.2 times
+# least twice its longest value: 23 characters for a category (the longest is
+# `body_type`; no colour is longer than 6), 22 for `model`, 121 for
+# `model_version`. The equipment lists get at least 1.2 times
 # theirs, rounded up to a multiple of 5, because their items dominate a body and
 # twice would not fit in 10 KB: 37 characters for an item, and 42, 16, 37 and 36
 # items for comfort, entertainment, extra and safety.
