@@ -40,8 +40,8 @@ flowchart LR
 
     subgraph u_system["Price component"]
         u_uc1(["Value an owned car<br/>UC1, /v1/predict"])
-        u_uc2(["Get a price range<br/>UC2, /v1/price-range"])
-        u_comp(["Find comparable listings<br/>UC2, /v1/comparables"])
+        u_uc2(["Get a price range<br/>UC2<br/>/v1/price-range"])
+        u_comp(["Find comparable listings<br/>UC2<br/>/v1/comparables"])
         u_retrain(["Retrain and promote a model<br/>FR-15"])
         u_gate(["Pass the promotion gate<br/>NFR-01"])
         u_deploy(["Deploy or roll back an image<br/>NFR-13"])
@@ -77,50 +77,54 @@ flowchart LR
 ### ML and non-ML components
 
 An ML component trains, evaluates, holds, serves or monitors the model, and is drawn with a blue fill; the others would look the same in any web service with a database.
-The arrows follow the ML lifecycle around the loop: data to the training pipeline, the pipeline to a model bundle, the bundle through the promotion gate into serving, every answer into the prediction log, the observed prices back as feedback, and drift back to a person who retrains.
+The two boxes are the two halves of the ML lifecycle loop: data to the training pipeline, the pipeline to a model bundle and a comparables index, the verdict through the promotion gate and the merge into serving, every answer into the prediction log, the observed prices back as feedback, and drift back to a person who retrains.
 
 ```mermaid
 flowchart TB
-    subgraph l_train["Training and promotion"]
-        l_pipe["<b>Training pipeline</b><br/>[dvc repro] on the<br/>DVC-tracked listings"]
-        l_mlflow[("<b>Experiment tracking</b><br/>[MLflow on DagsHub]")]
-        l_bundle[("<b>Model bundle</b><br/>models/lgbm-basic,<br/>pinned by dvc.lock")]
-        l_gate{"<b>Promotion gate</b><br/>required CI check"}
-    end
-
     subgraph l_serve["Serving and monitoring"]
+        direction LR
+        l_client["<b>HTTP client</b>"]
+        l_replay["<b>Replay job</b><br/>M6"]
         l_api["<b>Price API</b><br/>[FastAPI] contract,<br/>validation, errors"]
         l_served["<b>Served model</b><br/>[ServedModel] price,<br/>explanation, range"]
         l_log[("<b>Prediction log, feedback</b><br/>[SQLite]")]
-        l_replay["<b>Replay job</b><br/>M6"]
         l_drift["<b>Drift job</b><br/>[Alibi Detect]<br/>M6"]
+        l_client -->|"HTTP, via nginx"| l_api
+        l_replay -.->|"feedback"| l_api
+        l_api -->|"scores with"| l_served
+        l_api -->|"one row per answer"| l_log
+        l_log -.->|"read, joined<br/>by request ID"| l_drift
     end
 
-    l_client["<b>HTTP client</b>"]
+    subgraph l_train["Training and promotion"]
+        direction TB
+        l_pipe["<b>Training pipeline</b><br/>[dvc repro] on the<br/>DVC-tracked listings"]
+        l_mlflow[("<b>Experiment tracking</b><br/>[MLflow on DagsHub]")]
+        l_bundle[("<b>Model bundle</b><br/>models/lgbm-basic,<br/>pinned by dvc.lock")]
+        l_index[("<b>Comparables index</b><br/>[ComparablesIndex] listings,<br/>pinned by dvc.lock")]
+        l_gate{"<b>Promotion gate</b><br/>required CI check"}
+        l_pipe -->|"params, metrics"| l_mlflow
+        l_pipe -->|"writes"| l_bundle
+        l_pipe -->|"builds"| l_index
+        l_pipe -->|"evaluate: metrics.json, dvc.lock"| l_gate
+    end
 
-    l_pipe -->|"writes"| l_bundle
-    l_pipe -->|"params, metrics"| l_mlflow
-    l_bundle -->|"metrics.json"| l_gate
-    l_gate -->|"merge to main, CD bakes<br/>the bundle into the image"| l_api
-    l_client -->|"HTTP, via nginx"| l_api
-    l_replay -.->|"observed prices,<br/>/v1/feedback"| l_api
-    l_api -->|"scores with"| l_served
-    l_api -->|"one row per answer"| l_log
-    l_log -.->|"read, joined<br/>by request ID"| l_drift
-    l_drift -.->|"flags drift, a team member<br/>retrains: dvc repro, pull request"| l_pipe
+    l_train -->|"merge to main, CD bakes the bundle and index into the image"| l_serve
+    l_serve -.->|"drift flagged: a person starts the Retrain workflow"| l_train
 
     classDef ml fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
     classDef mlLater fill:#eef3f9,stroke:#6f93c0,color:#555,stroke-dasharray:6 4
     classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class l_pipe,l_mlflow,l_bundle,l_gate,l_served ml
+    class l_pipe,l_mlflow,l_bundle,l_index,l_gate,l_served ml
     class l_drift mlLater
     class l_replay later
 ```
 
 - **Model registry.** There is none at run time ([EDN-08][edn]): `dvc.lock` on `main` pins the bundle the image is built with, so merging a pull request that changes it promotes a model, and `/health` reports the bundle's `dvc.lock` hash (FR-12).
+- **Comparables index.** Counts as an ML component: a data artefact the pipeline builds (stage `comparables`), pins in `dvc.lock` beside the bundle and `/v1/comparables` searches by similarity of make, model, age and mileage (FR-09).
 - **Lineage.** `dvc.lock` ties the bundle to the data and code that produced it, and each model variant has one MLflow run across the pipeline's stages ([EDN-55][edn]).
-- **Retraining trigger.** The drift job (M6) flags drift; a person decides to retrain and opens the pull request, and the gate decides whether it may merge ([EDN-12][edn]).
-- **Inside the API.** Only `ServedModel` and the `LightGBMModel` it holds are ML; the routes, the validation, the error handling, the metrics and the prediction log are ordinary service code, which is why a model can be replaced without changing them.
+- **Retraining trigger.** The drift job (M6) flags drift; a person decides to retrain and starts the Retrain workflow (`.github/workflows/retrain.yml`) by hand, which runs `dvc repro` on a GitHub-hosted runner, logs to MLflow and pushes `dvc.lock` to a branch; the person opens the pull request from its link, and the gate decides whether it may merge ([EDN-12][edn], [EDN-92][edn]).
+- **Inside the API.** Only `ServedModel`, the `LightGBMModel` it holds and the `ComparablesIndex` are ML; the routes, the validation, the error handling, the metrics and the prediction log are ordinary service code, which is why a model can be replaced without changing them.
 
 ### Runtime containers
 
@@ -197,6 +201,7 @@ The state it keeps outside the image is the prediction log on its volume and the
 ## Class view: the serving code
 
 The main classes of `recommenditos/api/` and the model they load from `recommenditos/modeling/`, with the members the routes use; the ML classes have the blue fill of the logical view.
+`FeatureSpace` is defined in `recommenditos/data/build_features.py`, the one class here outside `api/` and `modeling/`.
 The routes are functions, not classes, so they are drawn as one box: FastAPI hands each of them the objects the app holds through `Depends` (`api/dependencies.py`).
 
 ```mermaid
@@ -278,7 +283,7 @@ classDiagram
     style Model fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
     style FeatureSpace fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
     style Routes fill:#ffffff,stroke:#333333,color:#000000
-    style ComparablesIndex fill:#ffffff,stroke:#333333,color:#000000
+    style ComparablesIndex fill:#e3eefa,stroke:#2a6db0,color:#0b2e4f
     style ApiMetrics fill:#ffffff,stroke:#333333,color:#000000
     style PredictionLog fill:#ffffff,stroke:#333333,color:#000000
     style PredictionStore fill:#ffffff,stroke:#333333,color:#000000
@@ -318,7 +323,8 @@ sequenceDiagram
     proxy->>api: to api:8000
     Note over api: request ID, 10 KB limit (413),<br/>ValuationRequest (422)
     api->>served: faults(listing)
-    served-->>api: none, or 422
+    served-->>api: faults (may be empty)
+    Note over api: any fault: 422
     api->>served: value(listing)
     served->>model: predict_eur,<br/>log_price_contributions
     model-->>served: price, SHAP values
@@ -358,7 +364,7 @@ sequenceDiagram
     Note over api: no or a wrong key: 401
     api->>store: record_feedback(Feedback)
     store-->>api: FeedbackResult
-    api-->>replay: 201 stored, 200 same price again,<br/>404 unknown request, 409 conflict
+    api-->>replay: 201 stored, 200 same price again,<br/>404 unknown request, 409 conflict,<br/>503 log unavailable
     Note over store: the drift job (M6) reads<br/>the view labelled_predictions
 ```
 
