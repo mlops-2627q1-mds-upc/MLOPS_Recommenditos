@@ -48,6 +48,9 @@ import tempfile
 import threading
 import time
 
+# `b1` is fitted on OpenBLAS's Haswell kernel (`check_openblas_kernel`); numpy has to see this first.
+os.environ.setdefault("OPENBLAS_CORETYPE", "Haswell")
+
 VARIANTS = ("b1", "lgbm-basic", "lgbm-extended")
 BLAS_VARIABLES = ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
 CONFIGS = {

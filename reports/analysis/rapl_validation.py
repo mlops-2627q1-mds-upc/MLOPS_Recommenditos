@@ -59,20 +59,23 @@ import tempfile
 import threading
 import time
 
-import codecarbon
-from codecarbon import OfflineEmissionsTracker, OutputMethod
+# `b1` is fitted on OpenBLAS's Haswell kernel (`check_openblas_kernel`); numpy has to see this first.
+os.environ.setdefault("OPENBLAS_CORETYPE", "Haswell")
+
+import codecarbon  # noqa: E402
+from codecarbon import OfflineEmissionsTracker, OutputMethod  # noqa: E402
 
 # The stages this calls log to stdout, which is where the results go.
-from loguru import logger
-import pandas as pd
-import psutil
+from loguru import logger  # noqa: E402
+import pandas as pd  # noqa: E402
+import psutil  # noqa: E402
 
-from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR
-from recommenditos.data.build_features import read_supported_makes
-from recommenditos.modeling import train
-from recommenditos.modeling.energy import EnergySettings, read_record
-from recommenditos.modeling.model import fit_variant
-from recommenditos.pipeline import load_params
+from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR  # noqa: E402
+from recommenditos.data.build_features import read_supported_makes  # noqa: E402
+from recommenditos.modeling import train  # noqa: E402
+from recommenditos.modeling.energy import EnergySettings, read_record  # noqa: E402
+from recommenditos.modeling.model import fit_variant  # noqa: E402
+from recommenditos.pipeline import load_params  # noqa: E402
 
 logger.remove()
 

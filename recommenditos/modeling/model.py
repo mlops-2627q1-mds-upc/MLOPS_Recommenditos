@@ -1000,12 +1000,22 @@ def check_openblas_kernel() -> None:
     costs no fit time (spike of 2026-10-31).
 
     OpenBLAS reads `OPENBLAS_CORETYPE` once, when the library loads, so a
-    process that imported numpy before setting it, a CPU without AVX2, a
-    non-x86 machine or a different value the user set all end up on another
-    kernel and would fit a `b1` that differs from the one `dvc.lock` records.
-    That fails here rather than in the lock. `ANY_OPENBLAS_KERNEL_VARIABLE`
-    fits anyway, with a warning, for a machine that has no Haswell kernel and
-    for the test suite, whose process loads numpy before any test runs.
+    process that imported numpy before setting it, a non-x86 machine (which has
+    no such core name, so OpenBLAS detects its own) or a different value the
+    user set ends up on another kernel and would fit a `b1` that differs from
+    the one `dvc.lock` records. That fails here rather than in the lock.
+    `ANY_OPENBLAS_KERNEL_VARIABLE` fits anyway, with a warning, for a machine
+    that has no Haswell kernel and for the test suite, whose process loads numpy
+    before any test runs.
+
+    OpenBLAS does not check that the CPU supports a forced kernel, so this
+    check cannot see an x86-64 CPU without AVX2: forcing SkylakeX on the
+    i5-10210U, which has no AVX-512, `threadpool_info` reported SkylakeX and the
+    first dense BLAS call died with SIGILL. On such a CPU the default
+    `OPENBLAS_CORETYPE=Haswell` passes this check and the fit crashes. It needs
+    `OPENBLAS_CORETYPE` set to a kernel it supports, for example Sandybridge,
+    together with `ANY_OPENBLAS_KERNEL_VARIABLE`, and its `b1` then differs
+    from the lock.
     """
     kernels = sorted(
         {
@@ -1030,9 +1040,12 @@ def check_openblas_kernel() -> None:
         f"loaded {loaded}. OpenBLAS reads OPENBLAS_CORETYPE once, when numpy loads it: "
         "fit through `dvc repro` or `python -m recommenditos.modeling.train`, which set "
         f"it first, or start Python with OPENBLAS_CORETYPE={OPENBLAS_KERNEL}. On a "
-        "machine without that kernel (no AVX2, or not x86-64), set "
+        "machine that cannot run that kernel, set "
         f"{ANY_OPENBLAS_KERNEL_VARIABLE}=1 to fit on the loaded one; the model then "
-        "differs from the one dvc.lock records."
+        "differs from the one dvc.lock records. A non-x86 machine needs only that "
+        "variable. An x86-64 CPU without AVX2 crashes on the forced Haswell kernel "
+        "(OpenBLAS does not check support), so it also needs OPENBLAS_CORETYPE set "
+        "to a kernel it supports, for example Sandybridge."
     )
 
 

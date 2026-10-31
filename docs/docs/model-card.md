@@ -417,7 +417,9 @@ At 5 only `model` and `fuel_category` have an infrequent group at all; the other
   The fit takes about 1.1 s on every kernel.
   `tests/test_model.py` fits the fixture in separate processes: two on Haswell agree, one on Sandybridge differs and is refused without the escape hatch below.
   The pin reaches x86-64 CPUs with AVX2 and FMA, which every machine we train on has; on Windows that test passes in CI, so the variable is honoured there too, while the real snapshot was not fitted on Windows.
-  A CPU without AVX2 or a non-x86 machine, such as a Mac with Apple silicon, has no Haswell kernel: there the fit runs only with `RECOMMENDITOS_ANY_OPENBLAS_KERNEL=1` and gives a `b1` that differs from the one `dvc.lock` records.
+  A non-x86 machine, such as a Mac with Apple silicon, has no Haswell kernel: there the fit runs only with `RECOMMENDITOS_ANY_OPENBLAS_KERNEL=1` and gives a `b1` that differs from the one `dvc.lock` records.
+  An x86-64 CPU without AVX2 is not caught by the check: OpenBLAS does not verify that the CPU supports a forced kernel (SkylakeX forced on the AVX2-only i5-10210U was reported by `threadpool_info` and died with SIGILL, exit 132, at the first dense BLAS call), so the default Haswell pin passes the check and the fit crashes.
+  Such a CPU needs `OPENBLAS_CORETYPE=<a kernel it supports, for example Sandybridge>` plus `RECOMMENDITOS_ANY_OPENBLAS_KERNEL=1`, and its `b1` differs from the lock too.
   The test suite sets that variable for its own process, which loads numpy before any test runs.
   The committed `b1` (coefficient md5 `36204956...`) comes from the retrain of PR #255 on an AMD EPYC 9V45 with AVX-512, most likely on the AVX-512 kernel (not verified), so the first retrain with the pin moves `b1` once more, to `c4a62da2...`.
 - **B0:** group medians only, and a median is order-independent, so the result does not depend on the row order Parquet hands back.
