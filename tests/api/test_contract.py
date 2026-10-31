@@ -28,10 +28,9 @@ valid request with a later month than the current one is moved to the current
 month, so it is not counted as a valid request the API refused. The upper bound
 is tested by hand in `test_predict.py`.
 
-Known limitation: the request schemas give no `maxLength` to strings and no
-`maxItems` to the equipment lists, so a schema-valid body can exceed the 10 KB
-limit of NFR-09 and be answered 413. The test accepts 413 for a valid request;
-the limit itself is tested by hand in `test_errors.py`.
+The 10 KB limit of NFR-09 is stated as length bounds on every string and list
+of a request body, so a generated valid body fits in it and a 413 for one fails
+the test (`test_request_bounds.py` holds the largest valid body under the limit).
 
 Known limitation: the response schemas allow additional properties, as
 pydantic writes them, so a field an answer gains without documentation is not
@@ -49,11 +48,6 @@ import pytest
 import schemathesis
 from schemathesis import GenerationMode
 from tests.api.conftest import API_KEY
-
-#: Schemathesis' default statuses for a valid request, which the API may answer
-#: with without the check calling it a refusal (4.32.7; 401, 403, 404, 409, 429
-#: and 5xx are there because they do not mean the data was invalid).
-POSITIVE_DATA_ACCEPTED_STATUSES = ["2xx", "3xx", "401", "403", "404", "409", "429", "5xx"]
 
 #: Random requests per operation in the fuzzing phase, valid and invalid
 #: together. With the coverage phase, about 970 requests and 18 s for the six
@@ -84,14 +78,6 @@ def api_schema(app: FastAPI) -> schemathesis.BaseSchema:
     config = schemathesis.Config.from_dict(
         {
             **({"auth": {"openapi": keys}} if keys else {}),
-            # NFR-09 caps a body at 10 KB (413), a limit of the deployment that the
-            # OpenAPI document does not state (see the module). Schemathesis 4.32.6
-            # sends strings of 65,537 characters to fields without a `maxLength`.
-            "checks": {
-                "positive_data_acceptance": {
-                    "expected-statuses": [*POSITIVE_DATA_ACCEPTED_STATUSES, "413"]
-                }
-            },
             "generation": {
                 "mode": "all",
                 "max-examples": MAX_EXAMPLES,

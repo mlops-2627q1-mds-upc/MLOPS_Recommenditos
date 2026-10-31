@@ -778,6 +778,7 @@
         "properties": {
           "make": {
             "type": "string",
+            "maxLength": 50,
             "title": "Make",
             "description": "Manufacturer. Must be one of the makes the served model supports (FR-04); a 422 lists them.",
             "examples": [
@@ -788,6 +789,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1,
                 "description": "Model name. A model the training data does not hold is accepted, passed to the model as unknown and reported in `warnings` (FR-05).",
                 "examples": [
@@ -854,6 +856,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Fuel category, one of the served model's.",
                 "examples": [
                   "Gasoline"
@@ -869,6 +872,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Transmission, one of the served model's.",
                 "examples": [
                   "Manual"
@@ -884,6 +888,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "ISO country code of the listing, one of the 8 countries of the data. `ES` is accepted although the model was not trained on it, and reported in `warnings` (FR-05).",
                 "examples": [
                   "DE"
@@ -899,6 +904,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Body type, one of the served model's.",
                 "examples": [
                   "Compact"
@@ -914,6 +920,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Seller type, one of the served model's.",
                 "examples": [
                   "Dealer"
@@ -943,6 +950,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Drive train, one of the served model's.",
                 "examples": [
                   "Front Wheel Drive"
@@ -1054,9 +1062,11 @@
           },
           "equipment_comfort": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 55,
             "title": "Equipment Comfort",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
@@ -1068,43 +1078,49 @@
           },
           "equipment_entertainment": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Equipment Entertainment",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "Bluetooth",
+                "Radio"
               ]
             ]
           },
           "equipment_extra": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 45,
             "title": "Equipment Extra",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "Alloy wheels",
+                "Sport seats"
               ]
             ]
           },
           "equipment_safety": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 45,
             "title": "Equipment Safety",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "ABS",
+                "Electronic stability control"
               ]
             ]
           },
@@ -1130,6 +1146,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1142,6 +1159,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1154,6 +1172,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1166,6 +1185,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1177,19 +1197,21 @@
           "model_version": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 250,
+                "description": "The listing's free-text version line."
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Model Version",
-            "description": "The listing's free-text version line."
+            "title": "Model Version"
           },
           "envir_standard": {
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1202,6 +1224,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1505,6 +1528,7 @@
         "properties": {
           "make": {
             "type": "string",
+            "maxLength": 50,
             "title": "Make",
             "description": "Manufacturer. Must be one of the makes the served model supports (FR-04); a 422 lists them.",
             "examples": [
@@ -1515,6 +1539,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1,
                 "description": "Model name. A model the training data does not hold is accepted, passed to the model as unknown and reported in `warnings` (FR-05).",
                 "examples": [
@@ -1581,6 +1606,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Fuel category, one of the served model's.",
                 "examples": [
                   "Gasoline"
@@ -1596,6 +1622,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Transmission, one of the served model's.",
                 "examples": [
                   "Manual"
@@ -1611,6 +1638,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "ISO country code of the listing, one of the 8 countries of the data. `ES` is accepted although the model was not trained on it, and reported in `warnings` (FR-05).",
                 "examples": [
                   "DE"
@@ -1626,6 +1654,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Body type, one of the served model's.",
                 "examples": [
                   "Compact"
@@ -1641,6 +1670,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Seller type, one of the served model's.",
                 "examples": [
                   "Dealer"
@@ -1670,6 +1700,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Drive train, one of the served model's.",
                 "examples": [
                   "Front Wheel Drive"
@@ -1781,9 +1812,11 @@
           },
           "equipment_comfort": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 55,
             "title": "Equipment Comfort",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
@@ -1795,43 +1828,49 @@
           },
           "equipment_entertainment": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Equipment Entertainment",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "Bluetooth",
+                "Radio"
               ]
             ]
           },
           "equipment_extra": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 45,
             "title": "Equipment Extra",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "Alloy wheels",
+                "Sport seats"
               ]
             ]
           },
           "equipment_safety": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 45,
             "title": "Equipment Safety",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "ABS",
+                "Electronic stability control"
               ]
             ]
           },
@@ -1857,6 +1896,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1869,6 +1909,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1881,6 +1922,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1893,6 +1935,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1904,19 +1947,21 @@
           "model_version": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 250,
+                "description": "The listing's free-text version line."
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Model Version",
-            "description": "The listing's free-text version line."
+            "title": "Model Version"
           },
           "envir_standard": {
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -1929,6 +1974,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -2215,6 +2261,7 @@
         "properties": {
           "make": {
             "type": "string",
+            "maxLength": 50,
             "title": "Make",
             "description": "Manufacturer. Must be one of the makes the served model supports (FR-04); a 422 lists them.",
             "examples": [
@@ -2223,6 +2270,7 @@
           },
           "model": {
             "type": "string",
+            "maxLength": 50,
             "minLength": 1,
             "title": "Model",
             "description": "Model name. A model the training data does not hold is accepted, passed to the model as unknown and reported in `warnings` (FR-05).",
@@ -2261,6 +2309,7 @@
           },
           "fuel_category": {
             "type": "string",
+            "maxLength": 50,
             "title": "Fuel Category",
             "description": "Fuel category, one of the served model's.",
             "examples": [
@@ -2269,6 +2318,7 @@
           },
           "transmission": {
             "type": "string",
+            "maxLength": 50,
             "title": "Transmission",
             "description": "Transmission, one of the served model's.",
             "examples": [
@@ -2277,6 +2327,7 @@
           },
           "country_code": {
             "type": "string",
+            "maxLength": 50,
             "title": "Country Code",
             "description": "ISO country code of the listing, one of the 8 countries of the data. `ES` is accepted although the model was not trained on it, and reported in `warnings` (FR-05).",
             "examples": [
@@ -2285,6 +2336,7 @@
           },
           "body_type": {
             "type": "string",
+            "maxLength": 50,
             "title": "Body Type",
             "description": "Body type, one of the served model's.",
             "examples": [
@@ -2293,6 +2345,7 @@
           },
           "seller_type": {
             "type": "string",
+            "maxLength": 50,
             "title": "Seller Type",
             "description": "Seller type, one of the served model's.",
             "examples": [
@@ -2317,6 +2370,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "description": "Drive train, one of the served model's.",
                 "examples": [
                   "Front Wheel Drive"
@@ -2428,9 +2482,11 @@
           },
           "equipment_comfort": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 55,
             "title": "Equipment Comfort",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
@@ -2442,43 +2498,49 @@
           },
           "equipment_entertainment": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Equipment Entertainment",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "Bluetooth",
+                "Radio"
               ]
             ]
           },
           "equipment_extra": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 45,
             "title": "Equipment Extra",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "Alloy wheels",
+                "Sport seats"
               ]
             ]
           },
           "equipment_safety": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 45
             },
             "type": "array",
+            "maxItems": 45,
             "title": "Equipment Safety",
             "description": "Equipment items as the listing names them. An omitted list is an empty list, never null (FR-01).",
             "examples": [
               [
-                "Air conditioning",
-                "Navigation system"
+                "ABS",
+                "Electronic stability control"
               ]
             ]
           },
@@ -2504,6 +2566,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -2516,6 +2579,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -2528,6 +2592,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -2540,6 +2605,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -2551,19 +2617,21 @@
           "model_version": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 250,
+                "description": "The listing's free-text version line."
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Model Version",
-            "description": "The listing's free-text version line."
+            "title": "Model Version"
           },
           "envir_standard": {
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {
@@ -2576,6 +2644,7 @@
             "anyOf": [
               {
                 "type": "string",
+                "maxLength": 50,
                 "minLength": 1
               },
               {

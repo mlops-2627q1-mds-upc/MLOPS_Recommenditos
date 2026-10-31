@@ -88,6 +88,18 @@ The operational endpoints are not part of that contract and stay at the root, wh
 The served model reads the fields its feature set holds; an omitted one reaches it as absent, an omitted equipment list as an empty one.
 A field the request body does not define is refused, so a misspelt optional field does not go unnoticed.
 
+Every string and equipment list has a maximum length, which the OpenAPI document states as `maxLength` and `maxItems`.
+The bounds accept every one of the 118,382 raw listings: a string outside the equipment lists gets at least twice its longest value in the data, an equipment list and its items at least 1.2 times theirs.
+
+| Field | Longest in the data | Bound |
+|-------|---------------------|-------|
+| `make`, `model` and the categorical and free-text fields | 23 characters (`body_type`) | 50 characters |
+| `model_version` | 121 characters | 250 characters |
+| an equipment item | 37 characters | 45 characters |
+| `equipment_comfort`, `equipment_entertainment`, `equipment_extra`, `equipment_safety` | 42, 16, 37 and 36 items | 55, 20, 45 and 45 items |
+
+A body with every field at its bound is at most 9.8 KB (9,804 bytes for `/v1/comparables`), so a longer value is a 422 that names the field rather than a 413 for the whole body.
+
 The values a categorical field accepts come from the loaded bundle, not from the code: the supported makes from its metadata (FR-04), the levels of `fuel_category`, `transmission`, `body_type`, `drive_train` and `seller_type` from its feature space (FR-03).
 `/docs` lists them as enums, and a 422 for such a field lists them in `allowed`.
 `country_code` accepts the 8 countries of the data.
@@ -364,7 +376,7 @@ That includes `/v1/feedback`'s 401, 404 and 409 and the 503 of a prediction log 
 ### validation-error
 
 Status 422.
-The request body is not valid JSON, misses a required field, has a value of the wrong type or outside its range (FR-03), or names a value the served model does not accept, such as an unsupported make (FR-04).
+The request body is not valid JSON, misses a required field, has a value of the wrong type, outside its range or longer than its bound (FR-03), or names a value the served model does not accept, such as an unsupported make (FR-04).
 `errors` has one entry per invalid field, every invalid field of the request in one response.
 `pointer` is a JSON Pointer ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)) into the request body, written as a URI fragment; `#` alone means the body as a whole.
 No endpoint takes query or path parameters yet; the first one that does decides how its errors name them, and documents it here.
@@ -375,7 +387,8 @@ No endpoint takes query or path parameters yet; the first one that does decides 
 Status 413.
 The request body is larger than 10 KB (NFR-09).
 A declared `Content-Length` over the limit is refused before the body is read; a chunked body without one is counted as it arrives and refused as soon as it passes the limit.
-A valuation request with every optional field filled is about 2 KB.
+The largest of the 118,382 raw listings, sent as a valuation request with every field it has, is 3.5 KB.
+A body within the [length bounds](#endpoints) of every field fits in the limit, so a 413 means padding, escaped characters or a body that is not a listing.
 
 A 500 says nothing about its cause; the cause is in the [service log](#logs), as the `exception` of the line with the request ID that `instance` names.
 
@@ -430,6 +443,7 @@ An operation behind an API key, such as `/v1/feedback`, gets the test app's key,
 
 The OpenAPI document is what a client codes against, so the API keeps to it as written: a request body is strict, and `0` is not a boolean nor `"45000"` a number, while a whole float such as `4.0` is an integer, as JSON Schema defines one.
 A constraint the schema cannot state needs a hook in the test module.
+The 10 KB limit of NFR-09 needs none: the length bounds keep every generated valid body under it, so a 413 for one fails the test.
 The one so far is that `registration_date` must not lie after the current month (FR-03): the pattern states the lower bound, 1900-01, and the upper bound moves with the calendar.
 The response schemas allow additional properties, so a field an answer gains without being documented is not caught; a documented field that changes its type or goes missing is.
 A generated feedback names a request ID the prediction log does not hold, so the stored, repeated and conflicting prices of `/v1/feedback` are left to `tests/api/test_feedback.py`.

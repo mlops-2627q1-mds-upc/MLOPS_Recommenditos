@@ -14,6 +14,11 @@ startup (FR-03, FR-04, FR-12), so a field like `make` is a plain string here and
 the served model checks it. `create_app` writes those values into the OpenAPI
 document as enums, so `/docs` shows them anyway.
 
+Every string and every equipment list has a maximum length, so that a body
+within every bound stays under the 10 KB limit of NFR-09 and the OpenAPI
+document states what that limit enforces. `tests/api/test_request_bounds.py` holds the
+largest such body under the limit.
+
 `Problem` and `FieldError` are the error shape every endpoint shares (FR-16,
 EDN-84); `recommenditos/api/errors.py` builds and documents them.
 """
@@ -39,6 +44,28 @@ _ANY_YEAR_MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 #: The earliest registration month FR-03 accepts.
 EARLIEST_REGISTRATION = "1900-01"
 
+# The length bounds come from the 118,382 raw listings (`data/raw/listings.parquet`),
+# whose every value they accept. A string outside the equipment lists gets at
+# least twice its longest value: 23 characters for a category or a colour, 22 for
+# `model`, 121 for `model_version`. The equipment lists get at least 1.2 times
+# theirs, rounded up to a multiple of 5, because their items dominate a body and
+# twice would not fit in 10 KB: 37 characters for an item, and 42, 16, 37 and 36
+# items for comfort, entertainment, extra and safety.
+
+#: Characters of a category, a colour, a make or a model name.
+MAX_NAME_LENGTH = 50
+#: Characters of `model_version`, the listing's free-text version line.
+MAX_MODEL_VERSION_LENGTH = 250
+#: Characters of one equipment item.
+MAX_EQUIPMENT_ITEM_LENGTH = 45
+#: Items per equipment list.
+MAX_EQUIPMENT_ITEMS = {
+    "equipment_comfort": 55,
+    "equipment_entertainment": 20,
+    "equipment_extra": 45,
+    "equipment_safety": 45,
+}
+
 
 def _within_registration_range(value: Any) -> Any:
     """FR-03: a registration month lies between 1900-01 and the request month.
@@ -60,6 +87,7 @@ def _within_registration_range(value: Any) -> Any:
 Make = Annotated[
     str,
     Field(
+        max_length=MAX_NAME_LENGTH,
         description="Manufacturer. Must be one of the makes the served model supports (FR-04); "
         "a 422 lists them.",
         examples=["Volkswagen"],
@@ -69,6 +97,7 @@ ModelName = Annotated[
     str,
     Field(
         min_length=1,
+        max_length=MAX_NAME_LENGTH,
         description="Model name. A model the training data does not hold is accepted, passed "
         "to the model as unknown and reported in `warnings` (FR-05).",
         examples=["Golf"],
@@ -105,14 +134,25 @@ PowerKw = Annotated[
     ),
 ]
 FuelCategory = Annotated[
-    str, Field(description="Fuel category, one of the served model's.", examples=["Gasoline"])
+    str,
+    Field(
+        max_length=MAX_NAME_LENGTH,
+        description="Fuel category, one of the served model's.",
+        examples=["Gasoline"],
+    ),
 ]
 Transmission = Annotated[
-    str, Field(description="Transmission, one of the served model's.", examples=["Manual"])
+    str,
+    Field(
+        max_length=MAX_NAME_LENGTH,
+        description="Transmission, one of the served model's.",
+        examples=["Manual"],
+    ),
 ]
 CountryCode = Annotated[
     str,
     Field(
+        max_length=MAX_NAME_LENGTH,
         description="ISO country code of the listing, one of the 8 countries of the data. "
         "`ES` is accepted although the model was not trained on it, and reported in `warnings` "
         "(FR-05).",
@@ -120,14 +160,28 @@ CountryCode = Annotated[
     ),
 ]
 BodyType = Annotated[
-    str, Field(description="Body type, one of the served model's.", examples=["Compact"])
+    str,
+    Field(
+        max_length=MAX_NAME_LENGTH,
+        description="Body type, one of the served model's.",
+        examples=["Compact"],
+    ),
 ]
 SellerType = Annotated[
-    str, Field(description="Seller type, one of the served model's.", examples=["Dealer"])
+    str,
+    Field(
+        max_length=MAX_NAME_LENGTH,
+        description="Seller type, one of the served model's.",
+        examples=["Dealer"],
+    ),
 ]
 DriveTrain = Annotated[
     str,
-    Field(description="Drive train, one of the served model's.", examples=["Front Wheel Drive"]),
+    Field(
+        max_length=MAX_NAME_LENGTH,
+        description="Drive train, one of the served model's.",
+        examples=["Front Wheel Drive"],
+    ),
 ]
 
 
@@ -169,19 +223,54 @@ ElectricRangeKm = Annotated[
     float,
     Field(ge=0, le=2_000, allow_inf_nan=False, description="Electric range in km, 0 to 2,000."),
 ]
-EquipmentList = Annotated[
-    list[str],
+EquipmentItem = Annotated[str, Field(max_length=MAX_EQUIPMENT_ITEM_LENGTH)]
+_EQUIPMENT_DESCRIPTION = (
+    "Equipment items as the listing names them. An omitted list is an empty list, never null "
+    "(FR-01)."
+)
+ComfortEquipment = Annotated[
+    list[EquipmentItem],
     Field(
-        description="Equipment items as the listing names them. An omitted list is an empty "
-        "list, never null (FR-01).",
+        max_length=MAX_EQUIPMENT_ITEMS["equipment_comfort"],
         examples=[["Air conditioning", "Navigation system"]],
+        description=_EQUIPMENT_DESCRIPTION,
+    ),
+]
+EntertainmentEquipment = Annotated[
+    list[EquipmentItem],
+    Field(
+        max_length=MAX_EQUIPMENT_ITEMS["equipment_entertainment"],
+        examples=[["Bluetooth", "Radio"]],
+        description=_EQUIPMENT_DESCRIPTION,
+    ),
+]
+ExtraEquipment = Annotated[
+    list[EquipmentItem],
+    Field(
+        max_length=MAX_EQUIPMENT_ITEMS["equipment_extra"],
+        examples=[["Alloy wheels", "Sport seats"]],
+        description=_EQUIPMENT_DESCRIPTION,
+    ),
+]
+SafetyEquipment = Annotated[
+    list[EquipmentItem],
+    Field(
+        max_length=MAX_EQUIPMENT_ITEMS["equipment_safety"],
+        examples=[["ABS", "Electronic stability control"]],
+        description=_EQUIPMENT_DESCRIPTION,
     ),
 ]
 Flag = Annotated[
     bool,
     Field(description="A ticked box of the listing. Omitted means not ticked (EDN-23)."),
 ]
-Text = Annotated[str, Field(min_length=1)]
+Text = Annotated[str, Field(min_length=1, max_length=MAX_NAME_LENGTH)]
+ModelVersion = Annotated[
+    str,
+    Field(
+        max_length=MAX_MODEL_VERSION_LENGTH, description="The listing's free-text version line."
+    ),
+]
 
 
 class ListingFields(BaseModel):
