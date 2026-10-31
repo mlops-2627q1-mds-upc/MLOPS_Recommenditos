@@ -8,7 +8,7 @@
   topic = {Performance Testing, Deployment},
   participants = {@lukas2510 decided (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143}{issue \#143})},
   decision = {A Locust load test on the VM, 20 requests/s for 5 minutes, settles NFR-02 to NFR-04 and NFR-10.
-NFR-02's \texttt{/\allowbreak{}predict} target rises from 200 to 250 ms at the 95th percentile; NFR-03, NFR-04 and NFR-10 are confirmed as measured.
+NFR-02's \texttt{/\allowbreak{}predict} target rises from 200 to 250 ms at the 95th percentile; the other endpoints' 300 ms and NFR-03, NFR-04 and NFR-10 are confirmed as measured.
 Production runs one API worker.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]

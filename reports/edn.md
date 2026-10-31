@@ -1161,7 +1161,7 @@ How to add an entry:
 - **Activity / Topic:** Performance Testing, Deployment
 - **Participants:** @lukas2510 decided ([issue #143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143))
 - **Decision:** A Locust load test on the VM, 20 requests/s for 5 minutes, settles NFR-02 to NFR-04 and NFR-10.
-  NFR-02's `/predict` target rises from 200 to 250 ms at the 95th percentile; NFR-03, NFR-04 and NFR-10 are confirmed as measured.
+  NFR-02's `/predict` target rises from 200 to 250 ms at the 95th percentile; the other endpoints' 300 ms and NFR-03, NFR-04 and NFR-10 are confirmed as measured.
   Production runs one API worker.
 - **Alternatives considered:**
   - Keep 200 ms and optimise `/predict`: the miss is 10 ms in the tail of one shared vCPU, not in the typical answer.
