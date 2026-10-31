@@ -7,19 +7,19 @@ FR-04); only `make` is required. A field left out reaches the model as absent,
 which is how the interval models were trained and calibrated (EDN-85).
 """
 
-from typing import Annotated
-
 from pydantic import ConfigDict, Field
 
 from recommenditos.api.schemas.common import (
     BodyType,
+    ComfortEquipment,
     CountryCode,
     Cylinders,
     DisplacementCc,
     Doors,
     DriveTrain,
     ElectricRangeKm,
-    EquipmentList,
+    EntertainmentEquipment,
+    ExtraEquipment,
     Flag,
     FuelCategory,
     Gears,
@@ -27,9 +27,11 @@ from recommenditos.api.schemas.common import (
     Make,
     MileageKm,
     ModelName,
+    ModelVersion,
     PowerKw,
     PreviousOwners,
     RegistrationDate,
+    SafetyEquipment,
     Seats,
     SellerType,
     Text,
@@ -65,10 +67,10 @@ class PartialListing(ListingFields):
     cylinders: Cylinders | None = None
     weight_kg: WeightKg | None = None
     electric_range_km: ElectricRangeKm | None = None
-    equipment_comfort: EquipmentList = Field(default_factory=list)
-    equipment_entertainment: EquipmentList = Field(default_factory=list)
-    equipment_extra: EquipmentList = Field(default_factory=list)
-    equipment_safety: EquipmentList = Field(default_factory=list)
+    equipment_comfort: ComfortEquipment = Field(default_factory=list)
+    equipment_entertainment: EntertainmentEquipment = Field(default_factory=list)
+    equipment_extra: ExtraEquipment = Field(default_factory=list)
+    equipment_safety: SafetyEquipment = Field(default_factory=list)
     has_full_service_history: Flag = False
     non_smoking: Flag = False
     is_rental: Flag = False
@@ -76,9 +78,7 @@ class PartialListing(ListingFields):
     paint_type: Text | None = None
     upholstery: Text | None = None
     upholstery_color: Text | None = None
-    model_version: Annotated[
-        str | None, Field(description="The listing's free-text version line.")
-    ] = None
+    model_version: ModelVersion | None = None
     envir_standard: Text | None = None
     original_market: Text | None = None
 
