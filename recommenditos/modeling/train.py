@@ -46,6 +46,14 @@ be able to train. `RECOMMENDITOS_REQUIRE_TRACKING=1` turns that into a failure
 for the runs whose numbers are cited.
 """
 
+import os
+
+# OpenBLAS reads its kernel from this variable once, when numpy loads it, so
+# this comes before any import that loads numpy. `check_openblas_kernel` in
+# model.py says why `b1` needs it and fails the fit if it did not take effect.
+# A value the caller set wins.
+os.environ.setdefault("OPENBLAS_CORETYPE", "Haswell")
+
 from dataclasses import replace
 from pathlib import Path
 import shutil
