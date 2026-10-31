@@ -447,9 +447,9 @@ def test_the_energy_comparison_carries_every_variant_in_the_columns_the_report_r
     lines = table.read_text(encoding="utf-8").splitlines()
     assert lines[0] == ",".join(compare_energy.COLUMNS)
 
-    # `round_trip`, because pandas' default float parser is not exact and the
-    # file holds `repr` of every float.
-    rows = pd.read_csv(table, float_precision="round_trip")
+    # The file holds `repr` of every float, and pandas 3's default parser reads
+    # it back exactly, which the comparisons below rely on.
+    rows = pd.read_csv(table)
     assert list(rows["variant"]) == list(params["train"]["variants"])
     for row in rows.itertuples():
         metrics = json.loads((pipeline["metrics_dir"] / f"{row.variant}.json").read_text())
@@ -482,9 +482,7 @@ def test_the_raw_file_is_profiled_over_every_listing_it_holds(pipeline):
     # what the scope rules were decided on, so each dimension's levels have to
     # account for every row `download` wrote, the ones without a value included.
     raw = pd.read_parquet(pipeline["raw"], columns=list(profile_data.DIMENSIONS))
-    table = pd.read_csv(
-        pipeline["figures"] / profile_data.TABLE_FILE, float_precision="round_trip"
-    )
+    table = pd.read_csv(pipeline["figures"] / profile_data.TABLE_FILE)
 
     assert list(table.columns) == list(profile_data.COLUMNS)
     for dimension in profile_data.DIMENSIONS:
