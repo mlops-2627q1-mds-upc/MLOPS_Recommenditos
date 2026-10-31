@@ -451,7 +451,7 @@ def test_an_id_no_requirement_defines_is_reported_as_unknown():
 #: What the gate currently enforces: every requirement whose evidence is already
 #: due, and the route by which the specification says it is verified. Both are
 #: parameters of a CI gate, and both were loosenable by a change that reads like
-#: tidying: move an ID from the `M3` list to the `M4` list, or rewrite a "Verified
+#: tidying: move an ID from the `M4` list to the `M5` list, or rewrite a "Verified
 #: by" cell from **[automated]** to **[manual]** and add a sentence of prose, and
 #: the requirement left the blocking set with no test written and nothing else
 #: changed. Pinning them here makes either move cost a visible test change, which
@@ -461,12 +461,30 @@ def test_an_id_no_requirement_defines_is_reported_as_unknown():
 #: neither waits for the half it was written with. NFR-14 is verified by tests,
 #: because what a run records can be read back from a run. NFR-15 is verified by
 #: the CI secret scan, which is not a Pytest test and is therefore **[manual]**,
-#: like the CI run NFR-07 names.
-DUE_AT_M3 = {
+#: like the CI run NFR-07 names. NFR-02, NFR-03 and NFR-10 are **[manual]**
+#: because their evidence is the load test a person runs against the VM.
+DUE_AT_M4 = {
+    "FR-01": "automated",
+    "FR-02": "automated",
+    "FR-03": "automated",
+    "FR-04": "automated",
+    "FR-05": "automated",
+    "FR-06": "automated",
+    "FR-07": "automated",
+    "FR-08": "automated",
+    "FR-09": "automated",
+    "FR-10": "automated",
+    "FR-11": "automated",
+    "FR-13": "automated",
+    "FR-16": "automated",
     "NFR-01": "automated",
+    "NFR-02": "manual",
+    "NFR-03": "manual",
     "NFR-06": "manual",
     "NFR-07": "manual",
     "NFR-08": "automated",
+    "NFR-09": "automated",
+    "NFR-10": "manual",
     "NFR-14": "automated",
     "NFR-15": "manual",
 }
@@ -478,7 +496,7 @@ def test_the_gate_stands_where_this_commit_says_it_stands():
         matrix_tool.EXPECTED_COVERAGE_FILE.read_text(encoding="utf-8"),
         set(matrix_tool.known_requirement_ids()),
     )
-    assert coverage.current == "M3"
+    assert coverage.current == "M4"
 
     specified = matrix_tool.parse_specification(
         matrix_tool.SPECIFICATION_DOC.read_text(encoding="utf-8")
@@ -488,7 +506,7 @@ def test_the_gate_stands_where_this_commit_says_it_stands():
         for req_id, milestone in coverage.due.items()
         if coverage.enforces(req_id)
     }
-    assert dict(sorted(due.items())) == DUE_AT_M3
+    assert dict(sorted(due.items())) == DUE_AT_M4
 
 
 # --------------------------------------------------------------------------
