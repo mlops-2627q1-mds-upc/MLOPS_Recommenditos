@@ -18,9 +18,9 @@
 
 # A pinned uv, so that the image builds the same way every time; Dependabot moves
 # the pin.
-FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
-FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2 AS dependencies
+FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 AS dependencies
 
 COPY --from=uv /uv /bin/uv
 
@@ -70,7 +70,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && cp -a "$site"/recommenditos/api/healthcheck.py /project/app/healthcheck.py
 
 
-FROM python:3.12-slim-trixie@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2
+FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
 
 # The bundle to serve. `/health` reports the DVC hash of this directory, so it is
 # copied whole and unchanged, and FR-12's check compares it with dvc.lock.
