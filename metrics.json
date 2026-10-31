@@ -22,13 +22,13 @@
     },
     "b1": {
       "estimator": "ridge",
-      "mdape": 0.0951563754861866,
-      "within_20pct": 0.8029494024917366,
+      "mdape": 0.09523488017098088,
+      "within_20pct": 0.8030511060259344,
       "sc05_coverage": null,
       "sc05_passed": null,
       "gate_passed": false,
       "gate_blocked_by": "sc01,sc02,sc03 failed; sc05 unmeasured",
-      "gate_waived": "sc04 failed at 0.2935 (EDN-62)"
+      "gate_waived": "sc04 failed at 0.2951 (EDN-62)"
     },
     "lgbm-basic": {
       "estimator": "lightgbm",

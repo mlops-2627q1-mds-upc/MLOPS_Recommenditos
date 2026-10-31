@@ -4,7 +4,7 @@
   "data_source": "zenodo",
   "feature_set": "basic",
   "n_test_rows": 19665,
-  "mlflow_run_id": "531a2aedf49b480c866b5ac4b7f1db18",
+  "mlflow_run_id": "2f1830b2833143a0b8dce46a54c5e590",
   "mdape": 0.06733805931326535,
   "within_10pct": 0.6661072972285786,
   "within_20pct": 0.8999237223493516,
@@ -35,7 +35,7 @@
       "mdape": 0.06355734961918771,
       "within_10pct": 0.6948154712920175,
       "within_20pct": 0.9208710514654681,
-      "mae_eur": 4939.021050961233,
+      "mae_eur": 4939.0210509612325,
       "mape": 0.08900750859491836,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -48,7 +48,7 @@
       "mdape": 0.0682412260389146,
       "within_10pct": 0.6555790410501724,
       "within_20pct": 0.881744354210702,
-      "mae_eur": 5792.110229538065,
+      "mae_eur": 5792.110229538066,
       "mape": 0.106856255875042,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -75,7 +75,7 @@
       "within_10pct": 0.6518908436071478,
       "within_20pct": 0.8936140739714642,
       "mae_eur": 2970.06200056204,
-      "mape": 0.10039772860258378,
+      "mape": 0.10039772860258377,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -127,7 +127,7 @@
       "within_10pct": 0.6889135254988914,
       "within_20pct": 0.9186252771618625,
       "mae_eur": 8264.256267098512,
-      "mape": 0.08696422361902735,
+      "mape": 0.08696422361902734,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -179,7 +179,7 @@
       "within_10pct": 0.6471349951440596,
       "within_20pct": 0.879896406604079,
       "mae_eur": 5580.231915096326,
-      "mape": 0.10646318418837442,
+      "mape": 0.10646318418837444,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -205,7 +205,7 @@
       "within_10pct": 0.7118391660461653,
       "within_20pct": 0.9538346984363366,
       "mae_eur": 5254.525253069234,
-      "mape": 0.0779280263038363,
+      "mape": 0.07792802630383629,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -240,7 +240,7 @@
       "segment": "age_bucket",
       "level": "1-3",
       "n": 2076,
-      "mdape": 0.05889814760594486,
+      "mdape": 0.05889814760594493,
       "within_10pct": 0.7254335260115607,
       "within_20pct": 0.9373795761078998,
       "mae_eur": 8376.558691988901,
@@ -257,7 +257,7 @@
       "within_10pct": 0.6545562835020846,
       "within_20pct": 0.8975580702799285,
       "mae_eur": 3613.8842124690404,
-      "mape": 0.09954989291898467,
+      "mape": 0.09954989291898465,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -344,7 +344,7 @@
       "segment": "make",
       "level": "Volvo",
       "n": 714,
-      "mdape": 0.09061733922299153,
+      "mdape": 0.0906173392229916,
       "within_10pct": 0.5266106442577031,
       "within_20pct": 0.7871148459383753,
       "mae_eur": 1572.8000006484394,
@@ -542,7 +542,7 @@
       "mdape": 0.07472642661250672,
       "within_10pct": 0.6307565789473685,
       "within_20pct": 0.8807565789473685,
-      "mae_eur": 1612.209521752484,
+      "mae_eur": 1612.2095217524839,
       "mape": 0.1019853653295665,
       "counts_toward_sc04": false,
       "excluded_because": "target_conditioned"
@@ -555,7 +555,7 @@
       "mdape": 0.13349750558225845,
       "within_10pct": 0.376844494892168,
       "within_20pct": 0.6912599318955732,
-      "mae_eur": 1396.465017200044,
+      "mae_eur": 1396.4650172000438,
       "mape": 0.18741290825437376,
       "counts_toward_sc04": false,
       "excluded_because": "target_conditioned"
@@ -724,7 +724,7 @@
       "n": 824,
       "coverage": 0.8592233009708737,
       "std_error": 0.010450995214374264,
-      "mean_relative_width": 0.5940306760225526,
+      "mean_relative_width": 0.5940306760225524,
       "judgement": "outside_band"
     },
     {
@@ -764,7 +764,7 @@
       "n": 84,
       "coverage": 0.8690476190476191,
       "std_error": 0.032732683535398856,
-      "mean_relative_width": 0.7588218123039752,
+      "mean_relative_width": 0.7588218123039753,
       "judgement": "not_judged_too_few_rows"
     },
     {
