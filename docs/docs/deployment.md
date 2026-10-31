@@ -109,7 +109,7 @@ Measured on the VM on 2026-10-30 (1 vCPU, 3.8 GiB, Docker 28.1.1), with the stac
 | `deploy.sh deploy` in the pipeline ([run 41132206289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/41132206289), commit a09f496) | 7 s from start to "runs"; the smoke check from the public internet passed 17 tests | - |
 | `deploy.sh deploy` of an image that does not start (tag `deadbeef...`, by hand) | exit 1 after 8.2 s, about 7 s of 503; `.deploy-previous` unchanged | - |
 | Reboot (`sudo reboot`) to the first 200 from `/health` through nginx, polled every 0.3 s over SSH | 19.8 s after `uptime -s`; about 26 s from the `reboot` command | within 30 s of the VM being up (NFR-05) |
-| [Load test](load-testing.md#run-it-on-the-vm) on 2026-10-31, 20 requests/s for 5 minutes, Locust on the VM, image 902de35 | One worker: `/v1/predict` p95 210 ms, no errors, API at most 295 MiB and 61 % of the vCPU on average. Two workers: p95 240 ms, at most 609 MiB, 546 MiB idle; restart count unchanged in both | NFR-02, NFR-03, NFR-04 |
+| [Load test](load-testing.md#run-it-on-the-vm) on 2026-10-31, 20 requests/s for 5 minutes, Locust on the VM, image 902de35 | One worker: `/v1/predict` p95 210 ms, no errors, API at most 295 MiB and 61 % of the vCPU on average. Two workers: p95 240 ms, at most 609 MiB; restart count unchanged in both | NFR-02, NFR-03, NFR-04 |
 
 The reboot, in detail: systemd took 14.3 s to start (3.1 s kernel, 11.3 s userspace), the containers started at 11.4 s, and nginx answered 503 for about 6 s while uvicorn loaded the model.
 The API kept its container IP, so nginx's 10 s re-resolve did not delay it; whether it would when the IP changes after a boot was not measured.

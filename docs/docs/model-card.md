@@ -330,7 +330,7 @@ The absolute error in log space *is* the symmetric relative error, so the stoppi
 `n_estimators: 5000` is a ceiling and not a tree count: early stopping on the validation split decides how many trees the model keeps, and the booster is saved at that round, so the file *is* the model and no consumer has to remember an iteration argument (EDN-73).
 On the real snapshot early stopping chooses round **1,394** for `lgbm-basic` and **1,647** for `lgbm-extended`, so the ceiling sits three times above the later of the two.
 It used to be 1,000, and then it was the ceiling that ended both fits, not early stopping (issue #64).
-5,000 rather than higher, because the ceiling is also the worst case of every cost that grows with the trees: a fit that used all of them would take about 80 s for `lgbm-extended`, write a booster of about 33 MB and spend about 105 ms on one row's SHAP export, against NFR-02's 200 ms for the whole of `/predict`.
+5,000 rather than higher, because the ceiling is also the worst case of every cost that grows with the trees: a fit that used all of them would take about 80 s for `lgbm-extended`, write a booster of about 33 MB and spend about 105 ms on one row's SHAP export, against NFR-02's 250 ms for the whole of `/predict`.
 `train` warns when the ceiling ends a fit, and `model.json` and the MLflow run record whether early stopping did (`early_stopped`, with the rounds run beside the trees kept), so a binding ceiling is a fact of the artefact rather than something read off a tree count.
 
 Raising the ceiling is also what showed how closely the stopping metric tracks the gate's.
@@ -498,7 +498,7 @@ The latency, image and memory targets are **[proposed]** (NFR-02 to NFR-04); NFR
 | Model artefact on disk | no target | 8.7 MB (`booster.txt`, 1,394 trees) for the candidate's point model, plus 36.4 MB for its three quantile boosters (4.1, 3.8 and 28.5 MB for 612, 578 and 4,774 trees), 10.9 MB (1,647 trees) for `lgbm-extended`, plus 22 KB and 87 KB of metadata and feature space respectively. About 6.2 and 6.6 MB per 1,000 trees, so the ceiling's worst case is about 33 MB |
 | API image, model and comparables index included | at most 1 GB, no GPU or deep-learning libraries (NFR-04) | _TBD_ |
 | Resident memory of the API under load | below 1 GB (NFR-04) | _TBD_ |
-| Inference latency, p95 | 200 ms for `/predict` including the explanation, 300 ms for `/price-range` and `/comparables` (NFR-02) | _TBD_ |
+| Inference latency, p95 | 250 ms for `/predict` including the explanation, 300 ms for `/price-range` and `/comparables` (NFR-02) | `/predict`: p50 65 ms, p95 210 ms, on the target VM (1 vCPU, one worker) at 20 requests/s for 5 minutes, 2026-10-31 ([results](load-testing.md#run-it-on-the-vm)) |
 
 ## Evaluation
 

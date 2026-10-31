@@ -137,7 +137,7 @@ It is rare: with `lgbm-basic`, 1 of the 103,868 listings of the feature matrices
 
 The explanation is the costliest step of a request, because TreeSHAP visits every leaf of each of the 1,394 trees of `lgbm-basic`, where a prediction follows one path per tree.
 Measured in-process with `TestClient` on a shared 4-core development laptop, over 394 requests built from test listings, it took p50 34 ms and p95 49 ms of a request that took p50 63 ms and p95 93 ms; a second run under heavier load from other processes gave 44 and 71 ms of 81 and 140 ms.
-Both are inside NFR-02's 200 ms for `/predict`, which the load test on the target VM checks.
+Both are inside NFR-02's 250 ms for `/predict`, which the load test on the target VM checked.
 `lgbm-extended`, with 162 columns in 33 fields, is close to that limit or over it: under a load average of 2.7 to 5.7 one run gave a whole request of p50 181 ms and p95 195 ms (explanation 78 and 83 ms) and another p50 250 ms and p95 357 ms (explanation 106 and 148 ms), where `lgbm-basic` took p50 65 ms and p95 78 ms in the first run.
 
 ### The price range
@@ -222,7 +222,7 @@ In the deployment only Prometheus reads it, inside the Compose network: nginx re
 
 `path` is the route template, such as `/v1/predict`, never the raw path, so a client cannot grow the label set; a request that matches no route is counted under `<unmatched>`.
 A method other than the standard ones is counted as `OTHER`.
-The latency histogram has bucket bounds at 0.2 s and 0.3 s, NFR-02's targets, so the share of answers within each target is read from one bucket.
+The latency histogram has bucket bounds at 0.25 s and 0.3 s, NFR-02's targets, so the share of answers within each target is read from one bucket.
 Every request is counted, a body refused before it was read and a last-resort 500 included, because the middleware that counts sits outside all others.
 The process's own CPU and memory are not here: cAdvisor or node-exporter report the container's (M6).
 
@@ -276,7 +276,7 @@ Several worker processes write the same file: SQLite serialises the writers with
 When the record cannot be written, the client gets a 503 instead of the answer, and the cause goes to the service log.
 An answer the log does not hold would break exactly-once silently, and the load test counts a 503 as an error, so a failing log is visible at once.
 
-Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 200 ms NFR-02 gives `/predict`.
+Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 250 ms NFR-02 gives `/predict`.
 A record takes about 940 bytes, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold about 2.1 million answers, fewer when requests fill more optional fields.
 
 ### Feedback

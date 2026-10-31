@@ -16,7 +16,7 @@ Priorities follow MoSCoW.
 **Should** means it is part of the plan and is dropped only if a milestone is at risk.
 
 Status markers **[decided]**, **[proposed]** and **[open]** mean what the [project brief](project-brief.md) defines them to mean; that is the only place they are defined.
-The alternatives behind a **[proposed]** marker are in the [specification](specification.md#decisions-pending-confirmation).
+The alternatives behind a decision are in the [specification](specification.md#decisions-pending-confirmation).
 
 ## Who the component is for
 
@@ -78,14 +78,14 @@ These requirements exist for the team as operator, not for the seller or the buy
 
 The component runs on the single small machine the course provides (4 GB RAM, 20 GB disk, CPU only, **[decided]**, [EDN-17](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 That machine is a given constraint, not a design choice, and NFR-02 to NFR-04 are written for it.
-Those three targets are themselves **[proposed]**: they are estimates, checked against the first load test in M4 and adjusted there if needed.
+Those three targets were estimates until the load test on the VM of 2026-10-31 checked them; NFR-02's `/predict` target was raised there and the rest confirmed (**[decided, [EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)]**).
 
 | ID | Priority | Quality | Requirement | Acceptance criterion |
 |----|----------|---------|-------------|----------------------|
 | NFR-01 | Must | Model quality | Only a model that meets every success criterion SC-01 to SC-06 of the [problem specification](problem-spec.md#8-success-criteria) is released, except a criterion whose miss the team accepted in a recorded engineering decision, which the gate then reports as waived. This requirement sets no thresholds of its own. | The quality gate in front of a release evaluates all six criteria and blocks on any miss of a criterion not waived under `evaluate.waived_criteria` in `params.yaml`. |
-| NFR-02 | Must | Latency | An answer arrives while the user is still looking at the screen, so that trying a variant of the same car costs nothing: 95 % of valuations within 200 ms and 95 % of price ranges and comparable listings within 300 ms. **[proposed]** | Measured under the load of NFR-03 on the target machine. |
-| NFR-03 | Must | Throughput and scalability | The component serves 20 requests per second for five minutes with fewer than 1 % errors while still meeting NFR-02. Its correctness must not depend on how many copies of it are running: whatever the number, every answer appears exactly once in the record of FR-13, and every reported price of FR-10 is visible to the monitoring of FR-14. **[proposed]** | A load test at that rate, repeated with more than one copy running, with the record checked for duplicates and gaps. |
-| NFR-04 | Must | Resources | The entire system fits the provided machine with headroom left at all times, and nothing in the serving path needs hardware beyond it, in particular no GPU. Storage that grows (records, metrics) is bounded, so that it cannot fill the disk. **[proposed]** | Memory and disk stay within the machine's limits during the NFR-03 load test, with the stated headroom free. |
+| NFR-02 | Must | Latency | An answer arrives while the user is still looking at the screen, so that trying a variant of the same car costs nothing: 95 % of valuations within 250 ms and 95 % of price ranges and comparable listings within 300 ms. **[decided, [EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)]** 250 ms rather than the estimated 200 ms, because the VM has one vCPU. | Measured under the load of NFR-03 on the target machine. |
+| NFR-03 | Must | Throughput and scalability | The component serves 20 requests per second for five minutes with fewer than 1 % errors while still meeting NFR-02. Its correctness must not depend on how many copies of it are running: whatever the number, every answer appears exactly once in the record of FR-13, and every reported price of FR-10 is visible to the monitoring of FR-14. **[decided, [EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)]** Confirmed by the load test on the VM of 2026-10-31. | A load test at that rate, repeated with more than one copy running, with the record checked for duplicates and gaps. |
+| NFR-04 | Must | Resources | The entire system fits the provided machine with headroom left at all times, and nothing in the serving path needs hardware beyond it, in particular no GPU. Storage that grows (records, metrics) is bounded, so that it cannot fill the disk. **[decided, [EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)]** Confirmed by the load test on the VM of 2026-10-31. | Memory and disk stay within the machine's limits during the NFR-03 load test, with the stated headroom free. |
 | NFR-05 | Must | Availability | **[decided, EDN-10]** The component recovers by itself within 30 seconds of a crash, a hang or a restart of the machine, without anyone logging in. It has zero unplanned downtime during the graded presentation and its warm-up. Outside that window it runs unattended on a single machine without redundancy, so uptime is monitored and reported, not contractually promised. | A rehearsed crash, a rehearsed hang and a rehearsed reboot, each followed by automatic recovery within 30 seconds; a health check immediately before the presentation. |
 | NFR-06 | Must | Reproducibility | From a clean clone of the repository, the documented steps reproduce the same splits and the same metrics within ±0.1 percentage points. **[decided]** That every training run records what produced it is NFR-14. | A rerun from a clean clone before each delivery. |
 | NFR-07 | Must | Maintainability | The repository stays reviewable for a semester with five part-time people: code and notebooks pass the agreed quality checks without findings, the test coverage of the project code is at least 80 % with every exclusion justified, and the checks run before a change is merged rather than after. Every requirement is traceable to the test that verifies it, or is explicitly marked as verified by hand. | The checks and the requirement-to-test matrix run in CI and are reviewed before each delivery. |
@@ -121,6 +121,6 @@ Three rows have no equivalent in either standard; they are here because the cour
 
 ## Open points
 
-The requirements above are agreed, except where a **[proposed]** marker says otherwise.
-Open is how some of them are realised: the performance and resource targets of NFR-02 to NFR-04, and everything that depends on how the course machine can be reached from outside, which affects NFR-05, NFR-09 and NFR-13.
-Both are listed with their alternatives under [Decisions pending confirmation](specification.md#decisions-pending-confirmation) in the specification.
+The requirements above are agreed.
+The two points that were open, the performance and resource targets of NFR-02 to NFR-04 and how the course machine can be reached from outside (NFR-05, NFR-09, NFR-13), are decided now.
+The [specification](specification.md#decisions-pending-confirmation) holds both with their alternatives.
