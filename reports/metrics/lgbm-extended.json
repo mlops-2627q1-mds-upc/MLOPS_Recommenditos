@@ -4,7 +4,7 @@
   "data_source": "zenodo",
   "feature_set": "extended",
   "n_test_rows": 19665,
-  "mlflow_run_id": "36fe1257e3b24d6d8dad46f2be061f70",
+  "mlflow_run_id": "617a04c0bf584238ba6f7c27e212cb38",
   "mdape": 0.06255536280848185,
   "within_10pct": 0.6883803712178999,
   "within_20pct": 0.9040427154843631,
@@ -78,7 +78,7 @@
       "mdape": 0.0550502036650006,
       "within_10pct": 0.7349937733499378,
       "within_20pct": 0.9190535491905355,
-      "mae_eur": 4381.624120943506,
+      "mae_eur": 4381.624120943507,
       "mape": 0.08706952390211929,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -92,7 +92,7 @@
       "within_10pct": 0.6924781825737637,
       "within_20pct": 0.9076049314309461,
       "mae_eur": 2794.212740011064,
-      "mape": 0.09106512310222029,
+      "mape": 0.0910651231022203,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -101,7 +101,7 @@
       "segment": "fuel_category",
       "level": "Diesel",
       "n": 6348,
-      "mdape": 0.06190722330594749,
+      "mdape": 0.06190722330594743,
       "within_10pct": 0.6959672337744172,
       "within_20pct": 0.9111531190926276,
       "mae_eur": 2612.6969910683406,
@@ -166,10 +166,10 @@
       "segment": "age_bucket",
       "level": "6-10",
       "n": 3996,
-      "mdape": 0.06438272596286215,
+      "mdape": 0.06438272596286221,
       "within_10pct": 0.6854354354354354,
       "within_20pct": 0.9216716716716716,
-      "mae_eur": 3575.949372679341,
+      "mae_eur": 3575.9493726793407,
       "mape": 0.08693872964346397,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -183,7 +183,7 @@
       "within_10pct": 0.5747156153050672,
       "within_20pct": 0.8221302998965874,
       "mae_eur": 3798.766279727896,
-      "mape": 0.13639550278801563,
+      "mape": 0.1363955027880156,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -221,7 +221,7 @@
       "mdape": 0.05729433790760189,
       "within_10pct": 0.7386448250186151,
       "within_20pct": 0.9519731943410276,
-      "mae_eur": 5193.688213980899,
+      "mae_eur": 5193.688213980898,
       "mape": 0.0742396204353868,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -234,7 +234,7 @@
       "mdape": 0.05706598103256237,
       "within_10pct": 0.74413821472645,
       "within_20pct": 0.9502262443438914,
-      "mae_eur": 4015.382412447041,
+      "mae_eur": 4015.382412447042,
       "mape": 0.0750035184896044,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -313,7 +313,7 @@
       "within_10pct": 0.5812854442344045,
       "within_20pct": 0.8449905482041588,
       "mae_eur": 7952.92897381956,
-      "mape": 0.1146950464377561,
+      "mape": 0.11469504643775609,
       "counts_toward_sc04": true,
       "excluded_because": ""
     },
@@ -325,7 +325,7 @@
       "mdape": 0.058064884132933335,
       "within_10pct": 0.7185567010309278,
       "within_20pct": 0.9350515463917526,
-      "mae_eur": 5800.1359841905505,
+      "mae_eur": 5800.135984190551,
       "mape": 0.0796204593809366,
       "counts_toward_sc04": true,
       "excluded_because": ""
@@ -390,7 +390,7 @@
       "mdape": 0.11185858810558624,
       "within_10pct": 0.4689265536723164,
       "within_20pct": 0.768361581920904,
-      "mae_eur": 2040.9539262718342,
+      "mae_eur": 2040.953926271834,
       "mape": 0.15785046693366955,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
@@ -404,7 +404,7 @@
       "within_10pct": 0.7278911564625851,
       "within_20pct": 0.9319727891156463,
       "mae_eur": 4862.035292261174,
-      "mape": 0.07360753511012808,
+      "mape": 0.0736075351101281,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
     },
@@ -456,7 +456,7 @@
       "within_10pct": 0.6811594202898551,
       "within_20pct": 0.8985507246376812,
       "mae_eur": 4308.823980126187,
-      "mape": 0.0851862531049949,
+      "mape": 0.08518625310499492,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
     },
@@ -507,8 +507,8 @@
       "mdape": 0.1558769300489663,
       "within_10pct": 0.3333333333333333,
       "within_20pct": 0.6666666666666666,
-      "mae_eur": 818.8825410888443,
-      "mape": 0.16068475610975677,
+      "mae_eur": 818.882541088843,
+      "mape": 0.16068475610975672,
       "counts_toward_sc04": false,
       "excluded_because": "below_sc04_min_segment_rows"
     },
@@ -573,7 +573,7 @@
       "within_10pct": 0.3813847900113507,
       "within_20pct": 0.6674233825198638,
       "mae_eur": 1366.9482849657331,
-      "mape": 0.18321583646909437,
+      "mape": 0.18321583646909442,
       "counts_toward_sc04": false,
       "excluded_because": "target_conditioned"
     },
@@ -585,7 +585,7 @@
       "mdape": 0.22269380475091408,
       "within_10pct": 0.21324503311258278,
       "within_20pct": 0.44900662251655626,
-      "mae_eur": 906.0552063954183,
+      "mae_eur": 906.0552063954185,
       "mape": 0.3603587779199244,
       "counts_toward_sc04": false,
       "excluded_because": "target_conditioned"
@@ -837,8 +837,8 @@
       "criterion": "sc05",
       "field": "(P1: make, model, registration date, mileage)",
       "n_columns_masked": 158,
-      "mdape": 0.19017649180844057,
-      "mdape_ratio": 3.0401309059733346,
+      "mdape": 0.1901764918084407,
+      "mdape_ratio": 3.040130905973337,
       "threshold": null,
       "passed": null
     }
