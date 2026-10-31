@@ -83,7 +83,7 @@ flowchart TB
 | **DVC pipeline** | Turns the raw listings into the model bundle, its metrics and the gate's verdict | Built, `dvc.yaml`, [pipeline](pipeline.md) |
 | **DagsHub** | DVC remote for data and models; hosted MLflow for every run | Built, [data versioning](data-versioning.md) |
 | **CI** (GitHub Actions) | On every pull request: lint, tests on Linux and Windows, Serving runtime, Promotion gate, integration tests through nginx | Built, `.github/workflows/ci.yml` |
-| **CD** (GitHub Actions, GHCR) | On a merge to `main`, `cd.yml` builds and pushes the image; `deploy.yml` then deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying is off until the VM is configured ([Deployment](deployment.md#turn-continuous-deployment-on)) |
+| **CD** (GitHub Actions, GHCR) | On a merge to `main`, `cd.yml` builds and pushes the image; `deploy.yml` then deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying to the VM has been on since 2026-10-30 ([Deployment](deployment.md#turn-continuous-deployment-on)) |
 
 The API calls no other service at request time: no DagsHub, no MLflow.
 The state it keeps outside the image is the prediction log on its volume and the workers' metric files in a tmpfs, so a worker or the whole container can be restarted or replaced without losing a request's context.
@@ -109,7 +109,7 @@ flowchart LR
     d_user -->|"HTTP, host port 8080"| d_proxyc
     d_uptime -.->|"/health"| d_proxyc
     d_laptop -->|"docker save, ssh, docker load"| d_apic
-    d_ghcr -.->|"deploy.sh pulls, off until the lab"| d_apic
+    d_ghcr -.->|"deploy.sh pulls, on a merge to main"| d_apic
     d_proxyc -->|"api:8000"| d_apic
     d_m6 -.->|"/metrics"| d_apic
     d_apic --- d_tmpfs
