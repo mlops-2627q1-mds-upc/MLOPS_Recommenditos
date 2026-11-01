@@ -26,6 +26,9 @@ import os
 import subprocess
 import sys
 
+# `b1` is fitted on OpenBLAS's Haswell kernel (`check_openblas_kernel`); numpy has to see this first.
+os.environ.setdefault("OPENBLAS_CORETYPE", "Haswell")
+
 THREAD_COUNTS = ("1", "2", "4", "8", "8")
 
 

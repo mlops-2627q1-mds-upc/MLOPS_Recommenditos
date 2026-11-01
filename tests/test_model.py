@@ -21,10 +21,14 @@ builds on these fixtures rather than refitting.
 
 from fractions import Fraction
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
 from statistics import median
+import subprocess
+import sys
+import textwrap
 import time
 
 import lightgbm
@@ -39,6 +43,7 @@ import yaml
 
 from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data.build_features import FeatureSpace, Vocabulary
+from recommenditos.modeling import model as model_module
 from recommenditos.modeling import train
 from recommenditos.modeling.energy import read_record
 from recommenditos.modeling.evaluate import (
@@ -79,12 +84,14 @@ from recommenditos.modeling.evaluate import (
 )
 from recommenditos.modeling.evaluate import main as evaluate_main
 from recommenditos.modeling.model import (
+    ANY_OPENBLAS_KERNEL_VARIABLE,
     BASE_LOG_PRICE,
     BLANKED_COPY_KINDS,
     ESTIMATORS,
     INTERVAL_QUANTILES,
     MISSING_LEVEL,
     MODEL_FILE,
+    OPENBLAS_KERNEL,
     PREDICTION_NAME,
     MedianBaselineModel,
     Model,
@@ -1198,6 +1205,173 @@ def test_the_ridge_coefficients_do_not_depend_on_the_blas_threads_available(
 
     differing = [threads for threads, coef in coefficients.items() if coef != coefficients[1]]
     assert not differing, f"the coefficients at {differing} BLAS threads differ from those at 1"
+
+
+#: Fits `b1` in a fresh process, on the kernel its environment's
+#: OPENBLAS_CORETYPE selects, once as the stage would and once more with the
+#: escape hatch if the stage's fit refused; prints what it saw as JSON.
+_FIT_B1_ON_THE_LOADED_KERNEL = textwrap.dedent(
+    """
+    import hashlib, json, os, sys
+    from pathlib import Path
+
+    import pandas as pd
+    from threadpoolctl import threadpool_info
+
+    from recommenditos.modeling import train
+    from recommenditos.modeling.model import (
+        ANY_OPENBLAS_KERNEL_VARIABLE, TrainingData, fit_variant,
+    )
+
+    features, makes, settings, rows = sys.argv[1:]
+    makes = tuple(json.loads(makes))
+    data = train.read_matrices(Path(features), "basic", makes)
+    repeats = -(-int(rows) // len(data.train))
+    data = TrainingData(
+        data.space, pd.concat([data.train] * repeats, ignore_index=True),
+        data.validation, makes,
+    )
+
+    def fit():
+        model = fit_variant("b1", json.loads(settings), data, seed=1, num_threads=1)
+        return hashlib.md5(model.pipeline[-1].coef_.tobytes()).hexdigest()
+
+    refused = None
+    try:
+        coefficients = fit()
+    except RuntimeError as error:
+        refused = str(error)
+        os.environ[ANY_OPENBLAS_KERNEL_VARIABLE] = "1"
+        coefficients = fit()
+    kernels = sorted(
+        {p["architecture"] for p in threadpool_info() if p["internal_api"] == "openblas"}
+    )
+    print(json.dumps({"kernels": kernels, "refused": refused, "coefficients": coefficients}))
+    """
+)
+
+_X86_64 = platform.machine().lower() in {"x86_64", "amd64"}
+
+
+def _environment_without_a_kernel_choice() -> dict[str, str]:
+    """This process's environment minus the kernel and the suite's escape hatch."""
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if name not in {"OPENBLAS_CORETYPE", ANY_OPENBLAS_KERNEL_VARIABLE}
+    }
+
+
+@pytest.mark.req("NFR-06")
+@pytest.mark.skipif(not _X86_64, reason="OpenBLAS's Haswell kernel exists only on x86-64")
+def test_b1_fits_the_same_coefficients_on_the_pinned_kernel_and_refuses_another(
+    matrices: dict, supported_makes: tuple[str, ...]
+):
+    """Two fits on the Haswell kernel agree; a Sandybridge process is refused (NFR-06).
+
+    `b1`'s coefficients depend on the OpenBLAS kernel, so a fit on another kernel
+    must differ, which shows the variable is honoured and the pin is not
+    vacuous; with the kernel pinned they are the same on every x86-64 CPU, here
+    as two processes on one. The stage's fit refuses the Sandybridge process and
+    fits there only with the escape hatch.
+    """
+    arguments = [
+        str(matrices["features"]),
+        json.dumps(list(supported_makes)),
+        json.dumps(train_variants()["b1"]),
+        str(_BLAS_THREADED_ROWS),
+    ]
+    runs = {}
+    for name, kernel in (("first", "Haswell"), ("second", "Haswell"), ("other", "Sandybridge")):
+        completed = subprocess.run(
+            [sys.executable, "-c", _FIT_B1_ON_THE_LOADED_KERNEL, *arguments],
+            env={**_environment_without_a_kernel_choice(), "OPENBLAS_CORETYPE": kernel},
+            cwd=PROJ_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr[-3000:]
+        runs[name] = json.loads(completed.stdout.strip().splitlines()[-1])
+
+    assert runs["first"]["kernels"] == runs["second"]["kernels"] == [OPENBLAS_KERNEL]
+    assert runs["first"]["refused"] is None
+    assert runs["first"]["coefficients"] == runs["second"]["coefficients"]
+    assert runs["other"]["kernels"] == ["Sandybridge"]
+    assert "Sandybridge kernel" in runs["other"]["refused"]
+    assert runs["other"]["coefficients"] != runs["first"]["coefficients"], (
+        "Sandybridge fitted the Haswell coefficients, so the kernel does not reach LSQR"
+    )
+
+
+@pytest.mark.req("NFR-06")
+@pytest.mark.parametrize("module", ["recommenditos.modeling.train", "recommenditos.modeling.tune"])
+def test_the_entry_points_that_fit_b1_pin_the_kernel_before_numpy_loads(module: str):
+    """`train` and `tune`, started as the stage starts them, choose Haswell in time.
+
+    OpenBLAS reads OPENBLAS_CORETYPE only when numpy loads it, so what counts is
+    the variable's value at numpy's first import, which an import hook records
+    on any CPU, also where the CPU's own choice is Haswell anyway.
+    """
+    probe = textwrap.dedent(
+        f"""
+        import json, os, runpy, sys
+
+        seen = []
+
+        class FirstNumpyImport:
+            def find_spec(self, name, path=None, target=None):
+                if name == "numpy" and not seen:
+                    seen.append(os.environ.get("OPENBLAS_CORETYPE"))
+
+        sys.meta_path.insert(0, FirstNumpyImport())
+        sys.argv = ["{module}", "--help"]
+        try:
+            runpy.run_module("{module}", run_name="__main__", alter_sys=True)
+        except SystemExit:
+            pass
+        from threadpoolctl import threadpool_info
+        kernels = sorted(
+            {{p["architecture"] for p in threadpool_info() if p["internal_api"] == "openblas"}}
+        )
+        print(json.dumps({{"seen": seen, "kernels": kernels}}))
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        env=_environment_without_a_kernel_choice(),
+        cwd=PROJ_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-3000:]
+    result = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert result["seen"] == [OPENBLAS_KERNEL]
+    if _X86_64:
+        assert result["kernels"] == [OPENBLAS_KERNEL]
+
+
+@pytest.mark.req("NFR-06")
+def test_b1_refuses_to_fit_on_another_kernel_unless_told_to(
+    matrices: dict, supported_makes: tuple[str, ...], monkeypatch
+):
+    """The stage's fit fails on a kernel it cannot vouch for, and fits with the escape hatch."""
+    data = train.read_matrices(matrices["features"], "basic", supported_makes)
+    monkeypatch.delenv(ANY_OPENBLAS_KERNEL_VARIABLE, raising=False)
+    for loaded in ([{"internal_api": "openblas", "architecture": "SkylakeX"}], []):
+        monkeypatch.setattr(model_module, "threadpool_info", lambda loaded=loaded: loaded)
+        with pytest.raises(RuntimeError, match=f"OPENBLAS_CORETYPE={OPENBLAS_KERNEL}"):
+            fit_variant("b1", train_variants()["b1"], data, seed=1, num_threads=1)
+
+    monkeypatch.setenv(ANY_OPENBLAS_KERNEL_VARIABLE, "1")
+    messages = []
+    sink = logger.add(messages.append, level="WARNING")
+    try:
+        fit_variant("b1", train_variants()["b1"], data, seed=1, num_threads=1)
+    finally:
+        logger.remove(sink)
+    assert any("on no OpenBLAS rather than" in str(message) for message in messages)
 
 
 def test_the_ridge_emits_a_missing_indicator_for_every_numeric_feature(trained: dict):

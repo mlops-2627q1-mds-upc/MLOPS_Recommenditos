@@ -43,6 +43,9 @@ import sys
 import tempfile
 import time
 
+# `b1` is fitted on OpenBLAS's Haswell kernel (`check_openblas_kernel`); numpy has to see this first.
+os.environ.setdefault("OPENBLAS_CORETYPE", "Haswell")
+
 ATTEMPTS: list[tuple[str, object]] = []
 
 

@@ -88,11 +88,18 @@ It runs outside `dvc repro`, from the repository root after `dvc pull`, one
 sweep per variant and grid; `docs/docs/pipeline.md` gives the commands.
 """
 
+import os
+
+# OpenBLAS reads its kernel from this variable once, when numpy loads it, so
+# this comes before any import that loads numpy. `check_openblas_kernel` in
+# model.py says why `b1` needs it and fails the fit if it did not take effect.
+# A value the caller set wins.
+os.environ.setdefault("OPENBLAS_CORETYPE", "Haswell")
+
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from itertools import product
-import os
 from pathlib import Path
 import re
 import tempfile

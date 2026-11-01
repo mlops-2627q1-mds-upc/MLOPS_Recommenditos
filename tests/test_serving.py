@@ -76,6 +76,7 @@ from recommenditos.data import build_features, preprocess, split_data
 from recommenditos.data.build_features import FeatureSpace, read_supported_makes
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.modeling.model import (
+    ANY_OPENBLAS_KERNEL_VARIABLE,
     RequestContract,
     TrainingData,
     fit_quantile_estimators,
@@ -222,13 +223,18 @@ def served(tmp_path_factory) -> dict:
             supported_makes=supported,
             request=RequestContract.from_params(params),
         )
-        model = fit_variant(
-            variant,
-            settings,
-            data,
-            seed=params["seed"],
-            num_threads=params["train"]["num_threads"],
-        )
+        # On the kernel this process loaded, as in the rest of the suite
+        # (`tests/conftest.py`, which `--noconftest` skips): no bundle here is
+        # compared with the one `dvc.lock` records.
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setenv(ANY_OPENBLAS_KERNEL_VARIABLE, "1")
+            model = fit_variant(
+                variant,
+                settings,
+                data,
+                seed=params["seed"],
+                num_threads=params["train"]["num_threads"],
+            )
         chosen = interval_settings(variant, settings)
         if chosen is not None:
             # The price range's boosters, fitted with LightGBM alone. Their
