@@ -351,6 +351,7 @@ module = [
     "joblib.*",
     "mapie.*",
     "pandas.*",
+    "pyarrow.*",
     "sklearn.*",
     "threadpoolctl.*",
 ]

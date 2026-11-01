@@ -61,7 +61,7 @@ from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardSc
 from threadpoolctl import threadpool_info, threadpool_limits
 
 from recommenditos.data.build_features import FeatureSpace, equipment_feature_name
-from recommenditos.pipeline import write_json
+from recommenditos.pipeline import write_json, write_parquet
 from recommenditos.schema import FEATURE_SPACE_FILE, Schema
 
 #: The name every prediction Series carries, so a frame that has been joined
@@ -801,7 +801,7 @@ class MedianBaselineModel(Model):
         return np.log(np.where(np.isnan(price), self._global, price))
 
     def _save_payload(self, directory: Path) -> None:
-        self.lookup.to_parquet(directory / _LOOKUP_FILE, index=False)
+        write_parquet(self.lookup, directory / _LOOKUP_FILE)
 
     @classmethod
     def _load_payload(
