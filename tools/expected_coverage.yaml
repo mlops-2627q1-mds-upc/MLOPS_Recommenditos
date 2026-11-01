@@ -28,7 +28,7 @@
 # whose evidence is half M3 work and half M4 work is booked M4, because that is
 # when it can first be complete.
 
-current: M4
+current: M5
 
 milestones:
   - milestone: M3
