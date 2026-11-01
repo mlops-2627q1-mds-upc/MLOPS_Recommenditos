@@ -41,6 +41,7 @@ uv run pre-commit install-hooks
 ```
 
 `uv sync` installs every dependency, in every group, so that is all a contributor ever needs.
+`pyproject.toml` requires uv 0.13.5 or newer (`required-version`): an older uv refuses to run, so run `uv self update` first.
 `pre-commit install` puts the hooks in place, and `install-hooks` builds their environments now rather than during your first commit.
 One of them is gitleaks, which pre-commit builds from source, downloading Go first if you have none: that takes one to six minutes and a few hundred MB of disk, once per machine, and well under a second per commit afterwards.
 If Go is on your `PATH`, pre-commit builds with that Go, and gitleaks 8.30.1 needs Go 1.24.11 or newer: an older one fails with `go.mod requires go >= 1.24.11`, or cannot read the file at all before Go 1.21.

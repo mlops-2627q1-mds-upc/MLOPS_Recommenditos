@@ -219,6 +219,8 @@ contract = [
 ]
 
 [tool.uv]
+# An older uv rewrites uv.lock in an outdated format (revision 3 instead of 5) and changes markers.
+required-version = ">=0.13.5"
 # Every group, so that `uv sync` and `uv run` still give the whole environment.
 # The API image, and the serving check that runs the same install in CI, opt out
 # with `--no-default-groups`.
