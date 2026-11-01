@@ -114,11 +114,17 @@ If the hook fires on something else that is not a secret, the fix is a narrow al
 ```bash
 make format         # ruff format + fix
 make lint           # mypy + ruff format --check + ruff check + hadolint + actionlint + shellcheck
+uv run pytest tests/test_x.py -q --no-cov  # the tests your change touches or that cover it
 make test           # pytest, which also reports the coverage of recommenditos/
 make test-serving   # the serving path from the runtime dependencies alone
 make test-integration  # the API as deployed, through nginx (needs `make stack` first)
 make notebook-lint  # Pynblint over every notebook, in its own environment
 ```
+
+Always run `make format`, `make lint` and the tests your change touches.
+Run the full `make test` and `make test-serving` locally when the change touches `recommenditos/`, `tools/` or shared test fixtures.
+CI runs the full suite on Linux and Windows either way, and its required checks gate the merge.
+A full local run takes 15 minutes or more on a loaded laptop, CI about 6.
 
 `make lint` runs the same ruff rules and the same mypy check as the pre-commit hook and CI, over the same files, so a green `make lint` means a green CI lint job.
 The ruff and mypy hooks are local hooks that run through `uv run`, so they use the ruff and mypy versions pinned in `uv.lock`, the ones Dependabot's uv group moves; the hooks need the synced environment (`uv sync`).
