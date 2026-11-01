@@ -71,6 +71,7 @@ The course grades how we make engineering decisions and how we use AI in them, s
    Link the evidence (issue, PR, commit, experiment) and do not retell it.
    The AI interaction evidence quotes the prompt that led to the decision, word for word or, when that is not available, its core marked "(paraphrased)", as the professor asked on 2026-10-27.
    So when a session leads to a decision, note the user's prompt for the entry before the session ends.
+   GitHub names `@lukas2510` as author and merger of everything an agent does under his account, so take Participants and who decided from the session, not from GitHub's fields.
    When an entry has to be cut to fit the word limit, keep what it says about AI's contribution and what the team checked, and compare the cut entry with the previous one before you commit it.
    When a decision is revised, update its entry so that it states the current decision, and do not add a second entry for it.
 

@@ -14,8 +14,7 @@ Closes #
 
 ## Test plan
 - [ ] `make lint` passes
-- [ ] `make test` passes
-- [ ] `make test-serving` passes
+- [ ] The tests the change touches pass; `make test` and `make test-serving` too when it touches `recommenditos/`, `tools/` or shared fixtures (CI runs the full suite either way)
 - [ ] `make notebook-lint` passes
 - [ ] `make notebook-run` passes (only if a notebook, or code a notebook imports, changed)
 - [ ] Manually verified with <how>
