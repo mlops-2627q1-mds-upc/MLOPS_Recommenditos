@@ -17,7 +17,12 @@ from fastapi.security import APIKeyHeader
 from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.errors import request_id_of
 from recommenditos.api.metrics import ApiMetrics
-from recommenditos.api.prediction_log import PredictionLog, PredictionStore
+from recommenditos.api.prediction_log import (
+    CLIENT_HEADER,
+    PredictionLog,
+    PredictionStore,
+    client_of,
+)
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import Settings
 
@@ -74,6 +79,7 @@ def prediction_log(
         # No endpoint takes a path parameter, so the path names the endpoint.
         endpoint=request.url.path,
         started=request.state.request_started,
+        client=client_of(request.headers.get(CLIENT_HEADER)),
     )
 
 

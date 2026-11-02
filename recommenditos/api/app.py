@@ -43,6 +43,7 @@ from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
 from recommenditos.api.schemas.common import FieldError, ListingFields
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import API_KEY_ENV_VAR, Settings
+from recommenditos.api.webui import WebPage
 
 API_VERSION = "1.0.0"
 
@@ -105,6 +106,7 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
     app.state.comparables = index
     app.state.metrics = ApiMetrics(served.info)
     app.state.settings = settings
+    app.state.web = WebPage.load()
     # The last middleware added is the outermost: every response, a refused body
     # and an unexpected failure included, carries the request ID.
     app.add_middleware(BodySizeLimitMiddleware)

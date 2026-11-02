@@ -64,6 +64,7 @@ PREDICTION_COLUMNS = {
     "inputs",
     "outputs",
     "warnings",
+    "client",
 }
 FEEDBACK_COLUMNS = {"request_id", "observed_price_eur", "received_at"}
 
@@ -555,3 +556,103 @@ def test_fr13_the_log_refuses_a_value_json_cannot_hold(store: SqliteStore):
     with pytest.raises(StoreError):
         store.record_answer(infinite)
     assert _record_of(store.path, "r-inf") == []
+
+
+# --------------------------------------------------------------------------
+# #269: the kind of client, so that M6 can leave the web page's traffic out
+# --------------------------------------------------------------------------
+
+#: The layout the first deployed images wrote, without `client`.
+FIRST_LAYOUT = """
+CREATE TABLE predictions (
+    seq INTEGER PRIMARY KEY, request_id TEXT NOT NULL UNIQUE, endpoint TEXT NOT NULL,
+    answered_at TEXT NOT NULL, latency_ms REAL NOT NULL, model_variant TEXT NOT NULL,
+    model_version TEXT NOT NULL, inputs TEXT NOT NULL, outputs TEXT NOT NULL,
+    warnings TEXT NOT NULL
+);
+CREATE TABLE feedback (
+    request_id TEXT PRIMARY KEY REFERENCES predictions (request_id) ON DELETE CASCADE,
+    observed_price_eur REAL NOT NULL, received_at TEXT NOT NULL
+);
+CREATE VIEW labelled_predictions AS
+    SELECT predictions.*, feedback.observed_price_eur, feedback.received_at
+    FROM predictions JOIN feedback USING (request_id);
+PRAGMA user_version = 1;
+"""
+
+#: The insert of an image from before `client`, word for word.
+FIRST_INSERT = (
+    "INSERT INTO predictions (request_id, endpoint, answered_at, latency_ms, "
+    "model_variant, model_version, inputs, outputs, warnings) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
+
+
+@pytest.mark.parametrize(
+    ("header", "stored"),
+    [("web-ui", "web-ui"), (None, None), ("someone@example.com", None), ("Web-UI", None)],
+)
+def test_a_record_names_the_kind_of_client_only_when_it_is_a_known_one(
+    client: TestClient, listing: dict, log_file: Path, header: str | None, stored: str | None
+):
+    headers = {"X-Client": header} if header is not None else {}
+    for endpoint, body in (
+        (PREDICT, listing),
+        ("/v1/price-range", listing),
+        ("/v1/comparables", listing),
+    ):
+        response = client.post(endpoint, json=body, headers=headers)
+        assert response.status_code == 200, response.text
+        (record,) = _record_of(log_file, response.json()["request_id"])
+        assert record["client"] == stored, endpoint
+
+
+def test_a_file_of_the_first_layout_gets_the_client_column_and_keeps_its_rows(tmp_path: Path):
+    path = tmp_path / "log.sqlite3"
+    connection = sqlite3.connect(path)
+    connection.executescript(FIRST_LAYOUT)
+    connection.execute(
+        FIRST_INSERT, ("old", PREDICT, "2026-11-01T00:00:00Z", 1.0, "v", "1", "{}", "{}", "[]")
+    )
+    connection.commit()
+    connection.close()
+
+    store = SqliteStore(path, max_bytes=10**9)
+    try:
+        store.record_answer(dataclasses.replace(answer_record("new"), client="web-ui"))
+    finally:
+        store.close()
+
+    rows = {row["request_id"]: row["client"] for row in _rows(path, "SELECT * FROM predictions")}
+    assert rows == {"old": None, "new": "web-ui"}
+    assert _rows(path, "PRAGMA user_version")[0][0] == prediction_log.SCHEMA_VERSION
+
+
+def test_an_image_from_before_the_client_column_still_writes_to_the_extended_file(
+    store: SqliteStore,
+):
+    """A rollback to an older image keeps the prediction log working (NFR-13)."""
+    store.record_answer(dataclasses.replace(answer_record("new"), client="web-ui"))
+    older = sqlite3.connect(store.path)
+    older.execute(
+        FIRST_INSERT, ("older", PREDICT, "2026-11-01T00:00:00Z", 1.0, "v", "1", "{}", "{}", "[]")
+    )
+    older.commit()
+    older.close()
+    assert _record_of(store.path, "older")[0]["client"] is None
+
+
+def test_the_labelled_view_carries_the_client(client: TestClient, listing: dict, log_file: Path):
+    answer = client.post(PREDICT, json=listing, headers={"X-Client": "web-ui"}).json()
+    stored = client.post(
+        "/v1/feedback",
+        json={"request_id": answer["request_id"], "observed_price_eur": 20000},
+        headers={"X-API-Key": API_KEY},
+    )
+    assert stored.status_code in {200, 201}, stored.text
+    (row,) = _rows(
+        log_file,
+        "SELECT client FROM labelled_predictions WHERE request_id = ?",
+        answer["request_id"],
+    )
+    assert row["client"] == "web-ui"

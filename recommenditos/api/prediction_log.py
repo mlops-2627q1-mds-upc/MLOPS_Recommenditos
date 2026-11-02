@@ -26,6 +26,11 @@ more. `SqliteStore` implements it:
   WAL file small after each checkpoint.
 - **No PII (NFR-08).** A row holds the validated request body, which has no
   PII field, and no column for the caller's address.
+- **Who asked, by kind (#269).** `client` names a known kind of client that
+  marked its requests with the `X-Client` header, such as the web page
+  (`web-ui`), and is NULL for every other request, so M6's drift job can leave
+  demo traffic out. Only the values of `KNOWN_CLIENTS` are stored: the header is
+  the client's to choose, and a free value could identify the caller.
 
 `PredictionLog`, a dependency of `recommenditos.api.dependencies`, is what a
 route uses: `log.record(request, answer)` writes the answer's row once.
@@ -49,7 +54,20 @@ from pydantic import BaseModel
 from recommenditos.api.schemas.common import FieldWarning, ModelInfo
 
 #: The layout of the file; a file with another one stops the service at startup.
+#: A column added later with NULL for the rows before it (`ADDED_COLUMNS`) does
+#: not change it: an image from before the column writes its rows without it, so
+#: a rollback to that image keeps working with the file a newer one extended.
 SCHEMA_VERSION = 1
+
+#: Columns of `predictions` added after `_SCHEMA` was first deployed, each NULL
+#: in the rows written before it and by an image that does not know it, and
+#: added to a file that lacks it when the store opens.
+ADDED_COLUMNS = {"client": "TEXT"}
+
+#: The request header a client marks its requests with, and the values stored
+#: from it in `client`; any other value is stored as NULL (#269).
+CLIENT_HEADER = "X-Client"
+KNOWN_CLIENTS = frozenset({"web-ui"})
 
 #: How long a writer waits for another process's write before it gives up.
 BUSY_TIMEOUT_S = 5.0
@@ -83,7 +101,8 @@ CREATE TABLE predictions (
     model_version TEXT NOT NULL,
     inputs        TEXT NOT NULL,
     outputs       TEXT NOT NULL,
-    warnings      TEXT NOT NULL
+    warnings      TEXT NOT NULL,
+    client        TEXT
 );
 CREATE TABLE feedback (
     request_id         TEXT PRIMARY KEY
@@ -114,6 +133,13 @@ class AnswerRecord:
     inputs: dict[str, Any]
     outputs: dict[str, Any]
     warnings: list[dict[str, Any]]
+    #: One of `KNOWN_CLIENTS`, or None for a request no known client marked.
+    client: str | None = None
+
+
+def client_of(header: str | None) -> str | None:
+    """The `client` to record for a request whose `X-Client` header is `header`."""
+    return header if header in KNOWN_CLIENTS else None
 
 
 @dataclass(frozen=True)
@@ -213,6 +239,11 @@ class SqliteStore:
                         f"{self.path} has schema version {version}; this service writes "
                         f"version {SCHEMA_VERSION}."
                     )
+                present = {row[1] for row in connection.execute("PRAGMA table_info(predictions)")}
+                for column, kind in ADDED_COLUMNS.items():
+                    if column not in present:
+                        connection.execute(f"ALTER TABLE predictions ADD COLUMN {column} {kind}")
+                        logger.info(f"added the column {column} to the prediction log")
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:
@@ -235,8 +266,8 @@ class SqliteStore:
             with self._lock, self._transaction() as connection:
                 connection.execute(
                     "INSERT INTO predictions (request_id, endpoint, answered_at, latency_ms, "
-                    "model_variant, model_version, inputs, outputs, warnings) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "model_variant, model_version, inputs, outputs, warnings, client) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         record.request_id,
                         record.endpoint,
@@ -247,6 +278,7 @@ class SqliteStore:
                         _json(record.inputs),
                         _json(record.outputs),
                         _json(record.warnings),
+                        record.client,
                     ),
                 )
         except (sqlite3.Error, ValueError) as error:
@@ -408,12 +440,18 @@ class PredictionLog:
     """The prediction log as one request sees it: `record` writes its answer, once."""
 
     def __init__(
-        self, store: PredictionStore, request_id: str, endpoint: str, started: float
+        self,
+        store: PredictionStore,
+        request_id: str,
+        endpoint: str,
+        started: float,
+        client: str | None = None,
     ) -> None:
         self._store = store
         self._request_id = request_id
         self._endpoint = endpoint
         self._started = started
+        self._client = client
         self._recorded = False
 
     def record(self, request: BaseModel, answer: Answer) -> None:
@@ -440,5 +478,6 @@ class PredictionLog:
                     mode="json", exclude={"model", "request_id", "warnings"}
                 ),
                 warnings=[warning.model_dump(mode="json") for warning in answer.warnings],
+                client=self._client,
             )
         )

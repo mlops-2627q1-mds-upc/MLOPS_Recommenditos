@@ -2,7 +2,7 @@
 
 The client contract is versioned: `V1_ROUTERS` are mounted under `/v1`, so an
 incompatible change can ship as `/v2` beside them. The operational endpoints
-(`/`, `/health` and `/metrics`) are not part of that contract and are
+(`/`, `/health` and `/metrics`, and the web page's `/assets`) are not part of that contract and are
 mounted at the root, where browsers, monitors and Prometheus look for them:
 `OPERATIONAL_ROUTERS`.
 
@@ -12,6 +12,7 @@ in parallel do not touch the same line.
 """
 
 from recommenditos.api.routes import (
+    assets,
     comparables,
     feedback,
     health,
@@ -29,6 +30,7 @@ V1_ROUTERS = [
 ]
 
 OPERATIONAL_ROUTERS = [
+    assets.router,
     health.router,
     index.router,
     metrics.router,
