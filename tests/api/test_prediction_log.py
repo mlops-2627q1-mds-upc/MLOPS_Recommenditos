@@ -241,7 +241,10 @@ def test_nfr03_a_route_that_records_twice_fails(store: SqliteStore):
 
     with pytest.raises(AnswerLoggedTwice):
         log.record(request, answer)
-    assert store.used_bytes() > 0
+    # Under the store's lock, as the store reads it: the pruning thread, which starts
+    # with a check, uses the same connection.
+    with store._lock:
+        assert store.used_bytes() > 0
     with pytest.raises(StoreError):
         store.record_answer(answer_record("r-1"))
 
@@ -383,7 +386,8 @@ def test_nfr04_the_log_is_pruned_to_its_cap_oldest_first_with_its_feedback(
             if index == 0:
                 store.record_feedback(Feedback("r-00000", 9999.0, datetime.now(UTC)))
         store.prune()
-        used = store.used_bytes()
+        with store._lock:
+            used = store.used_bytes()
     finally:
         store.close()
 
@@ -590,7 +594,14 @@ FIRST_INSERT = (
 
 @pytest.mark.parametrize(
     ("header", "stored"),
-    [("web-ui", "web-ui"), (None, None), ("someone@example.com", None), ("Web-UI", None)],
+    [
+        ("web-ui", "web-ui"),
+        ("smoke", "smoke"),
+        ("loadtest", "loadtest"),
+        (None, None),
+        ("someone@example.com", None),
+        ("Web-UI", None),
+    ],
 )
 def test_a_record_names_the_kind_of_client_only_when_it_is_a_known_one(
     client: TestClient, listing: dict, log_file: Path, header: str | None, stored: str | None

@@ -67,7 +67,9 @@ ADDED_COLUMNS = {"client": "TEXT"}
 #: The request header a client marks its requests with, and the values stored
 #: from it in `client`; any other value is stored as NULL (#269).
 CLIENT_HEADER = "X-Client"
-KNOWN_CLIENTS = frozenset({"web-ui"})
+#: `web-ui` is the web page, `smoke` the integration suite and the post-deployment
+#: smoke check, `loadtest` the load test (docs/docs/web-ui.md).
+KNOWN_CLIENTS = frozenset({"web-ui", "smoke", "loadtest"})
 
 #: How long a writer waits for another process's write before it gives up.
 BUSY_TIMEOUT_S = 5.0
@@ -334,7 +336,11 @@ class SqliteStore:
             raise StoreError(f"could not record feedback for {feedback.request_id}") from error
 
     def used_bytes(self) -> int:
-        """The bytes the live data takes: the file's pages minus the free ones."""
+        """The bytes the live data takes: the file's pages minus the free ones.
+
+        The caller holds `_lock`: the connection is shared with the pruning thread,
+        and two threads must not use it at once.
+        """
         connection = self._connection
         (page_size,) = connection.execute("PRAGMA page_size").fetchone()
         (pages,) = connection.execute("PRAGMA page_count").fetchone()

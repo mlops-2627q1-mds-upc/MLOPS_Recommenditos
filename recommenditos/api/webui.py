@@ -90,10 +90,10 @@ class WebFile:
     def response(self, request: Request, headers: dict[str, str]) -> Response:
         """This file for `request`: a 304 when the client holds it, gzip when it accepts that."""
         headers = {**headers, "ETag": self.etag, "Vary": "Accept-Encoding"}
-        if request.headers.get("if-none-match") == self.etag:
+        if etag_matches(request.headers.get("if-none-match"), self.etag):
             return Response(status_code=304, headers=headers)
         body = self.body
-        if self.gzipped is not None and "gzip" in request.headers.get("accept-encoding", ""):
+        if self.gzipped is not None and accepts_gzip(request.headers.get("accept-encoding")):
             body = self.gzipped
             headers["Content-Encoding"] = "gzip"
         return Response(body, media_type=self.media_type, headers=headers)
@@ -131,6 +131,39 @@ class WebPage:
         )
 
 
+def weights(header: str | None) -> dict[str, float]:
+    """The weight (`q`) of each value of a header such as `Accept`, lower-cased; 1 if none."""
+    found: dict[str, float] = {}
+    for item in (header or "").split(","):
+        value, *parameters = (part.strip() for part in item.split(";"))
+        if not value:
+            continue
+        weight = 1.0
+        for parameter in parameters:
+            key, _, number = parameter.partition("=")
+            if key.strip().lower() == "q":
+                try:
+                    weight = float(number)
+                except ValueError:
+                    weight = 0.0
+        found[value.lower()] = max(weight, found.get(value.lower(), 0.0))
+    return found
+
+
+def accepts_gzip(accept_encoding: str | None) -> bool:
+    """Whether `Accept-Encoding` allows gzip: named, or `*`, with a weight above zero."""
+    found = weights(accept_encoding)
+    return found.get("gzip", found.get("*", 0.0)) > 0
+
+
+def etag_matches(if_none_match: str | None, etag: str) -> bool:
+    """Whether `If-None-Match` names `etag`: `*`, or one of its list, weak or strong (RFC 9110)."""
+    if not if_none_match:
+        return False
+    tags = {tag.strip().removeprefix("W/") for tag in if_none_match.split(",")}
+    return "*" in tags or etag in tags
+
+
 def wants_html(accept: str | None) -> bool:
     """Whether a request with this `Accept` header asks for a page rather than JSON.
 
@@ -139,17 +172,6 @@ def wants_html(accept: str | None) -> bool:
     `application/json` prefers it. So the page goes to a request that names
     `text/html` with a weight above zero and at least that of `application/json`.
     """
-    weights: dict[str, float] = {}
-    for item in (accept or "").split(","):
-        media, *parameters = (part.strip() for part in item.split(";"))
-        weight = 1.0
-        for parameter in parameters:
-            key, _, value = parameter.partition("=")
-            if key.strip() == "q":
-                try:
-                    weight = float(value)
-                except ValueError:
-                    weight = 0.0
-        weights[media.lower()] = max(weight, weights.get(media.lower(), 0.0))
-    html = weights.get("text/html", 0.0)
-    return html > 0 and html >= weights.get("application/json", 0.0)
+    found = weights(accept)
+    html = found.get("text/html", 0.0)
+    return html > 0 and html >= found.get("application/json", 0.0)

@@ -38,6 +38,9 @@ from tools.loadtest.plan import Plan, build_plan
 DEFAULT_BODIES = "data/interim/loadtest/bodies.jsonl"
 
 REQUEST_ID_HEADER = "X-Request-ID"
+#: The mark of the load test's requests in the prediction log (`KNOWN_CLIENTS` in
+#: recommenditos/api/prediction_log.py).
+CLIENT_HEADER = "X-Client"
 
 #: The mix, made when the test starts, from the target's OpenAPI document.
 _state: dict[str, Plan] = {}
@@ -110,4 +113,5 @@ class Seller(HttpUser):
     @task
     def value_a_listing(self) -> None:
         path, body = _state["plan"].pick(self.rng)
-        self.client.post(path, json=body, name=path)
+        # Marked, so the prediction log tells the load from real requests (docs/docs/web-ui.md).
+        self.client.post(path, json=body, name=path, headers={CLIENT_HEADER: "loadtest"})

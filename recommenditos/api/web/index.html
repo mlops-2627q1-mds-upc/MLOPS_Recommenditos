@@ -33,7 +33,7 @@
 <main class="layout">
   <section class="panel-form" aria-labelledby="form-title">
     <h1 class="form-title" id="form-title">Describe the car</h1>
-    <p class="form-lede">Ten fields are needed for an estimate. The lists come from the model the service runs.</p>
+    <p class="form-lede">Ten details are needed for an estimate; the rest are optional.</p>
 
     <div class="form-alert" id="form-alert" role="alert" hidden></div>
 
@@ -166,7 +166,7 @@
     </form>
   </section>
 
-  <section class="panel-result" id="result" aria-labelledby="result-title" aria-busy="false">
+  <section class="panel-result" id="result" aria-label="Estimate" aria-busy="false">
     <div class="progress" aria-hidden="true"></div>
     <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
 
@@ -194,7 +194,7 @@
 
       <section class="block" aria-labelledby="range-title">
         <div class="block-head">
-          <h3 class="block-title" id="range-title">Likely range</h3>
+          <h2 class="block-title" id="range-title">Likely range</h2>
           <p class="block-aside" id="range-level"></p>
         </div>
         <div class="range" id="range" role="img">
@@ -211,16 +211,16 @@
 
       <section class="block" aria-labelledby="why-title">
         <div class="block-head">
-          <h3 class="block-title" id="why-title">What moved the estimate</h3>
+          <h2 class="block-title" id="why-title">What moved the estimate</h2>
           <p class="block-aside">Effects multiply, largest first</p>
         </div>
         <div class="waterfall" id="waterfall"></div>
-        <p class="block-note">The model starts from the average price of the listings it learned from and adjusts it for each detail of this car. A detail left out has an effect too: the model then does not know it.</p>
+        <p class="block-note">The model starts from the average price of the listings it learned from and adjusts it for each detail of this car. Leaving a detail out also changes the estimate.</p>
       </section>
 
       <section class="block" aria-labelledby="listings-title">
         <div class="block-head">
-          <h3 class="block-title" id="listings-title">Similar listings</h3>
+          <h2 class="block-title" id="listings-title">Similar listings</h2>
           <p class="block-aside" id="listings-aside"></p>
         </div>
         <div class="table-wrap" id="listings-wrap">

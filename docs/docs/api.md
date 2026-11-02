@@ -263,7 +263,7 @@ The API reaches them through the interface `PredictionStore` in `recommenditos/a
 | `inputs` | The validated request body as JSON, omitted optional fields left out |
 | `outputs` | The answer as JSON, without `model`, `request_id` and `warnings`, which have their own columns |
 | `warnings` | The answer's `warnings` as JSON |
-| `client` | `web-ui` for a request of the [web page](web-ui.md), which sends `X-Client: web-ui`; NULL for every other request and for every other value of the header, so that M6's drift job can leave the page's demo traffic out (#269) |
+| `client` | The kind of test traffic a request is, from its `X-Client` header: `web-ui` for the [web page](web-ui.md), `smoke` for the integration suite and the smoke check, `loadtest` for the load test; NULL for every other request and every other value of the header, so that M6's drift job can leave test traffic out (#269) |
 
 The request bodies have no PII field, and no column holds the caller's address (NFR-08).
 `client` was added after the first deployed images: the store adds the column, NULL for older rows, to a file that lacks it when it opens, and an older image writes its rows without it, so a rollback keeps working with the same file and the schema version stays 1.

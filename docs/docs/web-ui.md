@@ -2,7 +2,7 @@ The web page
 ============
 
 A browser that opens the service's address, `http://<host>:8080/` locally and on the VM, gets a web page for the price API ([#269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [EDN-96](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-It is a form for the car's details on the left and the answer on the right: the estimated asking price, the price range with the similar listings marked on it, a waterfall of what moved the estimate, and the similar listings as a table.
+It is a form for the car's details on the left and the answer on the right: the estimated asking price, the price range with the similar listings marked on it as thin lines, a waterfall of what moved the estimate, and the similar listings as a table.
 It is made for a laptop or desktop screen and holds its layout down to a window about 1,000 px wide; a phone layout is out of scope.
 
 ## How it is built and served
@@ -59,22 +59,27 @@ The API's other optional fields, such as the equipment lists and colours, are le
 - Any other problem, such as the 503 nginx answers while the API restarts, is shown above the result with its title, detail and the request's reference (`instance`).
 - When only the range or the listings fail, the estimate is shown and the failed part says why.
 
+One case the page cannot handle: while the API is down, for example for the few seconds of a deploy or a restart, nginx answers every path with its own 503, so a browser that loads `/` in that moment sees nginx's JSON problem instead of the page.
+An HTML fallback would need an `error_page` for `/` in `deploy/nginx.conf`, which reaches the VM only through the bootstrap; it is a possible follow-up, not part of this change.
+
 ## Accessibility
 
-Every field has a label, errors are tied to their field with `aria-describedby` and `aria-invalid`, the result is announced in a live region, and the page works with the keyboard alone.
-Text meets WCAG AA contrast in both themes (4.5:1 and more), and the borders of the fields and the waterfall bars of each effect 3:1; the range marker's one animation is switched off under `prefers-reduced-motion`.
+Every field has a label, errors are tied to their field with `aria-describedby` and `aria-invalid`, the result is announced in a live region, and the page works with the keyboard alone; the button keeps the focus while an estimate runs (`aria-disabled`).
+The waterfall is drawn for the eye and repeated as a table for screen readers.
+Text meets WCAG AA contrast in both themes (4.5:1 and more); the borders of the fields, the edge of the range band and of its track, and the waterfall bars of each effect reach 3:1; the range marker's one animation is switched off under `prefers-reduced-motion`.
 
 ## The traffic of the page, for M6
 
 The page marks every request it sends with the header `X-Client: web-ui`.
+Two other kinds of test traffic are marked the same way: the integration suite, which `make smoke` runs against the VM after every deploy, sends `X-Client: smoke`, and the load test (`tools/loadtest/locustfile.py`) sends `X-Client: loadtest`.
 The prediction log stores the mark in the column `client` of `predictions`, which is NULL for every other request ([API docs](api.md#what-a-record-holds)).
-M6's drift job compares real requests with the training data, so it should leave the page's demo requests out:
+M6's drift job compares real requests with the training data, so it should leave all marked requests out:
 
 ```sql
 SELECT inputs FROM predictions WHERE client IS NULL;
 ```
 
-Only the values the API knows (`KNOWN_CLIENTS` in `recommenditos/api/prediction_log.py`, now only `web-ui`) are stored; any other value of the header is stored as NULL, because the header is the client's to choose and a free value could identify the caller (NFR-08).
+Only the values the API knows (`KNOWN_CLIENTS` in `recommenditos/api/prediction_log.py`: `web-ui`, `smoke` and `loadtest`) are stored; any other value of the header is stored as NULL, because the header is the client's to choose and a free value could identify the caller (NFR-08).
 The mark is a convention, not a control: a client can send it or leave it out, so it separates the page's traffic from callers that do not imitate it.
 
 ## Rate limiting
@@ -86,7 +91,8 @@ The page itself sends one estimate, three requests, at a time.
 
 ## Work on it
 
-`make api` serves the page at `http://127.0.0.1:8000/` from the checkout; a reload of the server picks up a changed file.
+`make api` serves the page at `http://127.0.0.1:8000/` from the checkout; the files are read at startup, so a change shows after a restart of `make api`.
 `tests/api/test_web.py` checks the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
+`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node, when Node is installed: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale and the text of a problem without a reference.
 `tests/integration/test_deployed_proxy.py` checks the page through nginx.
 The Content Security Policy allows scripts, styles, fonts and requests from the page's own origin only and no inline script or style, so a new script or style goes into a file of `web/`, and a setting from JavaScript goes through the DOM (`element.style`), not a `style` attribute.

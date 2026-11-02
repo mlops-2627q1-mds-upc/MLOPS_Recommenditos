@@ -12,6 +12,8 @@ from recommenditos.api.webui import (
     CONTENT_SECURITY_POLICY,
     WEB_DIR,
     WebPage,
+    accepts_gzip,
+    etag_matches,
     wants_html,
 )
 
@@ -201,3 +203,41 @@ def test_the_page_never_calls_the_feedback_endpoint():
     for path in WEB_DIR.rglob("*"):
         if path.suffix in {".html", ".js"}:
             assert not in_a_string.search(path.read_text()), path
+
+
+@pytest.mark.parametrize(
+    ("accept_encoding", "expected"),
+    [
+        ("gzip, deflate, br", True),
+        ("br;q=1.0, gzip;q=0.8", True),
+        ("*", True),
+        ("gzip;q=0", False),
+        ("*;q=0", False),
+        ("identity", False),
+        (None, False),
+    ],
+)
+def test_accepts_gzip_follows_the_weights(accept_encoding: str | None, expected: bool):
+    assert accepts_gzip(accept_encoding) is expected
+
+
+@pytest.mark.parametrize(
+    ("if_none_match", "expected"),
+    [
+        ('"abc"', True),
+        ('W/"abc"', True),
+        ('"x", "abc"', True),
+        ("*", True),
+        ('"x"', False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_etag_matches_weak_tags_lists_and_any(if_none_match: str | None, expected: bool):
+    assert etag_matches(if_none_match, '"abc"') is expected
+
+
+def test_gzip_with_weight_zero_gets_the_plain_file(client: TestClient, app: FastAPI):
+    url = f"/assets/{app.state.web.version}/app.js"
+    response = client.get(url, headers={"Accept-Encoding": "gzip;q=0, identity"})
+    assert "content-encoding" not in response.headers

@@ -1360,15 +1360,15 @@ How to add an entry:
 - **Alternatives considered:**
   - nginx serving the files: nginx.conf reaches the VM only by rerunning the bootstrap, and its own image was rejected before (EDN-95).
   - Alpine.js: its standard build needs `unsafe-eval` in the Content Security Policy, for one form.
-  - Tailwind with DaisyUI: a build step and default looks for about 900 lines of CSS.
+  - Tailwind with DaisyUI: a build step and default looks for 1,047 lines of CSS.
   - A Streamlit or Gradio container: a new service on a VM that M6 needs.
 - **Rationale:** Only the API image moves to the VM on a merge, so the page goes live with no manual step and a rollback restores the matching page.
-  A first visit loads 64 KB; nginx stayed at 15.0 MiB of 64 MiB after 2,100 page requests.
+  A first visit loads 64 KB plus the 51 KB OpenAPI document; nginx stayed at 15.0 MiB of 64 MiB after 2,100 page requests.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found that a change to nginx.conf never reaches the VM in CD, chose the delivery through the API image, designed and built the page, and measured payload and memory.
-  No human code review; the review of the pull request is recorded on it.
-- **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, prompt (paraphrased): "add a public web UI for the price API, served by the existing nginx container, deployed through the normal CD path, with no new container; it should look premium; only laptops and PCs matter, not phones".
+  Two independent review agents (design and code) raised two blocking and eleven should-fix points, all fixed; no human code review.
+- **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, which asks for a page that looks "professional, modern and polished"; Lukas's prompt (translated from German): "I want a very good frontend that looks high quality".
 - **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md), [deployment docs](../docs/docs/deployment.md#the-stack).
 - **In LaTeX:** yes
 

@@ -43,6 +43,7 @@ import httpx2
 import pytest
 import yaml
 
+from recommenditos.api.prediction_log import CLIENT_HEADER
 from recommenditos.config import PROJ_ROOT
 
 STACK_URL_ENV_VAR = "RECOMMENDITOS_STACK_URL"
@@ -106,8 +107,15 @@ def base_url() -> str:
 
 @pytest.fixture(scope="session")
 def client(base_url: str) -> Iterator[httpx2.Client]:
-    """A client of the proxy, which every request of the suite goes through."""
-    with httpx2.Client(base_url=base_url, timeout=TIMEOUT_S) as session:
+    """A client of the proxy, which every request of the suite goes through.
+
+    Its requests say `X-Client: smoke`, so that the prediction log marks the
+    answers of a smoke run on the VM as test traffic, which M6's drift job
+    leaves out (docs/docs/web-ui.md).
+    """
+    with httpx2.Client(
+        base_url=base_url, timeout=TIMEOUT_S, headers={CLIENT_HEADER: "smoke"}
+    ) as session:
         yield session
 
 

@@ -47,7 +47,8 @@ const percent = new Intl.NumberFormat("en-IE", { maximumFractionDigits: 1, minim
 const longDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 const $ = (id) => document.getElementById(id);
-const form = $("car-form");
+// Null outside a browser, where the tests import the pure functions below.
+const form = typeof document === "undefined" ? null : $("car-form");
 let schema = {};
 let inFlight = null;
 
@@ -136,8 +137,8 @@ async function loadService() {
 
 function showModel(health) {
   const info = $("model-info");
-  const trained = health.model.trained_at ? `, trained ${longDate.format(new Date(health.model.trained_at))}` : "";
-  info.textContent = `Model ${health.model.variant}${trained}`;
+  if (!health.model.trained_at) return;
+  info.textContent = `Model trained ${longDate.format(new Date(health.model.trained_at))}`;
   info.title = `Model version ${health.model.version}`;
   info.hidden = false;
   if (health.comparables) {
@@ -297,6 +298,7 @@ async function estimate(event) {
     showFieldErrors(errors, "client");
     return;
   }
+  if (busy) return;
   inFlight?.abort();
   const controller = new AbortController();
   inFlight = controller;
@@ -327,12 +329,16 @@ async function estimate(event) {
   render(body, valuation.value, range, comparables);
 }
 
-function setBusy(busy) {
-  $("result").setAttribute("aria-busy", String(busy));
+let busy = false;
+
+/** Marks the estimate as running. The button stays focusable (aria-disabled), so focus stays on it. */
+function setBusy(running) {
+  busy = running;
+  $("result").setAttribute("aria-busy", String(running));
   const submit = $("submit");
-  submit.disabled = busy;
-  submit.textContent = busy ? "Estimating…" : "Estimate price";
-  if (busy) $("announcer").textContent = "Estimating the price.";
+  submit.setAttribute("aria-disabled", String(running));
+  submit.textContent = running ? "Estimating…" : "Estimate price";
+  if (running) $("announcer").textContent = "Estimating the price.";
 }
 
 // --------------------------------------------------------------- rendering
@@ -343,7 +349,7 @@ function el(tag, attributes = {}, ...children) {
     if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
     else if (value !== undefined && value !== null) node.setAttribute(key, value);
   }
-  node.append(...children.filter((child) => child !== null && child !== undefined));
+  node.append(...children.filter((child) => child !== null && child !== undefined && child !== false && child !== ""));
   return node;
 }
 
@@ -355,18 +361,21 @@ function svg(tag, attributes = {}, text) {
   return node;
 }
 
+/** What the page says about a failed request: a title, a detail and, when the problem names one, a reference. */
+export function describeProblem(status, problem) {
+  const title = status === 503 ? "The service is busy or restarting" : problem?.title ?? "Something went wrong";
+  const detail = problem?.detail ?? `The service answered ${status}.`;
+  const reference = typeof problem?.instance === "string" ? problem.instance.replace("urn:uuid:", "") : null;
+  return { title, detail, reference };
+}
+
 function showProblem(error) {
-  const problem = error.problem ?? {};
   const box = $("problem");
-  const title = error.status === 503
-    ? "The service is busy or restarting"
-    : problem.title ?? "Something went wrong";
-  const detail = problem.detail ?? error.message;
-  box.replaceChildren(
-    el("p", { class: "problem-title" }, title),
-    el("p", { class: "problem-detail" }, detail),
-    problem.instance ? el("p", { class: "problem-ref" }, `Reference ${problem.instance.replace("urn:uuid:", "")}`) : null,
-  );
+  const { title, detail, reference } = describeProblem(error.status, error.problem);
+  // A problem nginx answers itself, such as its 503 while the API restarts, has no instance.
+  const parts = [el("p", { class: "problem-title" }, title), el("p", { class: "problem-detail" }, detail)];
+  if (reference) parts.push(el("p", { class: "problem-ref" }, `Reference ${reference}`));
+  box.replaceChildren(...parts);
   box.hidden = false;
   // An older estimate below the problem would read as the answer to this request.
   $("estimate").hidden = true;
@@ -417,7 +426,11 @@ function render(body, valuation, range, comparables) {
   renderListings(comparables, body);
 
   const model = valuation.model;
-  $("estimate-foot").textContent = `Model ${model.variant}, version ${model.version.slice(0, 8)}. Request ${valuation.request_id}.`;
+  $("estimate-foot").replaceChildren(
+    `Model ${model.variant}, version ${model.version.slice(0, 8)}. Request `,
+    el("span", { class: "request-id" }, valuation.request_id),
+    ".",
+  );
   $("announcer").textContent = `Estimated asking price ${euro.format(valuation.price_eur)}.`;
   revealResult();
 }
@@ -470,9 +483,9 @@ function renderRange(range, price, listings) {
   const note = $("range-note");
   note.replaceChildren(
     `The model expects ${share} in 10 cars like this to be listed between ${euro.format(lower)} and ${euro.format(upper)}.`,
-    prices.length ? " The circles " : "",
+    prices.length ? " The thin marks " : "",
     prices.length ? el("span", { class: "range-legend", "aria-hidden": "true" }) : "",
-    prices.length ? " mark the asking prices of the similar listings below." : "",
+    prices.length ? " on the bar are the asking prices of the similar listings below." : "",
   );
 }
 
@@ -549,7 +562,8 @@ function renderWaterfall(valuation) {
   const domainMax = Math.ceil(maxValue / step) * step;
   const x = (value) => plotLeft + (value / domainMax) * (plotRight - plotLeft);
 
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, width, height, role: "img" });
+  // The drawing is for the eye; the table after it says the same to a screen reader.
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, width, height, "aria-hidden": "true" });
   root.append(svg("title", {}, `Waterfall from the starting price ${euro.format(base)} to the estimate ${euro.format(total)}`));
   for (let tick = 0; tick <= domainMax + 1e-6; tick += step) {
     root.append(svg("line", { class: "wf-grid", x1: x(tick), x2: x(tick), y1: top, y2: axisY }));
@@ -588,7 +602,19 @@ function renderWaterfall(valuation) {
       root.append(svg("text", { class: "wf-delta", x: width, y: y + rowHeight / 2 + 9, "text-anchor": "end", "dominant-baseline": "middle" }, delta));
     }
   });
-  container.replaceChildren(root);
+  const table = el("table", { class: "visually-hidden" },
+    el("caption", {}, "What moved the estimate, from the starting price to the estimate"),
+    el("thead", {}, el("tr", {},
+      el("th", { scope: "col" }, "Detail"), el("th", { scope: "col" }, "Value"),
+      el("th", { scope: "col" }, "Effect"), el("th", { scope: "col" }, "Price after it"))),
+    el("tbody", {}, ...rows.map((row) => el("tr", {},
+      el("th", { scope: "row" }, row.label),
+      el("td", {}, row.value || "–"),
+      el("td", {}, row.pct === undefined ? "–" : `${percent.format(row.pct)} %`),
+      el("td", {}, euro.format(row.to)),
+    ))),
+  );
+  container.replaceChildren(root, table);
 }
 
 function renderListings(comparables, body) {
@@ -615,7 +641,7 @@ function renderListings(comparables, body) {
   }
   aside.textContent = `${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
   $("listings-body").replaceChildren(...listings.map((listing) => {
-    const name = [listing.model, listing.model_version].filter(Boolean).join(" · ");
+    const name = listing.model_version || listing.model || listing.make;
     const meta = [
       listing.fuel_category, listing.body_type, labelOf("seller_type", listing.seller_type),
       COUNTRIES[listing.country_code] ?? listing.country_code,
@@ -640,6 +666,7 @@ function fillExample() {
     const input = form.elements[field];
     input.value = value;
     input.dispatchEvent(new Event("change"));
+    input.dispatchEvent(new Event("input"));
   }
   $("submit").focus();
 }
