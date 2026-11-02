@@ -6,7 +6,7 @@ docs/docs/web-ui.md). nginx's `location /` passes every path but `/feedback` and
 `/metrics` to the API, so the page needs no change to `deploy/nginx.conf`.
 
 `WebPage.load` reads every file once, at startup, and holds it with its gzip
-form, about 130 KB per worker process. The page itself is `index.html`, served
+form, about 135 KB per worker process. The page itself is `index.html`, served
 at `/` to a browser (`wants_html`); every other file is an asset under
 `/assets/<version>/`, where `<version>` is a hash of all files, so a new page
 gets new asset URLs and an asset can be cached for a year. `index.html` names

@@ -470,9 +470,9 @@ function renderRange(range, price, listings) {
   const note = $("range-note");
   note.replaceChildren(
     `The model expects ${share} in 10 cars like this to be listed between ${euro.format(lower)} and ${euro.format(upper)}.`,
-    prices.length ? " Each " : "",
-    prices.length ? el("span", { class: "range-legend" }, "circle") : "",
-    prices.length ? " is the asking price of one of the similar listings below." : "",
+    prices.length ? " The circles " : "",
+    prices.length ? el("span", { class: "range-legend", "aria-hidden": "true" }) : "",
+    prices.length ? " mark the asking prices of the similar listings below." : "",
   );
 }
 

@@ -1348,6 +1348,30 @@ How to add an entry:
 - **Other evidence:** [Issue #199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199), [issue #200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200), [PR #212](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/212), [PR #210](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/210), [PR #238](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238), [deployment docs](../docs/docs/deployment.md#vulnerabilities-and-dependency-updates).
 - **In LaTeX:** yes
 
+### EDN-96: The web page ships in the API image as plain files, without a framework
+
+- **Date:** 2026-11-02
+- **Milestone:** Other
+- **Activity / Topic:** Frontend, Deployment
+- **Participants:** @lukas2510 asked for the page and delegated it under his account; the AI chose the stack and the delivery path
+- **Decision:** A static page of hand-written HTML, CSS and JavaScript with self-hosted Instrument Serif and Sans and a hand-drawn SVG waterfall.
+  The API serves it from memory at `/` to browsers, behind the unchanged nginx, so it deploys and rolls back with the API image.
+  Its requests carry `X-Client: web-ui`, stored in the prediction log for M6.
+- **Alternatives considered:**
+  - nginx serving the files: nginx.conf reaches the VM only by rerunning the bootstrap, and its own image was rejected before (EDN-95).
+  - Alpine.js: its standard build needs `unsafe-eval` in the Content Security Policy, for one form.
+  - Tailwind with DaisyUI: a build step and default looks for about 900 lines of CSS.
+  - A Streamlit or Gradio container: a new service on a VM that M6 needs.
+- **Rationale:** Only the API image moves to the VM on a merge, so the page goes live with no manual step and a rollback restores the matching page.
+  A first visit loads 64 KB; nginx stayed at 15.0 MiB of 64 MiB after 2,100 page requests.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found that a change to nginx.conf never reaches the VM in CD, chose the delivery through the API image, designed and built the page, and measured payload and memory.
+  No human code review; the review of the pull request is recorded on it.
+- **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, prompt (paraphrased): "add a public web UI for the price API, served by the existing nginx container, deployed through the normal CD path, with no new container; it should look premium; only laptops and PCs matter, not phones".
+- **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md), [deployment docs](../docs/docs/deployment.md#the-stack).
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

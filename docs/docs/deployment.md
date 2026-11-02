@@ -13,7 +13,8 @@ The VM is described in [The VM](#the-vm), with the facts verified on it on 2026-
 ```
 client --HTTP--> proxy (nginx, host port 8080, on a laptop and on the VM)
                    |-- /feedback, /metrics: 403, never forwarded
-                   '-- everything else --> api:8000 (uvicorn, one model bundle)
+                   '-- everything else --> api:8000 (uvicorn, one model bundle,
+                                                and the web page for a browser at /)
                                           only reachable inside the Compose network
 ```
 
@@ -30,6 +31,7 @@ client --HTTP--> proxy (nginx, host port 8080, on a laptop and on the VM)
 What each part guarantees:
 
 - **The image** installs `[project] dependencies` from `uv.lock` and nothing else ([EDN-47](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), following the multi-stage pattern of [uv's Docker guide](https://docs.astral.sh/uv/guides/integration/docker/).
+  The [web page](web-ui.md) is part of the `recommenditos` package, so it ships in the image, reaches the VM with every deploy and goes back with every rollback, and nginx needs no change for it.
   It copies `models/lgbm-basic` unchanged, so `/health` reports the hash `dvc.lock` records for that directory (FR-12, EDN-08); `--build-arg MODEL_VARIANT=lgbm-extended` builds it with another bundle.
   It also copies FR-09's comparables index, `data/processed/comparables.parquet`, to `/app/models/comparables.parquet` beside the bundle, where `RECOMMENDITOS_COMPARABLES_FILE` points the API, and `/health` reports the md5 `dvc.lock` records for that file as the index's version.
   The API runs as the unprivileged user 10001, and the image's `HEALTHCHECK` runs `recommenditos/api/healthcheck.py`, copied to `/app/healthcheck.py`, which asks `/health` with Python's `urllib`, so the image needs no curl.
