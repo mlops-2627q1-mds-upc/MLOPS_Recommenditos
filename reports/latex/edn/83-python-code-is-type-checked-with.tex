@@ -25,6 +25,8 @@ It sees every DataFrame as \texttt{Any}, so column names and dtypes stay with \t
   response = {Accepted},
   assessment = {AI measured the error counts of the three checkers, laid out the options and recommended mypy, which @lukas2510 chose.
 It fixed the findings and wired the hook and the CI job; a deliberate type error turned the hook red, and a reviewer agent checked the pull request.},
-  aievidence = {Claude Code session of 2026-10-20 on issue \#133: three checkers measured, four options, recommendation.},
+  aievidence = {Claude Code session of 2026-10-20.
+Question from issue \#133 (paraphrased): ``Should the package and tools be type-checked at all, and if so with which checker: none, mypy, basedpyright, or ty?''.
+Lukas answered: ``The common standard, has a pydantic plugin for M4, and needs 10 fixes today.'' (the issue's option 2, mypy in default mode, shortened)},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133}{Issue \#133}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/149}{PR \#149}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/pyproject.toml}{\texttt{[tool.\allowbreak{}mypy]}}.},
 }

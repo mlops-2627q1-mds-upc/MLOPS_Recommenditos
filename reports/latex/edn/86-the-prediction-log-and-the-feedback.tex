@@ -22,6 +22,8 @@ Two uvicorn workers recorded each of 200 concurrent answers once, and a write ta
   response = {Accepted},
   assessment = {AI laid out the three options in the issue and recommended SQLite, which @lukas2510 chose.
 AI then built the store, the rotation and the tests, one with two worker processes, and measured the cost of a write.},
-  aievidence = {Claude Code session of 2026-10-20 planning Milestone 4: the issue's three options and recommendation.},
+  aievidence = {Claude Code session of 2026-10-20.
+Question from issue \#140 (paraphrased): ``Where should the prediction log and the feedback live: SQLite in WAL mode, PostgreSQL in its own container, or JSON Lines files per worker?''.
+Lukas answered: ``A, behind a small store interface so that B stays a local change.'' (A being SQLite in WAL mode, B PostgreSQL, shortened)},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/140}{Issue \#140}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/166}{PR \#166}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/api.md\#the-prediction-log-and-the-feedback}{API docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/api/prediction_log.py}{\texttt{prediction\_\allowbreak{}log.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/project-brief.md}{project brief} section 5.},
 }
