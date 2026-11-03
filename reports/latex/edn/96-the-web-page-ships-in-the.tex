@@ -6,27 +6,27 @@
   date = {2026-11-02},
   milestone = {Other},
   topic = {Frontend, Deployment},
-  participants = {@lukas2510 asked for the page, approved the design and chose navy and white; the AI chose stack and delivery},
-  decision = {A static page of hand-written HTML, CSS and JavaScript in self-hosted Schibsted Grotesk, with hand-drawn SVG charts; the form sits on a tinted panel as step 1, the estimate beside it as step 2.
+  participants = {@lukas2510 asked for the page, chose momentic.ai as the style reference and approved the look; the AI chose stack and delivery},
+  decision = {A static page of hand-written HTML, CSS and JavaScript with hand-drawn SVG charts, in momentic.ai's visual language: cream, ink, olive rules, one lime accent, self-hosted BDO Grotesk and a renamed Basically A Mono subset.
 The API serves it at \texttt{/\allowbreak{}} to browsers, so it deploys and rolls back with the API image.
 Its requests carry \texttt{X-\allowbreak{}Client: web-\allowbreak{}ui}, logged for M6.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item nginx serving the files: nginx.conf reaches the VM only through the bootstrap.
 \item Alpine.js: needs \texttt{unsafe-\allowbreak{}eval} in the Content Security Policy.
-\item Tailwind with DaisyUI: a build step and default looks.
 \item Streamlit or Gradio: a new container on a VM that M6 needs.
-\item A serif for headline and price (first build): Lukas found it read as a generic AI look.
+\item A serif display (first build), then Schibsted Grotesk: Lukas found the serif generic and preferred momentic's look.
 \end{itemize}
 \par
 \emph{Why:} Only the API image moves to the VM on a merge, so the page goes live with no manual step and a rollback restores the matching page.
-Of ten open-licensed faces rendered at real sizes, Schibsted Grotesk set the 96 px price most firmly and covers the accented letters of listing names.
-A first visit loads 83 KB plus the 52 KB OpenAPI document; nginx stayed at 7.5 MiB of 64 MiB after 2,400 page requests.},
+momentic's two faces are open-licensed, so the genuine ones match best; Basically A Mono reserves its name, so the subset is renamed.
+Its grey, focus ring and field borders miss WCAG AA, so the page darkens them; a test checks every pair.
+A first visit loads 76 KB plus the 52 KB OpenAPI document; with the first design nginx stayed at 7.5 MiB of 64 MiB after 2,400 page requests.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},
   response = {Accepted with modifications},
   assessment = {AI found that nginx.conf never reaches the VM in CD, chose delivery through the API image, and built and measured the page.
-Lukas had the design redone twice: AI rebuilt it from eight measured reference sites, then replaced the serif after a font specimen and set the form apart.
-Independent review agents found two blocking and sixteen should-fix points, all fixed; no human code review.},
+Lukas had the design redone three times; AI measured reference sites, momentic.ai last, and rebuilt it.
+Independent review agents found two blocking and twenty should-fix points, all fixed; no human code review.},
   aievidence = {Claude Code session of 2026-11-02 on issue \#269, which asks for a page that looks ``professional, modern and polished''; Lukas's prompt (translated from German): ``I want a very good frontend that looks high quality''.},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269}{Issue \#269}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/web-ui.md\#the-design}{web page docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md\#the-stack}{deployment docs}.},
 }
