@@ -238,7 +238,7 @@ def test_the_page_never_calls_the_feedback_endpoint():
     in_a_string = re.compile(r"""["'`][^"'`\n]*feedback""")
     for path in WEB_DIR.rglob("*"):
         if path.suffix in {".html", ".js"}:
-            assert not in_a_string.search(path.read_text()), path
+            assert not in_a_string.search(path.read_text(encoding="utf-8")), path
 
 
 @pytest.mark.parametrize(
