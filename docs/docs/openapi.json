@@ -491,17 +491,23 @@
         "tags": [
           "operations"
         ],
-        "summary": "Service name, served model and documentation links",
+        "summary": "Service name, served model and documentation links; the web page for a browser",
         "description": "The landing page of the service, for a person who opens its address.\n\nLinks are relative to the service, so they hold behind a reverse proxy.",
         "operationId": "index__get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "The service index as JSON, or the web page when the request asks for `text/html` before `application/json`.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServiceIndex"
                 }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "<!doctype html><html lang=\"en\">...</html>"
               }
             }
           }

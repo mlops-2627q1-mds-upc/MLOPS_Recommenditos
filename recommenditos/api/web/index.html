@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Used-car price estimate - Recommenditos</title>
+<meta name="description" content="Estimate the asking price of a used car in eight European countries, with the range asking prices fall in, what moved the estimate, and similar real listings.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1526" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="{{assets}}/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="{{assets}}/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{assets}}/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{assets}}/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{assets}}/app.css">
+<script src="{{assets}}/theme.js"></script>
+<script type="module" src="{{assets}}/app.js"></script>
+</head>
+<body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="wordmark" href="./">Recommenditos</a>
+    <p class="label masthead-claim">Used-car asking prices · 8 European markets</p>
+    <nav class="masthead-nav" aria-label="Service">
+      <span class="label model-info" id="model-info" hidden></span>
+      <a class="masthead-link" href="docs">API docs</a>
+      <button type="button" class="label theme-toggle" id="theme-toggle">Dark</button>
+    </nav>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="panel-form" aria-labelledby="form-title">
+    <h1 class="form-title" id="form-title">Used-car price estimate</h1>
+    <p class="form-lede">Describe a car to see the asking price a listing like it would carry in eight European markets.</p>
+
+    <form id="car-form" novalidate>
+      <fieldset class="group" disabled>
+        <legend class="label group-title">The car</legend>
+
+        <div class="field">
+          <label for="make">Make</label>
+          <select id="make" name="make" required data-options="make"><option value="">Choose a make</option></select>
+          <p class="field-error" id="make-error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="model">Model</label>
+          <input id="model" name="model" type="text" required autocomplete="off" spellcheck="false" placeholder="e.g. 320, Golf, A4">
+          <p class="field-error" id="model-error" hidden></p>
+        </div>
+
+        <div class="field" id="registration_date-field">
+          <span class="label" id="registration-label">First registration</span>
+          <div class="pair" role="group" aria-labelledby="registration-label">
+            <select id="registration_month" name="registration_month" required aria-label="Month of first registration">
+              <option value="">Month</option>
+            </select>
+            <select id="registration_year" name="registration_year" required aria-label="Year of first registration">
+              <option value="">Year</option>
+            </select>
+          </div>
+          <p class="field-error" id="registration_date-error" hidden></p>
+        </div>
+
+        <div class="pair">
+          <div class="field">
+            <label for="mileage_km_raw">Mileage</label>
+            <div class="unit-input"><input id="mileage_km_raw" name="mileage_km_raw" type="text" inputmode="numeric" required autocomplete="off" data-number><span class="unit" aria-hidden="true">km</span></div>
+            <p class="field-error" id="mileage_km_raw-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="power_kw">Power</label>
+            <div class="unit-input"><input id="power_kw" name="power_kw" type="text" inputmode="numeric" required autocomplete="off" data-number aria-describedby="power-hint"><span class="unit" aria-hidden="true">kW</span></div>
+            <p class="field-hint" id="power-hint">kW, as the listing states it</p>
+            <p class="field-error" id="power_kw-error" hidden></p>
+          </div>
+        </div>
+
+        <div class="pair">
+          <div class="field">
+            <label for="fuel_category">Fuel</label>
+            <select id="fuel_category" name="fuel_category" required data-options="fuel_category"><option value="">Choose</option></select>
+            <p class="field-error" id="fuel_category-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="transmission">Gearbox</label>
+            <select id="transmission" name="transmission" required data-options="transmission"><option value="">Choose</option></select>
+            <p class="field-error" id="transmission-error" hidden></p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="body_type">Body type</label>
+          <select id="body_type" name="body_type" required data-options="body_type"><option value="">Choose a body type</option></select>
+          <p class="field-error" id="body_type-error" hidden></p>
+        </div>
+      </fieldset>
+
+      <fieldset class="group" disabled>
+        <legend class="label group-title">The listing</legend>
+        <div class="pair">
+          <div class="field">
+            <label for="country_code">Country</label>
+            <select id="country_code" name="country_code" required data-options="country_code"><option value="">Choose</option></select>
+            <p class="field-error" id="country_code-error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="seller_type">Seller</label>
+            <select id="seller_type" name="seller_type" required data-options="seller_type"><option value="">Choose</option></select>
+            <p class="field-error" id="seller_type-error" hidden></p>
+          </div>
+        </div>
+      </fieldset>
+
+      <details class="more" id="more">
+        <summary class="label">More details · optional</summary>
+        <p class="field-hint more-hint">Optional. The model reads these too.</p>
+        <fieldset class="group group-more" disabled>
+          <legend class="visually-hidden">Optional details</legend>
+          <div class="pair">
+            <div class="field">
+              <label for="drive_train">Drive</label>
+              <select id="drive_train" name="drive_train" data-options="drive_train"><option value="">Not given</option></select>
+              <p class="field-error" id="drive_train-error" hidden></p>
+            </div>
+            <div class="field">
+              <label for="nr_prev_owners">Previous owners</label>
+              <input id="nr_prev_owners" name="nr_prev_owners" type="text" inputmode="numeric" autocomplete="off" data-number>
+              <p class="field-error" id="nr_prev_owners-error" hidden></p>
+            </div>
+          </div>
+          <div class="pair">
+            <div class="field">
+              <label for="cylinders_volume_cc">Engine size</label>
+              <div class="unit-input"><input id="cylinders_volume_cc" name="cylinders_volume_cc" type="text" inputmode="numeric" autocomplete="off" data-number><span class="unit" aria-hidden="true">cc</span></div>
+              <p class="field-error" id="cylinders_volume_cc-error" hidden></p>
+            </div>
+            <div class="field">
+              <label for="gears">Gears</label>
+              <input id="gears" name="gears" type="text" inputmode="numeric" autocomplete="off" data-number>
+              <p class="field-error" id="gears-error" hidden></p>
+            </div>
+          </div>
+          <div class="pair">
+            <div class="field">
+              <label for="nr_doors">Doors</label>
+              <input id="nr_doors" name="nr_doors" type="text" inputmode="numeric" autocomplete="off" data-number>
+              <p class="field-error" id="nr_doors-error" hidden></p>
+            </div>
+            <div class="field">
+              <label for="nr_seats">Seats</label>
+              <input id="nr_seats" name="nr_seats" type="text" inputmode="numeric" autocomplete="off" data-number>
+              <p class="field-error" id="nr_seats-error" hidden></p>
+            </div>
+          </div>
+        </fieldset>
+      </details>
+
+      <div class="actions">
+        <button type="submit" class="button-primary" id="submit" disabled>Estimate price</button>
+        <button type="button" class="button-quiet" id="example" disabled>Fill in an example</button>
+      </div>
+      <div class="form-alert" id="form-alert" role="alert" hidden></div>
+    </form>
+  </section>
+
+  <section class="panel-result" id="result" aria-label="Estimate" aria-busy="false">
+    <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
+    <div class="problem" id="problem" role="alert" hidden></div>
+
+    <article class="estimate is-empty" id="estimate">
+      <p class="label" id="price-label">Estimated asking price</p>
+      <p class="price" id="price">No car yet.</p>
+      <p class="car-line" id="car-line"></p>
+      <div class="warnings" id="warnings" hidden>
+        <p class="warnings-title">The model has not seen some of these values</p>
+        <ul class="warnings-list" id="warnings-list"></ul>
+      </div>
+
+      <section class="block" aria-labelledby="range-title">
+        <h2 class="label block-label" id="range-title">Likely range<span id="range-level"></span></h2>
+        <p class="block-empty">Where 9 in 10 listings like it are priced.</p>
+        <div class="range" id="range"></div>
+        <p class="caption" id="range-note"></p>
+        <p class="block-error" id="range-error" hidden></p>
+      </section>
+
+      <section class="block" aria-labelledby="why-title">
+        <h2 class="label block-label" id="why-title">What moved the estimate</h2>
+        <p class="block-empty">How much each detail adds or takes away.</p>
+        <div class="waterfall" id="waterfall"></div>
+        <p class="caption" id="waterfall-note">The model starts from the average asking price of the listings it learned from and multiplies it by one factor per detail. Solid bars raise the price, outlined bars lower it. A detail you leave out has an effect too, because the model then cannot use it.</p>
+      </section>
+
+      <section class="block" aria-labelledby="listings-title">
+        <h2 class="label block-label" id="listings-title">Similar listings<span id="listings-aside"></span></h2>
+        <p class="block-empty">Real listings close in mileage and age.</p>
+        <div class="table-wrap" id="listings-wrap" hidden>
+          <table class="listings" id="listings">
+            <thead>
+              <tr>
+                <th scope="col" class="label">Listing</th>
+                <th scope="col" class="label col-registered">Registered</th>
+                <th scope="col" class="label num">Mileage</th>
+                <th scope="col" class="label num col-power">Power</th>
+                <th scope="col" class="label num">Asking price</th>
+                <th scope="col" class="label num">vs. estimate</th>
+              </tr>
+            </thead>
+            <tbody id="listings-body"></tbody>
+          </table>
+        </div>
+        <p class="caption" id="listings-empty" hidden></p>
+        <p class="block-error" id="listings-error" hidden></p>
+      </section>
+
+      <p class="meta" id="estimate-foot"></p>
+    </article>
+  </section>
+</main>
+
+<footer class="colophon">
+  <p>An estimate from a statistical model, not an offer or a dealer valuation. Recommenditos is a student project of the MLOps course at UPC Barcelona, 2026.</p>
+</footer>
+<noscript><p class="noscript">This page needs JavaScript. The API itself answers without it: see <a href="docs">the API docs</a>.</p></noscript>
+</body>
+</html>

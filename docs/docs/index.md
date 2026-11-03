@@ -14,6 +14,7 @@ What the model is, what it may be used for and how good it has to be: [Model car
 How the pipeline is laid out and what each stage promises the next: [The DVC pipeline](pipeline.md).
 How data and models are versioned: [Data versioning](data-versioning.md).
 How to run the API, its endpoints and its error shape: [The API](api.md).
+The web page that a browser gets at the service's address, and how its traffic is marked: [The web page](web-ui.md).
 Every operation and field of the API contract, rendered from the committed OpenAPI document: [API reference](api-reference.md).
 How the API runs in Docker behind nginx, locally and on the VM: [Deployment](deployment.md).
 How the system is put together, the patterns it uses and the decisions behind them: [Architecture](architecture.md).

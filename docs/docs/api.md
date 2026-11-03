@@ -80,7 +80,7 @@ The operational endpoints are not part of that contract and stay at the root, wh
 | `POST /v1/comparables` | Up to `k` real listings with their price and key features, comparable to a car described as for `/v1/price-range`, the index and the model, a request ID and warnings | FR-02 to FR-04, FR-09, FR-13 |
 | `POST /v1/feedback` | Stores the observed price of an answered listing against its request ID; internal, requires the API key | FR-10 |
 | `GET /health` | `ok`, the served model (its variant, version and training time), `price_range`, whether the bundle can answer `/v1/price-range`, and `comparables`, the index's version and size | FR-11, FR-12 |
-| `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json` | - |
+| `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json`; for a browser, which asks for `text/html`, the [web page](web-ui.md) | FR-16 |
 | `GET /metrics` | Request, latency, error and model metrics in Prometheus' text format | FR-11 |
 
 `/v1/predict` values one car per request, because UC1 is one seller asking about one listing and every answer becomes one record of the prediction log; it has no batch form.
@@ -263,8 +263,10 @@ The API reaches them through the interface `PredictionStore` in `recommenditos/a
 | `inputs` | The validated request body as JSON, omitted optional fields left out |
 | `outputs` | The answer as JSON, without `model`, `request_id` and `warnings`, which have their own columns |
 | `warnings` | The answer's `warnings` as JSON |
+| `client` | The kind of test traffic a request is, from its `X-Client` header: `web-ui` for the [web page](web-ui.md), `smoke` for the integration suite and the smoke check, `loadtest` for the load test; NULL for every other request and every other value of the header, so that M6's drift job can leave test traffic out (#269) |
 
 The request bodies have no PII field, and no column holds the caller's address (NFR-08).
+`client` was added after the first deployed images: the store adds the column, NULL for older rows, to a file that lacks it when it opens, and an older image writes its rows without it, so a rollback keeps working with the same file and the schema version stays 1.
 A refused request (422, 413) is not an answer and has no record; it shows in the access log and the metrics.
 `feedback` holds `request_id`, `observed_price_eur` and `received_at`, and the view `labelled_predictions` is the join of the two tables.
 A reader opens the file with SQLite in the same way the API does; it needs write access to the directory for WAL's shared-memory file, even when it only reads.

@@ -1,5 +1,7 @@
 """What every client meets at the proxy: health, the service pages, errors, limits, refusals."""
 
+import re
+
 import httpx2
 import pytest
 from tests.api.helpers import assert_problem
@@ -107,3 +109,30 @@ def test_internal_endpoints_are_refused_from_outside(client, base_url, method, p
     # as a host name and send the request to `/`.
     response = client.request(method, base_url + path, json={} if method == "POST" else None)
     assert_proxy_problem(response, 403)
+
+
+#: What a browser sends when a person opens the address.
+BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+
+@pytest.mark.req("NFR-09")
+def test_a_browser_gets_the_web_page_through_the_proxy_with_its_security_headers(client):
+    """The page (#269) is the API's answer to a browser, so it carries nginx's headers too."""
+    page = client.get("/", headers={"Accept": BROWSER_ACCEPT, "Accept-Encoding": "gzip"})
+    assert page.status_code == 200, page.text
+    assert page.headers["content-type"] == "text/html; charset=utf-8"
+    assert page.headers["content-encoding"] == "gzip"
+    assert page.headers["x-frame-options"] == "DENY"
+    assert page.headers["x-content-type-options"] == "nosniff"
+    assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+    assert "Accept" in page.headers["vary"]
+
+    assets = re.findall(r'(?:href|src)="(assets/[^"]+)"', page.text)
+    assert any(asset.endswith("app.js") for asset in assets), assets
+    for asset in assets:
+        response = client.get("/" + asset)
+        assert response.status_code == 200, asset
+        assert "immutable" in response.headers["cache-control"], asset
+
+    # A client that is not a browser still gets the JSON index (FR-16).
+    assert client.get("/").headers["content-type"] == "application/json"
