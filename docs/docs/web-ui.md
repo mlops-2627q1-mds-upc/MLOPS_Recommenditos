@@ -57,7 +57,7 @@ The page splits into two numbered steps: on the left a raised cell, "Describe th
   Lime is too pale on cream to carry a mark alone, so the estimate bar has an ink edge and the marker an ink core.
   The form cell is `#fbfbfb`, fields an olive tint with a 1 px olive border; the dark theme is ink `#1c1c1c` with a `#252525` form cell.
   Where momentic's own values fall short of WCAG AA, the page deviates: muted grey `#6b6b6b` instead of `#737373`, a visible border on fields, a blue focus ring (`#2563eb`, `#93c5fd` in dark) instead of a pale one, and a darker error red (`#a8433b`, `#ef7a6f` in dark); olive text only from 24 px.
-  A test computes every text pair at 4.5:1 and borders, marks and focus at 3:1 from the tokens in `app.css`, in both themes.
+  A test computes every pair the page uses from the tokens in `app.css`, text at 4.5:1 and borders, marks and focus at 3:1, in the light theme and in both dark blocks (the system's and the toggle's), and checks that the two dark blocks hold the same tokens.
 - **Structure:** every division is a 1 px olive rule that runs to the cell's edge: under the header, between the form cell and the result, above each result section; hairlines inside; no cards, shadows or gradients; 4 px radius on chips and panels, 8 px on fields and buttons.
   The similar listings sit in a tinted panel with an index column, as in momentic's leaderboard.
 - **The button row:** it stays at the bottom of the window while the form runs past it and comes to rest under the last field, so the buttons are in reach at any window height.
@@ -93,7 +93,8 @@ uv run python -m tools.web_fonts BasicallyAMono-Regular.ttf \
 
 BDO Grotesk's `tnum` feature also widens the comma, full stop and percent sign, so `--tabular-digits-only` keeps it for the figures alone.
 It lacks the Esperanto and breve letters, Ĳ, ĸ, ŉ, ſ, µ and the double prime; of these the listing names hold only two double primes, which fall back to the system's face.
-`tests/api/test_web.py` checks that every other one of those characters, and every character of the page's own files, is in the text face, that `tnum` changes the figures and nothing else, that no mono file carries the reserved name, that each family ships with its licence, and that the fonts weigh no more than the first design's 79.7 KB.
+`tests/api/test_web_fonts.py` checks that every other one of those characters, and every character of the page's own files, is in the text face, that `tnum` changes the figures and nothing else, that no mono file carries the reserved name, that each family ships with its licence, and that the fonts weigh no more than the first design's 79.7 KB.
+It needs fontTools from the `webfonts` group; like the Node tests, it is skipped on a machine without it but fails in CI.
 
 ## What it calls
 
@@ -147,7 +148,7 @@ The page itself sends one estimate, three requests, at a time.
 ## Work on it
 
 `make api` serves the page at `http://127.0.0.1:8000/` from the checkout; the files are read at startup, so a change shows after a restart of `make api`.
-`tests/api/test_web.py` checks the fonts (above), the colour contrast, the sticky button row, the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
+`tests/api/test_web.py` checks the colour contrast, the sticky button row, the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
 `tests/api/test_web_script.py` runs the pure functions of `app.js` in Node; it is skipped on a machine without Node, but fails in CI (`CI` set) when Node is missing: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers, the title and quoted description of a listing and the text of a problem without a reference.
 `tests/integration/test_deployed_proxy.py` checks the page through nginx.
 The Content Security Policy allows scripts, styles, fonts and requests from the page's own origin only and no inline script or style, so a new script or style goes into a file of `web/`, and a setting from JavaScript goes through the DOM (`element.style`), not a `style` attribute.

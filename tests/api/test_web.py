@@ -5,10 +5,7 @@ import re
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from fontTools import subset
-from fontTools.ttLib import TTFont
 import pytest
-from tools.web_fonts import KEPT_NAME_IDS, UNICODES
 
 from recommenditos.api.webui import (
     ASSET_CACHE_CONTROL,
@@ -196,7 +193,8 @@ def _contrast(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     return (high + 0.05) / (low + 0.05)
 
 
-#: (foreground, background, minimum): text 4.5:1, field borders, marks and focus 3:1 (WCAG 2.2 AA).
+#: Every pair the page uses, as (foreground, background, minimum): text 4.5:1, field borders,
+#: marks, focus and the busy button's cue 3:1 (WCAG 2.2 AA; a busy button is disabled).
 #: "field" is the field's fill over the form cell, where every field sits.
 CONTRAST_PAIRS = [
     *[
@@ -207,6 +205,10 @@ CONTRAST_PAIRS = [
     ("danger", "form", 4.5),
     ("danger", "field", 4.5),
     ("danger", "ground", 4.5),
+    ("ink-2", "panel", 4.5),
+    ("ink-3", "panel", 4.5),
+    ("ink", "chip", 4.5),
+    ("on-accent-busy", "accent-busy", 3.0),
     ("ink-2", "danger-tint", 4.5),
     ("danger", "danger-tint", 4.5),
     ("on-accent", "accent", 4.5),
@@ -222,7 +224,17 @@ CONTRAST_PAIRS = [
 ]
 
 
-@pytest.mark.parametrize("theme", [":root", ':root[data-theme="dark"]'])
+#: The light tokens, the dark ones that follow the system, and the dark ones the toggle sets.
+THEMES = [":root", ':root:not([data-theme="light"])', ':root[data-theme="dark"]']
+
+
+def test_the_two_dark_blocks_hold_the_same_tokens():
+    """The system's dark theme and the toggle's must not drift apart."""
+    css = (WEB_DIR / "app.css").read_text(encoding="utf-8")
+    assert _tokens(css, THEMES[1]) == _tokens(css, THEMES[2])
+
+
+@pytest.mark.parametrize("theme", THEMES)
 def test_the_colours_reach_aa_contrast_in_both_themes(theme: str):
     css = (WEB_DIR / "app.css").read_text(encoding="utf-8")
     tokens = {**_tokens(css, ":root"), **(_tokens(css, theme) if theme != ":root" else {})}
@@ -235,6 +247,7 @@ def test_the_colours_reach_aa_contrast_in_both_themes(theme: str):
     rgb["field"] = _rgb(tokens["surface"], form)
     rgb["form"] = form
     rgb["band-text"] = _rgb(tokens["band-text"], _rgb(tokens["band-ink"], ground))
+    rgb["on-accent-busy"] = _rgb(tokens["on-accent-busy"], rgb["accent-busy"])
     failing = [
         (fg, bg, round(_contrast(rgb[fg], rgb[bg]), 2))
         for fg, bg, minimum in CONTRAST_PAIRS
@@ -290,76 +303,6 @@ def test_a_focused_field_scrolls_clear_of_the_sticky_button_row():
     border = _px(css, ".form-foot", "border-top")[0]
     button = _px(css, ".button-primary,\n.button-quiet", "height")[0]
     assert _px(css, "html", "scroll-padding-bottom")[0] >= vertical + border + button + 16
-
-
-def test_the_font_licences_ship_with_the_fonts():
-    fonts = {path.stem for path in (WEB_DIR / "fonts").glob("*.woff2")}
-    licences = {path.stem for path in (WEB_DIR / "fonts").glob("OFL-*.txt")}
-    assert fonts == {"bdo-grotesk", "recommenditos-mono-400", "recommenditos-mono-500"}
-    assert licences == {"OFL-bdo-grotesk", "OFL-basically-a-mono"}
-
-
-def test_the_mono_subset_does_not_carry_its_reserved_font_name():
-    """The name "Basically A Mono" is reserved: a subset, a Modified Version, must not use it."""
-    licence = (WEB_DIR / "fonts" / "OFL-basically-a-mono.txt").read_text(encoding="utf-8")
-    assert "Reserved Font Name 'Basically A Mono'" in licence
-    for path in (WEB_DIR / "fonts").glob("recommenditos-mono-*.woff2"):
-        names = TTFont(path)["name"]
-        assert names.getDebugName(1).startswith("Recommenditos Mono")
-        carrying = [
-            record.nameID
-            for record in names.names
-            if record.nameID not in KEPT_NAME_IDS and "Basically" in record.toUnicode()
-        ]
-        assert not carrying, path.name
-
-
-def test_the_text_face_has_every_character_of_the_page_and_the_listing_names():
-    """Listing names carry Škoda, Citroën, Łódź; a missing letter falls back to another face."""
-    cmap = TTFont(WEB_DIR / "fonts" / "bdo-grotesk.woff2").getBestCmap()
-    # What BDO Grotesk lacks: the Esperanto and breve letters (Ĉ Ĝ Ĥ Ŝ Ŭ Ĕ Ĭ Ŏ), Ĳ, ĸ, ŉ, ſ,
-    # µ, the soft hyphen and the double prime. Of these the listing names hold only two
-    # double primes (2 of 70,172 names, 2026-11-03), which take the fallback face.
-    lacking = set(
-        subset.parse_unicodes("U+00AD,U+00B5,U+0108-0109,U+0114-0115,U+011C-011D,U+0124-0125")
-    )
-    lacking |= set(
-        subset.parse_unicodes("U+012C-012D,U+0132-0133,U+0138,U+0149,U+014E-014F,U+015C-015D")
-    )
-    lacking |= set(subset.parse_unicodes("U+016C-016D,U+017F,U+2033"))
-    wanted = set(subset.parse_unicodes(UNICODES)) - lacking
-    assert not sorted(chr(code) for code in wanted - cmap.keys())
-    # And every character the page's own files print, whatever the tool's list says.
-    used = {
-        ord(char)
-        for name in ("index.html", "app.js", "app.css")
-        for char in (WEB_DIR / name).read_text(encoding="utf-8")
-        if char.isprintable() and not char.isspace()
-    }
-    assert not sorted(chr(code) for code in used - cmap.keys())
-
-
-def test_the_text_face_lines_up_its_figures_without_widening_the_comma():
-    """`tnum` is on wherever numbers line up; it must not open a gap in "62,000".
-
-    Upstream, the feature widens the comma too; tools/web_fonts.py limits it to the figures.
-    """
-    font = TTFont(WEB_DIR / "fonts" / "bdo-grotesk.woff2")
-    cmap = font.getBestCmap()
-    figures = {cmap[ord(digit)] for digit in "0123456789"}
-    gsub = font["GSUB"].table
-    substituted: set[str] = set()
-    for record in gsub.FeatureList.FeatureRecord:
-        if record.FeatureTag == "tnum":
-            for index in record.Feature.LookupListIndex:
-                for table in gsub.LookupList.Lookup[index].SubTable:
-                    substituted |= set(getattr(table, "ExtSubTable", table).mapping)
-    assert substituted == figures
-
-
-def test_the_fonts_weigh_no_more_than_those_of_the_first_design():
-    """The first design's three faces were 79.7 KB, sent on every first visit."""
-    assert sum(path.stat().st_size for path in (WEB_DIR / "fonts").glob("*.woff2")) <= 79_700
 
 
 @pytest.mark.req("FR-03")

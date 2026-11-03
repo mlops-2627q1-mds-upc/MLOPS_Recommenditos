@@ -47,7 +47,9 @@
   --accent-hover: #79e000;
   --accent-press: #6fce00;
   --on-accent: #1c1c1c;
-  --accent-busy: color-mix(in srgb, #87f700 45%, #ffffff);
+  /* Busy: lime at 45% over white, its label ink at 64%. */
+  --accent-busy: #c9fb8c;
+  --on-accent-busy: rgba(28, 28, 28, 0.64);
   --total-stroke: #1c1c1c;
   --danger: #a8433b;
   --danger-tint: #efe5e3;
@@ -87,7 +89,8 @@
     --field-border: #8f9080;
     --band: #8f9080;
     --total-stroke: transparent;
-    --accent-busy: color-mix(in srgb, #87f700 45%, #1c1c1c);
+    --accent-busy: #4c7f0f;
+    --on-accent-busy: rgba(245, 243, 242, 0.8);
     --danger: #ef7a6f;
     --danger-tint: #312524;
     --focus: #93c5fd;
@@ -114,7 +117,8 @@
   --field-border: #8f9080;
   --band: #8f9080;
   --total-stroke: transparent;
-  --accent-busy: color-mix(in srgb, #87f700 45%, #1c1c1c);
+  --accent-busy: #4c7f0f;
+  --on-accent-busy: rgba(245, 243, 242, 0.8);
   --danger: #ef7a6f;
   --danger-tint: #312524;
   --focus: #93c5fd;
@@ -1074,7 +1078,7 @@ fieldset:disabled select {
 .button-primary:disabled,
 .button-primary[aria-disabled="true"] {
   background: var(--accent-busy);
-  color: rgba(28, 28, 28, 0.42);
+  color: var(--on-accent-busy);
   transform: none;
   cursor: progress;
 }

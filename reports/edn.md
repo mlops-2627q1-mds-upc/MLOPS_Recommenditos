@@ -1397,7 +1397,7 @@ How to add an entry:
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI found that nginx.conf never reaches the VM in CD, chose delivery through the API image, and built and measured the page.
   Lukas had the design redone three times; AI measured reference sites, momentic.ai last, and rebuilt it.
-  Independent review agents found two blocking and twenty should-fix points, all fixed; no human code review.
+  Independent review agents found two blocking and twenty-two should-fix points, all fixed; no human code review.
 - **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, which asks for a page that looks "professional, modern and polished"; Lukas's prompt (translated from German): "I want a very good frontend that looks high quality".
 - **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md#the-design), [deployment docs](../docs/docs/deployment.md#the-stack).
 - **In LaTeX:** yes
