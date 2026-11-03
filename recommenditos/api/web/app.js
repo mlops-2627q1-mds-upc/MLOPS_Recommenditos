@@ -569,7 +569,8 @@ function renderRange(range, price, listings, fresh) {
   const width = Math.max(320, Math.round(box.clientWidth));
   const x = (value) => ((value - scale.min) / (scale.max - scale.min)) * width;
   const axisY = 36;
-  const rows = stackRows(prices.map(x), 8);
+  // Circles closer than 10 px would touch (r 3.5 plus the stroke), so they stack.
+  const rows = stackRows(prices.map(x), 10);
   const root = svg("svg", { width, height: 72, "aria-hidden": "true", class: "range-svg" });
   root.append(svg("line", { class: "range-axis", x1: 0, x2: width, y1: axisY + 0.5, y2: axisY + 0.5 }));
   const bandStart = x(lower);

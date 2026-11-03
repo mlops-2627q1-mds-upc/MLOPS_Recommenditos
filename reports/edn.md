@@ -1368,7 +1368,7 @@ How to add an entry:
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI found that nginx.conf never reaches the VM in CD, chose delivery through the API image, and built and measured the page.
   Lukas had the first design redone: AI measured eight reference sites (Zillow and Cars & Bids blocked bots; CarGurus' archived table and Bring a Trailer stood in) and rebuilt it.
-  Independent design and code review agents found two blocking and eleven should-fix points in round one, and twelve smaller ones in round two, all fixed; no human code review.
+  Independent design and code review agents found two blocking and ten should-fix points in round one and six should-fix points in round two, plus nits, all fixed; no human code review.
 - **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, which asks for a page that looks "professional, modern and polished"; Lukas's prompt (translated from German): "I want a very good frontend that looks high quality".
 - **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md#the-design), [deployment docs](../docs/docs/deployment.md#the-stack).
 - **In LaTeX:** yes
