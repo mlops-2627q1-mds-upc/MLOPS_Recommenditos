@@ -69,8 +69,12 @@ The course grades how we make engineering decisions and how we use AI in them, s
 4. **Record it.** Once decided, and if the user wants it recorded, add an entry to [reports/edn.md](reports/edn.md) following the template there, which also sets the shape and the word limit of an entry.
    An entry is short: the decision, the alternatives that were really weighed with the reason each lost, the deciding argument, who decided, and what AI contributed and what the team checked, changed or rejected.
    Link the evidence (issue, PR, commit, experiment) and do not retell it.
-   The AI interaction evidence quotes the prompt that led to the decision, word for word or, when that is not available, its core marked "(paraphrased)", as the professor asked on 2026-10-27.
-   So when a session leads to a decision, note the user's prompt for the entry before the session ends.
+   The AI interaction evidence, which the professor asked on 2026-10-27 to hold the prompt that led to the decision, has up to three lines, in this order:
+   the question that raised the decision, from the AI's options question or from the issue (paraphrased when it is not word for word);
+   in an orchestrated session, the orchestrator's briefing to the subagent, its core marked "(core, paraphrased)", because the opening prompt of such a session is the same for every decision and says nothing about this one;
+   and "Lukas answered:" followed by the text of the option he took, which is the text of the AI's recommendation when he accepted it, never his own "take your recommendation".
+   A line that does not exist is left out, never invented.
+   So when a session leads to a decision, note the question, the options and the user's answer for the entry before the session ends.
    GitHub names `@lukas2510` as author and merger of everything an agent does under his account, so take Participants and who decided from the session, not from GitHub's fields.
    When an entry has to be cut to fit the word limit, keep what it says about AI's contribution and what the team checked, and compare the cut entry with the previous one before you commit it.
    When a decision is revised, update its entry so that it states the current decision, and do not add a second entry for it.

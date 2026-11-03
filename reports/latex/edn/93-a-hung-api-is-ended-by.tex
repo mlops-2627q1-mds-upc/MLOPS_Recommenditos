@@ -25,6 +25,7 @@ The worst case is 5 s interval + 2 \ensuremath{\times} 6 s + 4 s restart = 21 s;
   response = {Accepted},
   assessment = {AI found the options, measured each on the stack or a small test server, and recommended the probe, which @lukas2510 chose.
 AI then wrote the probe and a hang drill that fails on the old stack and passes on the new one.},
-  aievidence = {Claude Code session of 2026-10-22 on Milestone 5: the measured options for restarting a hung API.},
+  aievidence = {Claude Code session of 2026-10-22 on Milestone 5.
+Question from issue \#185 (paraphrased): ``Which mechanism restarts a hung API: an autoheal-style watcher, or a healthcheck-driven restart?''.},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185}{Issue \#185}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md}{deployment docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/api/healthcheck.py}{\texttt{healthcheck.\allowbreak{}py}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/tests/integration/test_deployed_recovery.py}{hang drill}.},
 }

@@ -23,6 +23,8 @@ nginx stays over Caddy and Traefik, whose main gain, automatic TLS, EDN-13 does 
   response = {Accepted},
   assessment = {AI laid out both options in the issue and recommended Compose, which @lukas2510 chose.
 AI then built and measured the stack and chose to copy the image; nothing about the VM is verified yet.},
-  aievidence = {Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.},
+  aievidence = {Claude Code session of 2026-10-20.
+Question from issue \#142 (paraphrased): ``How does the API run on the VM in M4: the course demo's recipe (clone, \texttt{uv sync}, uvicorn under systemd, nginx) or a minimal Docker Compose stack of API and nginx?''.
+Lukas answered: ``A minimal Docker Compose stack, API and nginx, from the start. M5 adds CI/CD, the image scan and the hardening on top.'' (shortened)},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142}{Issue \#142}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/162}{PR \#162}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md}{deployment docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/deploy/compose.yaml}{\texttt{compose.\allowbreak{}yaml}}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/deploy/nginx.conf}{\texttt{nginx.\allowbreak{}conf}}.},
 }

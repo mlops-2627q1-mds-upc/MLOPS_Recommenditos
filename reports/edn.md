@@ -32,7 +32,11 @@ How to add an entry:
   - **Alternatives considered**: only alternatives we really weighed, one line each with the reason it lost; one is enough, and more than three is rare;
   - **Rationale**: the deciding argument, in about 60 words and with one or two numbers, each checked against its source; link the analysis and do not retell it;
   - **Assessment of the AI contribution**: what AI contributed and what we checked, changed, or rejected, in about 45 words;
-  - **AI interaction evidence**: the session's date and topic and the prompt that led to the decision, in double quotes: word for word when we have it, otherwise its core, marked "(paraphrased)"; the professor asked on 2026-10-27 for this much detail, a session and topic alone is not enough, and entries recorded before that date keep their evidence as it is;
+  - **AI interaction evidence**: the session's date and up to three lines, each on its own line and in this order, which the professor asked for on 2026-10-27 (a session and topic alone is not enough, and entries recorded before that date keep their evidence as it is):
+    - the question that raised the decision, from the AI's options question or from the issue, word for word or marked "(paraphrased)";
+    - in an orchestrated session, the orchestrator's briefing to the subagent as "Orchestrator briefing (core, paraphrased):", because the opening prompt of such a session is the same for every decision;
+    - "Lukas answered:" and the text of the option he took, which is the AI's recommendation word for word when he accepted it, not his "take your recommendation", in double quotes and marked "(translated from German)" when it was;
+    - leave out a line that does not exist and never invent one; say in **Assessment of the AI contribution** whether Lukas took the recommendation unchanged or what he changed;
   - **Other evidence**: about four links.
 - When a decision is revised, edit its entry so that it states the current decision, and say in one note line above the fields what changed and when.
   Do not add a second entry for the same decision.
@@ -1057,7 +1061,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI measured the error counts of the three checkers, laid out the options and recommended mypy, which @lukas2510 chose.
   It fixed the findings and wired the hook and the CI job; a deliberate type error turned the hook red, and a reviewer agent checked the pull request.
-- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #133: three checkers measured, four options, recommendation.
+- **AI interaction evidence:** Claude Code session of 2026-10-20.
+  Question from issue #133 (paraphrased): "Should the package and tools be type-checked at all, and if so with which checker: none, mypy, basedpyright, or ty?".
+  Lukas answered: "The common standard, has a pydantic plugin for M4, and needs 10 fixes today." (the issue's option 2, mypy in default mode, shortened)
 - **Other evidence:** [Issue #133](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/133), [PR #149](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/149), [`[tool.mypy]`](../pyproject.toml).
 - **In LaTeX:** yes
 
@@ -1080,7 +1086,9 @@ How to add an entry:
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out both options in the issue and recommended the standard, which @lukas2510 chose. AI then built the handlers and the tests that hold every error path to the shape, and on 2026-10-21 laid out strict against lax coercion and recommended strict, which @lukas2510 chose.
-- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
+- **AI interaction evidence:** Claude Code sessions of 2026-10-20 and 2026-10-21.
+  Question from issue #135 (paraphrased): "What shape should an API error have: RFC 9457 Problem Details, or an envelope of our own?".
+  Lukas answered: "A, because the rewrite is needed either way and only A gives clients something they already know." (A: RFC 9457)
 - **Other evidence:** [Issue #135](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/135), [PR #151](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/151), [PR #175](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/175), [API docs](../docs/docs/api.md), [`errors.py`](../recommenditos/api/errors.py), [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457).
 - **In LaTeX:** yes
 
@@ -1104,7 +1112,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out the options for both questions, measured the typical-price ones, and recommended these, which @lukas2510 took.
   AI implemented it and checked that MAPIE 1.6 moves each bound by one constant before storing it.
-- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #137: options, measurements, implementation.
+- **AI interaction evidence:** Claude Code session of 2026-10-20.
+  Question from issue #137 (paraphrased): "How should serving apply the conformalized-quantile calibration: MAPIE in the serving runtime, MAPIE in training only, or our own implementation without MAPIE?".
+  Lukas answered: "B, because it keeps the library where the statistics happen and keeps the image as small as EDN-11 does." (B being MAPIE in training only)
 - **Other evidence:** [PR #158](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/158), [`lgbm-basic.json`](metrics/lgbm-basic.json), [Typical-price analysis](analysis/price_range_point_estimate_results.txt), MLflow run `train@lgbm-basic` in `recommenditos-price`.
 - **In LaTeX:** yes
 
@@ -1126,7 +1136,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out the three options in the issue and recommended SQLite, which @lukas2510 chose.
   AI then built the store, the rotation and the tests, one with two worker processes, and measured the cost of a write.
-- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's three options and recommendation.
+- **AI interaction evidence:** Claude Code session of 2026-10-20.
+  Question from issue #140 (paraphrased): "Where should the prediction log and the feedback live: SQLite in WAL mode, PostgreSQL in its own container, or JSON Lines files per worker?".
+  Lukas answered: "A, behind a small store interface so that B stays a local change." (A being SQLite in WAL mode, B PostgreSQL, shortened)
 - **Other evidence:** [Issue #140](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/140), [PR #166](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/166), [API docs](../docs/docs/api.md#the-prediction-log-and-the-feedback), [`prediction_log.py`](../recommenditos/api/prediction_log.py), [project brief](../docs/docs/project-brief.md) section 5.
 - **In LaTeX:** yes
 
@@ -1150,7 +1162,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out both options in the issue and recommended Compose, which @lukas2510 chose.
   AI then built and measured the stack and chose to copy the image; nothing about the VM is verified yet.
-- **AI interaction evidence:** Claude Code session of 2026-10-20 planning Milestone 4: the issue's two options and recommendation.
+- **AI interaction evidence:** Claude Code session of 2026-10-20.
+  Question from issue #142 (paraphrased): "How does the API run on the VM in M4: the course demo's recipe (clone, `uv sync`, uvicorn under systemd, nginx) or a minimal Docker Compose stack of API and nginx?".
+  Lukas answered: "A minimal Docker Compose stack, API and nginx, from the start. M5 adds CI/CD, the image scan and the hardening on top." (shortened)
 - **Other evidence:** [Issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142), [PR #162](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/162), [deployment docs](../docs/docs/deployment.md), [`compose.yaml`](../deploy/compose.yaml), [`nginx.conf`](../deploy/nginx.conf).
 - **In LaTeX:** yes
 
@@ -1173,7 +1187,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI ran both runs on the VM, checked that the image and the container did not change during them, and recommended each option; @lukas2510 chose each option from the measured values the AI presented.
   AI checked Locust's own CPU with `ps` before relying on it.
-- **AI interaction evidence:** Claude Code session of 2026-10-31 on the load test on the VM, question "NFR-02: The /predict target (p95 at most 200 ms) is missed narrowly on the 1-core VM with 210 ms. What to do?" (translated from German), answered with the recommended option.
+- **AI interaction evidence:** Claude Code session of 2026-10-31.
+  Question (translated from German): "NFR-02: The /predict target (p95 at most 200 ms) is missed narrowly on the 1-core VM with 210 ms. What to do?".
+  Lukas answered: "The `/predict` p95 target is 250 ms, because the VM has one vCPU and the miss is in the tail (210 ms at p95, 65 ms at p50)."
 - **Other evidence:** [Issue #143](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143), [PR #244](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/244), [one worker](loadtest/vm-2026-10-31-workers-1.md), [two workers](loadtest/vm-2026-10-31-workers-2.md), [load test docs](../docs/docs/load-testing.md).
 - **In LaTeX:** yes
 
@@ -1194,7 +1210,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI built the per-make table, simulated Mondrian offsets offline on the calibration split and scored them on test, and recommended this option.
   @lukas2510 chose it after the numbers were laid out.
-- **AI interaction evidence:** Claude Code session of 2026-10-20 on issue #108: measurement, offline Mondrian simulation, recommendation.
+- **AI interaction evidence:** Claude Code session of 2026-10-20.
+  Question from issue #108 (paraphrased): "Some makes miss the 88 % to 92 % coverage band of the UC2 intervals: per-make or Mondrian calibration, or a stated limitation?".
+  Lukas answered: "Keep the pooled calibration and report the per-make coverage as a stated limitation; Mondrian calibration and a larger calibration split were rejected." (the decision as recorded in PR #169, shortened)
 - **Other evidence:** [PR #169](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/169), [per-make coverage table](metrics/interval-coverage-by-make.csv), [split analysis](analysis/split_strategy_results.txt), EDN-32 and EDN-85.
 - **In LaTeX:** yes
 
@@ -1216,7 +1234,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI drafted the three options and recommended the warning in #193, from the stale-lock incident of #183; @lukas2510 accepted it and asked for it to be implemented.
   AI then built the check, and on the real repository a comment-only edit of `config.py` reported all 16 stages while `main` reported none.
-- **AI interaction evidence:** Claude Code session orchestrating M4, prompt "please do you recommendations here: #193".
+- **AI interaction evidence:** Claude Code session of 2026-10-22.
+  Question from issue #193 (paraphrased): "Should CI check that `dvc.lock` matches the pipeline code: a required check, a non-blocking report, or nothing and a re-sync before each delivery?".
+  Lukas answered: "B, because A makes comment-only changes expensive while B still makes staleness visible." (B being a non-blocking check that only reports a stale lock in the job summary)
 - **Other evidence:** [Issue #193](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/193), [PR #183](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/183), [PR #205](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/205), [`tools/stale_lock.py`](../tools/stale_lock.py).
 - **In LaTeX:** yes
 
@@ -1241,7 +1261,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out the three questions with their options in the issue and recommended the chosen ones; @lukas2510 decided all three as recommended.
   AI then wrote the workflow and checked the build, the size gate, and the integration suite locally with the real model.
-- **AI interaction evidence:** Claude Code session of 2026-10-22 planning Milestone 5: the options and recommendations of issue #197.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 planning Milestone 5.
+  Question from issue #197 (paraphrased): "How does CI get the model, is the GHCR package public, and what triggers the build?".
+  Lukas answered: "its own workflow that runs only after CI passed on that commit, so a red `main` never publishes an image." (the trigger); for the package "A, because the image holds no secret and no personal data (the API key is passed at run time)." (later changed to private)
 - **Other evidence:** [Issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197), [PR #207](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/207), [`cd.yml`](../.github/workflows/cd.yml), [deployment docs](../docs/docs/deployment.md#continuous-delivery), EDN-08.
 - **In LaTeX:** yes
 
@@ -1264,7 +1286,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI measured the pipeline on the runner, compared the outputs with the committed ones, checked the billing API when @lukas2510 asked about the Actions limits, laid out the options and recommended this one.
   @lukas2510 chose it, the energy labelling, and to keep the Actions pull request setting off.
-- **AI interaction evidence:** Claude Code session of 2026-10-22 on issue #201: runner measurement, billing check, recommendation, workflow.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 on issue #201.
+  Question from issue #201 (paraphrased): "How far should CI automate the pipeline?".
+  Lukas answered: "A manually started workflow retrains and prepares the promotion pull request." (the issue's option B, shortened)
 - **Other evidence:** [measurement on #201](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/201#issuecomment-6347639135), runs [39825393405](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39825393405) and [39826534385](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/39826534385), EDN-12.
 - **In LaTeX:** yes
 
@@ -1289,7 +1313,8 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found the options, measured each on the stack or a small test server, and recommended the probe, which @lukas2510 chose.
   AI then wrote the probe and a hang drill that fails on the old stack and passes on the new one.
-- **AI interaction evidence:** Claude Code session of 2026-10-22 on Milestone 5: the measured options for restarting a hung API.
+- **AI interaction evidence:** Claude Code session of 2026-10-22 on Milestone 5.
+  Question from issue #185 (paraphrased): "Which mechanism restarts a hung API: an autoheal-style watcher, or a healthcheck-driven restart?".
 - **Other evidence:** [Issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185), [deployment docs](../docs/docs/deployment.md), [`healthcheck.py`](../recommenditos/api/healthcheck.py), [hang drill](../tests/integration/test_deployed_recovery.py).
 - **In LaTeX:** yes
 
@@ -1314,7 +1339,9 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out the options for reaching the VM and for the private package and recommended the chosen ones; @lukas2510 decided both as recommended.
   AI then wrote the workflow, the install script and the guard test, and probed the sudoers rule in the container.
-- **AI interaction evidence:** Claude Code session of 2026-10-30 on deploying to the VM, prompt "please continue with it, look at the VM" (translated from German); the AI's question "How should CD reach the VM?" was answered with its recommended option.
+- **AI interaction evidence:** Claude Code session of 2026-10-30 on deploying to the VM.
+  Question: "How should CD reach the VM?".
+  Lukas answered: "A self-hosted runner on the VM, as a user outside the `docker` group, runs the deploy and rollback jobs and may run only `deploy.sh` through one sudo rule; the smoke check runs on a GitHub-hosted runner against the public URL." (the issue's option D, shortened)
 - **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [PR #237](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/237), [`deploy.yml`](../.github/workflows/deploy.yml), [deployment docs](../docs/docs/deployment.md#turn-continuous-deployment-on).
 - **In LaTeX:** yes
 
@@ -1440,7 +1467,10 @@ The original text of each is in [edn-archive.md](edn-archive.md), and no ID is r
 - **AI involvement:** Select all that apply: No AI involvement | Information seeking | Alternative generation | Alternative assessment | Recommendation | Solution generation | Other (describe)
 - **Response to AI:** If AI contributed, select one: Accepted | Accepted with modifications | Rejected | Used as input for further analysis | Other (describe)
 - **Assessment of the AI contribution:** If AI contributed: what it contributed and what we checked, changed, or rejected, in about 45 words.
-- **AI interaction evidence:** Claude Code session of YYYY-MM-DD on the topic, prompt "the literal prompt, or its core (paraphrased)".
+- **AI interaction evidence:** Claude Code session of YYYY-MM-DD.
+  Question from issue #N (paraphrased): "the question that raised the decision".
+  Orchestrator briefing (core, paraphrased): "what the subagent was told to do".
+  Lukas answered: "the text of the option he took".
 - **Other evidence:** About four links: issue, PR, analysis result, document.
 - **In LaTeX:** no
 ```

@@ -23,6 +23,8 @@ Two workers made the tail slower (p95 240 ms) and the memory peak 609 MiB instea
   response = {Accepted},
   assessment = {AI ran both runs on the VM, checked that the image and the container did not change during them, and recommended each option; @lukas2510 chose each option from the measured values the AI presented.
 AI checked Locust's own CPU with \texttt{ps} before relying on it.},
-  aievidence = {Claude Code session of 2026-10-31 on the load test on the VM, question ``NFR-02: The /predict target (p95 at most 200 ms) is missed narrowly on the 1-core VM with 210 ms. What to do?'' (translated from German), answered with the recommended option.},
+  aievidence = {Claude Code session of 2026-10-31.
+Question (translated from German): ``NFR-02: The /predict target (p95 at most 200 ms) is missed narrowly on the 1-core VM with 210 ms. What to do?''.
+Lukas answered: ``The \texttt{/\allowbreak{}predict} p95 target is 250 ms, because the VM has one vCPU and the miss is in the tail (210 ms at p95, 65 ms at p50).''},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/143}{Issue \#143}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/244}{PR \#244}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-1.md}{one worker}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-2.md}{two workers}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/load-testing.md}{load test docs}.},
 }
