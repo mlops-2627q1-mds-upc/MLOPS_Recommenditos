@@ -6,11 +6,10 @@
 <title>Used-car price estimate - Recommenditos</title>
 <meta name="description" content="Estimate the asking price of a used car in eight European countries, with the range asking prices fall in, what moved the estimate, and similar real listings.">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0b1526" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f3f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1c" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="{{assets}}/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="{{assets}}/fonts/schibsted-grotesk.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="{{assets}}/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{assets}}/fonts/bdo-grotesk.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{assets}}/app.css">
 <script src="{{assets}}/theme.js"></script>
 <script type="module" src="{{assets}}/app.js"></script>
@@ -163,8 +162,8 @@
           <button type="submit" class="button-primary" id="submit" disabled>Estimate price</button>
           <button type="button" class="button-quiet" id="example" disabled>Fill in an example</button>
         </div>
-        <div class="form-alert" id="form-alert" role="alert" hidden></div>
       </div>
+      <div class="form-alert" id="form-alert" role="alert" hidden></div>
     </form>
   </section>
 
@@ -206,7 +205,8 @@
           <table class="listings" id="listings">
             <thead>
               <tr>
-                <th scope="col" class="label">Listing</th>
+                <th scope="col" class="label col-index"><span class="visually-hidden">Number</span><span aria-hidden="true">#</span></th>
+                <th scope="col" class="label col-listing">Listing</th>
                 <th scope="col" class="label col-registered">Registered</th>
                 <th scope="col" class="label num">Mileage</th>
                 <th scope="col" class="label num col-power">Power</th>

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from fontTools import subset
 from fontTools.ttLib import TTFont
 import pytest
-from tools.web_fonts import UNICODES
+from tools.web_fonts import KEPT_NAME_IDS, UNICODES
 
 from recommenditos.api.webui import (
     ASSET_CACHE_CONTROL,
@@ -170,18 +170,164 @@ def test_a_file_of_an_unknown_kind_fails_the_load(tmp_path):
         WebPage.load(tmp_path)
 
 
+def _tokens(css: str, selector: str) -> dict[str, str]:
+    block = re.search(rf"(?m)^\s*{re.escape(selector)} {{([^}}]*)}}", css)
+    assert block, selector
+    return dict(re.findall(r"--([a-z0-9-]+): ([^;]+);", block.group(1)))
+
+
+def _rgb(value: str, ground: tuple[float, ...]) -> tuple[float, ...]:
+    """A colour token as RGB, an `rgba()` composited over the colour it lies on."""
+    if value.startswith("#"):
+        return tuple(int(value[i : i + 2], 16) for i in (1, 3, 5))
+    *channels, alpha = (float(part) for part in re.findall(r"[\d.]+", value))
+    return tuple(alpha * c + (1 - alpha) * g for c, g in zip(channels, ground, strict=True))
+
+
+def _contrast(a: tuple[float, ...], b: tuple[float, ...]) -> float:
+    def luminance(rgb: tuple[float, ...]) -> float:
+        linear = [
+            c / 255 / 12.92 if c / 255 <= 0.04045 else ((c / 255 + 0.055) / 1.055) ** 2.4
+            for c in rgb
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    high, low = sorted([luminance(a), luminance(b)], reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+#: (foreground, background, minimum): text 4.5:1, field borders, marks and focus 3:1 (WCAG 2.2 AA).
+#: "field" is the field's fill over the form cell, where every field sits.
+CONTRAST_PAIRS = [
+    *[
+        (text, ground, 4.5)
+        for text in ("ink", "ink-2", "ink-3")
+        for ground in ("ground", "form", "field")
+    ],
+    ("danger", "form", 4.5),
+    ("danger", "field", 4.5),
+    ("danger", "ground", 4.5),
+    ("ink-2", "danger-tint", 4.5),
+    ("danger", "danger-tint", 4.5),
+    ("on-accent", "accent", 4.5),
+    ("on-accent", "accent-hover", 4.5),
+    ("band-text", "band-ink", 4.5),
+    ("field-border", "field", 3.0),
+    ("field-border", "form", 3.0),
+    ("focus", "form", 3.0),
+    ("focus", "ground", 3.0),
+    ("band", "ground", 3.0),
+    ("rule", "ground", 3.0),
+    ("ink-2", "ground", 3.0),
+]
+
+
+@pytest.mark.parametrize("theme", [":root", ':root[data-theme="dark"]'])
+def test_the_colours_reach_aa_contrast_in_both_themes(theme: str):
+    css = (WEB_DIR / "app.css").read_text(encoding="utf-8")
+    tokens = {**_tokens(css, ":root"), **(_tokens(css, theme) if theme != ":root" else {})}
+    ground = _rgb(tokens["ground"], (255, 255, 255))
+    form = _rgb(tokens["form"], ground)
+    colours = {name: value for name, value in tokens.items() if value.startswith(("#", "rgba"))}
+    rgb = {
+        name: _rgb(value, form if name == "surface" else ground) for name, value in colours.items()
+    }
+    rgb["field"] = _rgb(tokens["surface"], form)
+    rgb["form"] = form
+    rgb["band-text"] = _rgb(tokens["band-text"], _rgb(tokens["band-ink"], ground))
+    failing = [
+        (fg, bg, round(_contrast(rgb[fg], rgb[bg]), 2))
+        for fg, bg, minimum in CONTRAST_PAIRS
+        if _contrast(rgb[fg], rgb[bg]) < minimum
+    ]
+    assert not failing
+
+
+class _Foot(HTMLParser):
+    """The ids inside the form's sticky button row."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.depth = 0
+        self.inside: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if self.depth:
+            self.depth += tag == "div"
+            if attributes.get("id"):
+                self.inside.append(str(attributes["id"]))
+        elif tag == "div" and "form-foot" in (attributes.get("class") or "").split():
+            self.depth = 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.depth and tag == "div":
+            self.depth -= 1
+
+
+def _px(css: str, selector: str, prop: str) -> list[int]:
+    block = re.search(rf"(?m)^{re.escape(selector)} {{([^}}]*)}}", css)
+    assert block, selector
+    value = re.search(rf"(?m)^\s*{prop}: ([^;]+);", block.group(1))
+    assert value, f"{selector} {prop}"
+    return [int(number) for number in re.findall(r"(-?\d+)px", value.group(1))]
+
+
+def test_a_focused_field_scrolls_clear_of_the_sticky_button_row():
+    """A field the Tab key reaches must not end up under the row stuck to the window's bottom.
+
+    The row holds the buttons alone. With the error summary inside it, it grew to 137 px
+    against 112 px of scroll padding, and after an empty submit at 1,440 x 700 the
+    registration selects were half covered.
+    """
+    foot = _Foot()
+    foot.feed((WEB_DIR / "index.html").read_text(encoding="utf-8"))
+    assert "form-alert" not in foot.inside
+    assert "submit" in foot.inside
+    css = (WEB_DIR / "app.css").read_text(encoding="utf-8")
+    padding = _px(css, ".form-foot", "padding")
+    vertical = padding[0] + (padding[2] if len(padding) > 2 else padding[0])
+    border = _px(css, ".form-foot", "border-top")[0]
+    button = _px(css, ".button-primary,\n.button-quiet", "height")[0]
+    assert _px(css, "html", "scroll-padding-bottom")[0] >= vertical + border + button + 16
+
+
 def test_the_font_licences_ship_with_the_fonts():
     fonts = {path.stem for path in (WEB_DIR / "fonts").glob("*.woff2")}
     licences = {path.stem for path in (WEB_DIR / "fonts").glob("OFL-*.txt")}
-    assert fonts == {"schibsted-grotesk", "jetbrains-mono"}
-    assert licences == {f"OFL-{font}" for font in fonts}
+    assert fonts == {"bdo-grotesk", "recommenditos-mono-400", "recommenditos-mono-500"}
+    assert licences == {"OFL-bdo-grotesk", "OFL-basically-a-mono"}
+
+
+def test_the_mono_subset_does_not_carry_its_reserved_font_name():
+    """The name "Basically A Mono" is reserved: a subset, a Modified Version, must not use it."""
+    licence = (WEB_DIR / "fonts" / "OFL-basically-a-mono.txt").read_text(encoding="utf-8")
+    assert "Reserved Font Name 'Basically A Mono'" in licence
+    for path in (WEB_DIR / "fonts").glob("recommenditos-mono-*.woff2"):
+        names = TTFont(path)["name"]
+        assert names.getDebugName(1).startswith("Recommenditos Mono")
+        carrying = [
+            record.nameID
+            for record in names.names
+            if record.nameID not in KEPT_NAME_IDS and "Basically" in record.toUnicode()
+        ]
+        assert not carrying, path.name
 
 
 def test_the_text_face_has_every_character_of_the_page_and_the_listing_names():
     """Listing names carry Škoda, Citroën, Łódź; a missing letter falls back to another face."""
-    cmap = TTFont(WEB_DIR / "fonts" / "schibsted-grotesk.woff2").getBestCmap()
-    # The soft hyphen is invisible and the long s is obsolete; the family has neither.
-    wanted = set(subset.parse_unicodes(UNICODES)) - {0x00AD, 0x017F}
+    cmap = TTFont(WEB_DIR / "fonts" / "bdo-grotesk.woff2").getBestCmap()
+    # What BDO Grotesk lacks: the Esperanto and breve letters (Ĉ Ĝ Ĥ Ŝ Ŭ Ĕ Ĭ Ŏ), Ĳ, ĸ, ŉ, ſ,
+    # µ, the soft hyphen and the double prime. Of these the listing names hold only two
+    # double primes (2 of 70,172 names, 2026-11-03), which take the fallback face.
+    lacking = set(
+        subset.parse_unicodes("U+00AD,U+00B5,U+0108-0109,U+0114-0115,U+011C-011D,U+0124-0125")
+    )
+    lacking |= set(
+        subset.parse_unicodes("U+012C-012D,U+0132-0133,U+0138,U+0149,U+014E-014F,U+015C-015D")
+    )
+    lacking |= set(subset.parse_unicodes("U+016C-016D,U+017F,U+2033"))
+    wanted = set(subset.parse_unicodes(UNICODES)) - lacking
     assert not sorted(chr(code) for code in wanted - cmap.keys())
     # And every character the page's own files print, whatever the tool's list says.
     used = {
@@ -198,7 +344,7 @@ def test_the_text_face_lines_up_its_figures_without_widening_the_comma():
 
     Upstream, the feature widens the comma too; tools/web_fonts.py limits it to the figures.
     """
-    font = TTFont(WEB_DIR / "fonts" / "schibsted-grotesk.woff2")
+    font = TTFont(WEB_DIR / "fonts" / "bdo-grotesk.woff2")
     cmap = font.getBestCmap()
     figures = {cmap[ord(digit)] for digit in "0123456789"}
     gsub = font["GSUB"].table
