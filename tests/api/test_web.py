@@ -5,7 +5,10 @@ import re
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fontTools import subset
+from fontTools.ttLib import TTFont
 import pytest
+from tools.web_fonts import UNICODES
 
 from recommenditos.api.webui import (
     ASSET_CACHE_CONTROL,
@@ -170,8 +173,39 @@ def test_a_file_of_an_unknown_kind_fails_the_load(tmp_path):
 def test_the_font_licences_ship_with_the_fonts():
     fonts = {path.stem for path in (WEB_DIR / "fonts").glob("*.woff2")}
     licences = {path.stem for path in (WEB_DIR / "fonts").glob("OFL-*.txt")}
-    assert fonts == {"newsreader", "public-sans", "jetbrains-mono"}
+    assert fonts == {"schibsted-grotesk", "jetbrains-mono"}
     assert licences == {f"OFL-{font}" for font in fonts}
+
+
+def test_the_text_face_has_every_character_of_the_page_and_the_listing_names():
+    """Listing names carry Škoda, Citroën, Łódź; a missing letter falls back to another face."""
+    cmap = TTFont(WEB_DIR / "fonts" / "schibsted-grotesk.woff2").getBestCmap()
+    # The soft hyphen is invisible and the long s is obsolete; the family has neither.
+    wanted = set(subset.parse_unicodes(UNICODES)) - {0x00AD, 0x017F}
+    assert not sorted(chr(code) for code in wanted - cmap.keys())
+
+
+def test_the_text_face_lines_up_its_figures_without_widening_the_comma():
+    """`tnum` is on wherever numbers line up; it must not open a gap in "62,000".
+
+    Upstream, the feature widens the comma too; tools/web_fonts.py limits it to the figures.
+    """
+    font = TTFont(WEB_DIR / "fonts" / "schibsted-grotesk.woff2")
+    cmap = font.getBestCmap()
+    figures = {cmap[ord(digit)] for digit in "0123456789"}
+    gsub = font["GSUB"].table
+    substituted: set[str] = set()
+    for record in gsub.FeatureList.FeatureRecord:
+        if record.FeatureTag == "tnum":
+            for index in record.Feature.LookupListIndex:
+                for table in gsub.LookupList.Lookup[index].SubTable:
+                    substituted |= set(getattr(table, "ExtSubTable", table).mapping)
+    assert substituted == figures
+
+
+def test_the_fonts_weigh_no_more_than_those_of_the_first_design():
+    """The first design's three faces were 79.7 KB, sent on every first visit."""
+    assert sum(path.stat().st_size for path in (WEB_DIR / "fonts").glob("*.woff2")) <= 79_700
 
 
 @pytest.mark.req("FR-03")
