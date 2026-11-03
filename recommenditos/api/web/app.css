@@ -561,11 +561,14 @@ a:hover {
   font-size: 12px;
 }
 
+/* Labels are words, not a column of numbers: the face's proportional figures (its tabular zero
+   is dotted). */
 .wf-label {
   fill: var(--ink);
   font-family: var(--sans);
   font-size: 14px;
   letter-spacing: -0.02em;
+  font-variant-numeric: normal;
 }
 
 .wf-label.is-total,
