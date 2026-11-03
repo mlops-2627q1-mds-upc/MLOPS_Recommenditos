@@ -1380,22 +1380,24 @@ How to add an entry:
 - **Date:** 2026-11-02
 - **Milestone:** Other
 - **Activity / Topic:** Frontend, Deployment
-- **Participants:** @lukas2510 asked for the page, approved the design and chose navy and white; the AI chose stack and delivery
-- **Decision:** A static page of hand-written HTML, CSS and JavaScript, set in self-hosted Newsreader, Public Sans and JetBrains Mono, with hand-drawn SVG charts.
-  The API serves it at `/` to browsers, behind the unchanged nginx, so it deploys and rolls back with the API image.
+- **Participants:** @lukas2510 asked for the page, chose momentic.ai as the style reference and approved the look; the AI chose stack and delivery
+- **Decision:** A static page of hand-written HTML, CSS and JavaScript with hand-drawn SVG charts, in momentic.ai's visual language: cream, ink, olive rules, one lime accent, self-hosted BDO Grotesk and a renamed Basically A Mono subset.
+  The API serves it at `/` to browsers, so it deploys and rolls back with the API image.
   Its requests carry `X-Client: web-ui`, logged for M6.
 - **Alternatives considered:**
-  - nginx serving the files: nginx.conf reaches the VM only through the bootstrap; an own nginx image lost in EDN-95.
-  - Alpine.js: its standard build needs `unsafe-eval` in the Content Security Policy.
-  - Tailwind with DaisyUI: a build step and default looks for 877 lines of CSS.
+  - nginx serving the files: nginx.conf reaches the VM only through the bootstrap.
+  - Alpine.js: needs `unsafe-eval` in the Content Security Policy.
   - Streamlit or Gradio: a new container on a VM that M6 needs.
+  - A serif display (first build), then Schibsted Grotesk: Lukas found the serif generic and preferred momentic's look.
 - **Rationale:** Only the API image moves to the VM on a merge, so the page goes live with no manual step and a rollback restores the matching page.
-  A first visit loads 98 KB plus the 52 KB OpenAPI document; nginx stayed at 7.5 MiB of 64 MiB after 2,400 page requests.
+  momentic's two faces are open-licensed, so the genuine ones match best; Basically A Mono reserves its name, so the subset is renamed.
+  Its grey, focus ring and field borders miss WCAG AA, so the page darkens them; a test checks every pair.
+  A first visit loads 76 KB plus the 52 KB OpenAPI document; with the first design nginx stayed at 7.5 MiB of 64 MiB after 2,400 page requests.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI found that nginx.conf never reaches the VM in CD, chose delivery through the API image, and built and measured the page.
-  Lukas had the first design redone: AI measured eight reference sites (Zillow and Cars & Bids blocked bots; CarGurus' archived table and Bring a Trailer stood in) and rebuilt it.
-  Independent design and code review agents found two blocking and ten should-fix points in round one and six should-fix points in round two, plus nits, all fixed; no human code review.
+  Lukas had the design redone three times; AI measured reference sites, momentic.ai last, and rebuilt it.
+  Independent review agents found two blocking and twenty-two should-fix points, all fixed; no human code review.
 - **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, which asks for a page that looks "professional, modern and polished"; Lukas's prompt (translated from German): "I want a very good frontend that looks high quality".
 - **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md#the-design), [deployment docs](../docs/docs/deployment.md#the-stack).
 - **In LaTeX:** yes

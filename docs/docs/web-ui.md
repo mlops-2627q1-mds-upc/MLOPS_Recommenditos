@@ -2,7 +2,7 @@ The web page
 ============
 
 A browser that opens the service's address, `http://<host>:8080/` locally and on the VM, gets a web page for the price API ([#269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [EDN-96](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-It is a form for the car's details on the left and the answer on the right: the estimated asking price, the price range with the similar listings marked on it, a waterfall of what moved the estimate, and the similar listings as a table with how far each lies from the estimate.
+It is a form for the car's details in a raised cell on the left and the answer on the right: the estimated asking price, the price range with the similar listings marked on it, a waterfall of what moved the estimate, and the similar listings as a table with how far each lies from the estimate.
 It is made for a laptop or desktop screen and holds its layout down to a window about 1,000 px wide; a phone layout is out of scope.
 
 ## How it is built and served
@@ -13,7 +13,7 @@ It is made for a laptop or desktop screen and holds its layout down to a window 
 | `recommenditos/api/web/app.css` | Hand-written styles, light and dark |
 | `recommenditos/api/web/app.js` | Plain JavaScript, one ES module, no framework and no build step |
 | `recommenditos/api/web/theme.js` | Applies a theme chosen with the toggle before the page paints |
-| `recommenditos/api/web/fonts/` | Newsreader (headline and price), Public Sans (text) and JetBrains Mono (labels and IDs), subset to Latin, each with its SIL Open Font License file |
+| `recommenditos/api/web/fonts/` | BDO Grotesk (all text) and Recommenditos Mono, a renamed subset of Basically A Mono (uppercase labels, table heads, ticks and IDs), built by `tools/web_fonts.py`, each family with its SIL Open Font License file |
 | `recommenditos/api/webui.py` | Reads the files once at startup and serves them from memory |
 | `recommenditos/api/routes/index.py`, `routes/assets.py` | `GET /` and `GET /assets/<version>/<file>` |
 
@@ -30,33 +30,71 @@ What a first visit loads, measured through nginx on the local stack on 2026-11-0
 
 | File | Size | Sent (gzip) |
 |------|------|-------------|
-| The page | 11.9 KB | 2.9 KB |
-| `app.css` | 14.8 KB | 3.8 KB |
-| `app.js` | 34.3 KB | 11.0 KB |
+| The page | 12.4 KB | 3.0 KB |
+| `app.css` | 23.5 KB | 6.1 KB |
+| `app.js` | 37.4 KB | 12.0 KB |
 | `theme.js`, `favicon.svg` | 0.7 KB | 0.4 KB |
-| Newsreader, Public Sans, JetBrains Mono (woff2) | 79.7 KB | 79.7 KB |
-| In all | 141.4 KB | 97.8 KB |
+| BDO Grotesk, Recommenditos Mono 400 and 500 (woff2) | 54.8 KB | 54.8 KB |
+| In all | 128.7 KB | 76.3 KB |
 
 The page also reads `/openapi.json` (52 KB, uncompressed) and `/health` on every load; the assets are cached for a year after the first visit.
-Held in memory with their gzip copies, the files take about 180 KB per worker process.
-After 300 loads of the page with all its assets, 2,400 requests in 3.6 s, nginx used 7.5 MiB against 7.3 MiB idle, of its 64 MiB limit, and the API 251.3 MiB against 250.0 MiB.
+Held in memory with their gzip copies, the files take about 150 KB per worker process.
+Measured with the first design, which sent 98 KB: after 300 loads of the page with all its assets, 2,400 requests in 3.6 s, nginx used 7.5 MiB against 7.3 MiB idle, of its 64 MiB limit, and the API 251.3 MiB against 250.0 MiB.
 
 ## The design
 
-The page reads as a printed valuation slip: the price large in a serif, everything else small, exact and ruled.
+The page takes its visual language from [momentic.ai](https://momentic.ai/), which Lukas chose as the reference: a ruled ledger on warm paper.
+Its colours, type, rules and component shapes were measured on that site in the browser; no logo, text, image, code or font file comes from it.
+The page splits into two numbered steps: on the left a raised cell, "Describe the car", holds the form; on the right "Estimate" holds the answer, which before the first estimate points back at the form.
 
-- **Type:** five sizes only, 11, 13, 15, 32 and 96 px. Newsreader for the headline (32) and the price (96, tabular lining figures); Public Sans for text, fields and tables, with tabular figures wherever numbers line up; JetBrains Mono at 11 px for section and group labels, table headers, axis ticks and the model and request IDs.
-- **Colour:** white and navy, dark navy in the dark theme, three text greys of the navy hue and one flat navy-blue accent for the primary button, the range marker, the estimate bar and the focus ring. Errors use a restrained red of their own, and nothing else is red.
-  Text reaches WCAG AA (4.5:1) in both themes; field borders, the range band's end ticks, the start bar and the effect bars of the waterfall reach 3:1.
-- **Structure:** a 1 px ink rule above each result section and hairlines inside it instead of cards; no shadows, gradients or tinted panels; one 4 px radius, on fields and the button only.
-- **Spacing:** 4, 8, 12, 16, 24, 32, 48 and 96 px. At 1,440 px the columns are 360 and 824 px with a 96 px gap; below 1,200 px they are 312 px and the rest with a 48 px gap, and the similar listings fold registration and power into their second line once the column is under 680 px.
-- **Charts:** drawn as SVG at the column's measured pixel width, so their text stays 13 and 11 px at every width. In the waterfall a solid bar raises the price and an outlined bar lowers it, so the sign does not depend on colour.
-- **Motion:** two animations only, both off under `prefers-reduced-motion`: the range marker slides to the new estimate in 320 ms, and the waterfall's bars grow in turn, 160 ms each.
-- **Similar listings:** "vs. estimate" says how far each listing's asking price lies from the estimate, in whole percent. No deal tiers such as "good deal": the listings are other cars, and the API gives no boundaries for tiers.
+- **Type:** BDO Grotesk, the open-licensed grotesque momentic uses, for all text, at weights 400 and 500 with -0.04em tracking from 24 px up.
+  Recommenditos Mono, a subset of Basically A Mono, only for uppercase labels, the step chips, field labels, table heads, axis ticks and IDs, never for sentences.
+  Sizes: 96 px for the price, 40 px for the step titles (32 px below 1,200 px), 24 px for the form's groups and the result's sections, 16 px for body text, 15 px in fields, 14 px for tables and captions, 13 px for labels and hints, 12 px for ticks and IDs.
+  Figures are tabular wherever numbers line up; the price keeps the face's proportional figures.
+- **Why these faces:** the first build's serif read as a generic AI look; Schibsted Grotesk, which replaced it, was dropped when Lukas chose momentic's style.
+  Both of momentic's faces are open-licensed, so the genuine ones give the closest match without a substitute: BDO Grotesk has no Reserved Font Name; Basically A Mono reserves its name, so the subset is renamed.
+- **Colour:** cream ground `#f5f3f2`, ink `#1c1c1c`, greys `#404040` and `#6b6b6b`, olive `#7f806f` for every rule; lime `#87f700` is the one accent, on the Estimate button, the estimate bar and the ring of the range marker.
+  Lime is too pale on cream to carry a mark alone, so the estimate bar has an ink edge and the marker an ink core.
+  The form cell is `#fbfbfb`, fields an olive tint with a 1 px olive border; the dark theme is ink `#1c1c1c` with a `#252525` form cell.
+  Where momentic's own values fall short of WCAG AA, the page deviates: muted grey `#6b6b6b` instead of `#737373`, a visible border on fields, a blue focus ring (`#2563eb`, `#93c5fd` in dark) instead of a pale one, and a darker error red (`#a8433b`, `#ef7a6f` in dark); olive text only from 24 px.
+  A test computes every pair the page uses from the tokens in `app.css`, text at 4.5:1 and borders, marks and focus at 3:1, in the light theme and in both dark blocks (the system's and the toggle's), and checks that the two dark blocks hold the same tokens.
+- **Structure:** every division is a 1 px olive rule that runs to the cell's edge: under the header, between the form cell and the result, above each result section; hairlines inside; no cards, shadows or gradients; 4 px radius on chips and panels, 8 px on fields and buttons.
+  The similar listings sit in a tinted panel with an index column, as in momentic's leaderboard.
+- **The button row:** it stays at the bottom of the window while the form runs past it and comes to rest under the last field, so the buttons are in reach at any window height.
+  The form's error summary sits under the row, not in it, so the row stays 75 px, inside the 112 px of `scroll-padding-bottom`, and a field the focus reaches always scrolls clear of it; a test checks both, and after an empty submit at 1,440 and 1,024 by 700 px no field the Tab key reached was covered.
+- **Layout:** at 1,440 px the form is 416 px wide in a 480 px cell and the result 896 px; below 1,200 px the form is 312 px and the result 584 px, and the listings drop their index column below 1,100 px and fold registration and power into their second line below 680 px.
+- **Captions:** they run the width of their chart or table, with `text-wrap: pretty` against a single word on the last line.
+- **Charts:** drawn as SVG at the column's measured pixel width, so their text keeps its size at every width.
+  In the waterfall a solid ink bar raises the price and an outlined bar lowers it, so the sign does not depend on colour.
+- **Motion:** colour fades of 150 to 180 ms, a 0.97 press on the buttons, the range marker sliding to the new estimate in 500 ms, the waterfall's bars growing once in 800 ms, and a blinking block after the button's label while an estimate runs; all off under `prefers-reduced-motion`.
+- **Similar listings:** "vs. estimate" says how far each listing's asking price lies from the estimate, in whole percent.
+  No deal tiers such as "good deal": the listings are other cars, and the API gives no boundaries for tiers.
+  Each listing is titled by its make and model, the data's clean fields, with fuel, body, seller and country below.
+  Under them, in quotes, is `model_version`: the seller's own description of the version, free text in the seller's language that mixes trim, equipment and even mileage ("d/Virtual-Cockpit/62.000KM"), shown as written and not parsed.
+  The data cuts it at 50 characters, so a description of exactly that length ends in "…".
 
-The direction comes from a study of reference sites at 1,440 px (styles measured in the browser): Linear for the tool as the first screen and the mono for data, Resend for a serif display at regular weight, Vercel's Geist for hairlines without shadows, Ramp for small uppercase labels, CarGurus' price-trend table (an archived copy) and Bring a Trailer's auction result for the result layout.
-Zillow and Cars & Bids could not be studied: both answer with a bot check, live and archived, so nothing is taken from them.
-One deliberate difference from the brief of that study: the form column is not sticky, because at 900 px of window height the form is taller than the window and its button would scroll out of reach.
+### The fonts
+
+| File | Source | Licence |
+|------|--------|---------|
+| `bdo-grotesk.woff2` | `Fonts/Variable/BDOGrotesk-VF.ttf` of [LCTipografi/BDO-Grotesk](https://github.com/LCTipografi/BDO-Grotesk), weight axis cut to 400-500 | SIL OFL 1.1, no Reserved Font Name |
+| `recommenditos-mono-400.woff2`, `-500.woff2` | Basically A Mono 1.301 Regular and Medium from [Mental Design](https://experi.mentallydesigned.com/type/bam) | SIL OFL 1.1 with the Reserved Font Name "Basically A Mono" |
+
+A subset is a Modified Version under the OFL, so the mono's subsets must not carry the reserved name: `tools/web_fonts.py --rename` calls them Recommenditos Mono in every name record but the copyright and licence ones, and `OFL-basically-a-mono.txt` keeps the licence with a line saying so.
+BDO Grotesk keeps its name.
+The tool lists the characters (Latin, Latin-1 and Latin Extended-A for names such as Škoda, Łódź or Citroën, the euro and minus signs and the page's punctuation; ASCII and a few signs for the mono) and writes each file:
+
+```bash
+uv run python -m tools.web_fonts BDOGrotesk-VF.ttf \
+    recommenditos/api/web/fonts/bdo-grotesk.woff2 --weight 400:500 --tabular-digits-only
+uv run python -m tools.web_fonts BasicallyAMono-Regular.ttf \
+    recommenditos/api/web/fonts/recommenditos-mono-400.woff2 --mono --rename "Recommenditos Mono"
+```
+
+BDO Grotesk's `tnum` feature also widens the comma, full stop and percent sign, so `--tabular-digits-only` keeps it for the figures alone.
+It lacks the Esperanto and breve letters, Ĳ, ĸ, ŉ, ſ, µ and the double prime; of these the listing names hold only two double primes, which fall back to the system's face.
+`tests/api/test_web_fonts.py` checks that every other one of those characters, and every character of the page's own files, is in the text face, that `tnum` changes the figures and nothing else, that no mono file carries the reserved name, that each family ships with its licence, and that the fonts weigh no more than the first design's 79.7 KB.
+It needs fontTools from the `webfonts` group; like the Node tests, it is skipped on a machine without it but fails in CI.
 
 ## What it calls
 
@@ -110,7 +148,7 @@ The page itself sends one estimate, three requests, at a time.
 ## Work on it
 
 `make api` serves the page at `http://127.0.0.1:8000/` from the checkout; the files are read at startup, so a change shows after a restart of `make api`.
-`tests/api/test_web.py` checks the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
-`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node; it is skipped on a machine without Node, but fails in CI (`CI` set) when Node is missing: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers, the names of the listings and the text of a problem without a reference.
+`tests/api/test_web.py` checks the colour contrast, the sticky button row, the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
+`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node; it is skipped on a machine without Node, but fails in CI (`CI` set) when Node is missing: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers, the title and quoted description of a listing and the text of a problem without a reference.
 `tests/integration/test_deployed_proxy.py` checks the page through nginx.
 The Content Security Policy allows scripts, styles, fonts and requests from the page's own origin only and no inline script or style, so a new script or style goes into a file of `web/`, and a setting from JavaScript goes through the DOM (`element.style`), not a `style` attribute.

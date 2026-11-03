@@ -182,8 +182,8 @@ async function loadService() {
 
 function showModel(health) {
   const info = $("model-info");
-  const trained = health.model.trained_at ? ` · trained ${longDate.format(new Date(health.model.trained_at))}` : "";
-  info.textContent = `Model ${health.model.variant}${trained}`;
+  const trained = health.model.trained_at ? ` trained ${longDate.format(new Date(health.model.trained_at))}` : "";
+  info.replaceChildren("Model ", el("span", { class: "chip" }, health.model.variant), trained);
   info.title = `Model version ${health.model.version}`;
   info.hidden = false;
 }
@@ -401,7 +401,7 @@ function setBusy(running) {
   $("result").setAttribute("aria-busy", String(running));
   const submit = $("submit");
   submit.setAttribute("aria-disabled", String(running));
-  submit.textContent = running ? "Estimating…" : "Estimate price";
+  // The label stays; a blinking block after it (app.css) shows the estimate running.
   $("price-label").textContent = running && lastResult ? "Estimated asking price · updating" : "Estimated asking price";
   if (running) $("announcer").textContent = "Estimating the price.";
 }
@@ -477,13 +477,19 @@ function setPrice(value) {
 /** The longest `model_version` the data keeps; a version of exactly this length was cut. */
 export const VERSION_MAX_LENGTH = 50;
 
-/** A listing's name: its version line, led by the model unless the line starts with it. */
-export function listingName(listing) {
+/** A listing's title: its make and model, the data's clean fields. */
+export function listingTitle(listing) {
+  return [listing.make, listing.model].map((part) => (part ?? "").trim()).filter(Boolean).join(" ");
+}
+
+/**
+ * The seller's own description of the version (`model_version`): free text in the seller's
+ * language, not parsed, so the page quotes it rather than reading it as a name. Empty without one.
+ */
+export function sellerDescription(listing) {
   const version = (listing.model_version ?? "").trim();
-  const model = (listing.model ?? "").trim();
-  if (!version) return model || listing.make;
-  const cut = version.length >= VERSION_MAX_LENGTH ? `${version}…` : version;
-  return model && !version.toLowerCase().startsWith(model.toLowerCase()) ? `${model} ${cut}` : cut;
+  if (!version) return "";
+  return `“${version}${version.length >= VERSION_MAX_LENGTH ? "…" : ""}”`;
 }
 
 function describeCar(body) {
@@ -569,24 +575,26 @@ function renderRange(range, price, listings, fresh) {
   const width = Math.max(320, Math.round(box.clientWidth));
   const x = (value) => ((value - scale.min) / (scale.max - scale.min)) * width;
   const axisY = 36;
-  // Circles closer than 10 px would touch (r 3.5 plus the stroke), so they stack.
-  const rows = stackRows(prices.map(x), 10);
+  // Circles closer than 11 px would touch (r 4 plus the stroke), so they stack.
+  const rows = stackRows(prices.map(x), 11);
   const root = svg("svg", { width, height: 72, "aria-hidden": "true", class: "range-svg" });
   root.append(svg("line", { class: "range-axis", x1: 0, x2: width, y1: axisY + 0.5, y2: axisY + 0.5 }));
   const bandStart = x(lower);
   const bandEnd = x(upper);
-  root.append(svg("rect", { class: "range-band", x: bandStart, y: 31, width: Math.max(1, bandEnd - bandStart), height: 11 }));
-  root.append(svg("line", { class: "range-end", x1: bandStart + 0.5, x2: bandStart + 0.5, y1: 31, y2: 42 }));
-  root.append(svg("line", { class: "range-end", x1: bandEnd - 0.5, x2: bandEnd - 0.5, y1: 31, y2: 42 }));
+  root.append(svg("rect", {
+    class: "range-band", x: bandStart, y: axisY - 2.5, width: Math.max(1, bandEnd - bandStart), height: 6, rx: 3,
+  }));
   prices.forEach((value, index) => {
     root.append(svg("circle", {
-      class: "range-listing", "data-listing": index, cx: x(value), cy: axisY + 0.5 - rows[index] * 8, r: 3.5,
+      class: "range-listing", "data-listing": index, cx: x(value), cy: axisY + 0.5 - rows[index] * 11, r: 4,
     }));
   });
   // The marker and its value, which slide from where they were (the band centre at first).
   const target = x(price);
   const marker = svg("g", { class: "range-marker" });
-  marker.append(svg("rect", { x: -1, y: 22, width: 2, height: 27 }));
+  // A lime ring round an ink core: the core carries the mark, lime alone is too pale on the ground.
+  marker.append(svg("circle", { class: "range-ring", cx: 0, cy: axisY + 0.5, r: 9 }));
+  marker.append(svg("circle", { class: "range-core", cx: 0, cy: axisY + 0.5, r: 5 }));
   const label = svg("text", { class: "range-value", x: 0, y: 14, "text-anchor": "middle" }, euro.format(price));
   marker.append(label);
   root.append(marker);
@@ -612,7 +620,7 @@ function renderRange(range, price, listings, fresh) {
   }
   lastMarkerX = target;
 
-  $("range-level").textContent = ` · ${Math.round(level * 100)}% prediction interval`;
+  $("range-level").textContent = ` ${Math.round(level * 100)}% prediction interval`;
   const share = Math.round(level * 10);
   note.textContent =
     `${share} in 10 cars like this are listed between ${euro.format(lower)} and ${euro.format(upper)}.` +
@@ -670,13 +678,14 @@ function renderWaterfall(valuation, body, fresh) {
   const container = $("waterfall");
   const { base, steps, total } = waterfallSteps(valuation.explanation);
   const width = Math.max(480, Math.round(container.clientWidth));
-  const labelWidth = width >= 760 ? 208 : 168;
-  const euroWidth = 88;
-  const pctWidth = 64;
+  const wide = width >= 760;
+  const labelWidth = wide ? 220 : 180;
+  const euroWidth = wide ? 120 : 94;
+  const pctWidth = wide ? 88 : 70;
   const plotLeft = labelWidth + 16;
   const plotRight = width - euroWidth - 16 - pctWidth - 16;
   const rowHeight = 32;
-  const barHeight = 14;
+  const barHeight = 16;
   const rows = [
     { kind: "base", label: "Average listing", value: "", from: 0, to: base },
     ...steps.map((step) => ({
@@ -716,14 +725,15 @@ function renderWaterfall(valuation, body, fresh) {
     const start = Math.min(row.from, row.to);
     const left = x(start);
     const barWidth = Math.max(1, Math.abs(x(row.to) - x(row.from)));
-    const inset = row.kind === "down" ? 0.5 : 0;
+    // Outlined bars (a lowering effect, the estimate) keep their 1px stroke inside the bar.
+    const inset = row.kind === "down" || row.kind === "total" ? 0.5 : 0;
     const bar = svg("rect", {
       class: `wf-bar wf-bar-${row.kind}`,
       x: left + inset, y: barY + inset, width: Math.max(1, barWidth - 2 * inset), height: barHeight - 2 * inset,
     });
     // Grows from its start edge: the running total before it, which for a lowering effect is its right edge.
     bar.style.transformOrigin = `${row.kind === "down" ? left + barWidth : left}px ${middle}px`;
-    bar.style.animationDelay = `${index * 40}ms`;
+    bar.style.animationDelay = `${index * 45}ms`;
     root.append(bar);
     if (index < rows.length - 2) {
       const end = Math.round(x(row.to)) + 0.5;
@@ -776,9 +786,10 @@ function renderListings(comparables, body, price) {
     empty.hidden = false;
     return;
   }
-  aside.textContent = ` · ${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
+  aside.textContent = ` ${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
   $("listings-body").replaceChildren(...listings.map((listing, position) => {
-    const name = listingName(listing);
+    const title = listingTitle(listing);
+    const description = sellerDescription(listing);
     const [year, month] = (listing.registration_date ?? "").split("-");
     const registered = year ? `${MONTHS[Number(month) - 1]} ${year}` : "–";
     const power = listing.power_kw === null ? "–" : `${integer.format(listing.power_kw)} kW`;
@@ -790,10 +801,12 @@ function renderListings(comparables, body, price) {
     ];
     const narrow = [registered, power, listing.country_code].filter(Boolean).join(" · ");
     const row = el("tr", { "data-listing": position },
-      el("td", {},
-        el("span", { class: "listing-name", title: name }, name),
+      el("td", { class: "col-index" }, String(position + 1).padStart(2, "0")),
+      el("td", { class: "col-listing" },
+        el("span", { class: "listing-name" }, title),
         el("span", { class: "listing-meta" },
-          el("span", { class: "listing-narrow" }, `${narrow} · `), ...meta)),
+          el("span", { class: "listing-narrow" }, `${narrow} · `), ...meta),
+        description ? el("span", { class: "listing-words", title: `Seller's description: ${description}` }, description) : null),
       el("td", { class: "col-registered" }, registered),
       el("td", { class: "num" }, listing.mileage_km_raw === null ? "–" : `${integer.format(listing.mileage_km_raw)} km`),
       el("td", { class: "num col-power" }, power),

@@ -217,6 +217,12 @@ contract = [
     # 4.32.7 or newer: older releases read `Node._nodeid`, which pytest 9.2 removed.
     "schemathesis>=4.32.7",
 ]
+# Building the web page's fonts (`tools/web_fonts.py`) and the test that checks
+# them; woff2 needs Brotli. Not in `test`, for the reason given there.
+webfonts = [
+    "brotli>=1.2.0",
+    "fonttools>=4.65.0",
+]
 
 [tool.uv]
 # An older uv rewrites uv.lock in an outdated format (revision 3 instead of 5) and changes markers.
@@ -350,6 +356,7 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = [
     "dvc.*",
+    "fontTools.*",
     "joblib.*",
     "mapie.*",
     "pandas.*",
