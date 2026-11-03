@@ -13,7 +13,7 @@ It is made for a laptop or desktop screen and holds its layout down to a window 
 | `recommenditos/api/web/app.css` | Hand-written styles, light and dark |
 | `recommenditos/api/web/app.js` | Plain JavaScript, one ES module, no framework and no build step |
 | `recommenditos/api/web/theme.js` | Applies a theme chosen with the toggle before the page paints |
-| `recommenditos/api/web/fonts/` | Schibsted Grotesk (all text) and JetBrains Mono (axis ticks and IDs), subset to Latin and Latin Extended-A, each with its SIL Open Font License file; `tools/web_fonts.py` builds them |
+| `recommenditos/api/web/fonts/` | Schibsted Grotesk (all text), subset to Latin and Latin Extended-A by `tools/web_fonts.py`, and JetBrains Mono (axis ticks and IDs), the Latin-only static subset of the first design; each with its SIL Open Font License file |
 | `recommenditos/api/webui.py` | Reads the files once at startup and serves them from memory |
 | `recommenditos/api/routes/index.py`, `routes/assets.py` | `GET /` and `GET /assets/<version>/<file>` |
 
@@ -78,15 +78,16 @@ Zillow and Cars & Bids could not be studied: both answer with a bot check, live 
 
 ### The fonts
 
-Each woff2 is a subset of the family's variable font in [google/fonts](https://github.com/google/fonts) (`ofl/schibstedgrotesk`, `ofl/jetbrainsmono`), under the SIL Open Font License 1.1 with no Reserved Font Name, which allows the subset and the change to `tnum`.
-`tools/web_fonts.py` lists the characters (Latin, Latin-1, Latin Extended-A for names such as Škoda, Łódź or Citroën, the euro and minus signs and the page's punctuation) and writes the file:
+Both faces come from [google/fonts](https://github.com/google/fonts) under the SIL Open Font License 1.1 with no Reserved Font Name, which allows subsets and the change to `tnum`.
+JetBrains Mono (`ofl/jetbrainsmono`) is the static, Latin-only subset the first design shipped; it prints only axis ticks and IDs, which are ASCII.
+`tools/web_fonts.py` builds Schibsted Grotesk alone, from the variable font in `ofl/schibstedgrotesk`: it lists the characters (Latin, Latin-1, Latin Extended-A for names such as Škoda, Łódź or Citroën, the euro and minus signs and the page's punctuation) and writes the file:
 
 ```bash
 uv run python -m tools.web_fonts "SchibstedGrotesk[wght].ttf" \
     recommenditos/api/web/fonts/schibsted-grotesk.woff2 --weight 400:700 --tabular-digits-only
 ```
 
-`tests/api/test_web.py` checks that every one of those characters is in the text face, that `tnum` changes the figures and nothing else, that each font ships with its licence, and that the fonts weigh no more than the first design's 79.7 KB.
+`tests/api/test_web.py` checks that every one of those characters, and every character of the page's own files, is in the text face, that `tnum` changes the figures and nothing else, that each font ships with its licence, and that the fonts weigh no more than the first design's 79.7 KB.
 
 ## What it calls
 

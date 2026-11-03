@@ -183,6 +183,14 @@ def test_the_text_face_has_every_character_of_the_page_and_the_listing_names():
     # The soft hyphen is invisible and the long s is obsolete; the family has neither.
     wanted = set(subset.parse_unicodes(UNICODES)) - {0x00AD, 0x017F}
     assert not sorted(chr(code) for code in wanted - cmap.keys())
+    # And every character the page's own files print, whatever the tool's list says.
+    used = {
+        ord(char)
+        for name in ("index.html", "app.js", "app.css")
+        for char in (WEB_DIR / name).read_text(encoding="utf-8")
+        if char.isprintable() and not char.isspace()
+    }
+    assert not sorted(chr(code) for code in used - cmap.keys())
 
 
 def test_the_text_face_lines_up_its_figures_without_widening_the_comma():

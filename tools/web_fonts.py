@@ -1,8 +1,9 @@
-"""Build the web page's self-hosted fonts from their upstream variable TTFs.
+"""Build the web page's text face, Schibsted Grotesk, from its upstream variable TTF.
 
-The page (docs/docs/web-ui.md) sets everything in Schibsted Grotesk and its axis
-ticks and IDs in JetBrains Mono. Each woff2 under `recommenditos/api/web/fonts/`
-is a subset of the family's variable font in google/fonts: the characters of
+The page (docs/docs/web-ui.md) sets everything in Schibsted Grotesk; its axis
+ticks and IDs use JetBrains Mono, the static Latin-only subset the first design
+shipped, which this tool does not build. `schibsted-grotesk.woff2` under
+`recommenditos/api/web/fonts/` is a subset of the variable font in google/fonts: the characters of
 `UNICODES` (Latin, Latin-1, Latin Extended-A for names such as Škoda or Łódź, and
 the page's punctuation, euro and minus signs), the weight axis cut to the weights
 the page uses, and only the OpenType features it needs.
