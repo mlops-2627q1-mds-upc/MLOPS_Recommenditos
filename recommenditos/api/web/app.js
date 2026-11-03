@@ -23,6 +23,19 @@ const FIELD_LABELS = {
   electric_range_km: "Electric range",
 };
 
+/** What a field's error asks for when it is left empty. */
+const EMPTY_MESSAGES = {
+  make: "Choose a make.",
+  model: "Enter the model, for example 320 or Golf.",
+  mileage_km_raw: "Enter the mileage in km, for example 62000.",
+  power_kw: "Enter the power in kW, for example 140.",
+  fuel_category: "Choose a fuel.",
+  transmission: "Choose a gearbox.",
+  body_type: "Choose a body type.",
+  country_code: "Choose a country.",
+  seller_type: "Choose a seller type.",
+};
+
 const COUNTRIES = {
   AT: "Austria", BE: "Belgium", DE: "Germany", ES: "Spain", FR: "France",
   IT: "Italy", LU: "Luxembourg", NL: "Netherlands",
@@ -40,17 +53,31 @@ const EXAMPLE = {
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MINUS = "−";
 
 const euro = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const integer = new Intl.NumberFormat("en-IE", { maximumFractionDigits: 0 });
-const percent = new Intl.NumberFormat("en-IE", { maximumFractionDigits: 1, minimumFractionDigits: 1, signDisplay: "exceptZero" });
 const longDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+/** A signed percentage with a real minus sign: "+9.2%", "−21.7%". */
+export function signedPercent(value, digits = 1) {
+  const rounded = Number(value.toFixed(digits));
+  if (rounded === 0) return `${(0).toFixed(digits)}%`;
+  return `${rounded > 0 ? "+" : MINUS}${Math.abs(rounded).toFixed(digits)}%`;
+}
+
+/** A signed amount in euros: "+€2,410", "−€8,343". */
+function signedEuro(value) {
+  return `${value >= 0 ? "+" : MINUS}${euro.format(Math.abs(value))}`;
+}
 
 const $ = (id) => document.getElementById(id);
 // Null outside a browser, where the tests import the pure functions below.
 const form = typeof document === "undefined" ? null : $("car-form");
 let schema = {};
-let inFlight = null;
+let busy = false;
+let lastResult = null;
+let lastMarkerX = null;
 
 // ------------------------------------------------------------------ the theme
 
@@ -60,13 +87,17 @@ function setupTheme() {
     const chosen = document.documentElement.dataset.theme;
     return chosen ? chosen === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
   };
-  const label = () => toggle.setAttribute("aria-label", dark() ? "Switch to light mode" : "Switch to dark mode");
+  const label = () => {
+    toggle.textContent = dark() ? "Light" : "Dark";
+    toggle.setAttribute("aria-label", dark() ? "Switch to the light theme" : "Switch to the dark theme");
+  };
   toggle.addEventListener("click", () => {
     const next = dark() ? "light" : "dark";
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem("theme", next); } catch { /* not remembered */ }
     label();
   });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", label);
   label();
 }
 
@@ -127,7 +158,7 @@ async function loadService() {
     alert.hidden = true;
   } catch (error) {
     alert.replaceChildren(
-      el("p", {}, "The service is not answering, so the form cannot load its lists. Try again in a few seconds."),
+      el("p", {}, "The price service is not answering, so the form cannot load its lists. Try again in a minute."),
       el("button", { type: "button", class: "button-quiet", onclick: () => location.reload() }, "Reload the page"),
     );
     alert.hidden = false;
@@ -137,15 +168,10 @@ async function loadService() {
 
 function showModel(health) {
   const info = $("model-info");
-  if (!health.model.trained_at) return;
-  info.textContent = `Model trained ${longDate.format(new Date(health.model.trained_at))}`;
+  const trained = health.model.trained_at ? ` · trained ${longDate.format(new Date(health.model.trained_at))}` : "";
+  info.textContent = `Model ${health.model.variant}${trained}`;
   info.title = `Model version ${health.model.version}`;
   info.hidden = false;
-  if (health.comparables) {
-    $("intro-note").textContent =
-      `Trained on AutoScout24 listings from Austria, Belgium, France, Germany, Italy, Luxembourg, the Netherlands and Spain. ` +
-      `Similar listings come from ${integer.format(health.comparables.listings)} of them.`;
-  }
 }
 
 // --------------------------------------------------------------- validation
@@ -189,7 +215,6 @@ function readForm() {
   const data = new FormData(form);
   for (const field of [...REQUIRED, ...OPTIONAL]) {
     const required = REQUIRED.includes(field);
-    const label = FIELD_LABELS[field].toLowerCase();
     if (field === "registration_date") {
       const month = data.get("registration_month");
       const year = data.get("registration_year");
@@ -203,16 +228,16 @@ function readForm() {
     }
     const raw = String(data.get(field) ?? "").trim();
     if (raw === "") {
-      if (required) errors[field] = form.elements[field].tagName === "SELECT" ? `Choose the ${label}.` : `Enter the ${label}.`;
+      if (required) errors[field] = EMPTY_MESSAGES[field] ?? `Enter the ${FIELD_LABELS[field].toLowerCase()}.`;
       continue;
     }
     const input = form.elements[field];
     if (input.dataset.number !== undefined) {
       const value = parseNumber(raw);
       const { min, max } = limits(schema, field);
-      if (Number.isNaN(value)) { errors[field] = "Enter a whole number."; continue; }
+      if (Number.isNaN(value)) { errors[field] = "Enter a whole number, for example 62000."; continue; }
       if ((min !== undefined && value < min) || (max !== undefined && value > max)) {
-        errors[field] = `Enter ${integer.format(min)} to ${integer.format(max)}.`;
+        errors[field] = `Enter a value between ${integer.format(min)} and ${integer.format(max)}.`;
         continue;
       }
       body[field] = value;
@@ -225,13 +250,13 @@ function readForm() {
   return { body, errors };
 }
 
-function showFieldErrors(errors, origin) {
+function showFieldErrors(errors) {
   const fields = Object.keys(errors);
   for (const field of fields) setError(field, errors[field]);
   const alert = $("form-alert");
+  const labels = fields.map((field) => (field === "registration_date" ? "First registration" : FIELD_LABELS[field] ?? field));
   const count = fields.length;
-  const lead = origin === "server" ? "The service did not accept the request." : "";
-  alert.replaceChildren(el("p", {}, `${lead} ${count === 1 ? "One field needs" : `${count} fields need`} attention.`.trim()));
+  alert.replaceChildren(el("p", {}, `${count === 1 ? "One field needs" : `${count} fields need`} attention: ${labels.join(", ")}.`));
   alert.hidden = false;
   const first = fields.map((f) => (f === "registration_date" ? $("registration_month") : form.elements[f])).find(Boolean);
   if (first) {
@@ -257,18 +282,16 @@ class Problem extends Error {
   }
 }
 
-async function post(path, body, signal) {
+async function post(path, body) {
   let response;
   try {
     response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json", ...CLIENT },
       body: JSON.stringify(body),
-      signal,
     });
-  } catch (error) {
-    if (error.name === "AbortError") throw error;
-    throw new Problem(0, { title: "No connection", detail: "The service could not be reached. Check the connection and try again." });
+  } catch {
+    throw new Problem(0, null);
   }
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Problem(response.status, payload);
@@ -288,28 +311,54 @@ export function fieldErrors(problem) {
   return errors;
 }
 
-let lastResult = null;
+/**
+ * What the page says about a failed estimate: a title, a detail, and whether a retry may help.
+ *
+ * A 503 or no answer at all is the service restarting or unreachable; nginx's own
+ * 503 names no instance, so a reference appears only when the problem has one.
+ */
+export function describeProblem(status, problem) {
+  const reference = typeof problem?.instance === "string" ? problem.instance.replace("urn:uuid:", "") : null;
+  if (status === 0 || status === 502 || status === 503 || status === 504) {
+    return { title: "The price service is not answering.", detail: "Your inputs are kept; try again in a minute.", retry: true };
+  }
+  if (status >= 500) {
+    const quote = reference ? `quote request ${reference}` : "say when it happened";
+    return {
+      title: `The service failed while estimating this car (error ${status}).`,
+      detail: `Try again; if it repeats, ${quote}.`,
+      retry: true,
+    };
+  }
+  if (status === 422) {
+    const [field, message] = Object.entries(fieldErrors(problem))[0] ?? [];
+    const detail = field
+      ? `The service did not accept ${FIELD_LABELS[field]?.toLowerCase() ?? field}: ${message}`
+      : problem?.detail ?? "The service did not accept the request.";
+    return { title: "The request was not accepted.", detail, retry: false };
+  }
+  return {
+    title: problem?.title ?? `The service answered ${status}.`,
+    detail: problem?.detail ?? "Try again in a minute.",
+    retry: false,
+  };
+}
 
 async function estimate(event) {
-  event.preventDefault();
+  event?.preventDefault();
+  if (busy) return;
   clearErrors();
   const { body, errors } = readForm();
   if (Object.keys(errors).length) {
-    showFieldErrors(errors, "client");
+    showFieldErrors(errors);
     return;
   }
-  if (busy) return;
-  inFlight?.abort();
-  const controller = new AbortController();
-  inFlight = controller;
   setBusy(true);
   const settled = await Promise.allSettled([
-    post("v1/predict", body, controller.signal),
-    post("v1/price-range", body, controller.signal),
-    post("v1/comparables", { ...body, k: COMPARABLES_K }, controller.signal),
+    post("v1/predict", body),
+    post("v1/price-range", body),
+    post("v1/comparables", { ...body, k: COMPARABLES_K }),
   ]);
-  if (controller.signal.aborted) return;
-  inFlight = null;
   setBusy(false);
   const [valuation, range, comparables] = settled;
   if (valuation.status === "rejected") {
@@ -318,18 +367,16 @@ async function estimate(event) {
       const byField = fieldErrors(problem.problem);
       const known = Object.keys(byField).filter((field) => [...REQUIRED, ...OPTIONAL].includes(field));
       if (known.length) {
-        showFieldErrors(Object.fromEntries(known.map((f) => [f, byField[f]])), "server");
+        showFieldErrors(Object.fromEntries(known.map((f) => [f, byField[f]])));
         return;
       }
     }
     showProblem(problem);
     return;
   }
-  lastResult = { body, valuation: valuation.value };
-  render(body, valuation.value, range, comparables);
+  lastResult = { body, valuation: valuation.value, range, comparables };
+  render(lastResult, true);
 }
-
-let busy = false;
 
 /** Marks the estimate as running. The button stays focusable (aria-disabled), so focus stays on it. */
 function setBusy(running) {
@@ -338,6 +385,7 @@ function setBusy(running) {
   const submit = $("submit");
   submit.setAttribute("aria-disabled", String(running));
   submit.textContent = running ? "Estimating…" : "Estimate price";
+  $("price-label").textContent = running && lastResult ? "Estimated asking price · updating" : "Estimated asking price";
   if (running) $("announcer").textContent = "Estimating the price.";
 }
 
@@ -347,7 +395,7 @@ function el(tag, attributes = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attributes)) {
     if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
-    else if (value !== undefined && value !== null) node.setAttribute(key, value);
+    else if (value !== undefined && value !== null && value !== false) node.setAttribute(key, value);
   }
   node.append(...children.filter((child) => child !== null && child !== undefined && child !== false && child !== ""));
   return node;
@@ -361,30 +409,6 @@ function svg(tag, attributes = {}, text) {
   return node;
 }
 
-/** What the page says about a failed request: a title, a detail and, when the problem names one, a reference. */
-export function describeProblem(status, problem) {
-  const title = status === 503 ? "The service is busy or restarting" : problem?.title ?? "Something went wrong";
-  const detail = problem?.detail ?? `The service answered ${status}.`;
-  const reference = typeof problem?.instance === "string" ? problem.instance.replace("urn:uuid:", "") : null;
-  return { title, detail, reference };
-}
-
-function showProblem(error) {
-  const box = $("problem");
-  const { title, detail, reference } = describeProblem(error.status, error.problem);
-  // A problem nginx answers itself, such as its 503 while the API restarts, has no instance.
-  const parts = [el("p", { class: "problem-title" }, title), el("p", { class: "problem-detail" }, detail)];
-  if (reference) parts.push(el("p", { class: "problem-ref" }, `Reference ${reference}`));
-  box.replaceChildren(...parts);
-  box.hidden = false;
-  // An older estimate below the problem would read as the answer to this request.
-  $("estimate").hidden = true;
-  $("intro").hidden = false;
-  lastResult = null;
-  $("announcer").textContent = `${title}. ${detail}`;
-  revealResult();
-}
-
 function smoothScroll() {
   return matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 }
@@ -393,6 +417,32 @@ function smoothScroll() {
 function revealResult() {
   const result = $("result");
   if (result.getBoundingClientRect().top < 0) result.scrollIntoView({ block: "start", behavior: smoothScroll() });
+}
+
+/** Puts the result back to its empty state, so that nothing stale stays on screen. */
+function resetResult() {
+  $("estimate").classList.add("is-empty");
+  $("price").textContent = "No car yet.";
+  $("car-line").textContent = "";
+  $("warnings").hidden = true;
+  for (const id of ["range", "waterfall", "range-note", "range-level", "listings-aside", "estimate-foot"]) $(id).replaceChildren();
+  $("listings-wrap").hidden = true;
+  for (const id of ["listings-empty", "listings-error", "range-error"]) $(id).hidden = true;
+  lastResult = null;
+  lastMarkerX = null;
+}
+
+function showProblem(error) {
+  const box = $("problem");
+  const { title, detail, retry } = describeProblem(error.status, error.problem);
+  const parts = [el("p", { class: "problem-title" }, title), el("p", { class: "problem-detail" }, detail)];
+  if (retry) parts.push(el("button", { type: "button", class: "button-quiet", onclick: () => estimate() }, "Try again"));
+  box.replaceChildren(...parts);
+  box.hidden = false;
+  // An older estimate below the problem would read as the answer to this request.
+  resetResult();
+  $("announcer").textContent = `${title} ${detail}`;
+  revealResult();
 }
 
 function describeCar(body) {
@@ -405,88 +455,126 @@ function describeCar(body) {
     body.fuel_category,
     body.transmission,
     COUNTRIES[body.country_code] ?? body.country_code,
+    labelOf("seller_type", body.seller_type),
   ].join(" · ");
 }
 
-function render(body, valuation, range, comparables) {
-  $("intro").hidden = true;
+function render(result, fresh) {
+  const { body, valuation, range, comparables } = result;
   $("problem").hidden = true;
-  $("estimate").hidden = false;
+  $("estimate").classList.remove("is-empty");
   $("price").textContent = euro.format(valuation.price_eur);
   $("car-line").textContent = describeCar(body);
 
-  const warnings = [...valuation.warnings];
-  const list = $("warnings");
-  list.replaceChildren(...warnings.map((warning) => el("li", {}, warning.detail)));
-  list.hidden = warnings.length === 0;
+  const list = $("warnings-list");
+  list.replaceChildren(...valuation.warnings.map((warning) => {
+    const field = warning.pointer.replace(/^#\/?/, "").split("/")[0];
+    const label = FIELD_LABELS[field];
+    return el("li", {}, label ? `${label}: ${warning.detail}` : warning.detail);
+  }));
+  $("warnings").hidden = valuation.warnings.length === 0;
 
-  const listings = comparables.status === "fulfilled" ? comparables.value.listings : null;
-  renderRange(range, valuation.price_eur, listings);
-  renderWaterfall(valuation);
-  renderListings(comparables, body);
+  const listings = comparables.status === "fulfilled" ? comparables.value.listings : [];
+  renderRange(range, valuation.price_eur, listings, fresh);
+  renderWaterfall(valuation, body, fresh);
+  renderListings(comparables, body, valuation.price_eur);
 
   const model = valuation.model;
-  $("estimate-foot").replaceChildren(
-    `Model ${model.variant}, version ${model.version.slice(0, 8)}. Request `,
-    el("span", { class: "request-id" }, valuation.request_id),
-    ".",
-  );
-  $("announcer").textContent = `Estimated asking price ${euro.format(valuation.price_eur)}.`;
-  revealResult();
+  $("estimate-foot").textContent =
+    `Model ${model.variant} · version ${model.version.slice(0, 8)} · request ${valuation.request_id}`;
+  if (fresh) {
+    $("announcer").textContent = `Estimated asking price ${euro.format(valuation.price_eur)}.`;
+    revealResult();
+  }
 }
 
-/** The scale of the range bar: the range and every comparable price, with some room. */
+/** The scale of the range bar: the range and every comparable price, padded 4 % on each side. */
 export function rangeScale(lower, upper, prices) {
   const low = Math.min(lower, ...prices);
   const high = Math.max(upper, ...prices);
-  const pad = (high - low) * 0.12 || high * 0.1;
+  const pad = (high - low) * 0.04 || high * 0.04;
   return { min: Math.max(0, low - pad), max: high + pad };
 }
 
-function renderRange(range, price, listings) {
+/** Rows for circles that would overlap: each circle goes one row up from a neighbour closer than `gap` px. */
+export function stackRows(xs, gap) {
+  const rows = [];
+  const placed = [];
+  xs.forEach((x, index) => {
+    let row = 0;
+    while (placed.some((p) => p.row === row && Math.abs(p.x - x) < gap)) row += 1;
+    placed.push({ x, row });
+    rows[index] = row;
+  });
+  return rows;
+}
+
+function renderRange(range, price, listings, fresh) {
   const box = $("range");
   const error = $("range-error");
+  const note = $("range-note");
   if (range.status === "rejected") {
-    box.hidden = true;
+    box.replaceChildren();
+    note.textContent = "";
     $("range-level").textContent = "";
-    $("range-note").textContent = "";
-    error.textContent = `No range for this car: ${range.reason.message}`;
+    error.textContent = "The range could not be loaded; the estimate above is not affected.";
     error.hidden = false;
     return;
   }
   error.hidden = true;
-  box.hidden = false;
   const { lower_eur: lower, upper_eur: upper, confidence_level: level } = range.value;
-  const prices = (listings ?? []).map((listing) => listing.price_eur);
+  const prices = listings.map((listing) => listing.price_eur);
   const scale = rangeScale(lower, upper, prices);
-  const at = (value) => `${(((value - scale.min) / (scale.max - scale.min)) * 100).toFixed(2)}%`;
-  box.style.setProperty("--low", at(lower));
-  box.style.setProperty("--high", at(upper));
-  // The marker settles on the estimate from the middle of the range, the one motion that explains something.
-  box.style.setProperty("--at", at((lower + upper) / 2));
-  requestAnimationFrame(() => requestAnimationFrame(() => box.style.setProperty("--at", at(price))));
-  $("range-marker-label").textContent = euro.format(price);
-  $("range-min").textContent = euro.format(lower);
-  $("range-max").textContent = euro.format(upper);
-  $("range-ticks").replaceChildren(
-    ...prices.map((value) => {
-      const tick = el("span", { class: "range-tick", title: `A similar listing at ${euro.format(value)}` });
-      tick.style.left = at(value);
-      return tick;
-    }),
-  );
+  const width = Math.max(320, Math.round(box.clientWidth));
+  const x = (value) => ((value - scale.min) / (scale.max - scale.min)) * width;
+  const axisY = 36;
+  const rows = stackRows(prices.map(x), 8);
+  const root = svg("svg", { width, height: 72, "aria-hidden": "true", class: "range-svg" });
+  root.append(svg("line", { class: "range-axis", x1: 0, x2: width, y1: axisY + 0.5, y2: axisY + 0.5 }));
+  const bandStart = x(lower);
+  const bandEnd = x(upper);
+  root.append(svg("rect", { class: "range-band", x: bandStart, y: 31, width: Math.max(1, bandEnd - bandStart), height: 11 }));
+  root.append(svg("line", { class: "range-end", x1: bandStart + 0.5, x2: bandStart + 0.5, y1: 31, y2: 42 }));
+  root.append(svg("line", { class: "range-end", x1: bandEnd - 0.5, x2: bandEnd - 0.5, y1: 31, y2: 42 }));
+  prices.forEach((value, index) => {
+    root.append(svg("circle", {
+      class: "range-listing", "data-listing": index, cx: x(value), cy: axisY + 0.5 - rows[index] * 8, r: 3.5,
+    }));
+  });
+  // The marker and its value, which slide from where they were (the band centre at first).
+  const target = x(price);
+  const marker = svg("g", { class: "range-marker" });
+  marker.append(svg("rect", { x: -1, y: 22, width: 2, height: 27 }));
+  const label = svg("text", { class: "range-value", x: 0, y: 14, "text-anchor": "middle" }, euro.format(price));
+  marker.append(label);
+  root.append(marker);
+  if (bandEnd - bandStart >= 140) {
+    root.append(svg("text", { class: "range-bound", x: bandStart, y: 64, "text-anchor": "start" }, euro.format(lower)));
+    root.append(svg("text", { class: "range-bound", x: bandEnd, y: 64, "text-anchor": "end" }, euro.format(upper)));
+  } else {
+    root.append(svg("text", { class: "range-bound", x: (bandStart + bandEnd) / 2, y: 64, "text-anchor": "middle" },
+      `${euro.format(lower)} to ${euro.format(upper)}`));
+  }
+  box.replaceChildren(root);
+  // Keep the value inside the column.
+  const half = label.getComputedTextLength() / 2 || 32;
+  const clamp = Math.min(Math.max(target, half), width - half) - target;
+  label.setAttribute("x", String(clamp));
+  const from = fresh ? (lastMarkerX ?? (bandStart + bandEnd) / 2) : target;
+  marker.style.transform = `translateX(${from}px)`;
+  if (from !== target) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      marker.classList.add("is-moving");
+      marker.style.transform = `translateX(${target}px)`;
+    }));
+  }
+  lastMarkerX = target;
+
+  $("range-level").textContent = ` · ${Math.round(level * 100)}% prediction interval`;
   const share = Math.round(level * 10);
-  $("range-level").textContent = `${Math.round(level * 100)} % prediction interval`;
-  box.setAttribute("aria-label",
-    `Range from ${euro.format(lower)} to ${euro.format(upper)}, estimate ${euro.format(price)}` +
-    (prices.length ? `, with ${prices.length} similar listings marked` : ""));
-  const note = $("range-note");
-  note.replaceChildren(
-    `The model expects ${share} in 10 cars like this to be listed between ${euro.format(lower)} and ${euro.format(upper)}.`,
-    prices.length ? " The thin marks " : "",
-    prices.length ? el("span", { class: "range-legend", "aria-hidden": "true" }) : "",
-    prices.length ? " on the bar are the asking prices of the similar listings below." : "",
-  );
+  note.textContent =
+    `${share} in 10 cars like this are listed between ${euro.format(lower)} and ${euro.format(upper)}.` +
+    (prices.length ? ` The circles are the ${prices.length === 1 ? "similar listing" : `${prices.length} similar listings`} below.` : "");
 }
 
 function fieldValue(field, body) {
@@ -522,102 +610,109 @@ export function waterfallSteps(explanation) {
   return { base: explanation.base_price_eur, steps, total: running };
 }
 
-function niceStep(max) {
-  const raw = max / 4;
-  const magnitude = 10 ** Math.floor(Math.log10(raw));
-  return [1, 2, 2.5, 5, 10].map((m) => m * magnitude).find((step) => step >= raw);
+/** A text clipped with an ellipsis to `width` px, as an SVG text measures it. */
+function fitText(node, width) {
+  if (node.getComputedTextLength() <= width) return;
+  const text = node.textContent;
+  let low = 0;
+  let high = text.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    node.textContent = `${text.slice(0, middle)}…`;
+    if (node.getComputedTextLength() <= width) low = middle; else high = middle - 1;
+  }
+  node.textContent = `${text.slice(0, low)}…`;
 }
 
-function compactEuro(value) {
-  if (value === 0) return "€0";
-  return value >= 1000 ? `€${integer.format(value / 1000)}k` : euro.format(value);
-}
-
-function renderWaterfall(valuation) {
+function renderWaterfall(valuation, body, fresh) {
   const container = $("waterfall");
-  const body = lastResult?.body ?? {};
   const { base, steps, total } = waterfallSteps(valuation.explanation);
-  const width = Math.max(480, container.clientWidth || 640);
-  const labelWidth = Math.min(210, width * 0.3);
-  const effectWidth = 112;
-  const plotLeft = labelWidth + 12;
-  const plotRight = width - effectWidth - 12;
-  const rowHeight = 40;
-  const barHeight = 18;
+  const width = Math.max(480, Math.round(container.clientWidth));
+  const labelWidth = width >= 760 ? 208 : 168;
+  const euroWidth = 88;
+  const pctWidth = 64;
+  const plotLeft = labelWidth + 16;
+  const plotRight = width - euroWidth - 16 - pctWidth - 16;
+  const rowHeight = 32;
+  const barHeight = 14;
   const rows = [
-    { kind: "base", label: "Starting point", value: "average listing", from: 0, to: base },
+    { kind: "base", label: "Average listing", value: "", from: 0, to: base },
     ...steps.map((step) => ({
       kind: step.to >= step.from ? "up" : "down",
       label: step.field ? FIELD_LABELS[step.field] ?? step.field : "All other details",
-      value: step.field ? fieldValue(step.field, body) : "combined",
+      value: step.field ? fieldValue(step.field, body) : "",
       from: step.from, to: step.to, pct: step.pct,
     })),
     { kind: "total", label: "Estimate", value: "", from: 0, to: total },
   ];
-  const top = 6;
-  const axisY = top + rows.length * rowHeight + 6;
-  const height = axisY + 22;
-  const maxValue = Math.max(...rows.map((row) => Math.max(row.from, row.to))) * 1.04;
-  const step = niceStep(maxValue);
-  const domainMax = Math.ceil(maxValue / step) * step;
+  const maxValue = Math.max(...rows.map((row) => Math.max(row.from, row.to)));
+  const domainMax = Math.ceil(maxValue / 10000) * 10000;
+  const tick = domainMax < 20000 ? 5000 : 10000;
   const x = (value) => plotLeft + (value / domainMax) * (plotRight - plotLeft);
+  const plotBottom = rows.length * rowHeight;
+  const height = plotBottom + 28;
 
-  // The drawing is for the eye; the table after it says the same to a screen reader.
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, width, height, "aria-hidden": "true" });
-  root.append(svg("title", {}, `Waterfall from the starting price ${euro.format(base)} to the estimate ${euro.format(total)}`));
-  for (let tick = 0; tick <= domainMax + 1e-6; tick += step) {
-    root.append(svg("line", { class: "wf-grid", x1: x(tick), x2: x(tick), y1: top, y2: axisY }));
-    root.append(svg("text", { class: "wf-axis", x: x(tick), y: axisY + 16, "text-anchor": "middle" }, compactEuro(tick)));
+  const root = svg("svg", { width, height, "aria-hidden": "true", class: fresh ? "waterfall-svg is-fresh" : "waterfall-svg" });
+  for (let t = 0; t <= domainMax + 1e-6; t += tick) {
+    const tx = Math.round(x(t)) + 0.5;
+    root.append(svg("line", { class: "wf-grid", x1: tx, x2: tx, y1: 0, y2: plotBottom }));
+    root.append(svg("text", { class: "wf-tick", x: tx, y: plotBottom + 20, "text-anchor": "middle" }, t === 0 ? "€0" : `€${t / 1000}k`));
   }
+  const labels = [];
   rows.forEach((row, index) => {
-    const y = top + index * rowHeight;
-    const barY = y + (rowHeight - barHeight) / 2;
-    const left = x(Math.min(row.from, row.to));
-    const barWidth = Math.max(2, Math.abs(x(row.to) - x(row.from)));
+    const top = index * rowHeight;
+    const middle = top + rowHeight / 2;
+    const barY = middle - barHeight / 2;
     if (row.kind === "total") {
-      root.append(svg("line", { class: "wf-rule", x1: 0, x2: width, y1: y + 0.5, y2: y + 0.5 }));
+      root.append(svg("line", { class: "wf-rule", x1: 0, x2: width, y1: top + 0.5, y2: top + 0.5 }));
     }
-    root.append(svg("text", { class: "wf-label", x: 0, y: y + rowHeight / 2 - 1, "dominant-baseline": "middle" }, row.label));
-    if (row.value) {
-      const label = root.lastChild;
-      label.setAttribute("y", y + rowHeight / 2 - 8);
-      root.append(svg("text", { class: "wf-value", x: 0, y: y + rowHeight / 2 + 9, "dominant-baseline": "middle" }, row.value));
-    }
-    root.append(svg("rect", { class: `wf-bar-${row.kind}`, x: left, y: barY, width: barWidth, height: barHeight, rx: 2 }));
-    if (index < rows.length - 1 && row.kind !== "total") {
-      const end = x(row.to);
+    const text = svg("text", { class: row.kind === "total" ? "wf-label is-total" : "wf-label", x: 0, y: middle, "dominant-baseline": "central" });
+    text.append(svg("tspan", {}, row.label));
+    if (row.value) text.append(svg("tspan", { class: "wf-value", dx: 6 }, row.value));
+    root.append(text);
+    labels.push(text);
+    const start = Math.min(row.from, row.to);
+    const left = x(start);
+    const barWidth = Math.max(1, Math.abs(x(row.to) - x(row.from)));
+    const inset = row.kind === "down" ? 0.5 : 0;
+    const bar = svg("rect", {
+      class: `wf-bar wf-bar-${row.kind}`,
+      x: left + inset, y: barY + inset, width: Math.max(1, barWidth - 2 * inset), height: barHeight - 2 * inset,
+    });
+    // Grows from its start edge: the running total before it, which for a lowering effect is its right edge.
+    bar.style.transformOrigin = `${row.kind === "down" ? left + barWidth : left}px ${middle}px`;
+    bar.style.animationDelay = `${index * 40}ms`;
+    root.append(bar);
+    if (index < rows.length - 2) {
+      const end = Math.round(x(row.to)) + 0.5;
       root.append(svg("line", { class: "wf-link", x1: end, x2: end, y1: barY + barHeight, y2: barY + rowHeight }));
     }
-    const effect = row.kind === "base" || row.kind === "total"
-      ? euro.format(row.to)
-      : `${percent.format(row.pct)} %`;
-    const delta = row.kind === "up" || row.kind === "down"
-      ? `${row.to >= row.from ? "+" : "−"}${euro.format(Math.abs(row.to - row.from))}`
-      : "";
-    root.append(svg("text", {
-      class: "wf-effect", x: width, y: delta ? y + rowHeight / 2 - 8 : y + rowHeight / 2 - 1,
-      "text-anchor": "end", "dominant-baseline": "middle",
-    }, effect.replace("-", "−")));
-    if (delta) {
-      root.append(svg("text", { class: "wf-delta", x: width, y: y + rowHeight / 2 + 9, "text-anchor": "end", "dominant-baseline": "middle" }, delta));
+    if (row.pct !== undefined) {
+      root.append(svg("text", { class: "wf-pct", x: width - euroWidth - 16, y: middle, "text-anchor": "end", "dominant-baseline": "central" }, signedPercent(row.pct)));
     }
+    const amount = row.kind === "up" || row.kind === "down" ? signedEuro(row.to - row.from) : euro.format(row.to);
+    root.append(svg("text", {
+      class: row.kind === "total" ? "wf-euro is-total" : "wf-euro", x: width, y: middle,
+      "text-anchor": "end", "dominant-baseline": "central",
+    }, amount));
   });
   const table = el("table", { class: "visually-hidden" },
-    el("caption", {}, "What moved the estimate, from the starting price to the estimate"),
+    el("caption", {}, "What moved the estimate, from the average listing to the estimate"),
     el("thead", {}, el("tr", {},
       el("th", { scope: "col" }, "Detail"), el("th", { scope: "col" }, "Value"),
       el("th", { scope: "col" }, "Effect"), el("th", { scope: "col" }, "Price after it"))),
     el("tbody", {}, ...rows.map((row) => el("tr", {},
       el("th", { scope: "row" }, row.label),
       el("td", {}, row.value || "–"),
-      el("td", {}, row.pct === undefined ? "–" : `${percent.format(row.pct)} %`),
+      el("td", {}, row.pct === undefined ? "–" : signedPercent(row.pct)),
       el("td", {}, euro.format(row.to)),
     ))),
   );
   container.replaceChildren(root, table);
+  for (const label of labels) fitText(label, labelWidth);
 }
 
-function renderListings(comparables, body) {
+function renderListings(comparables, body, price) {
   const wrap = $("listings-wrap");
   const empty = $("listings-empty");
   const error = $("listings-error");
@@ -627,7 +722,7 @@ function renderListings(comparables, body) {
   wrap.hidden = true;
   aside.textContent = "";
   if (comparables.status === "rejected") {
-    error.textContent = `No listings for this car: ${comparables.reason.message}`;
+    error.textContent = "Similar listings could not be loaded; the estimate above is not affected.";
     error.hidden = false;
     return;
   }
@@ -635,25 +730,35 @@ function renderListings(comparables, body) {
   if (!listings.length) {
     empty.textContent =
       `None of the ${integer.format(index.listings)} listings in the data is a ${body.make} ${body.model} ` +
-      "within two years of this car's age and 25 % of its mileage.";
+      "within two years of this car's age and 25% of its mileage.";
     empty.hidden = false;
     return;
   }
-  aside.textContent = `${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
-  $("listings-body").replaceChildren(...listings.map((listing) => {
+  aside.textContent = ` · ${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
+  $("listings-body").replaceChildren(...listings.map((listing, position) => {
     const name = listing.model_version || listing.model || listing.make;
+    const [year, month] = (listing.registration_date ?? "").split("-");
+    const registered = year ? `${MONTHS[Number(month) - 1]} ${year}` : "–";
+    const power = listing.power_kw === null ? "–" : `${integer.format(listing.power_kw)} kW`;
     const meta = [
       listing.fuel_category, listing.body_type, labelOf("seller_type", listing.seller_type),
       COUNTRIES[listing.country_code] ?? listing.country_code,
     ].filter(Boolean).join(" · ");
-    const [year, month] = (listing.registration_date ?? "").split("-");
-    return el("tr", {},
-      el("td", {}, el("span", { class: "listing-name", title: name }, name), el("span", { class: "listing-meta" }, meta)),
-      el("td", {}, year ? `${MONTHS[Number(month) - 1]} ${year}` : "–"),
+    const row = el("tr", { "data-listing": position },
+      el("td", {},
+        el("span", { class: "listing-name", title: name }, name),
+        el("span", { class: "listing-meta" },
+          el("span", { class: "listing-narrow" }, `${registered} · ${power} · `), meta)),
+      el("td", { class: "col-registered" }, registered),
       el("td", { class: "num" }, listing.mileage_km_raw === null ? "–" : `${integer.format(listing.mileage_km_raw)} km`),
-      el("td", { class: "num" }, listing.power_kw === null ? "–" : `${integer.format(listing.power_kw)} kW`),
+      el("td", { class: "num col-power" }, power),
       el("td", { class: "num listing-price" }, euro.format(listing.price_eur)),
+      el("td", { class: "num listing-versus" }, signedPercent(((listing.price_eur - price) / price) * 100, 0)),
     );
+    const circle = () => document.querySelector(`.range-listing[data-listing="${position}"]`);
+    row.addEventListener("mouseenter", () => circle()?.classList.add("is-active"));
+    row.addEventListener("mouseleave", () => circle()?.classList.remove("is-active"));
+    return row;
   }));
   wrap.hidden = false;
 }
@@ -696,10 +801,15 @@ if (typeof document !== "undefined" && form) {
   setupNumbers();
   form.addEventListener("submit", estimate);
   $("example").addEventListener("click", fillExample);
+  // The charts are drawn at the column's pixel width, so a new width draws them again.
   let resizeFrame = 0;
-  new ResizeObserver(() => {
+  let drawnWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const width = Math.round(entry.contentRect.width);
+    if (width === drawnWidth) return;
+    drawnWidth = width;
     cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => { if (lastResult) renderWaterfall(lastResult.valuation); });
-  }).observe($("waterfall"));
+    resizeFrame = requestAnimationFrame(() => { if (lastResult) render(lastResult, false); });
+  }).observe($("result"));
   loadService();
 }

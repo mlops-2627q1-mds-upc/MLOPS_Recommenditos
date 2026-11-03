@@ -6,11 +6,12 @@
 <title>Used-car price estimate - Recommenditos</title>
 <meta name="description" content="Estimate the asking price of a used car in eight European countries, with the range asking prices fall in, what moved the estimate, and similar real listings.">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f5f2ec" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121311" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1526" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="{{assets}}/favicon.svg" type="image/svg+xml">
-<link rel="preload" href="{{assets}}/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="{{assets}}/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{assets}}/fonts/public-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{assets}}/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{assets}}/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{assets}}/app.css">
 <script src="{{assets}}/theme.js"></script>
 <script type="module" src="{{assets}}/app.js"></script>
@@ -19,27 +20,23 @@
 <header class="masthead">
   <div class="masthead-inner">
     <a class="wordmark" href="./">Recommenditos</a>
-    <p class="masthead-claim">Used-car prices for eight European markets</p>
+    <p class="label masthead-claim">Used-car asking prices · 8 European markets</p>
     <nav class="masthead-nav" aria-label="Service">
-      <span class="model-info" id="model-info" hidden></span>
-      <a href="docs">API docs</a>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark mode">
-        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path d="M10 2.5a7.5 7.5 0 1 0 0 15z" fill="currentColor"/><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-      </button>
+      <span class="label model-info" id="model-info" hidden></span>
+      <a class="masthead-link" href="docs">API docs</a>
+      <button type="button" class="label theme-toggle" id="theme-toggle">Dark</button>
     </nav>
   </div>
 </header>
 
 <main class="layout">
   <section class="panel-form" aria-labelledby="form-title">
-    <h1 class="form-title" id="form-title">Describe the car</h1>
-    <p class="form-lede">Ten details are needed for an estimate; the rest are optional.</p>
-
-    <div class="form-alert" id="form-alert" role="alert" hidden></div>
+    <h1 class="form-title" id="form-title">Used-car price estimate</h1>
+    <p class="form-lede">Describe a car to see the asking price a listing like it would carry in eight European markets.</p>
 
     <form id="car-form" novalidate>
       <fieldset class="group" disabled>
-        <legend class="group-title">The car</legend>
+        <legend class="label group-title">The car</legend>
 
         <div class="field">
           <label for="make">Make</label>
@@ -101,7 +98,7 @@
       </fieldset>
 
       <fieldset class="group" disabled>
-        <legend class="group-title">The listing</legend>
+        <legend class="label group-title">The listing</legend>
         <div class="pair">
           <div class="field">
             <label for="country_code">Country</label>
@@ -117,7 +114,8 @@
       </fieldset>
 
       <details class="more" id="more">
-        <summary>More details <span class="summary-note">optional, the model reads these too</span></summary>
+        <summary class="label">More details · optional</summary>
+        <p class="field-hint more-hint">Optional. The model reads these too.</p>
         <fieldset class="group group-more" disabled>
           <legend class="visually-hidden">Optional details</legend>
           <div class="pair">
@@ -163,85 +161,61 @@
         <button type="submit" class="button-primary" id="submit" disabled>Estimate price</button>
         <button type="button" class="button-quiet" id="example" disabled>Fill in an example</button>
       </div>
+      <div class="form-alert" id="form-alert" role="alert" hidden></div>
     </form>
   </section>
 
   <section class="panel-result" id="result" aria-label="Estimate" aria-busy="false">
-    <div class="progress" aria-hidden="true"></div>
     <p class="visually-hidden" id="announcer" role="status" aria-live="polite"></p>
-
     <div class="problem" id="problem" role="alert" hidden></div>
 
-    <div class="intro" id="intro">
-      <h2 class="intro-title" id="result-title">What would this car be listed for?</h2>
-      <p class="intro-text">Describe the car and press <em>Estimate price</em>. You get four things, in this order:</p>
-      <ol class="intro-list">
-        <li><span class="intro-step">Estimate</span>the asking price the model expects for this car</li>
-        <li><span class="intro-step">Range</span>where 9 in 10 asking prices for cars like it fall</li>
-        <li><span class="intro-step">Why</span>the details that moved the estimate up or down</li>
-        <li><span class="intro-step">Listings</span>real cars of the same make and model in the data</li>
-      </ol>
-      <p class="intro-note" id="intro-note">Trained on AutoScout24 listings from Austria, Belgium, France, Germany, Italy, Luxembourg, the Netherlands and Spain.</p>
-    </div>
-
-    <article class="estimate" id="estimate" hidden>
-      <header class="estimate-head">
-        <p class="eyebrow">Estimated asking price</p>
-        <p class="price" id="price"></p>
-        <p class="car-line" id="car-line"></p>
-        <ul class="warnings" id="warnings" hidden></ul>
-      </header>
+    <article class="estimate is-empty" id="estimate">
+      <p class="label" id="price-label">Estimated asking price</p>
+      <p class="price" id="price">No car yet.</p>
+      <p class="car-line" id="car-line"></p>
+      <div class="warnings" id="warnings" hidden>
+        <p class="warnings-title">The model has not seen some of these values</p>
+        <ul class="warnings-list" id="warnings-list"></ul>
+      </div>
 
       <section class="block" aria-labelledby="range-title">
-        <div class="block-head">
-          <h2 class="block-title" id="range-title">Likely range</h2>
-          <p class="block-aside" id="range-level"></p>
-        </div>
-        <div class="range" id="range" role="img">
-          <div class="range-track">
-            <div class="range-band"></div>
-            <div class="range-ticks" id="range-ticks"></div>
-            <div class="range-marker"><span class="range-marker-label" id="range-marker-label"></span></div>
-          </div>
-          <div class="range-scale"><span id="range-min"></span><span id="range-max"></span></div>
-        </div>
-        <p class="block-note" id="range-note"></p>
+        <h2 class="label block-label" id="range-title">Likely range<span id="range-level"></span></h2>
+        <p class="block-empty">Where 9 in 10 listings like it are priced.</p>
+        <div class="range" id="range"></div>
+        <p class="caption" id="range-note"></p>
         <p class="block-error" id="range-error" hidden></p>
       </section>
 
       <section class="block" aria-labelledby="why-title">
-        <div class="block-head">
-          <h2 class="block-title" id="why-title">What moved the estimate</h2>
-          <p class="block-aside">Effects multiply, largest first</p>
-        </div>
+        <h2 class="label block-label" id="why-title">What moved the estimate</h2>
+        <p class="block-empty">How much each detail adds or takes away.</p>
         <div class="waterfall" id="waterfall"></div>
-        <p class="block-note">The model starts from the average price of the listings it learned from and adjusts it for each detail of this car. Leaving a detail out also changes the estimate.</p>
+        <p class="caption" id="waterfall-note">The model starts from the average asking price of the listings it learned from and multiplies it by one factor per detail. Solid bars raise the price, outlined bars lower it. A detail you leave out has an effect too, because the model then cannot use it.</p>
       </section>
 
       <section class="block" aria-labelledby="listings-title">
-        <div class="block-head">
-          <h2 class="block-title" id="listings-title">Similar listings</h2>
-          <p class="block-aside" id="listings-aside"></p>
-        </div>
-        <div class="table-wrap" id="listings-wrap">
+        <h2 class="label block-label" id="listings-title">Similar listings<span id="listings-aside"></span></h2>
+        <p class="block-empty">Real listings close in mileage and age.</p>
+        <div class="table-wrap" id="listings-wrap" hidden>
           <table class="listings" id="listings">
             <thead>
               <tr>
-                <th scope="col">Listing</th>
-                <th scope="col">Registered</th>
-                <th scope="col" class="num">Mileage</th>
-                <th scope="col" class="num">Power</th>
-                <th scope="col" class="num">Asking price</th>
+                <th scope="col" class="label">Listing</th>
+                <th scope="col" class="label col-registered">Registered</th>
+                <th scope="col" class="label num">Mileage</th>
+                <th scope="col" class="label num col-power">Power</th>
+                <th scope="col" class="label num">Asking price</th>
+                <th scope="col" class="label num">vs. estimate</th>
               </tr>
             </thead>
             <tbody id="listings-body"></tbody>
           </table>
         </div>
-        <p class="block-empty" id="listings-empty" hidden></p>
+        <p class="caption" id="listings-empty" hidden></p>
         <p class="block-error" id="listings-error" hidden></p>
       </section>
 
-      <footer class="estimate-foot" id="estimate-foot"></footer>
+      <p class="meta" id="estimate-foot"></p>
     </article>
   </section>
 </main>
