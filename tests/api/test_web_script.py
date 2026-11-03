@@ -6,6 +6,7 @@ Without Node on the machine they are skipped; GitHub's runners have it.
 """
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,12 +17,16 @@ import pytest
 from recommenditos.api.webui import WEB_DIR
 
 NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(NODE is None, reason="Node is not installed")
+# Skipped on a machine without Node, but never in CI, where a missing Node would
+# silently drop the page's script from the tests.
+pytestmark = pytest.mark.skipif(
+    NODE is None and not os.environ.get("CI"), reason="Node is not installed"
+)
 
 
 def run(expression: str) -> Any:
     """The JSON value of `expression`, evaluated with app.js's exports as `app`."""
-    assert NODE is not None
+    assert NODE is not None, "CI is set, but Node is not installed"
     script = (
         f"const app = await import({json.dumps((WEB_DIR / 'app.js').as_uri())});\n"
         f"console.log(JSON.stringify({expression}));"
@@ -144,3 +149,22 @@ def test_the_range_scale_holds_the_range_and_every_listing():
     assert scale["min"] < 18000
     assert scale["max"] > 35000
     assert run("app.rangeScale(20000, 30000, [])")["min"] >= 0
+
+
+def test_a_listing_is_named_by_its_version_led_by_the_model():
+    names = run(
+        "[app.listingName({model: '320', model_version: 'd Touring M Sport'}),"
+        " app.listingName({model: '320', model_version: '320d msport auto'}),"
+        " app.listingName({model: '320', model_version: null, make: 'BMW'}),"
+        " app.listingName({model: null, model_version: null, make: 'BMW'})]"
+    )
+    assert names == ["320 d Touring M Sport", "320d msport auto", "320", "BMW"]
+
+
+def test_a_version_cut_at_the_data_limit_ends_in_an_ellipsis():
+    cut = "x" * 50
+    names = run(
+        f"[app.listingName({{model: 'x', model_version: '{cut}'}}),"
+        f" app.listingName({{model: 'x', model_version: '{cut[:49]}'}}), app.VERSION_MAX_LENGTH]"
+    )
+    assert names == [cut + "\u2026", cut[:49], 50]

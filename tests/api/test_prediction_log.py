@@ -241,10 +241,7 @@ def test_nfr03_a_route_that_records_twice_fails(store: SqliteStore):
 
     with pytest.raises(AnswerLoggedTwice):
         log.record(request, answer)
-    # Under the store's lock, as the store reads it: the pruning thread, which starts
-    # with a check, uses the same connection.
-    with store._lock:
-        assert store.used_bytes() > 0
+    assert store.used_bytes() > 0
     with pytest.raises(StoreError):
         store.record_answer(answer_record("r-1"))
 
@@ -386,8 +383,7 @@ def test_nfr04_the_log_is_pruned_to_its_cap_oldest_first_with_its_feedback(
             if index == 0:
                 store.record_feedback(Feedback("r-00000", 9999.0, datetime.now(UTC)))
         store.prune()
-        with store._lock:
-            used = store.used_bytes()
+        used = store.used_bytes()
     finally:
         store.close()
 
@@ -463,7 +459,7 @@ def test_nfr04_a_write_during_a_prune_waits_for_one_batch_at_most(
         store.record_answer(answer_record(f"old-{index}"))
     store.max_bytes = 64 * 1024
 
-    used_bytes, delete_oldest = SqliteStore.used_bytes, SqliteStore._delete_oldest
+    used_bytes, delete_oldest = SqliteStore._used_bytes, SqliteStore._delete_oldest
     batches: list[float] = []
 
     def slow_used_bytes(self: SqliteStore) -> int:
@@ -477,7 +473,7 @@ def test_nfr04_a_write_during_a_prune_waits_for_one_batch_at_most(
         finally:
             batches.append(time.perf_counter() - started)
 
-    monkeypatch.setattr(SqliteStore, "used_bytes", slow_used_bytes)
+    monkeypatch.setattr(SqliteStore, "_used_bytes", slow_used_bytes)
     monkeypatch.setattr(SqliteStore, "_delete_oldest", timed_delete_oldest)
     pruner = threading.Thread(target=prune, args=(store,))
     waits: list[float] = []

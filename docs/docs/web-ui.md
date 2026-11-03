@@ -63,7 +63,7 @@ One deliberate difference from the brief of that study: the form column is not s
 - `GET /openapi.json` once, for the option lists of the selects and the limits of the number fields, so the form offers exactly what the served model accepts.
 - `GET /health` once, for the model's name and training date in the header.
 - For each estimate, `POST /v1/predict`, `POST /v1/price-range` and `POST /v1/comparables` (with `k` 8) in parallel, with the same body.
-  A second estimate cancels the first if it has not finished.
+  A second press of the button while an estimate runs is ignored; nothing is cancelled.
 
 The page never calls `/v1/feedback` and sends no price anywhere: it only shows estimates.
 The form has the ten fields `/v1/predict` requires and the six optional fields the served `lgbm-basic` model also reads (drive, previous owners, engine size, gears, doors, seats).
@@ -73,7 +73,8 @@ The API's other optional fields, such as the equipment lists and colours, are le
 
 - A field the form can check itself, a missing value or a number outside the limits of `/openapi.json`, is marked at the field before anything is sent, and the first such field gets the focus.
 - A 422 from the API is shown the same way, field by field, with the values it allows where it lists them.
-- Any other problem, such as the 503 nginx answers while the API restarts, is shown above the result with its title, detail and the request's reference (`instance`).
+- Any other problem is shown above the result, once to a screen reader (`role="alert"`), with a button to try again where that can help.
+  A 503, such as the one nginx answers while the API restarts, or no answer at all says that the price service is not answering; a 500 says the estimate failed and names the request to quote, when the problem carries one (`instance`).
 - When only the range or the listings fail, the estimate is shown and the failed part says why.
 
 One case the page cannot handle: while the API is down, for example for the few seconds of a deploy or a restart, nginx answers every path with its own 503, so a browser that loads `/` in that moment sees nginx's JSON problem instead of the page.
@@ -110,6 +111,6 @@ The page itself sends one estimate, three requests, at a time.
 
 `make api` serves the page at `http://127.0.0.1:8000/` from the checkout; the files are read at startup, so a change shows after a restart of `make api`.
 `tests/api/test_web.py` checks the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
-`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node, when Node is installed: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers and the text of a problem without a reference.
+`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node; it is skipped on a machine without Node, but fails in CI (`CI` set) when Node is missing: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers, the names of the listings and the text of a problem without a reference.
 `tests/integration/test_deployed_proxy.py` checks the page through nginx.
 The Content Security Policy allows scripts, styles, fonts and requests from the page's own origin only and no inline script or style, so a new script or style goes into a file of `web/`, and a setting from JavaScript goes through the DOM (`element.style`), not a `style` attribute.

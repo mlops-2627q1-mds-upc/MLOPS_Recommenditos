@@ -186,8 +186,11 @@ a {
   line-height: 20px;
 }
 
+/* As wide as "LIGHT", so the model line does not move when the label changes. */
 .theme-toggle {
+  min-width: 6ch;
   padding: 4px 0;
+  text-align: right;
   border: 0;
   background: none;
   color: var(--ink);
@@ -218,11 +221,12 @@ a {
   scroll-margin-top: 24px;
 }
 
-.estimate {
+.estimate > * {
   transition: opacity 100ms var(--ease);
 }
 
-[aria-busy="true"] .estimate {
+/* While an estimate runs, the old result fades; its label, which says "updating", does not. */
+[aria-busy="true"] .estimate > :not(#price-label) {
   opacity: 0.5;
 }
 
@@ -237,13 +241,18 @@ a {
   font-variation-settings: "opsz" 72;
 }
 
+/* The euro sign kept off the first figure, and its round body aligned with the label above. */
+.price-currency {
+  margin-right: 0.03em;
+  margin-left: -0.04em;
+}
+
 .car-line {
   margin-top: 12px;
   overflow: hidden;
   color: var(--ink-2);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .is-empty .price {
@@ -546,6 +555,10 @@ a {
   .listing-narrow {
     display: inline;
   }
+
+  .meta-wide {
+    display: none;
+  }
 }
 
 /* Problem from the API or the network */
@@ -648,7 +661,6 @@ select {
   color: var(--ink);
   font: inherit;
   font-size: 15px;
-  font-variant-numeric: tabular-nums;
   transition: border-color 100ms var(--ease);
 }
 
@@ -715,7 +727,6 @@ fieldset:disabled select {
   color: var(--ink-2);
   font-size: 13px;
   line-height: 20px;
-  font-variant-numeric: tabular-nums;
 }
 
 .field-error {

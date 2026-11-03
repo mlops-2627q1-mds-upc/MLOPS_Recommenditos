@@ -338,9 +338,14 @@ class SqliteStore:
     def used_bytes(self) -> int:
         """The bytes the live data takes: the file's pages minus the free ones.
 
-        The caller holds `_lock`: the connection is shared with the pruning thread,
-        and two threads must not use it at once.
+        Takes the store's lock, since the connection is shared with the pruning
+        thread and two threads must not use it at once.
         """
+        with self._lock:
+            return self._used_bytes()
+
+    def _used_bytes(self) -> int:
+        """`used_bytes` for a caller that holds `_lock` already."""
         connection = self._connection
         (page_size,) = connection.execute("PRAGMA page_size").fetchone()
         (pages,) = connection.execute("PRAGMA page_count").fetchone()
@@ -374,7 +379,7 @@ class SqliteStore:
     def _delete_oldest(self, limit: float) -> int:
         """One batch: the oldest `PRUNE_BATCH` answers, if the data is over `limit`."""
         with self._lock:
-            if self.used_bytes() <= limit:
+            if self._used_bytes() <= limit:
                 return 0
             with self._transaction() as connection:
                 return int(

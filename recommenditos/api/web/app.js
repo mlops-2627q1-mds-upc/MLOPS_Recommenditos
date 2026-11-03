@@ -27,14 +27,28 @@ const FIELD_LABELS = {
 const EMPTY_MESSAGES = {
   make: "Choose a make.",
   model: "Enter the model, for example 320 or Golf.",
-  mileage_km_raw: "Enter the mileage in km.",
-  power_kw: "Enter the power in kW.",
+  mileage_km_raw: "Enter the mileage in km, for example 62000.",
+  power_kw: "Enter the power in kW, for example 140.",
   fuel_category: "Choose a fuel.",
   transmission: "Choose a gearbox.",
   body_type: "Choose a body type.",
   country_code: "Choose a country.",
   seller_type: "Choose a seller type.",
 };
+
+/** What a number field's range error names: its unit and an example. */
+const NUMBER_HINTS = {
+  mileage_km_raw: { what: "the mileage in km", example: "62000" },
+  power_kw: { what: "the power in kW", example: "140" },
+  cylinders_volume_cc: { what: "the engine size in cc", example: "1998" },
+  nr_prev_owners: { what: "the number of previous owners", example: "1" },
+  gears: { what: "the number of gears", example: "6" },
+  nr_doors: { what: "the number of doors", example: "5" },
+  nr_seats: { what: "the number of seats", example: "5" },
+};
+
+/** A warning names its field as the person reads it, which for `model` is the model name. */
+const WARNING_LABELS = { model: "Model name", registration_date: "First registration", country_code: "Country" };
 
 const COUNTRIES = {
   AT: "Austria", BE: "Belgium", DE: "Germany", ES: "Spain", FR: "France",
@@ -237,7 +251,10 @@ function readForm() {
       const { min, max } = limits(schema, field);
       if (Number.isNaN(value)) { errors[field] = "Enter a whole number."; continue; }
       if ((min !== undefined && value < min) || (max !== undefined && value > max)) {
-        errors[field] = `Enter ${integer.format(min)} to ${integer.format(max)}.`;
+        const hint = NUMBER_HINTS[field];
+        errors[field] = hint
+          ? `Enter ${hint.what} between ${integer.format(min)} and ${integer.format(max)}, for example ${hint.example}.`
+          : `Enter a number between ${integer.format(min)} and ${integer.format(max)}.`;
         continue;
       }
       body[field] = value;
@@ -441,8 +458,32 @@ function showProblem(error) {
   box.hidden = false;
   // An older estimate below the problem would read as the answer to this request.
   resetResult();
-  $("announcer").textContent = `${title} ${detail}`;
+  // The box is role="alert", which announces it once; the live region stays quiet.
+  $("announcer").textContent = "";
   revealResult();
+}
+
+/** The price, with the euro sign in a span of its own so it can be kerned against the figures. */
+function setPrice(value) {
+  const text = euro.format(value);
+  const price = $("price");
+  if (text.startsWith("€")) {
+    price.replaceChildren(el("span", { class: "price-currency" }, "€"), text.slice(1));
+  } else {
+    price.textContent = text;
+  }
+}
+
+/** The longest `model_version` the data keeps; a version of exactly this length was cut. */
+export const VERSION_MAX_LENGTH = 50;
+
+/** A listing's name: its version line, led by the model unless the line starts with it. */
+export function listingName(listing) {
+  const version = (listing.model_version ?? "").trim();
+  const model = (listing.model ?? "").trim();
+  if (!version) return model || listing.make;
+  const cut = version.length >= VERSION_MAX_LENGTH ? `${version}…` : version;
+  return model && !version.toLowerCase().startsWith(model.toLowerCase()) ? `${model} ${cut}` : cut;
 }
 
 function describeCar(body) {
@@ -463,13 +504,13 @@ function render(result, fresh) {
   const { body, valuation, range, comparables } = result;
   $("problem").hidden = true;
   $("estimate").classList.remove("is-empty");
-  $("price").textContent = euro.format(valuation.price_eur);
+  setPrice(valuation.price_eur);
   $("car-line").textContent = describeCar(body);
 
   const list = $("warnings-list");
   list.replaceChildren(...valuation.warnings.map((warning) => {
     const field = warning.pointer.replace(/^#\/?/, "").split("/")[0];
-    const label = FIELD_LABELS[field];
+    const label = WARNING_LABELS[field] ?? FIELD_LABELS[field];
     return el("li", {}, label ? `${label}: ${warning.detail}` : warning.detail);
   }));
   $("warnings").hidden = valuation.warnings.length === 0;
@@ -736,19 +777,22 @@ function renderListings(comparables, body, price) {
   }
   aside.textContent = ` · ${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
   $("listings-body").replaceChildren(...listings.map((listing, position) => {
-    const name = listing.model_version || listing.model || listing.make;
+    const name = listingName(listing);
     const [year, month] = (listing.registration_date ?? "").split("-");
     const registered = year ? `${MONTHS[Number(month) - 1]} ${year}` : "–";
     const power = listing.power_kw === null ? "–" : `${integer.format(listing.power_kw)} kW`;
+    // In a narrow column the seller drops out and the country moves to the front as its code, so it stays visible.
     const meta = [
-      listing.fuel_category, listing.body_type, labelOf("seller_type", listing.seller_type),
-      COUNTRIES[listing.country_code] ?? listing.country_code,
-    ].filter(Boolean).join(" · ");
+      el("span", {}, [listing.fuel_category, listing.body_type].filter(Boolean).join(" · ")),
+      listing.seller_type ? el("span", { class: "meta-wide" }, ` · ${labelOf("seller_type", listing.seller_type)}`) : null,
+      listing.country_code ? el("span", { class: "meta-wide" }, ` · ${COUNTRIES[listing.country_code] ?? listing.country_code}`) : null,
+    ];
+    const narrow = [registered, power, listing.country_code].filter(Boolean).join(" · ");
     const row = el("tr", { "data-listing": position },
       el("td", {},
         el("span", { class: "listing-name", title: name }, name),
         el("span", { class: "listing-meta" },
-          el("span", { class: "listing-narrow" }, `${registered} · ${power} · `), meta)),
+          el("span", { class: "listing-narrow" }, `${narrow} · `), ...meta)),
       el("td", { class: "col-registered" }, registered),
       el("td", { class: "num" }, listing.mileage_km_raw === null ? "–" : `${integer.format(listing.mileage_km_raw)} km`),
       el("td", { class: "num col-power" }, power),
