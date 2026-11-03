@@ -121,7 +121,10 @@ services:
   proxy:
     <<: *hardening
     # Pinned by digest as well as by tag, which Dependabot moves together (NFR-09).
-    image: nginxinc/nginx-unprivileged:1.30-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+    # The slim variant: nginx with its core modules only, without the optional
+    # modules (image filter, XSLT, GeoIP, njs) and the libraries they pull in,
+    # such as fontconfig and libexpat, none of which a proxy uses.
+    image: nginxinc/nginx-unprivileged:1.30-alpine-slim@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6
     depends_on:
       api:
         condition: service_healthy

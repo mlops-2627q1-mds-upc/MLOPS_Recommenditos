@@ -1320,6 +1320,8 @@ How to add an entry:
 
 ### EDN-95: CI fails on fixable image vulnerabilities, and the containers run locked down
 
+> **Revised on 2026-11-03**: nginx's slim image leaves `.trivyignore` without nginx entries.
+>
 - **Date:** 2026-10-22
 - **Milestone:** M5: Model Packaging
 - **Activity / Topic:** CI/CD, Security, Containerization
@@ -1331,11 +1333,11 @@ How to add an entry:
   Both containers run read-only, without capabilities, with `no-new-privileges` and limits on memory and processes.
 - **Alternatives considered:**
   - `aquasecurity/trivy-action`: its tags were moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)), so trivy is the release binary, pinned by SHA-256.
-  - Waiting for the VM load test (#143): laptop measurements sufficed; the VM run kept 768 MiB (EDN-88: 295 MiB with one worker, 609 MiB with two).
-  - Later, in PR #238, our own nginx image with `apk upgrade`: a second image to maintain; two unfixed vulnerabilities sit in `.trivyignore` until 2026-11-13.
+  - Waiting for the VM load test (#143): laptop measurements sufficed, and the VM run kept 768 MiB (EDN-88).
+  - Our own nginx image with `apk upgrade` (PR #238): a second image to maintain; nginx's slim image, core modules only, has no finding ([PR #271](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271)).
 - **Rationale:** Counting unfixed findings keeps unpatched Debian CVEs from blocking pull requests.
   The canary fails the October 2023 Python image with 93 fixable findings; the API image has none.
-  The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB, and the overall p95 stayed 140 to 170 ms before and 150 to 160 ms after.
+  The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB, and p95 stayed at 140 to 170 ms.
 - **AI involvement:** Alternative generation, Alternative assessment, Solution generation, Other: wrote the issues
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI wrote the issues and built the scan, the Dependabot file and the hardening; it chose how trivy is installed and run, measured the limits and merged the pull requests.
