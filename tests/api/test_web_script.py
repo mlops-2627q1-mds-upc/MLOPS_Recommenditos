@@ -29,7 +29,8 @@ def run(expression: str) -> Any:
     result = subprocess.run(
         [NODE, "--input-type=module", "-e", script],
         capture_output=True,
-        text=True,
+        # Node writes UTF-8; Windows would decode it with its ANSI code page.
+        encoding="utf-8",
         timeout=30,
         check=False,
         cwd=Path(__file__).parent,
