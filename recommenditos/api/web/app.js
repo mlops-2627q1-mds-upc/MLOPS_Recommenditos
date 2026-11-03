@@ -477,13 +477,19 @@ function setPrice(value) {
 /** The longest `model_version` the data keeps; a version of exactly this length was cut. */
 export const VERSION_MAX_LENGTH = 50;
 
-/** A listing's name: its version line, led by the model unless the line starts with it. */
-export function listingName(listing) {
+/** A listing's title: its make and model, the data's clean fields. */
+export function listingTitle(listing) {
+  return [listing.make, listing.model].map((part) => (part ?? "").trim()).filter(Boolean).join(" ");
+}
+
+/**
+ * The seller's own description of the version (`model_version`): free text in the seller's
+ * language, not parsed, so the page quotes it rather than reading it as a name. Empty without one.
+ */
+export function sellerDescription(listing) {
   const version = (listing.model_version ?? "").trim();
-  const model = (listing.model ?? "").trim();
-  if (!version) return model || listing.make;
-  const cut = version.length >= VERSION_MAX_LENGTH ? `${version}…` : version;
-  return model && !version.toLowerCase().startsWith(model.toLowerCase()) ? `${model} ${cut}` : cut;
+  if (!version) return "";
+  return `“${version}${version.length >= VERSION_MAX_LENGTH ? "…" : ""}”`;
 }
 
 function describeCar(body) {
@@ -778,7 +784,8 @@ function renderListings(comparables, body, price) {
   }
   aside.textContent = ` · ${listings.length} closest by mileage and age, of ${integer.format(index.listings)}`;
   $("listings-body").replaceChildren(...listings.map((listing, position) => {
-    const name = listingName(listing);
+    const title = listingTitle(listing);
+    const description = sellerDescription(listing);
     const [year, month] = (listing.registration_date ?? "").split("-");
     const registered = year ? `${MONTHS[Number(month) - 1]} ${year}` : "–";
     const power = listing.power_kw === null ? "–" : `${integer.format(listing.power_kw)} kW`;
@@ -791,9 +798,10 @@ function renderListings(comparables, body, price) {
     const narrow = [registered, power, listing.country_code].filter(Boolean).join(" · ");
     const row = el("tr", { "data-listing": position },
       el("td", {},
-        el("span", { class: "listing-name", title: name }, name),
+        el("span", { class: "listing-name" }, title),
         el("span", { class: "listing-meta" },
-          el("span", { class: "listing-narrow" }, `${narrow} · `), ...meta)),
+          el("span", { class: "listing-narrow" }, `${narrow} · `), ...meta),
+        description ? el("span", { class: "listing-words", title: `Seller's description: ${description}` }, description) : null),
       el("td", { class: "col-registered" }, registered),
       el("td", { class: "num" }, listing.mileage_km_raw === null ? "–" : `${integer.format(listing.mileage_km_raw)} km`),
       el("td", { class: "num col-power" }, power),

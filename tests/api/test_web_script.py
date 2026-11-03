@@ -151,20 +151,27 @@ def test_the_range_scale_holds_the_range_and_every_listing():
     assert run("app.rangeScale(20000, 30000, [])")["min"] >= 0
 
 
-def test_a_listing_is_named_by_its_version_led_by_the_model():
-    names = run(
-        "[app.listingName({model: '320', model_version: 'd Touring M Sport'}),"
-        " app.listingName({model: '320', model_version: '320d msport auto'}),"
-        " app.listingName({model: '320', model_version: null, make: 'BMW'}),"
-        " app.listingName({model: null, model_version: null, make: 'BMW'})]"
+def test_a_listing_is_titled_by_its_make_and_model_alone():
+    titles = run(
+        "[app.listingTitle({make: 'BMW', model: '320', model_version: 'd Touring M Sport'}),"
+        " app.listingTitle({make: 'BMW', model: null, model_version: '320d'})]"
     )
-    assert names == ["320 d Touring M Sport", "320d msport auto", "320", "BMW"]
+    assert titles == ["BMW 320", "BMW"]
 
 
-def test_a_version_cut_at_the_data_limit_ends_in_an_ellipsis():
+def test_the_sellers_description_is_quoted_as_written_or_left_out():
+    words = run(
+        "[app.sellerDescription({model: '320', model_version: ' d/Virtual-Cockpit/62.000KM '}),"
+        " app.sellerDescription({model: '320', model_version: null}),"
+        " app.sellerDescription({model: '320', model_version: '  '})]"
+    )
+    assert words == ["\u201cd/Virtual-Cockpit/62.000KM\u201d", "", ""]
+
+
+def test_a_description_cut_at_the_data_limit_ends_in_an_ellipsis():
     cut = "x" * 50
-    names = run(
-        f"[app.listingName({{model: 'x', model_version: '{cut}'}}),"
-        f" app.listingName({{model: 'x', model_version: '{cut[:49]}'}}), app.VERSION_MAX_LENGTH]"
+    words = run(
+        f"[app.sellerDescription({{model_version: '{cut}'}}),"
+        f" app.sellerDescription({{model_version: '{cut[:49]}'}}), app.VERSION_MAX_LENGTH]"
     )
-    assert names == [cut + "\u2026", cut[:49], 50]
+    assert words == ["\u201c" + cut + "\u2026\u201d", "\u201c" + cut[:49] + "\u201d", 50]

@@ -593,8 +593,16 @@ a {
   text-overflow: ellipsis;
 }
 
-.listing-meta {
+.listing-meta,
+.listing-words {
   color: var(--ink-2);
+}
+
+/* The seller's own words, quoted: neither a name nor a field of the data. */
+.listing-words {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .listing-narrow {

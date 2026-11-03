@@ -69,6 +69,9 @@ The price is the largest thing on the page; everything else is small, exact and 
 - **Motion:** two animations only, both off under `prefers-reduced-motion`: the range marker slides to the new estimate in 320 ms, and the waterfall's bars grow in turn, 160 ms each.
 - **Similar listings:** "vs. estimate" says how far each listing's asking price lies from the estimate, in whole percent.
   No deal tiers such as "good deal": the listings are other cars, and the API gives no boundaries for tiers.
+  Each listing is titled by its make and model, the data's clean fields, with fuel, body, seller and country below.
+  Under them, in quotes, is `model_version`: the seller's own description of the version, free text in the seller's language that mixes trim, equipment and even mileage ("d/Virtual-Cockpit/62.000KM"), shown as written and not parsed.
+  The data cuts it at 50 characters, so a description of exactly that length ends in "…".
 
 The direction comes from a study of reference sites at 1,440 px (styles measured in the browser): Linear for the tool as the first screen and the mono for data, Vercel's Geist for hairlines without shadows, Ramp for small uppercase labels, CarGurus' price-trend table (an archived copy) and Bring a Trailer's auction result for the result layout.
 Zillow and Cars & Bids could not be studied: both answer with a bot check, live and archived, so nothing is taken from them.
@@ -138,6 +141,6 @@ The page itself sends one estimate, three requests, at a time.
 
 `make api` serves the page at `http://127.0.0.1:8000/` from the checkout; the files are read at startup, so a change shows after a restart of `make api`.
 `tests/api/test_web.py` checks the fonts (above), the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
-`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node; it is skipped on a machine without Node, but fails in CI (`CI` set) when Node is missing: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers, the names of the listings and the text of a problem without a reference.
+`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node; it is skipped on a machine without Node, but fails in CI (`CI` set) when Node is missing: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers, the title and quoted description of a listing and the text of a problem without a reference.
 `tests/integration/test_deployed_proxy.py` checks the page through nginx.
 The Content Security Policy allows scripts, styles, fonts and requests from the page's own origin only and no inline script or style, so a new script or style goes into a file of `web/`, and a setting from JavaScript goes through the DOM (`element.style`), not a `style` attribute.
