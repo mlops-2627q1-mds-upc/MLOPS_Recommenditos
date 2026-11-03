@@ -1,6 +1,6 @@
 /* The web page of the price API (#269, docs/docs/web-ui.md): a form panel and a ruled result.
    Six type sizes (11, 13, 15, 24, 32, 96) in one grotesque, a mono only for axis ticks and IDs,
-   the spacing scale 4 8 12 16 24 32 48 96, 1px rules instead of cards, one 4px radius on
+   the spacing scale 4 8 12 16 24 32 40 48 64 96, 1px rules instead of cards, one 4px radius on
    controls, one flat accent. */
 
 @font-face {
