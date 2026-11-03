@@ -31,11 +31,11 @@ What a first visit loads, measured through nginx on the local stack on 2026-11-0
 | File | Size | Sent (gzip) |
 |------|------|-------------|
 | The page | 12.4 KB | 3.0 KB |
-| `app.css` | 23.3 KB | 6.1 KB |
+| `app.css` | 23.5 KB | 6.1 KB |
 | `app.js` | 37.4 KB | 12.0 KB |
 | `theme.js`, `favicon.svg` | 0.7 KB | 0.4 KB |
 | BDO Grotesk, Recommenditos Mono 400 and 500 (woff2) | 54.8 KB | 54.8 KB |
-| In all | 128.5 KB | 76.3 KB |
+| In all | 128.7 KB | 76.3 KB |
 
 The page also reads `/openapi.json` (52 KB, uncompressed) and `/health` on every load; the assets are cached for a year after the first visit.
 Held in memory with their gzip copies, the files take about 150 KB per worker process.
