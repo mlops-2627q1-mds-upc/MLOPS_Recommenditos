@@ -27,8 +27,8 @@ const FIELD_LABELS = {
 const EMPTY_MESSAGES = {
   make: "Choose a make.",
   model: "Enter the model, for example 320 or Golf.",
-  mileage_km_raw: "Enter the mileage in km, for example 62000.",
-  power_kw: "Enter the power in kW, for example 140.",
+  mileage_km_raw: "Enter the mileage in km.",
+  power_kw: "Enter the power in kW.",
   fuel_category: "Choose a fuel.",
   transmission: "Choose a gearbox.",
   body_type: "Choose a body type.",
@@ -235,9 +235,9 @@ function readForm() {
     if (input.dataset.number !== undefined) {
       const value = parseNumber(raw);
       const { min, max } = limits(schema, field);
-      if (Number.isNaN(value)) { errors[field] = "Enter a whole number, for example 62000."; continue; }
+      if (Number.isNaN(value)) { errors[field] = "Enter a whole number."; continue; }
       if ((min !== undefined && value < min) || (max !== undefined && value > max)) {
-        errors[field] = `Enter a value between ${integer.format(min)} and ${integer.format(max)}.`;
+        errors[field] = `Enter ${integer.format(min)} to ${integer.format(max)}.`;
         continue;
       }
       body[field] = value;

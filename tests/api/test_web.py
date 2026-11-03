@@ -104,7 +104,9 @@ def test_every_asset_the_page_names_is_served_and_cached_for_a_year(
 ):
     version = app.state.web.version
     css = client.get(f"/assets/{version}/app.css").text
-    font_urls = [f"assets/{version}/{url}" for url in re.findall(r'url\("([^"]+)"\)', css)]
+    font_urls = [
+        f"assets/{version}/{url}" for url in re.findall(r'url\("(?!data:)([^"]+)"\)', css)
+    ]
     assert font_urls, "the stylesheet names no font"
     for url in [*page.urls, *font_urls]:
         assert url.startswith(f"assets/{version}/"), url
@@ -168,7 +170,7 @@ def test_a_file_of_an_unknown_kind_fails_the_load(tmp_path):
 def test_the_font_licences_ship_with_the_fonts():
     fonts = {path.stem for path in (WEB_DIR / "fonts").glob("*.woff2")}
     licences = {path.stem for path in (WEB_DIR / "fonts").glob("OFL-*.txt")}
-    assert fonts == {"instrument-sans", "instrument-serif"}
+    assert fonts == {"newsreader", "public-sans", "jetbrains-mono"}
     assert licences == {f"OFL-{font}" for font in fonts}
 
 

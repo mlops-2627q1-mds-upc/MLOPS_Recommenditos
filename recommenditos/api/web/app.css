@@ -609,6 +609,17 @@ a {
   margin-bottom: 16px;
 }
 
+/* The last field of a group adds no space of its own: groups sit 32px apart. */
+.group > .field:last-child,
+.group > .pair:last-child > .field {
+  margin-bottom: 0;
+}
+
+/* An error replaces the help text of its field. */
+.field:has([aria-invalid="true"]) .field-hint {
+  display: none;
+}
+
 .pair {
   display: grid;
   grid-template-columns: 1fr 1fr;

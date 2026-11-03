@@ -38,8 +38,8 @@ def run(expression: str) -> Any:
     return json.loads(result.stdout)
 
 
-def test_a_problem_without_an_instance_has_no_reference():
-    """nginx's own 503 names no instance; the page must not show "null"."""
+def test_a_problem_without_an_instance_names_no_reference():
+    """nginx's own 503 names no instance; the page must not show "null" or "undefined"."""
     nginx = {
         "type": "about:blank",
         "title": "Service Unavailable",
@@ -48,13 +48,46 @@ def test_a_problem_without_an_instance_has_no_reference():
     }
     shown = run(f"app.describeProblem(503, {json.dumps(nginx)})")
     assert shown == {
-        "title": "The service is busy or restarting",
-        "detail": nginx["detail"],
-        "reference": None,
+        "title": "The price service is not answering.",
+        "detail": "Your inputs are kept; try again in a minute.",
+        "retry": True,
     }
-    api = {**nginx, "status": 500, "title": "Internal Server Error", "instance": "urn:uuid:ab-12"}
-    assert run(f"app.describeProblem(500, {json.dumps(api)})")["reference"] == "ab-12"
-    assert run("app.describeProblem(502, null)")["detail"] == "The service answered 502."
+    assert run("app.describeProblem(0, null)") == shown
+    failed = {
+        **nginx,
+        "status": 500,
+        "title": "Internal Server Error",
+        "instance": "urn:uuid:ab-12",
+    }
+    assert run(f"app.describeProblem(500, {json.dumps(failed)})")["detail"] == (
+        "Try again; if it repeats, quote request ab-12."
+    )
+    without = run("app.describeProblem(500, {})")["detail"]
+    assert "null" not in without
+    assert "undefined" not in without
+
+
+def test_a_422_the_form_cannot_map_names_its_field():
+    problem = {"errors": [{"pointer": "#/cylinders", "detail": "Too many."}]}
+    assert run(f"app.describeProblem(422, {json.dumps(problem)})")["detail"] == (
+        "The service did not accept cylinders: Too many."
+    )
+
+
+def test_signed_numbers_use_a_real_minus_sign():
+    assert run(
+        "[app.signedPercent(-21.74), app.signedPercent(9.2),"
+        " app.signedPercent(0.01), app.signedPercent(34.4, 0)]"
+    ) == [
+        "\u221221.7%",
+        "+9.2%",
+        "0.0%",
+        "+34%",
+    ]
+
+
+def test_close_circles_are_stacked_into_rows():
+    assert run("app.stackRows([10, 14, 30, 31, 32], 8)") == [0, 1, 0, 1, 2]
 
 
 def test_the_option_lists_and_limits_are_read_from_the_openapi_schema():
