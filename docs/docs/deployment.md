@@ -470,7 +470,7 @@ When the scan fails, update the base image or the package; Dependabot's pull req
 If neither is possible yet, accept the finding in `.trivyignore`: the vulnerability ID with an expiry date (`CVE-2026-12345 exp:2026-12-31`), after which trivy reports it again, and a comment line above it that says why the risk is accepted.
 The scan refuses an entry without either.
 On 2026-10-30 the API image had no fixable HIGH or CRITICAL finding and 44 without a fix, all in Debian packages.
-The nginx image is the slim variant, `nginx-unprivileged:1.30-alpine-slim`: nginx with its core modules only, without the optional modules and the libraries they need (fontconfig, libexpat, curl, brotli), which the proxy does not use.
+The nginx image is the slim variant, `nginx-unprivileged:1.30-alpine-slim`: nginx with its core modules only, without the optional modules, their libraries (such as fontconfig and libexpat) and curl, none of which the proxy uses.
 On 2026-11-03 it had no finding, where `1.30-alpine` had two fixable ones in libexpat and three accepted in `.trivyignore` (brotli-libs, curl and libcurl); `.trivyignore` holds no entry now.
 
 **The Dockerfile lint.**
