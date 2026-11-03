@@ -2,7 +2,7 @@ The web page
 ============
 
 A browser that opens the service's address, `http://<host>:8080/` locally and on the VM, gets a web page for the price API ([#269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [EDN-96](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-It is a form for the car's details on the left and the answer on the right: the estimated asking price, the price range with the similar listings marked on it as thin lines, a waterfall of what moved the estimate, and the similar listings as a table.
+It is a form for the car's details on the left and the answer on the right: the estimated asking price, the price range with the similar listings marked on it, a waterfall of what moved the estimate, and the similar listings as a table with how far each lies from the estimate.
 It is made for a laptop or desktop screen and holds its layout down to a window about 1,000 px wide; a phone layout is out of scope.
 
 ## How it is built and served
@@ -13,7 +13,7 @@ It is made for a laptop or desktop screen and holds its layout down to a window 
 | `recommenditos/api/web/app.css` | Hand-written styles, light and dark |
 | `recommenditos/api/web/app.js` | Plain JavaScript, one ES module, no framework and no build step |
 | `recommenditos/api/web/theme.js` | Applies a theme chosen with the toggle before the page paints |
-| `recommenditos/api/web/fonts/` | Instrument Serif and Instrument Sans, subset to Latin, with their SIL Open Font License files |
+| `recommenditos/api/web/fonts/` | Newsreader (headline and price), Public Sans (text) and JetBrains Mono (labels and IDs), subset to Latin, each with its SIL Open Font License file |
 | `recommenditos/api/webui.py` | Reads the files once at startup and serves them from memory |
 | `recommenditos/api/routes/index.py`, `routes/assets.py` | `GET /` and `GET /assets/<version>/<file>` |
 
@@ -26,20 +26,37 @@ Every other client, curl, an HTTP library or an uptime monitor, gets the JSON in
 The assets live under `/assets/<version>/`, where the version is a hash of all files of the page, so they are sent with `Cache-Control: public, max-age=31536000, immutable`; the page itself is sent with `no-cache` and an `ETag`, so a deploy shows at the next load.
 Text files are gzip-compressed once at startup.
 
-What a first visit loads, measured through nginx on the local stack on 2026-11-02:
+What a first visit loads, measured through nginx on the local stack on 2026-11-03:
 
 | File | Size | Sent (gzip) |
 |------|------|-------------|
-| The page | 13.0 KB | 3.2 KB |
-| `app.css` | 16.8 KB | 4.1 KB |
-| `app.js` | 27.8 KB | 9.0 KB |
+| The page | 11.9 KB | 2.9 KB |
+| `app.css` | 14.8 KB | 3.8 KB |
+| `app.js` | 34.3 KB | 11.0 KB |
 | `theme.js`, `favicon.svg` | 0.7 KB | 0.4 KB |
-| Instrument Sans, Instrument Serif (woff2) | 47.6 KB | 47.6 KB |
-| In all | 105.9 KB | 64.3 KB |
+| Newsreader, Public Sans, JetBrains Mono (woff2) | 79.7 KB | 79.7 KB |
+| In all | 141.4 KB | 97.8 KB |
 
-The page also reads `/openapi.json` (51 KB, uncompressed) and `/health` on every load.
-Held in memory with their gzip copies, the files take about 135 KB per worker process.
-After 300 loads of the page with all its assets, 2,100 requests in 3.2 s, nginx used 15.0 MiB against 14.4 MiB idle, of its 64 MiB limit, and the API 253.8 MiB against 251.2 MiB.
+The page also reads `/openapi.json` (52 KB, uncompressed) and `/health` on every load; the assets are cached for a year after the first visit.
+Held in memory with their gzip copies, the files take about 180 KB per worker process.
+After 300 loads of the page with all its assets, 2,400 requests in 3.6 s, nginx used 7.5 MiB against 7.3 MiB idle, of its 64 MiB limit, and the API 251.3 MiB against 250.0 MiB.
+
+## The design
+
+The page reads as a printed valuation slip: the price large in a serif, everything else small, exact and ruled.
+
+- **Type:** five sizes only, 11, 13, 15, 32 and 96 px. Newsreader for the headline (32) and the price (96, tabular lining figures); Public Sans for text, fields and tables, with tabular figures wherever numbers line up; JetBrains Mono at 11 px for section and group labels, table headers, axis ticks and the model and request IDs.
+- **Colour:** white and navy, dark navy in the dark theme, three text greys of the navy hue and one flat navy-blue accent for the primary button, the range marker, the estimate bar and the focus ring. Errors use a restrained red of their own, and nothing else is red.
+  Text reaches WCAG AA (4.5:1) in both themes; field borders, the range band's end ticks, the start bar and the effect bars of the waterfall reach 3:1.
+- **Structure:** a 1 px ink rule above each result section and hairlines inside it instead of cards; no shadows, gradients or tinted panels; one 4 px radius, on fields and the button only.
+- **Spacing:** 4, 8, 12, 16, 24, 32, 48 and 96 px. At 1,440 px the columns are 360 and 824 px with a 96 px gap; below 1,200 px they are 312 px and the rest with a 48 px gap, and the similar listings fold registration and power into their second line once the column is under 680 px.
+- **Charts:** drawn as SVG at the column's measured pixel width, so their text stays 13 and 11 px at every width. In the waterfall a solid bar raises the price and an outlined bar lowers it, so the sign does not depend on colour.
+- **Motion:** two animations only, both off under `prefers-reduced-motion`: the range marker slides to the new estimate in 320 ms, and the waterfall's bars grow in turn, 160 ms each.
+- **Similar listings:** "vs. estimate" says how far each listing's asking price lies from the estimate, in whole percent. No deal tiers such as "good deal": the listings are other cars, and the API gives no boundaries for tiers.
+
+The direction comes from a study of reference sites at 1,440 px (styles measured in the browser): Linear for the tool as the first screen and the mono for data, Resend for a serif display at regular weight, Vercel's Geist for hairlines without shadows, Ramp for small uppercase labels, CarGurus' price-trend table (an archived copy) and Bring a Trailer's auction result for the result layout.
+Zillow and Cars & Bids could not be studied: both answer with a bot check, live and archived, so nothing is taken from them.
+One deliberate difference from the brief of that study: the form column is not sticky, because at 900 px of window height the form is taller than the window and its button would scroll out of reach.
 
 ## What it calls
 
@@ -66,7 +83,7 @@ An HTML fallback would need an `error_page` for `/` in `deploy/nginx.conf`, whic
 
 Every field has a label, errors are tied to their field with `aria-describedby` and `aria-invalid`, the result is announced in a live region, and the page works with the keyboard alone; the button keeps the focus while an estimate runs (`aria-disabled`).
 The waterfall is drawn for the eye and repeated as a table for screen readers.
-Text meets WCAG AA contrast in both themes (4.5:1 and more); the borders of the fields, the edge of the range band and of its track, and the waterfall bars of each effect reach 3:1; the range marker's one animation is switched off under `prefers-reduced-motion`.
+Contrast is listed under [The design](#the-design); both animations are switched off under `prefers-reduced-motion`.
 
 ## The traffic of the page, for M6
 
@@ -93,6 +110,6 @@ The page itself sends one estimate, three requests, at a time.
 
 `make api` serves the page at `http://127.0.0.1:8000/` from the checkout; the files are read at startup, so a change shows after a restart of `make api`.
 `tests/api/test_web.py` checks the negotiation of `/`, the headers, the caching, the compression, that every asset the page names is served, that every select finds its values in `/openapi.json`, and that the page never names the feedback endpoint.
-`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node, when Node is installed: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale and the text of a problem without a reference.
+`tests/api/test_web_script.py` runs the pure functions of `app.js` in Node, when Node is installed: reading the option lists, mapping a 422 to its fields, the waterfall's steps, the range's scale, the stacking of close circles, the signed numbers and the text of a problem without a reference.
 `tests/integration/test_deployed_proxy.py` checks the page through nginx.
 The Content Security Policy allows scripts, styles, fonts and requests from the page's own origin only and no inline script or style, so a new script or style goes into a file of `web/`, and a setting from JavaScript goes through the DOM (`element.style`), not a `style` attribute.

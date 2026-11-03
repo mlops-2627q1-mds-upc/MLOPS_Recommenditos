@@ -3,27 +3,29 @@
 \ednentry{
   id = {EDN-96},
   title = {The web page ships in the API image as plain files, without a framework},
+  note = {\textbf{Revised on 2026-11-03}: the first design was replaced by one from a reference study, in navy and white; delivery and stack are unchanged.},
   date = {2026-11-02},
   milestone = {Other},
   topic = {Frontend, Deployment},
-  participants = {@lukas2510 asked for the page and delegated it under his account; the AI chose the stack and the delivery path},
-  decision = {A static page of hand-written HTML, CSS and JavaScript with self-hosted Instrument Serif and Sans and a hand-drawn SVG waterfall.
-The API serves it from memory at \texttt{/\allowbreak{}} to browsers, behind the unchanged nginx, so it deploys and rolls back with the API image.
-Its requests carry \texttt{X-\allowbreak{}Client: web-\allowbreak{}ui}, stored in the prediction log for M6.},
+  participants = {@lukas2510 asked for the page, approved the design and chose navy and white; the AI chose stack and delivery},
+  decision = {A static page of hand-written HTML, CSS and JavaScript, set in self-hosted Newsreader, Public Sans and JetBrains Mono, with hand-drawn SVG charts.
+The API serves it at \texttt{/\allowbreak{}} to browsers, behind the unchanged nginx, so it deploys and rolls back with the API image.
+Its requests carry \texttt{X-\allowbreak{}Client: web-\allowbreak{}ui}, logged for M6.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item nginx serving the files: nginx.conf reaches the VM only by rerunning the bootstrap, and its own image was rejected before (EDN-95).
-\item Alpine.js: its standard build needs \texttt{unsafe-\allowbreak{}eval} in the Content Security Policy, for one form.
-\item Tailwind with DaisyUI: a build step and default looks for 1,047 lines of CSS.
-\item A Streamlit or Gradio container: a new service on a VM that M6 needs.
+\item nginx serving the files: nginx.conf reaches the VM only through the bootstrap; an own nginx image lost in EDN-95.
+\item Alpine.js: its standard build needs \texttt{unsafe-\allowbreak{}eval} in the Content Security Policy.
+\item Tailwind with DaisyUI: a build step and default looks for 877 lines of CSS.
+\item Streamlit or Gradio: a new container on a VM that M6 needs.
 \end{itemize}
 \par
 \emph{Why:} Only the API image moves to the VM on a merge, so the page goes live with no manual step and a rollback restores the matching page.
-A first visit loads 64 KB plus the 51 KB OpenAPI document; nginx stayed at 15.0 MiB of 64 MiB after 2,100 page requests.},
+A first visit loads 98 KB plus the 52 KB OpenAPI document; nginx stayed at 7.5 MiB of 64 MiB after 2,400 page requests.},
   ai = {Alternative generation, Alternative assessment, Recommendation, Solution generation},
-  response = {Accepted},
-  assessment = {AI found that a change to nginx.conf never reaches the VM in CD, chose the delivery through the API image, designed and built the page, and measured payload and memory.
-Two independent review agents (design and code) raised two blocking and eleven should-fix points, all fixed; no human code review.},
+  response = {Accepted with modifications},
+  assessment = {AI found that nginx.conf never reaches the VM in CD, chose delivery through the API image, and built and measured the page.
+Lukas had the first design redone: AI measured eight reference sites (Zillow and Cars \& Bids blocked bots; CarGurus' archived table and Bring a Trailer stood in) and rebuilt it.
+On the first build, two independent review agents (design and code) raised two blocking and eleven should-fix points, all fixed; no human code review.},
   aievidence = {Claude Code session of 2026-11-02 on issue \#269, which asks for a page that looks ``professional, modern and polished''; Lukas's prompt (translated from German): ``I want a very good frontend that looks high quality''.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269}{Issue \#269}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/web-ui.md}{web page docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md\#the-stack}{deployment docs}.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269}{Issue \#269}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/web-ui.md\#the-design}{web page docs}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md\#the-stack}{deployment docs}.},
 }

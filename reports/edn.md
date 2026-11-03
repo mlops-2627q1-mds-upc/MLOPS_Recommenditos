@@ -1350,26 +1350,29 @@ How to add an entry:
 
 ### EDN-96: The web page ships in the API image as plain files, without a framework
 
+> **Revised on 2026-11-03**: the first design was replaced by one from a reference study, in navy and white; delivery and stack are unchanged.
+>
 - **Date:** 2026-11-02
 - **Milestone:** Other
 - **Activity / Topic:** Frontend, Deployment
-- **Participants:** @lukas2510 asked for the page and delegated it under his account; the AI chose the stack and the delivery path
-- **Decision:** A static page of hand-written HTML, CSS and JavaScript with self-hosted Instrument Serif and Sans and a hand-drawn SVG waterfall.
-  The API serves it from memory at `/` to browsers, behind the unchanged nginx, so it deploys and rolls back with the API image.
-  Its requests carry `X-Client: web-ui`, stored in the prediction log for M6.
+- **Participants:** @lukas2510 asked for the page, approved the design and chose navy and white; the AI chose stack and delivery
+- **Decision:** A static page of hand-written HTML, CSS and JavaScript, set in self-hosted Newsreader, Public Sans and JetBrains Mono, with hand-drawn SVG charts.
+  The API serves it at `/` to browsers, behind the unchanged nginx, so it deploys and rolls back with the API image.
+  Its requests carry `X-Client: web-ui`, logged for M6.
 - **Alternatives considered:**
-  - nginx serving the files: nginx.conf reaches the VM only by rerunning the bootstrap, and its own image was rejected before (EDN-95).
-  - Alpine.js: its standard build needs `unsafe-eval` in the Content Security Policy, for one form.
-  - Tailwind with DaisyUI: a build step and default looks for 1,047 lines of CSS.
-  - A Streamlit or Gradio container: a new service on a VM that M6 needs.
+  - nginx serving the files: nginx.conf reaches the VM only through the bootstrap; an own nginx image lost in EDN-95.
+  - Alpine.js: its standard build needs `unsafe-eval` in the Content Security Policy.
+  - Tailwind with DaisyUI: a build step and default looks for 877 lines of CSS.
+  - Streamlit or Gradio: a new container on a VM that M6 needs.
 - **Rationale:** Only the API image moves to the VM on a merge, so the page goes live with no manual step and a rollback restores the matching page.
-  A first visit loads 64 KB plus the 51 KB OpenAPI document; nginx stayed at 15.0 MiB of 64 MiB after 2,100 page requests.
+  A first visit loads 98 KB plus the 52 KB OpenAPI document; nginx stayed at 7.5 MiB of 64 MiB after 2,400 page requests.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
-- **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI found that a change to nginx.conf never reaches the VM in CD, chose the delivery through the API image, designed and built the page, and measured payload and memory.
-  Two independent review agents (design and code) raised two blocking and eleven should-fix points, all fixed; no human code review.
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI found that nginx.conf never reaches the VM in CD, chose delivery through the API image, and built and measured the page.
+  Lukas had the first design redone: AI measured eight reference sites (Zillow and Cars & Bids blocked bots; CarGurus' archived table and Bring a Trailer stood in) and rebuilt it.
+  On the first build, two independent review agents (design and code) raised two blocking and eleven should-fix points, all fixed; no human code review.
 - **AI interaction evidence:** Claude Code session of 2026-11-02 on issue #269, which asks for a page that looks "professional, modern and polished"; Lukas's prompt (translated from German): "I want a very good frontend that looks high quality".
-- **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md), [deployment docs](../docs/docs/deployment.md#the-stack).
+- **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md#the-design), [deployment docs](../docs/docs/deployment.md#the-stack).
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
