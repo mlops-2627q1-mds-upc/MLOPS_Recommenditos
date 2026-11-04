@@ -4,14 +4,16 @@
 
 Samples listings of the processed test split, which the model never saw, and
 writes each as a `/v1/predict` body with every field the listing has, one JSON
-object per line. The Locust file cuts each body down to what an endpoint
-accepts. A listing without one of the ten fields FR-01 requires, with a value
-the request schema refuses, or with a category the served bundle does not
+object per line. The mapping is `recommenditos.data.request_body.to_body`, which
+M6's replay samples share. The Locust file cuts each body down to what an
+endpoint accepts. A listing without one of the ten fields FR-01 requires, with a
+value the request schema refuses, or with a category the served bundle does not
 accept (FR-03, FR-04) is not a valid request and is left out, so that every
 error the load test counts is the API's.
 
 The test split holds no `ES` listings (EDN-03). M6's replay of them is a
-different run: `--split data/processed/holdout_es.parquet`.
+different run, from the versioned samples of the `monitoring_samples` stage
+(`data/monitoring/`).
 
 Needs `uv run dvc pull data/processed/test.parquet models/lgbm-basic`, or the
 bundle the target serves with `--model`. The output is small and
@@ -20,70 +22,22 @@ which needs neither DVC nor the data.
 """
 
 import argparse
-import ast
 from collections.abc import Iterator
 import json
 from pathlib import Path
-import re
 from typing import Any
 
 import pandas as pd
-from pydantic import ValidationError
 
-from recommenditos.api.schemas.predict import ValuationRequest
 from recommenditos.api.serving import ServedModel
 from recommenditos.config import INTERIM_DATA_DIR, MODELS_DIR, PROCESSED_DATA_DIR
+from recommenditos.data.request_body import to_body
 
 DEFAULT_SPLIT = PROCESSED_DATA_DIR / "test.parquet"
 DEFAULT_OUTPUT = INTERIM_DATA_DIR / "loadtest" / "bodies.jsonl"
 DEFAULT_MODEL = MODELS_DIR / "lgbm-basic"
 DEFAULT_COUNT = 2000
 DEFAULT_SEED = 143
-
-_EQUIPMENT = (
-    "equipment_comfort",
-    "equipment_entertainment",
-    "equipment_extra",
-    "equipment_safety",
-)
-_INTEGER = {"nr_prev_owners", "gears", "nr_seats", "nr_doors", "cylinders", "cylinders_volume_cc"}
-
-
-def _missing(value: Any) -> bool:
-    """None, NaN, `pd.NaT` or `pd.NA`; a list (the equipment fields) is never missing."""
-    return bool(pd.api.types.is_scalar(value) and pd.isna(value))
-
-
-def _weight_kg(text: str) -> int | None:
-    """`'2,355 kg'` as 2355, the way a client sends the kerb weight."""
-    digits = re.sub(r"[^0-9]", "", text)
-    return int(digits) if digits else None
-
-
-def to_body(listing: dict[str, Any]) -> dict[str, Any] | None:
-    """The `/v1/predict` body of one processed listing, or None if it is no valid request."""
-    body: dict[str, Any] = {}
-    for field in ValuationRequest.model_fields:
-        value: Any = listing.get(field)
-        if _missing(value):
-            continue
-        if field == "registration_date":
-            value = pd.Timestamp(value).strftime("%Y-%m")
-        elif field in _EQUIPMENT:
-            value = ast.literal_eval(value) if isinstance(value, str) else list(value)
-        elif field == "weight_kg":
-            value = _weight_kg(str(value))
-        elif field in _INTEGER:
-            value = int(value)
-        elif hasattr(value, "item"):
-            value = value.item()
-        if value is not None:
-            body[field] = value
-    try:
-        ValuationRequest.model_validate(body)
-    except ValidationError:
-        return None
-    return body
 
 
 def sample_bodies(

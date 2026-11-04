@@ -11,13 +11,13 @@ import pandas as pd
 import pytest
 from tools.loadtest import measure
 from tools.loadtest.arrivals import Arrivals
-from tools.loadtest.bodies import to_body
 from tools.loadtest.plan import build_plan
 from tools.loadtest.run import seconds
 
 from recommenditos.api.metrics import ApiMetrics
 from recommenditos.api.schemas.common import ModelInfo
 from recommenditos.api.schemas.predict import ValuationRequest
+from recommenditos.data.request_body import to_body
 
 LISTING = {
     "make": "Volkswagen",

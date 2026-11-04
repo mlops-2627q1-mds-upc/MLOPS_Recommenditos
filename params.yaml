@@ -513,3 +513,18 @@ report:
   # variant as `deployable_variant`. Changing it for a figure changes what the
   # promotion gate demands (EDN-12).
   candidate_variant: lgbm-basic
+
+monitoring:
+  # The samples M6's replay (#227) sends and the drift job (#228) compares
+  # against, written by the `monitoring_samples` stage with the top-level `seed`.
+  # Only listings the API accepts as a `/v1/predict` request are drawn: a
+  # supported make (FR-04) and every field FR-01 requires, because nothing else
+  # reaches the prediction log the drift job reads.
+  #
+  # NFR-11 fixes the reference at 10,000 training listings (EDN-14, EDN-26).
+  reference_size: 10000
+  # Training listings not in the reference, drawn at random from the same rows,
+  # so a control window is i.i.d. with the reference: EDN-14 measured that a
+  # seller-grouped control is flagged as drift. The model has seen them, so their
+  # error and coverage are in-sample and optimistic. 20 control windows of 1,000.
+  control_size: 20000
