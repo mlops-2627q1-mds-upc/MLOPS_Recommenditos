@@ -35,10 +35,11 @@ lint: typecheck
 	uv run pre-commit run actionlint --all-files
 	uv run pre-commit run shellcheck --all-files
 
-## Type-check recommenditos/ and tools/ with mypy (configured in pyproject.toml)
+## Type-check recommenditos/ and tools/, and the monitoring jobs in their own environment, with mypy
 .PHONY: typecheck
 typecheck:
 	uv run mypy
+	uv run --directory monitoring --locked mypy
 
 ## Format source code with ruff
 # `--exit-zero`, so a finding `--fix` cannot fix still prints but does not stop
@@ -54,6 +55,11 @@ format:
 .PHONY: test
 test:
 	uv run pytest
+
+## Run the tests of the monitoring jobs in their own locked environment (monitoring/)
+.PHONY: test-monitoring
+test-monitoring:
+	uv run --directory monitoring --locked pytest
 
 # The API image installs `[project] dependencies` alone (EDN-47), so this builds
 # an environment with exactly that plus the `test` group and runs the serving

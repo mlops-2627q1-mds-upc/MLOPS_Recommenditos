@@ -1,0 +1,68 @@
+{
+  "seed": 20251108,
+  "reference_date": "2025-11-08",
+  "samples": {
+    "reference": {
+      "source": "train",
+      "rows": 10000
+    },
+    "control": {
+      "source": "train",
+      "rows": 20000
+    },
+    "es": {
+      "source": "holdout_es",
+      "rows": 5779
+    }
+  },
+  "sources": {
+    "holdout_es": {
+      "rows": 6079,
+      "accepted": 5779,
+      "dropped": {
+        "unsupported_make": 100,
+        "invalid_request": 200
+      }
+    },
+    "train": {
+      "rows": 61180,
+      "accepted": 58864,
+      "dropped": {
+        "unsupported_make": 802,
+        "invalid_request": 1514
+      }
+    }
+  },
+  "features": {
+    "numeric": [
+      "age_years",
+      "mileage_km_raw",
+      "power_kw",
+      "nr_prev_owners",
+      "gears",
+      "cylinders_volume_cc",
+      "nr_seats",
+      "nr_doors"
+    ],
+    "categorical": [
+      "make",
+      "body_type",
+      "fuel_category",
+      "transmission",
+      "drive_train",
+      "seller_type",
+      "country_code"
+    ],
+    "missing_indicators": [
+      "age_years__missing",
+      "mileage_km_raw__missing",
+      "power_kw__missing",
+      "nr_prev_owners__missing",
+      "gears__missing",
+      "cylinders_volume_cc__missing",
+      "nr_seats__missing",
+      "nr_doors__missing"
+    ]
+  },
+  "missing_category": "__MISSING__"
+}

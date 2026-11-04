@@ -285,6 +285,42 @@ services:
       start_interval: 1s
       retries: 3
 
+  # M6's replay of held-out listings (#227, EDN-100): control listings, then the
+  # ES market, sent through nginx like a client's, with each listing's observed
+  # price sent to /v1/feedback inside this network. Behind a profile, so `up`,
+  # and with it every deploy, neither starts nor removes it; it runs by hand,
+  # to its end (docs/docs/monitoring.md#replay):
+  #     docker compose -f deploy/compose.yaml --profile replay run --rm replay \
+  #         --control 5000 --then es --rate 5
+  replay:
+    <<: *hardening
+    profiles: [replay]
+    # The monitoring image of the same release (monitoring/Dockerfile), with the
+    # samples of `dvc pull monitoring_samples` baked in. On the VM .env names
+    # CD's repository in MONITORING_IMAGE; locally Compose builds it.
+    image: ${MONITORING_IMAGE:-recommenditos-monitoring}:${API_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: monitoring/Dockerfile
+    entrypoint: ["python", "-m", "recommenditos_monitoring", "replay"]
+    depends_on:
+      api:
+        condition: service_healthy
+      proxy:
+        condition: service_started
+    environment:
+      # The key /v1/feedback requires, the API's own from the same `.env`.
+      RECOMMENDITOS_API_KEY: ${RECOMMENDITOS_API_KEY:-}
+    # Python's own signal handling as a child of tini, so Ctrl+C stops the run
+    # with its summary.
+    init: true
+    # The design's budget for the replay (docs/docs/monitoring.md): it streams
+    # the samples a listing at a time and holds only the counts.
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 32
+    logging: *logging
+
 volumes:
   prediction-log:
   # Prometheus' TSDB, at most 2 GB by its retention.
