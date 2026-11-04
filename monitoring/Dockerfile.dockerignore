@@ -5,6 +5,7 @@
 !monitoring/pyproject.toml
 !monitoring/uv.lock
 !monitoring/recommenditos_monitoring/
+!monitoring/monitor-loop.sh
 !data/monitoring/
 
 **/__pycache__

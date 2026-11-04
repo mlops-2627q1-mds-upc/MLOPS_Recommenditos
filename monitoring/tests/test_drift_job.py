@@ -19,6 +19,7 @@ import pytest
 from samples import PredictionLog, fixture_bodies, write_fixture_samples
 
 from recommenditos_monitoring import __main__ as cli
+from recommenditos_monitoring import store as store_module
 from recommenditos_monitoring.drift import (
     CHI_SQUARE,
     KS,
@@ -216,6 +217,39 @@ def test_the_job_reads_the_log_without_writing_it(paths, log):
     with pytest.raises(sqlite3.OperationalError, match="readonly"):
         connect_read_only(paths.log).execute("DELETE FROM predictions")
     assert paths.log.read_bytes() == before
+
+
+@pytest.mark.req("NFR-04")
+def test_a_pass_drops_the_requests_the_log_rotated_away_and_keeps_their_windows(paths, log):
+    seqs = log.add_many(control(3 * WINDOW + 1), START, STEP)
+    run_once(paths, window_size=WINDOW)
+    # The API's rotation: the oldest answers go, with their feedback.
+    with sqlite3.connect(paths.log) as connection:
+        connection.execute("DELETE FROM predictions WHERE seq <= ?", (seqs[WINDOW + 1],))
+
+    run_once(paths, window_size=WINDOW)
+
+    with sqlite3.connect(paths.db) as connection:
+        kept = [
+            seq for (seq,) in connection.execute("SELECT seq FROM window_requests ORDER BY seq")
+        ]
+        tested = connection.execute(
+            "SELECT count(DISTINCT window_id) FROM window_features"
+        ).fetchone()
+    assert kept == seqs[WINDOW + 2 : 3 * WINDOW]
+    assert [row[0] for row in windows(paths)] == [1, 2, 3]
+    assert tested == (3,)
+
+
+def test_runs_keeps_the_latest_passes(paths, log, monkeypatch):
+    monkeypatch.setattr(store_module, "RUNS_KEPT", 2)
+    log.add_many(control(1), START, STEP)
+    for _ in range(4):
+        run_once(paths, window_size=WINDOW)
+
+    with sqlite3.connect(paths.db) as connection:
+        runs = connection.execute("SELECT run_id FROM runs ORDER BY run_id").fetchall()
+    assert runs == [(3,), (4,)]
 
 
 def test_a_log_that_restarted_below_the_last_window_fails_the_pass(paths, log, tmp_path):

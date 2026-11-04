@@ -17,7 +17,9 @@ the window early as `partial`, untested, so that every window and its error
 open window: only its progress is stored, and the next pass reads its rows
 again. A pass never stores a window twice, because it starts after the last
 closed one; a second pass while one runs finds the lock taken and leaves.
-The pass ends by writing the results for node-exporter (`textfile.py`).
+The pass drops the requests of closed windows that the log's rotation has
+deleted (`Store.drop_requests_before`), and ends by writing the results for
+node-exporter (`textfile.py`).
 
 A pass reads the log one row at a time and holds at most one window, so a
 backlog of many windows costs time, not memory.
@@ -42,7 +44,13 @@ from recommenditos_monitoring.drift import (
     read_reference,
 )
 from recommenditos_monitoring.drift_features import DRIFT_FEATURES, as_of_for, drift_features
-from recommenditos_monitoring.log import LogRow, connect_read_only, last_seq, rows_after
+from recommenditos_monitoring.log import (
+    LogRow,
+    connect_read_only,
+    first_seq,
+    last_seq,
+    rows_after,
+)
 from recommenditos_monitoring.store import (
     PARTIAL,
     TESTED,
@@ -146,6 +154,11 @@ def _pass(store: Store, paths: Paths, window_size: int, now: Callable[[], dateti
                 f"the prediction log ends at seq {newest}, before the last closed window "
                 f"(seq {after}): is it a new log? Move monitor.db aside to start over"
             )
+        # The requests the log's rotation deleted, with their feedback: nothing
+        # joins them any more (NFR-04).
+        oldest = first_seq(log)
+        if oldest is not None:
+            store.drop_requests_before(oldest)
         current: list[LogRow] = []
         for row in rows_after(log, after):
             if not row.has_required_fields:

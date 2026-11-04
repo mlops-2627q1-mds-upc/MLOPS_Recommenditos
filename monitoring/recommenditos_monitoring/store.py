@@ -14,9 +14,14 @@ writer there would hold up the API's workers. The tables:
   statistic, and whether it drifted.
 - `window_requests`: which requests of the log make up each window, with their
   `request_id`, so that the error and coverage of a window (#229) join the
-  feedback of exactly its requests, also after the log's rotation dropped them.
+  feedback of exactly its requests. Only while the log holds them: the log's
+  rotation deletes the oldest answers with their feedback, after which nothing
+  can be joined to them, so a pass drops the rows of requests the log no longer
+  holds (`drop_requests_before`). That bounds the table by the log's cap
+  (NFR-04, docs/docs/monitoring.md#how-large-it-grows).
 - `open_window`: the progress of the window being filled, one row.
-- `runs`: every pass of the job, so that its last success is on record.
+- `runs`: the last `RUNS_KEPT` passes of the job, so that its last success is
+  on record.
 
 A later table, such as #229's `window_performance` keyed by `window_id`, is added
 with `CREATE TABLE IF NOT EXISTS` and leaves these as they are. `user_version`
@@ -36,6 +41,9 @@ from recommenditos_monitoring.drift import FeatureResult
 SCHEMA_VERSION = 1
 
 TESTED, PARTIAL = "tested", "partial"
+
+#: Passes kept in `runs`: 104 days of one pass every 15 minutes.
+RUNS_KEPT = 10_000
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS windows (
@@ -230,6 +238,15 @@ class Store:
             )
         return window_id
 
+    def drop_requests_before(self, seq: int) -> int:
+        """Drop the requests below `seq`, the log's first; returns how many.
+
+        The windows and their results stay: they are the evidence, and small.
+        """
+        with self.transaction() as connection:
+            cursor = connection.execute("DELETE FROM window_requests WHERE seq < ?", (seq,))
+        return cursor.rowcount
+
     def set_open_window(self, progress: OpenWindow) -> None:
         with self.transaction() as connection:
             connection.execute(
@@ -259,6 +276,10 @@ class Store:
                     closed,
                     detail,
                 ),
+            )
+            connection.execute(
+                "DELETE FROM runs WHERE run_id <= (SELECT max(run_id) FROM runs) - ?",
+                (RUNS_KEPT,),
             )
 
     def windows(self) -> list[Window]:

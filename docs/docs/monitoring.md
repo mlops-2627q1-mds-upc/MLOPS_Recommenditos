@@ -447,7 +447,8 @@ The indicators `age_years__missing`, `mileage_km_raw__missing` and `power_kw__mi
 
 ### How it runs
 
-The service is a shell loop that starts one pass, `python -m recommenditos_monitoring run-once`, and sleeps 15 minutes after it ends (`RECOMMENDITOS_MONITOR_INTERVAL_S`, 900 s).
+The service is a shell loop, `monitoring/monitor-loop.sh`, that starts one pass, `python -m recommenditos_monitoring run-once`, and sleeps 15 minutes after it ends (`RECOMMENDITOS_MONITOR_INTERVAL_S`, 900 s).
+An interval that is not a positive whole number of seconds would make `sleep` fail at once and run the passes back to back, so the loop prints a warning to the service log and sleeps 900 s instead.
 The Python process ends after every pass, so between passes only the shell, its `sleep` and Docker's init run, 4 MiB of resident memory in `docker top` (10.5 MiB in `docker stats`, which counts the page cache).
 A pass runs at the container's start too, so every deploy runs one.
 A pass reads the log from the end of the last closed window, tests every window that has filled since, stores each with its results in one transaction, and records the progress of the window being filled; a rerun never stores a window twice, and a second pass while one runs leaves it to finish.
@@ -471,12 +472,27 @@ The image is 1.26 GB, most of it Alibi Detect's dependencies.
 |-------|-------------|
 | `windows` | Closed window: `status` (`tested` or `partial`), its first and last `seq`, its time range (`first_answered_at`, `last_answered_at`), the model, `es_share`, and when tested `flagged`, `drifted_features` and the threshold |
 | `window_features` | Feature of a tested window: the test (`ks` or `chi2`), the p-value, the statistic, the values compared, and `drifted` |
-| `window_requests` | Request of a window, with its `request_id`, so a window's labels are the feedback of exactly its requests ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)) |
+| `window_requests` | Request of a window that the log still holds, with its `request_id`, so a window's labels are the feedback of exactly its requests ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)) |
 | `open_window` | The window being filled: n of 1,000 |
-| `runs` | Pass, with its outcome |
+| `runs` | Pass, with its outcome, the last 10,000 |
 
 After each pass the job writes `monitor.prom` into the volume `monitor-textfile`, which node-exporter serves ([The textfile collector](#the-textfile-collector)): the latest tested window's flag, its number of drifted features, each feature's p-value (`recommenditos_drift_feature_p_value{feature, test}`), the threshold, its number, last `seq`, end time and ES share, the open window's progress, and `recommenditos_monitor_last_success_timestamp_seconds`, the end of the last pass that succeeded.
 That last one, and node-exporter's `node_textfile_mtime_seconds`, show a job that stopped.
+
+### How large it grows
+
+`monitor.db` is bounded, as NFR-04 asks of storage that grows: it never holds more than the log's cap allows, and its evidence grows by a few kilobytes a window.
+
+- `window_requests` takes 121 bytes a request, its two indexes included.
+  The log's rotation deletes the oldest answers with their feedback ([Rotation](api.md#rotation)), after which no label can be joined to them, so every pass drops the rows of requests below the log's lowest `seq`.
+  The table therefore holds at most the requests the log holds.
+  The log's 2 GB hold 820,000 answers of the replay's full listings (2,445 bytes each) or 3.1 million of the ten required fields alone (637 bytes each), so the table stays at about 100 MB with the replay's traffic and at about 380 MB in the worst case.
+- `windows` and `window_features` take about 2.7 KB a window of 1,000 requests, and stay: they are the evidence for the report and for retraining.
+  At 5 requests a second around the clock, which only a replay sends, that is 1.2 MB a day and 0.4 GB a year, against the 20 GB disk with at least 8 GB free.
+- `runs` keeps the last 10,000 passes, 104 days of one every 15 minutes: 0.8 MB with one failed pass in ten.
+
+The sizes were measured with SQLite's `dbstat` on a log of 20,000 answers written by the API's own store, with 20 windows tested on it.
+SQLite reuses the pages a deletion frees, so the file does not grow past its largest content.
 
 ### How to read a finding
 
@@ -493,9 +509,10 @@ A `partial` window was cut short by a new model and is not tested; an open windo
 
 ### Run it by hand
 
-Locally, on the stack of `make stack`, a pass and the reports:
+Locally, on the stack of `make stack`, a pass and the reports; Compose refuses to read `compose.yaml` without the two variables of [Run it locally](#run-it-locally), and any value does for `exec`:
 
 ```bash
+export GRAFANA_ADMIN_PASSWORD=unused DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded
 docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring run-once
 docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report
 docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report --window 3 --json

@@ -48,6 +48,8 @@ COPY --from=dependencies /app/.venv /app/.venv
 # bytecode at run time.
 COPY monitoring/recommenditos_monitoring /app/recommenditos_monitoring
 RUN /app/.venv/bin/python -m compileall -q /app/recommenditos_monitoring
+# The drift job's loop, which the stack's `monitor` service runs.
+COPY monitoring/monitor-loop.sh /app/monitor-loop.sh
 # The samples of the `monitoring_samples` stage: the replay's control and ES
 # listings, the drift reference and the manifest with its reference date.
 COPY data/monitoring /app/data/monitoring

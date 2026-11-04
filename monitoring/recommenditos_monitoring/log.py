@@ -105,6 +105,12 @@ def rows_after(connection: sqlite3.Connection, seq: int) -> Iterator[LogRow]:
         )
 
 
+def first_seq(connection: sqlite3.Connection) -> int | None:
+    """The lowest `seq` of the log, the oldest answer its rotation kept; None for an empty one."""
+    (value,) = connection.execute("SELECT min(seq) FROM predictions").fetchone()
+    return None if value is None else int(value)
+
+
 def last_seq(connection: sqlite3.Connection) -> int:
     """The highest `seq` of the log, 0 for an empty one."""
     (value,) = connection.execute("SELECT coalesce(max(seq), 0) FROM predictions").fetchone()

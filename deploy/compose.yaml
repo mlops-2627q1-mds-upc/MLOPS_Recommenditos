@@ -445,14 +445,8 @@ services:
     # even to read (docs/docs/api.md#the-records), and the API's volume is the
     # API user's. The job opens the log read-only all the same.
     user: "10001:10001"
-    entrypoint:
-      - sh
-      - -c
-      - |
-        while :; do
-          python -m recommenditos_monitoring run-once
-          sleep "$$RECOMMENDITOS_MONITOR_INTERVAL_S"
-        done
+    # The loop of monitoring/monitor-loop.sh: a pass, then the interval below.
+    entrypoint: ["sh", "/app/monitor-loop.sh"]
     depends_on:
       api:
         condition: service_healthy
@@ -460,7 +454,9 @@ services:
       RECOMMENDITOS_PREDICTION_LOG: /var/lib/recommenditos/prediction-log.sqlite3
       RECOMMENDITOS_MONITOR_DB: /var/lib/recommenditos-monitor/monitor.db
       RECOMMENDITOS_MONITOR_TEXTFILE_DIR: /var/lib/node-exporter/textfile
-      # Seconds between the end of one pass and the start of the next.
+      # Seconds between the end of one pass and the start of the next; the loop
+      # takes 900 and says so in the service log when it is not a positive
+      # whole number.
       RECOMMENDITOS_MONITOR_INTERVAL_S: ${RECOMMENDITOS_MONITOR_INTERVAL_S:-900}
     volumes:
       # The API's volume, read-write for WAL's shared-memory file (see `user`).
