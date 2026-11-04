@@ -344,6 +344,9 @@ force-sort-within-sections = true
 [tool.mypy]
 files = ["recommenditos", "tools"]
 python_version = "3.12"
+# The platform the code runs on, the image and CI, so that a Windows checkout gets
+# the same findings (os.sysconf, for example, exists only on Unix).
+platform = "linux"
 check_untyped_defs = true
 # Plugins go here when their package is a runtime dependency. The pydantic plugin
 # checks the API's request and response models: a constructor call with a missing
