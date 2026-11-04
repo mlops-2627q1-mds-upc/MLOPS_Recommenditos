@@ -437,11 +437,13 @@ Times are UTC on 2026-11-04, from the incident's timeline in the API ([Better St
 |-------|------|
 | Monitor `5183933` created, its first check fails with 403 | 13:25:37 |
 | "Waiting for 3 minutes before starting the incident", the confirmation period begins | 13:28:08 |
-| Incident `1047238502` starts, "Sent an email to" the account owner | 13:31:11 |
-| Better Stack records that the email was loaded | 13:31:33 |
+| Incident `1047238502` is created in the API, "Sent an email to" the account owner | 13:31:11 |
+| Better Stack records that the email was loaded; the email is in Lukas's inbox at 14:31 CET | 13:31:33 |
 
-The email went out 5 min 34 s after the first failing check, 3 min 3 s after the confirmation period began.
-The inbox was not read for this: the send and the load are the timeline's entries, and the load is Better Stack's tracking of the opened message.
+The email went out 5 min 34 s after the first failing check and 3 min 3 s after the confirmation period began.
+Lukas confirmed it in his inbox (minute resolution): the "New incident started" email from `alerts@alerts.betterstack.com` arrived at 14:31 CET (13:31 UTC) and names "Started at: Nov 4, 2026 at 2:28pm CET" (13:28 UTC), the moment the confirmation period began, so the inbox time agrees with the API's timeline and the email came about 3 minutes after the incident's stated start.
+The first failing check ran 2 min 31 s before that start.
+The "Incident resolved" email, 2:32pm CET, "length 4 minutes", came from Better Stack closing the incident when the rehearsal monitor was deleted, not from a recovery.
 For a real outage, expect the email 3 to 6 minutes after the API stops answering: up to one 180 s check interval until a check fails, plus the 180 s confirmation.
 That is slow against the 30 s recovery target on purpose: a restart that the VM does itself within 30 s never reaches the confirmation period, so only an outage that a person has to fix sends an email.
 

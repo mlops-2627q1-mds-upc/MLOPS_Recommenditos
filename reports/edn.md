@@ -234,13 +234,13 @@ How to add an entry:
   Outside those windows, uptime is monitored and reported, not promised: Better Stack requests the public `/health` every 3 minutes, emails the team after 3 minutes of failures, and gives a status page and the uptime figure.
 - **Alternatives considered:**
   - Keep 99 % uptime: nothing backs it on one VM without redundancy, SLA, or on-call, and its measurement window was unbounded.
-  - Lower the number to 95 %: as unverifiable as 99 %.
+  - 95 %: as unverifiable.
   - UptimeRobot: 5-minute checks. HetrixTools: little known. Freshping: shut down in 2026.
   - Uptime Kuma: self-hosted, so on the VM it cannot see the VM go down.
 - **Rationale:** M6 grades whether monitoring gives actionable insight, not whether a percentage was hit.
   The requirement separates what we control from what we can only observe.
-  Better Stack is the course's tool, and its free plan covers the need.
-  A monitor on a URL that fails on purpose emailed 5 min 34 s after its first failing check, and the production API stayed up.
+  Better Stack is the course's tool; its free plan covers the need.
+  A monitor on a URL that fails on purpose emailed 5 min 34 s after its first failing check, 3 minutes after the incident's start (seen in Lukas's inbox).
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI had flagged that Prometheus's `up` metric cannot see the host going down.

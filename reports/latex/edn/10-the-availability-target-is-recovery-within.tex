@@ -15,15 +15,15 @@ Outside those windows, uptime is monitored and reported, not promised: Better St
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Keep 99\,\% uptime: nothing backs it on one VM without redundancy, SLA, or on-call, and its measurement window was unbounded.
-\item Lower the number to 95\,\%: as unverifiable as 99\,\%.
+\item 95\,\%: as unverifiable.
 \item UptimeRobot: 5-minute checks. HetrixTools: little known. Freshping: shut down in 2026.
 \item Uptime Kuma: self-hosted, so on the VM it cannot see the VM go down.
 \end{itemize}
 \par
 \emph{Why:} M6 grades whether monitoring gives actionable insight, not whether a percentage was hit.
 The requirement separates what we control from what we can only observe.
-Better Stack is the course's tool, and its free plan covers the need.
-A monitor on a URL that fails on purpose emailed 5 min 34 s after its first failing check, and the production API stayed up.},
+Better Stack is the course's tool; its free plan covers the need.
+A monitor on a URL that fails on purpose emailed 5 min 34 s after its first failing check, 3 minutes after the incident's start (seen in Lukas's inbox).},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
   assessment = {AI had flagged that Prometheus's \texttt{up} metric cannot see the host going down.
