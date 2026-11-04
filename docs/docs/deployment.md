@@ -18,8 +18,11 @@ client --HTTP--> proxy (nginx, host port 8080, on a laptop and on the VM)
                                           only reachable inside the Compose network
 
 prometheus --scrapes every 15 s--> api:8000/metrics, cadvisor:8080 (per container),
-                                   node-exporter:9100 (the host), itself
+                                   node-exporter:9100 (the host), alertmanager, grafana, itself
+           |-- firing alerts --> alertmanager --webhook--> the team's Discord
            no published port: inside the Compose network only
+
+you --SSH tunnel--> grafana (host port 3000 on 127.0.0.1 only) --queries--> prometheus
 ```
 
 | File | What it is |
@@ -28,6 +31,9 @@ prometheus --scrapes every 15 s--> api:8000/metrics, cadvisor:8080 (per containe
 | `deploy/compose.yaml` | The stack: the API, the proxy, and the resource monitoring |
 | `deploy/nginx.conf` | The proxy's configuration |
 | `deploy/prometheus/prometheus.yml` | What Prometheus scrapes ([Monitoring](monitoring.md#resource-monitoring)) |
+| `deploy/prometheus/rules/`, `deploy/prometheus/tests/` | The alerting rules and their unit tests ([Alerts](monitoring.md#alerts)) |
+| `deploy/alertmanager/` | Where the alerts go, the team's Discord, and the message's template ([Alerts](monitoring.md#alerts)) |
+| `deploy/grafana/` | Grafana's provisioned data source and dashboard ([Grafana](monitoring.md#grafana)) |
 | `deploy/stack.Dockerfile`, `deploy/.dockerignore` | The stack image: the stack files of one commit, which travel with its release |
 | `deploy/.env.template` | The template of the stack's `.env` on the VM |
 | `deploy/bootstrap.sh` | Prepares a fresh VM |
@@ -52,6 +58,7 @@ What each part guarantees:
   nginx's unprivileged image writes only its pid file and buffered bodies, all under `/tmp`, which is a tmpfs too.
   Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, at least 1.2 times the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements.
   The monitoring's limits are 384 MiB for Prometheus, 192 MiB for cAdvisor and 64 MiB for node-exporter, at least three times what each used after the integration suite on a laptop (measurements below); Prometheus grows with the series it holds, and 384 MiB is about twice its estimated peak on the VM.
+  Grafana has 512 MiB and 128 processes, for the 171 MiB it held after starting, its 369 MiB peak with the page cache and its 30 processes (laptop, 2026-11-04), with the bundled data sources it does not use turned off, and Alertmanager 64 MiB for its 25 MiB.
   The VM's [load test](load-testing.md#run-it-on-the-vm) of 2026-10-31 measured at most 295 MiB with one worker and 609 MiB with two.
   On the VM, Docker does not enforce the no-swap part: the kernel runs cgroup v1 without `swapaccount=1`, and Docker warns "No swap limit support" and ignores `memswap_limit`.
   That has no effect today, because the VM has no swap; it would matter if swap were added.
@@ -75,7 +82,7 @@ What each part guarantees:
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
-- **Docker** keeps each container's log in at most five files of 10 MB, so the five logs take at most 250 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
+- **Docker** keeps each container's log in at most five files of 10 MB, so the seven logs take at most 350 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
 
 ## Run it locally
 
@@ -89,7 +96,9 @@ make test-integration   # the integration suite against http://localhost:8080
 make stack-down
 ```
 
-`make stack` is `docker compose -f deploy/compose.yaml up -d --build --wait`, so it runs the same way on Windows without `make`.
+`make stack` is `docker compose -f deploy/compose.yaml up -d --build --wait` with two variables that `compose.yaml` requires and has no default for: a random Grafana admin password for the run, and a Discord webhook that goes nowhere, so that a laptop's alerts never reach the team's channel ([Alerts](monitoring.md#alerts)).
+On Windows without `make`, set both first, in PowerShell `$env:GRAFANA_ADMIN_PASSWORD = "<any>"; $env:DISCORD_WEBHOOK_URL = "http://127.0.0.1:9/discarded"`, and run the same command; any other `docker compose` command of the stack needs them too.
+Grafana is then on <http://localhost:3000>, read-only without logging in ([Grafana](monitoring.md#grafana)).
 The `Dockerfile` installs third-party wheels from uv's build cache, but builds the `recommenditos` wheel from the build context every time (`--reinstall-package`): the cache is shared by every build on the machine, and uv would otherwise install a wheel it built from another worktree or branch ([#180](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/180)); the integration suite checks that the image holds the checkout's package.
 Docker copies a symbolic link into the image as a link, so `models/lgbm-basic` and `data/processed/comparables.parquet` have to be the files themselves: `find models data/processed/comparables.parquet -type l` must print nothing.
 That holds for DVC's default cache type, `copy`, and for `hardlink`; with `symlink`, set `cache.type` to one of those and run `uv run dvc checkout --relink models/lgbm-basic data/processed/comparables.parquet`.
@@ -240,7 +249,8 @@ Verified on 2026-10-30 by the first bootstrap and deploy ([#134](https://github.
   We have sudo as `alumne`.
   There are no backups, and the VM is erased at the end of term.
 - Docker Engine 28.1.1 and the compose plugin 2.35.1, the newest packages in Docker's apt repository for `focal`.
-- SSH: `nattech.fib.upc.edu` port 22052 reaches the VM's port 22, from the UPC network or UPClink only, not from the public internet.
+- SSH: `nattech.fib.upc.edu` port 22052 reaches the VM's port 22 with UPClink connected, not from the public internet.
+  From the university's Wi-Fi (eduroam, UPC address 147.83.201.170) the connection timed out on 2026-11-04, so UPClink is needed on campus too; another UPC network may answer, but none has been checked.
 - HTTP: `nattech.fib.upc.edu` ports 40520 to 40529 reach the VM's ports 8080 to 8089, from the public internet.
   The API's public URL is `http://nattech.fib.upc.edu:40520`, so the stack's `HTTP_PORT` is 8080.
 - The NAT does not serve the public ports to the VM itself, nor to clients on the UPC network or UPClink: the answer is "Empty reply from server".
@@ -308,7 +318,7 @@ The smoke job checks out the deployed commit, so the smoke suite holds `/health`
 A manual run (**Actions**, **Deploy**, **Run workflow** on `main`) deploys the full commit SHA it is given, an older one too: that is how an earlier version is redeployed on purpose, for example after a promoted model regressed (FR-15).
 Any tag CD pushed can be deployed this way, since GHCR keeps them all.
 
-`deploy.sh` is also how a deploy runs by hand, over SSH from the UPC network or its VPN, or on the VM as `recommenditos`.
+`deploy.sh` is also how a deploy runs by hand, over SSH with UPClink connected, or on the VM as `recommenditos`.
 The package is private, so a pull needs a token on standard input, here the GitHub CLI's; `deploy.sh` keeps it for the one pull and writes it nowhere:
 
 ```bash
@@ -345,6 +355,22 @@ make smoke SMOKE_URL=http://<vm-host>:<port>
 `deploy.sh` finds both images on the VM and pulls neither.
 On Windows, run these in Git Bash or WSL: Windows PowerShell 5 corrupts binary data in a pipe.
 Without either, save to a file instead: `docker save -o api.tar $IMAGE:$TAG`, `scp api.tar recommenditos@<vm>:`, `ssh recommenditos@<vm> docker load -i api.tar`.
+
+### A release that needs a new variable in `.env`
+
+`.env` stays on the VM and never travels with a release, so a release whose `compose.yaml` requires a variable that `.env` lacks cannot start there.
+`deploy.sh` checks the new `compose.yaml` with `.env` before it changes anything (`docker compose config`), so such a deploy fails with "the compose.yaml of ... is missing or not valid", and the release that runs keeps running.
+`compose.yaml` requires a variable with `${NAME:?...}` when a stack without it would be broken without anyone noticing, as for `GRAFANA_ADMIN_PASSWORD` and `DISCORD_WEBHOOK_URL` ([Monitoring](monitoring.md#grafana)); an empty value counts as missing.
+Before such a pull request is merged, add the variable to `/opt/recommenditos/.env`, readable by the deploy user alone, with the value from the team's own `.env`:
+
+```bash
+ssh -p 22052 recommenditos@<vm>
+umask 077; nano /opt/recommenditos/.env     # add the line NAME=value, as in deploy/.env.template
+grep -c '^NAME=.' /opt/recommenditos/.env   # 1
+```
+
+A variable the running release does not use yet changes nothing for it, so this step can come any time before the merge.
+The pull request says so in its body, and `deploy/.env.template` documents every variable.
 
 ### The stack files on the VM
 
@@ -613,7 +639,8 @@ When one registry answers with a rate limit or a server error, trivy takes the d
 To scan locally, with trivy installed:
 
 ```bash
-python3 tools/image_scan.py scan $(docker compose -f deploy/compose.yaml config --images)
+GRAFANA_ADMIN_PASSWORD=x DISCORD_WEBHOOK_URL=x python3 tools/image_scan.py scan \
+  $(docker compose -f deploy/compose.yaml config --images)
 ```
 
 When the scan fails, update the base image or the package; Dependabot's pull request may already do so.

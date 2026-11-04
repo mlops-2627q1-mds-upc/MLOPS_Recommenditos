@@ -17,6 +17,7 @@ import hashlib
 import io
 import os
 from pathlib import Path
+import secrets
 import shutil
 import socket
 import subprocess
@@ -93,7 +94,9 @@ def without_stack_environment() -> dict[str, str]:
     return {
         name: value
         for name, value in os.environ.items()
-        if not name.startswith(("API_IMAGE", "COMPOSE_", "RECOMMENDITOS_", "HTTP_PORT"))
+        if not name.startswith(
+            ("API_IMAGE", "COMPOSE_", "RECOMMENDITOS_", "HTTP_PORT", "GRAFANA_", "DISCORD_")
+        )
     }
 
 
@@ -268,8 +271,12 @@ def drill(tmp_path: Path, api_container: Container) -> Iterator[Stack]:
     directory.mkdir()
     shutil.copy(PROJ_ROOT / "deploy" / "deploy.sh", directory / "deploy.sh")
     port = free_port()
+    # Grafana on a free port too, beside the stack under test on 3000; a
+    # throwaway admin password, and a webhook that goes nowhere.
     (directory / ".env").write_text(
-        f"COMPOSE_PROJECT_NAME={PROJECT}\nAPI_IMAGE={API}\nAPI_IMAGE_TAG=\nHTTP_PORT={port}\n",
+        f"COMPOSE_PROJECT_NAME={PROJECT}\nAPI_IMAGE={API}\nAPI_IMAGE_TAG=\nHTTP_PORT={port}\n"
+        f"GRAFANA_PORT={free_port()}\nGRAFANA_ADMIN_PASSWORD={secrets.token_urlsafe(24)}\n"
+        "DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded\n",
         encoding="utf-8",
     )
     stack = Stack(directory, port, tmp_path / "stack-images")

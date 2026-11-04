@@ -1,0 +1,172 @@
+# Alerts on the service's promises: NFR-02's latency, NFR-03's error rate,
+# NFR-04's memory and disk headroom and NFR-05's availability
+# (docs/docs/monitoring.md#alerts). Prometheus evaluates them every 15 s and
+# sends what fires to Alertmanager, which posts it to the team's Discord
+# (deploy/alertmanager/alertmanager.yml).
+#
+# Every alert carries the same four annotations, which the Discord message
+# shows and tests/test_monitoring_config.py checks:
+#   summary        what is wrong, in one line;
+#   description    what a person should do about it;
+#   runbook_url    its section of docs/docs/monitoring.md;
+#   dashboard_url  its panel of the provisioned Grafana dashboard, as seen
+#                  through the SSH tunnel (docs/docs/monitoring.md#grafana).
+# `promtool test rules` checks each rule against the series in
+# ../tests/service-health.test.yml (make prometheus-check, CI).
+#
+# The API's figures count only the /v1/ routes, the ones the NFRs are about:
+# the healthcheck's /health every 5 s would dilute every share. A share needs at
+# least 100 answers in its 5 minutes, so that a handful of answers on a quiet
+# day cannot make one.
+
+groups:
+  - name: service-health
+    rules:
+      # NFR-05: the API recovers within 30 s, so a scrape that has failed for a
+      # minute means it did not. Prometheus scrapes api:8000 inside the Compose
+      # network, so this sees the container, not the public path through the
+      # NAT, which Better Stack checks from outside (EDN-10).
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The API has not answered Prometheus' scrape for a minute (NFR-05)."
+          description: "The API did not recover within NFR-05's 30 s. Check the container's state and log on the VM (`./deploy.sh status`, `docker logs recommenditos-api-1`); if the last deploy broke it, roll back with `./deploy.sh rollback`."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#apidown"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-1"
+
+      # NFR-02: 95 % of valuations within 250 ms (EDN-88). The share slower than
+      # 250 ms is read from the histogram's 0.25 s bucket, exactly, rather than
+      # from an interpolated quantile: above 5 %, the p95 is above 250 ms. Five
+      # minutes of it, as long as NFR-03's load test.
+      - alert: PredictLatencyHigh
+        expr: |
+          (
+            1 - sum(rate(http_request_duration_seconds_bucket{path="/v1/predict",le="0.25"}[5m]))
+              / sum(rate(http_request_duration_seconds_count{path="/v1/predict"}[5m]))
+          ) > 0.05
+          and sum(increase(http_request_duration_seconds_count{path="/v1/predict"}[5m])) >= 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The p95 of /v1/predict is above NFR-02's 250 ms: {{ $value | humanizePercentage }} of its answers took longer."
+          description: "Look at the dashboard for what else uses the one vCPU at the same time (the CPU panel) and for a traffic peak. A load test or the replay running is expected to cause it; otherwise check the API's CPU and the last deploy, and roll back if it brought the slowdown."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#predictlatencyhigh-and-rangelatencyhigh"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-7"
+
+      # NFR-02: 95 % of price ranges and comparable listings within 300 ms.
+      - alert: RangeLatencyHigh
+        expr: |
+          (
+            1 - sum by (path) (rate(http_request_duration_seconds_bucket{path=~"/v1/(price-range|comparables)",le="0.3"}[5m]))
+              / sum by (path) (rate(http_request_duration_seconds_count{path=~"/v1/(price-range|comparables)"}[5m]))
+          ) > 0.05
+          and sum by (path) (increase(http_request_duration_seconds_count{path=~"/v1/(price-range|comparables)"}[5m])) >= 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The p95 of {{ $labels.path }} is above NFR-02's 300 ms: {{ $value | humanizePercentage }} of its answers took longer."
+          description: "Look at the dashboard for what else uses the one vCPU at the same time (the CPU panel) and for a traffic peak. A load test or the replay running is expected to cause it; otherwise check the API's CPU and the last deploy, and roll back if it brought the slowdown."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#predictlatencyhigh-and-rangelatencyhigh"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-8"
+
+      # NFR-03: fewer than 1 % errors. Server errors only: a 4xx is the API's
+      # correct answer to a bad request (FR-16), and the public internet sends
+      # plenty of those.
+      - alert: ErrorRateHigh
+        expr: |
+          (
+            sum(rate(http_requests_total{path=~"/v1/.+",status=~"5.."}[5m]))
+              / sum(rate(http_requests_total{path=~"/v1/.+"}[5m]))
+          ) > 0.01
+          and sum(increase(http_requests_total{path=~"/v1/.+"}[5m])) >= 100
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the /v1/ answers are server errors, above NFR-03's 1 %."
+          description: "Read the API's log for the 5xx answers and their request IDs (`docker logs recommenditos-api-1`). If they started with a deploy, roll back with `./deploy.sh rollback`; if the prediction log's disk or lock is the cause, see the disk and memory panels."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#errorratehigh"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-9"
+
+      # NFR-04: at least 4 GB of the VM's 20 GB disk stay free. The floor is the
+      # headroom, not the end of the disk, so this fires while there is still
+      # room to act.
+      - alert: DiskFreeLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} < 4e9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Only {{ $value | humanize }}B are free on the host's root file system, below NFR-04's 4 GB floor."
+          description: "Find what grew (`docker system df`, `sudo du -xh -d1 /var/lib/docker`): old image tags are removed with `docker image prune`, and Prometheus and the prediction log are capped at 2 GB each. Free space before the disk fills, which stops the prediction log and Prometheus."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#diskfreelow"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-12"
+
+      # NFR-04: memory headroom on the host. The VM has no swap, so when
+      # available memory runs out the kernel kills a process. 512 MiB is the
+      # drift job's peak of up to 400 MiB per run (#228) with room to spare:
+      # below it, the next run can push the VM into the out-of-memory killer.
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes < 512 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Only {{ $value | humanize1024 }}B of memory are available on the host, below 512 MiB."
+          description: "See on the dashboard which container grew (the container memory panel) and whether a load test, the replay or a CI job on the self-hosted runner is running. A container that keeps growing is restarted with `docker restart <container>`; the VM has no swap, so act before the kernel kills a process."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#hostmemorylow"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-11"
+
+      # NFR-04: each container's memory limit. Above 90 % of it, the kernel will
+      # soon kill the container's largest process.
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          max by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (
+            container_memory_working_set_bytes{container_label_com_docker_compose_service!=""}
+          )
+          / max by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (
+            container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=""} > 0
+          )
+          > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The {{ $labels.container_label_com_docker_compose_service }} container uses {{ $value | humanizePercentage }} of its memory limit."
+          description: "A container at its limit loses its largest process to the kernel. If its memory grew steadily, it leaks: restart it (`docker restart recommenditos-{{ $labels.container_label_com_docker_compose_service }}-1`) and open an issue with the panel; if it grew with load, its limit in deploy/compose.yaml is too small for that load."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#containermemorynearlimit"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-15"
+
+      # NFR-05: a container restarts on its own after a crash or a hang
+      # (EDN-93), which is the requirement working. Three restarts in half an
+      # hour are not: something kills it again and again.
+      - alert: ContainerRestarting
+        expr: |
+          max by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (
+            changes(container_start_time_seconds{container_label_com_docker_compose_service!=""}[30m])
+          ) >= 3
+        labels:
+          severity: critical
+        annotations:
+          summary: "The {{ $labels.container_label_com_docker_compose_service }} container restarted {{ $value }} times in 30 minutes."
+          description: "Read the container's log from before the restarts (`docker logs --since 30m recommenditos-{{ $labels.container_label_com_docker_compose_service }}-1`) and its memory panel: at its limit it is killed for memory; a hang shows as the healthcheck's kill (EDN-93). If the restarts began with a deploy, roll back with `./deploy.sh rollback`."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#containerrestarting"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-13"
+
+      # A monitoring target that Prometheus cannot scrape leaves its panels and
+      # alerts blind. The API has ApiDown, which fires sooner.
+      - alert: TargetDown
+        expr: up{job!="api"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus has not scraped the {{ $labels.job }} target ({{ $labels.instance }}) for 5 minutes."
+          description: "Its panels and the alerts built on it see nothing. Check the container (`docker ps -a`, `docker logs recommenditos-<service>-1`); it restarts on its own after a crash, so a target that stays down needs its log read, and a deploy rolls back when a monitoring service does not start."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#targetdown"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-14"

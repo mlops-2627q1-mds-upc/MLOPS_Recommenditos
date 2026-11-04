@@ -9,10 +9,22 @@
 
 global:
   # One sample every 15 s: about 5,800 a day per series, which keeps the TSDB of
-  # the four targets at tens of MB a day, far below the 2 GB retention cap.
+  # the six targets at tens of MB a day, far below the 2 GB retention cap.
   scrape_interval: 15s
   scrape_timeout: 10s
   evaluation_interval: 15s
+
+# The alerting rules (docs/docs/monitoring.md#alerts): every file in rules/,
+# each with its unit tests in tests/ (`promtool test rules`, make prometheus-check).
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# Where firing alerts go: Alertmanager, by its Compose service name, which posts
+# them to the team's Discord (../alertmanager/alertmanager.yml).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
 
 scrape_configs:
   # Prometheus itself: its own memory, the TSDB's size and failed scrapes.
@@ -37,3 +49,14 @@ scrape_configs:
   - job_name: node
     static_configs:
       - targets: ["node-exporter:9100"]
+
+  # Alertmanager: whether it is up, and whether its notifications reach Discord
+  # (`alertmanager_notifications_failed_total`).
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  # Grafana: whether it is up.
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]

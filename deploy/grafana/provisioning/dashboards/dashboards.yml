@@ -1,0 +1,15 @@
+# The dashboards are the JSON files of deploy/grafana/dashboards/, mounted at
+# /etc/grafana/dashboards (docs/docs/monitoring.md#grafana). A change is a change
+# to those files, reviewed like code: the UI cannot save over them
+# (`allowUiUpdates: false`) or delete them, and Grafana reads the folder again
+# every minute, so a new release's files show without a restart.
+apiVersion: 1
+
+providers:
+  - name: recommenditos
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/dashboards

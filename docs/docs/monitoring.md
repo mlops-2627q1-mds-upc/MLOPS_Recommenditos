@@ -6,7 +6,7 @@ Better Stack checks the public `/health` from outside, so it notices when the VM
 Prometheus, inside the stack, keeps the figures of the API and of the machine it runs on ([Resource monitoring](#resource-monitoring)).
 The drift job, a later part of M6, compares what the API is asked with what the model was trained on ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228)).
 With no real users, its traffic is the [replay](#replay) of held-out listings.
-Grafana's dashboards and the alerts follow in [#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225), on top of the Prometheus described here.
+[Grafana](#grafana) shows Prometheus' figures against the limits the requirements set, and [alerts](#alerts) post to the team's Discord before a limit is reached, each with what to do ([#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)).
 
 ## Resource monitoring
 
@@ -73,15 +73,15 @@ A writer has to write each file under a temporary name and rename it, so that a 
 ### Reachable only inside the stack
 
 None of the three publishes a port: the VM's ports 8080 to 8089 are public through the NAT ([The VM](deployment.md#the-vm)), and nothing but nginx is meant to be (NFR-09).
-The integration suite checks that no service but the proxy publishes one and that none uses the host's network, which would open its ports on the host without a `ports` entry.
-Grafana ([#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)) will be the way in, through an SSH tunnel to the VM.
-Until then, Prometheus' HTTP API is reached from inside its container, whose busybox `wget` asks it on `127.0.0.1:9090`:
+The integration suite checks that no service but the proxy publishes one beyond the host's loopback, and that none uses the host's network, which would open its ports on the host without a `ports` entry.
+[Grafana](#grafana) is the way in, through an SSH tunnel to the VM.
+For a figure the dashboard does not show, Prometheus' HTTP API is reached from inside its container, whose busybox `wget` asks it on `127.0.0.1:9090`:
 
 ```bash
-# Locally, from the repository root:
-docker compose -f deploy/compose.yaml exec prometheus \
+# Locally, after make stack:
+docker exec recommenditos-prometheus-1 \
   wget -qO- 'http://127.0.0.1:9090/api/v1/targets?state=active'
-docker compose -f deploy/compose.yaml exec prometheus \
+docker exec recommenditos-prometheus-1 \
   wget -qO- 'http://127.0.0.1:9090/api/v1/query?query=node_filesystem_avail_bytes'
 
 # On the VM, from /opt/recommenditos, with the paths deploy.sh uses:
@@ -89,7 +89,7 @@ docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env exec prome
   wget -qO- 'http://127.0.0.1:9090/api/v1/targets?state=active'
 ```
 
-For Prometheus' own web page during debugging, a temporary tunnel reaches the container's address on the VM's Docker network without publishing anything, from the UPC network or UPClink:
+For Prometheus' own web page during debugging, a temporary tunnel reaches the container's address on the VM's Docker network without publishing anything, with UPClink connected ([Open it](#open-it)):
 
 ```bash
 ip=$(ssh -p 22052 recommenditos@nattech.fib.upc.edu \
@@ -114,10 +114,192 @@ The figures above have the same names under both.
 
 ### When a monitoring service does not start
 
-The three services are part of the release, so a deploy waits for them as for the API: `deploy.sh` runs `docker compose up --wait`, and a monitoring service that does not become healthy fails the deploy, which then puts the previous release back, the API included ([Every deploy](deployment.md#every-deploy)).
-That is wanted for a broken configuration, which `make prometheus-check` and CI's integration job should catch first, and unwanted for a registry that cannot be reached: the images come from quay.io and ghcr.io, and a VM that cannot pull one keeps the release that runs.
-Their healthchecks therefore probe only that each serves (`/-/ready`, `/healthz`, the landing page), not what it scrapes, so a failing scrape target never fails a deploy.
+The monitoring services, Grafana and Alertmanager below included, are part of the release, so a deploy waits for them as for the API: `deploy.sh` runs `docker compose up --wait`, and a monitoring service that does not become healthy fails the deploy, which then puts the previous release back, the API included ([Every deploy](deployment.md#every-deploy)).
+That is wanted for a broken configuration, which `make prometheus-check` and CI's integration job should catch first, and unwanted for a registry that cannot be reached: the images come from quay.io, ghcr.io and, for Grafana, Docker Hub, whose anonymous pull limit counts per address and the FIB's NAT is shared; a VM that cannot pull one keeps the release that runs.
+A deploy pulls an image only when its digest in `compose.yaml` changed.
+Their healthchecks therefore probe only that each serves (`/-/ready`, `/healthz`, the landing page, Grafana's `/api/health`), not what it scrapes, so a failing scrape target never fails a deploy.
 Each also restarts on its own after a crash and after a reboot (`restart: unless-stopped`, NFR-05).
+
+## Grafana
+
+Grafana runs in the stack and shows one provisioned dashboard, **Service health**, which is also its home page: the figures of [Resource monitoring](#resource-monitoring) against the limits the requirements set ([EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)).
+
+| Panel | Against | Alert |
+|-------|---------|-------|
+| API up, scrape target health | NFR-05: back within 30 s | [ApiDown](#apidown), [TargetDown](#targetdown) |
+| API uptime in the time range | NFR-05: monitored and reported | - |
+| Firing alerts | - | all of [Alerts](#alerts) |
+| Request rate per route | FR-11 | - |
+| p95 latency of `/v1/predict` | NFR-02: 250 ms ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) | [PredictLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) |
+| p95 latency of `/v1/price-range` and `/v1/comparables` | NFR-02: 300 ms | [RangeLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) |
+| Server error rate | NFR-03: 1 % | [ErrorRateHigh](#errorratehigh) |
+| API memory | its 768 MiB limit (NFR-04 caps it at 1 GB) | [ContainerMemoryNearLimit](#containermemorynearlimit) |
+| Memory of each container, share of its limit | 90 % | [ContainerMemoryNearLimit](#containermemorynearlimit) |
+| CPU of each container | the VM's one vCPU | - |
+| Host memory available | 512 MiB | [HostMemoryLow](#hostmemorylow) |
+| Disk free | NFR-04: 4 GB | [DiskFreeLow](#diskfreelow) |
+| Container restarts in the last 30 minutes | 3 | [ContainerRestarting](#containerrestarting) |
+| Predicted prices, prediction warnings by field | FR-11, FR-05 | drift and error follow in [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230) |
+
+The uptime panel is the share of Prometheus' scrapes of the API that succeeded in the dashboard's time range, seen from inside the stack.
+It cannot see the VM or its network being gone; the uptime NFR-05 reports is Better Stack's, from outside ([External uptime check](deployment.md#external-uptime-check), EDN-10).
+
+![The Service health dashboard on a laptop's stack under a light load](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-service-health-local.png)
+
+The screenshot is a local stand-in, taken on a laptop's stack under 5 requests per second for two and a half minutes; the one for the report is taken on the VM under NFR-03's load test.
+
+### Provisioned, not clicked
+
+Everything Grafana shows comes from `deploy/grafana/`, which travels with every release like the other stack files:
+
+| File | What it provisions |
+|------|--------------------|
+| `provisioning/datasources/prometheus.yml` | The data source `Prometheus`, uid `prometheus`, at `http://prometheus:9090`, not editable |
+| `provisioning/dashboards/dashboards.yml` | The dashboards in `dashboards/`, which the UI can neither save over (`allowUiUpdates: false`) nor delete |
+| `dashboards/service-health.json` | The dashboard, uid `service-health` |
+
+A change to a panel is a change to the JSON file, reviewed in a pull request: change it in a local Grafana, copy the JSON (**Export**, **Export as JSON**), and remove the ids Grafana adds, the dashboard's `id`, `version` and `iteration`.
+`tests/test_monitoring_config.py` fails on such ids, on repeated panel ids and on a panel that queries another data source, and checks that every alert links a panel that exists.
+Panel ids stay what they are, since the alerts link panels by id.
+Grafana reads the folder again every minute, so a new release's dashboard shows without a restart.
+The integration suite checks that a fresh stack has the data source, reaches Prometheus through it, and shows the dashboard to an anonymous visitor (`tests/integration/test_deployed_grafana.py`).
+
+### Open it
+
+Grafana listens on the host's `127.0.0.1:3000` only, on a laptop and on the VM alike, so no other machine reaches it; on the VM it is opened through an SSH tunnel:
+
+```bash
+ssh -p 22052 -N -L 3000:127.0.0.1:3000 recommenditos@nattech.fib.upc.edu
+# then open http://localhost:3000 in the browser
+```
+
+The tunnel needs UPClink connected, on campus too: from the university's Wi-Fi (eduroam) the SSH port timed out on 2026-11-04 ([The VM](deployment.md#the-vm)).
+The links in the alerts' messages point at `http://localhost:3000`, so they open once the tunnel is up.
+
+Inside the tunnel, a visitor is an anonymous Viewer: every dashboard can be seen, nothing can be changed.
+The admin logs in as `admin` with `GRAFANA_ADMIN_PASSWORD` from the stack's `.env`; compose.yaml has no default for it and refuses to start without one.
+Grafana sets the password when it creates its database, in the named volume `grafana-data`, on its first start; a later change to `.env` does not change it, `docker exec recommenditos-grafana-1 grafana cli admin reset-admin-password <new>` does.
+The rejected alternatives, Grafana read-only behind nginx's public port and screenshots only, are in [EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+
+Grafana runs with the shared hardening (read-only root, no capability, `no-new-privileges`, its own user 472), with its database in the volume and a tmpfs on `/tmp`.
+It sends nothing out: usage reports, update checks, the news feed, avatars and plugin downloads at start-up are off, and so is its own alerting, since the alerts are Prometheus' ([Alerts](#alerts)).
+The data sources the image bundles besides Prometheus are turned off: each would run as a process of its own, and together they exhausted the container's 128 processes.
+
+## Alerts
+
+Prometheus evaluates the alerting rules in `deploy/prometheus/rules/` every 15 s and hands what fires to Alertmanager, which posts it to the team's Discord channel through a webhook ([EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+Each message carries the alert's summary, what to do, a link to its section below and a link to its dashboard panel through the [tunnel](#open-it).
+Alertmanager groups the alerts by name, waits 30 s so that alerts firing together arrive in one message, posts again every 4 hours while a problem lasts, and posts when it is resolved.
+While the API is down, its latency and error alerts are held back.
+
+| Alert | Fires when | For | Severity |
+|-------|------------|-----|----------|
+| [ApiDown](#apidown) | Prometheus cannot scrape `api:8000` | 1 minute | critical |
+| [PredictLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) | more than 5 % of the `/v1/predict` answers of the last 5 minutes took over 250 ms, that is, the p95 is above NFR-02's target, with at least 100 answers | 5 minutes | warning |
+| [RangeLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) | the same for `/v1/price-range` or `/v1/comparables` and 300 ms, per route | 5 minutes | warning |
+| [ErrorRateHigh](#errorratehigh) | more than 1 % of the `/v1/` answers of the last 5 minutes are server errors (5xx), with at least 100 answers | 5 minutes | critical |
+| [DiskFreeLow](#diskfreelow) | the host's root file system has less than 4 GB free | 5 minutes | critical |
+| [HostMemoryLow](#hostmemorylow) | the host has less than 512 MiB available | 5 minutes | warning |
+| [ContainerMemoryNearLimit](#containermemorynearlimit) | a container uses more than 90 % of its memory limit | 5 minutes | warning |
+| [ContainerRestarting](#containerrestarting) | a container restarted 3 times in 30 minutes | at once | critical |
+| [TargetDown](#targetdown) | a monitoring target other than the API cannot be scraped | 5 minutes | warning |
+
+Why these thresholds:
+
+- **Latency** is read from the histogram's 0.25 s and 0.3 s buckets, which are NFR-02's targets, so "more than 5 % slower than the target" is exact where an interpolated p95 is not; five minutes are as long as NFR-03's load test.
+- **Errors** count server errors only: a 4xx is the API's correct answer to a bad request (FR-16), and the public internet sends many.
+  The `/v1/` routes only, so that the healthcheck's `/health` every 5 s does not dilute the share; the dashboard shows the 4xx share beside it.
+- **At least 100 answers** in the 5 minutes, so that five slow answers or one server error on a quiet day do not fire.
+- **Disk:** NFR-04's 4 GB floor is headroom, not the end of the disk, so the alert fires with room left to act.
+- **Host memory:** the VM has no swap, so memory that runs out ends with the kernel killing a process; 512 MiB is the drift job's peak of up to 400 MiB per run with room to spare.
+- **Restarts:** one restart is NFR-05 working (a crash, or a hang the healthcheck ends, EDN-93); three in half an hour are a loop.
+  A deploy recreates a container, which counts as a new one, not as a restart.
+
+The rules have unit tests, `deploy/prometheus/tests/service-health.test.yml`: for each alert, series that make it fire after its `for` duration with its labels and annotations, and series that must not.
+`make prometheus-check` runs them with `promtool test rules`, after `promtool check config`, and checks Alertmanager's configuration with `amtool check-config`; CI's integration job runs it before it starts the stack.
+The integration suite checks that Prometheus has loaded every rule and found Alertmanager, and that Alertmanager runs the Discord receiver.
+
+### The Discord webhook
+
+The webhook URL is a secret, since whoever has it can post to the channel: it is `DISCORD_WEBHOOK_URL` in the stack's `.env` ([`.env.template`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/deploy/.env.template)), and compose.yaml has no default for it, so a stack without it does not start rather than drop every alert.
+Alertmanager does not expand environment variables in its configuration, and reads the URL from a file (`webhook_url_file`): the service's entrypoint writes it to a tmpfs that only Alertmanager's user can read, and starts Alertmanager without it in its environment.
+A Compose secret would keep it out of `docker inspect` too, but Compose does not mount one from the environment into a read-only container.
+
+A local stack (`make stack`) and CI's get a webhook that goes nowhere, so a laptop's or a runner's alerts never reach the team; `make stack LOCAL_DISCORD_WEBHOOK_URL=<url>` sends them somewhere on purpose.
+The receiver was tested on 2026-11-04 with one test alert from a local Alertmanager to the team's channel.
+
+### What the alerts do not cover
+
+- **Prometheus or Alertmanager down.** Nothing then evaluates or sends the alerts, and nothing says so; the dashboard's target health shows it, and Better Stack still notices the API being gone ([External uptime check](deployment.md#external-uptime-check)).
+- **The VM or its network down.** The same: Better Stack's check from outside sends its own email.
+- **Drift, error and coverage** of the model follow in [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230), as more rule files in `deploy/prometheus/rules/` and more panels.
+
+### Runbook
+
+On the VM, the commands below run as `recommenditos` over SSH, from `/opt/recommenditos` ([Deploy to the VM](deployment.md#deploy-to-the-vm)).
+
+#### ApiDown
+
+The API has not answered Prometheus' scrape for a minute, so it did not recover within NFR-05's 30 s on its own.
+
+1. `./deploy.sh status` and `docker ps -a`: is the container running, restarting or gone?
+2. `docker logs --tail 100 recommenditos-api-1`: a traceback at start-up is a broken image or bundle; a kill is memory (the API memory panel).
+3. If the last deploy brought it, `./deploy.sh rollback` starts the previous release.
+4. If the container is up but does not answer, the healthcheck ends it within about 21 s (EDN-93); if that does not happen, `docker restart recommenditos-api-1`.
+
+#### PredictLatencyHigh and RangeLatencyHigh
+
+More than 5 % of a route's answers took longer than NFR-02's target for five minutes.
+
+1. On the dashboard, the CPU panel: does another container (the drift job, cAdvisor) or the self-hosted runner take the one vCPU at the same time? A load test or the replay running is expected to cause it.
+2. The request rate: a traffic peak beyond NFR-03's 20 requests per second is outside the promise.
+3. If neither, compare with the last deploy: a slower model or image is rolled back with `./deploy.sh rollback`, and the regression gets an issue with the panel.
+
+#### ErrorRateHigh
+
+More than 1 % of the `/v1/` answers were server errors for five minutes.
+
+1. `docker logs --since 10m recommenditos-api-1`: the failing requests, their status codes and request IDs, and the tracebacks.
+2. A full disk or a locked prediction log shows in the disk panel and the log; free space ([DiskFreeLow](#diskfreelow)).
+3. If the errors began with a deploy, `./deploy.sh rollback`.
+
+#### DiskFreeLow
+
+Less than NFR-04's 4 GB are free on the host's root file system.
+
+1. `docker system df` and `sudo du -xh -d1 /var/lib/docker`: images, volumes or container logs?
+2. Old image tags: `docker image prune -a` removes the images no container uses, the previous release's too, so keep the tag `.deploy-previous` names (`docker image ls`).
+3. Prometheus' TSDB is capped at 2 GB and the prediction log is pruned to its own cap; if one of them is larger, that cap is broken: open an issue.
+
+#### HostMemoryLow
+
+The host has less than 512 MiB available, and the VM has no swap.
+
+1. The panel of each container's memory: which one grew?
+2. Is a load test, the replay or a CI job on the self-hosted runner running? Those end on their own.
+3. A container that keeps growing without load leaks: `docker restart recommenditos-<service>-1`, and an issue with the panel.
+
+#### ContainerMemoryNearLimit
+
+A container uses more than 90 % of its memory limit, and the kernel will soon kill its largest process.
+
+1. Steady growth without more traffic is a leak: restart the container (`docker restart recommenditos-<service>-1`) and open an issue with the panel.
+2. Growth with the traffic means the limit in `deploy/compose.yaml` is too small for that load: raise it in a pull request, with the measurement.
+
+#### ContainerRestarting
+
+A container restarted three times in 30 minutes.
+
+1. `docker logs --since 30m recommenditos-<service>-1`: what it logged before each restart.
+2. The memory panel: at its limit, it is killed for memory ([ContainerMemoryNearLimit](#containermemorynearlimit)); for the API, a hang ends with the healthcheck's kill (EDN-93).
+3. If the restarts began with a deploy, `./deploy.sh rollback`.
+
+#### TargetDown
+
+Prometheus could not scrape a monitoring target for five minutes, so its panels and the alerts built on it see nothing.
+
+1. `docker ps -a` and `docker logs --tail 100 recommenditos-<service>-1` for the target's service (cAdvisor, node-exporter, Alertmanager, Grafana, Prometheus itself).
+2. Each restarts on its own after a crash, so one that stays down needs its log read; a configuration it refuses fails `make prometheus-check` in CI first.
 
 ## Replay
 

@@ -48,3 +48,16 @@ CVE-2026-84445 exp:2026-12-04
 CVE-2026-97031 exp:2026-12-04
 # gRPC-Go xDS RBAC in cAdvisor: it uses no xDS and serves no gRPC.
 GHSA-hrxh-6v49-42gf exp:2026-12-04
+
+# Grafana 13.3.0 (deploy/compose.yaml), the newest release on 2026-11-04: every
+# HIGH finding is in a backend binary of a data source plugin it bundles
+# (Tempo, Jaeger, Loki, MySQL, MSSQL and others). compose.yaml turns every one
+# of those plugins off (GF_PLUGINS_DISABLE_PLUGINS), so the binaries never run;
+# the stack provisions Prometheus alone, and Grafana is reachable only through
+# the SSH tunnel (docs/docs/monitoring.md#grafana). The Go stdlib findings
+# CVE-2026-111943, CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031 above
+# match the same plugin binaries. Reviewed again with the exporters' entries.
+# github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.8.4: the plugin is off.
+CVE-2026-21728 exp:2026-12-04
+# github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.10.3: the plugin is off.
+CVE-2026-28377 exp:2026-12-04
