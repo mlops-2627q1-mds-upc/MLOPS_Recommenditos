@@ -139,7 +139,7 @@ flowchart TB
     subgraph stack["Docker Compose stack"]
         proxy["<b>Gateway</b> [nginx]<br/>only published port<br/>403 for /feedback, /metrics"]
         replay["<b>Replay job</b><br/>ES holdout<br/>M6"]
-        prom["<b>Prometheus, Grafana</b><br/>M6"]
+        prom["<b>Prometheus</b><br/>cAdvisor, node-exporter<br/>Grafana in M6"]
         api["<b>Price API</b><br/>[FastAPI, uvicorn workers]"]
         drift["<b>Drift job</b><br/>[Alibi Detect, scheduled]<br/>M6"]
         bundle[("<b>Model bundle</b><br/>in the image")]
@@ -158,7 +158,7 @@ flowchart TB
     drift -.->|"reads, joins"| log
 
     classDef later fill:#f2f2f2,stroke:#888,color:#555,stroke-dasharray:6 4
-    class uptime,replay,prom,drift later
+    class uptime,replay,drift later
 ```
 
 ### Build and delivery
@@ -189,7 +189,8 @@ flowchart TB
 | **Prediction log and feedback** (SQLite in WAL mode, named volume) | One row per answer (FR-13) and per observed price (FR-10), joined by request ID (FR-14) | Built, `api/prediction_log.py` |
 | **Replay job** | Sends the `ES` holdout as requests and its prices as feedback (NFR-11) | M6 |
 | **Drift job** (Alibi Detect, scheduled container) | Input drift, error and interval coverage per window of logged requests (FR-14, EDN-14) | M6 |
-| **Prometheus and Grafana** | Scrape `/metrics` inside the network; show latency, errors and resources | M6 |
+| **Prometheus, cAdvisor, node-exporter** | Prometheus scrapes `/metrics`, cAdvisor (per container) and node-exporter (the host) inside the network every 15 s and keeps at most 2 GB or 60 days; no published port (NFR-04, EDN-99) | Built, `deploy/compose.yaml`, `deploy/prometheus/`, [Monitoring](monitoring.md#resource-monitoring) |
+| **Grafana and the alerts** | Show latency, errors and resources; alert the team (#225) | M6 |
 | **Better Stack** (formerly Better Uptime) | Checks `/health` from outside every 3 minutes and emails on an outage; its status page and availability figure feed the report (NFR-05, [External uptime check](deployment.md#external-uptime-check)) | M6 |
 | **DVC pipeline** | Turns the raw listings into the model bundle, its metrics and the gate's verdict | Built, `dvc.yaml`, [pipeline](pipeline.md) |
 | **DagsHub** | DVC remote for data and models; hosted MLflow for every run | Built, [data versioning](data-versioning.md) |
@@ -385,7 +386,7 @@ flowchart LR
         direction LR
         d_proxyc["<b>proxy</b><br/>nginx-unprivileged:1.30<br/>listens on 8080"]
         d_apic["<b>api</b><br/>API_IMAGE:sha<br/>user 10001, port 8000"]
-        d_m6["<b>prometheus, grafana,<br/>drift job</b><br/>M6"]
+        d_m6["<b>prometheus, cadvisor,<br/>node-exporter</b><br/>no published port<br/>grafana, drift job in M6"]
         d_tmpfs[("<b>tmpfs</b><br/>/tmp, /tmp/prometheus")]
         d_vol[("<b>volume</b> prediction-log<br/>/var/lib/recommenditos")]
     end

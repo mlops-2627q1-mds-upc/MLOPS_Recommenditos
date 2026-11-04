@@ -1,7 +1,7 @@
 Deployment
 ==========
 
-The API runs as a Docker Compose stack of two containers: the API image, which holds the serving runtime and one model bundle, and nginx in front of it.
+The API runs as a Docker Compose stack: the API image, which holds the serving runtime and one model bundle, nginx in front of it, and the resource monitoring beside them, Prometheus, cAdvisor and node-exporter ([Monitoring](monitoring.md#resource-monitoring)).
 The same stack runs on a laptop and on the FIB Virtech VM ([EDN-87](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 This page says what the stack guarantees, how to run it locally, how CI builds and publishes the image, what the VM is, how to set up a fresh VM and deploy to it, and the checklist that was run on the VM.
 Milestone 5 adds CI/CD, the image scan and the hardening on top of this stack ([Continuous delivery](#continuous-delivery), [What M5 adds](#what-m5-adds)).
@@ -16,13 +16,18 @@ client --HTTP--> proxy (nginx, host port 8080, on a laptop and on the VM)
                    '-- everything else --> api:8000 (uvicorn, one model bundle,
                                                 and the web page for a browser at /)
                                           only reachable inside the Compose network
+
+prometheus --scrapes every 15 s--> api:8000/metrics, cadvisor:8080 (per container),
+                                   node-exporter:9100 (the host), itself
+           no published port: inside the Compose network only
 ```
 
 | File | What it is |
 |------|------------|
 | `Dockerfile`, `.dockerignore` | The API image |
-| `deploy/compose.yaml` | The stack: the API and the proxy |
+| `deploy/compose.yaml` | The stack: the API, the proxy, and the resource monitoring |
 | `deploy/nginx.conf` | The proxy's configuration |
+| `deploy/prometheus/prometheus.yml` | What Prometheus scrapes ([Monitoring](monitoring.md#resource-monitoring)) |
 | `deploy/stack.Dockerfile`, `deploy/.dockerignore` | The stack image: the stack files of one commit, which travel with its release |
 | `deploy/.env.template` | The template of the stack's `.env` on the VM |
 | `deploy/bootstrap.sh` | Prepares a fresh VM |
@@ -41,11 +46,12 @@ What each part guarantees:
   With more than one worker, a single worker whose event loop blocks goes unnoticed: the others still answer `/health`, so the healthcheck passes while the requests that worker accepted hang, and uvicorn's supervisor replaces a worker only when it stops answering its ping, which runs in a thread of its own.
   The API therefore runs one worker ([EDN-93](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), and the load test on the VM kept it there: on the VM's one vCPU a second worker added no throughput, a slower tail and twice the memory ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [results](load-testing.md#run-it-on-the-vm)).
 - **Compose** publishes only the proxy's port.
-  Both containers run with a read-only root file system, without any Linux capability and with `no-new-privileges` (NFR-09), so they write only to their tmpfs mounts and the API also to its volume.
-  Neither needed a capability back or any other exception.
+  Every container runs with a read-only root file system, without any Linux capability and with `no-new-privileges` (NFR-09), so they write only to their tmpfs mounts and volumes.
+  None needed a capability back; the one exception is cAdvisor's user, root, because it reads the Docker socket, which is root-equivalent on the host ([Monitoring](monitoring.md#hardening-and-cadvisors-exception)).
   The API needed one writable path more than its metric files: a tmpfs on `/tmp`, where SQLite writes a sort too large for its cache and Python's `tempfile` writes; without it a large query of the prediction log fails with "disk I/O error".
   nginx's unprivileged image writes only its pid file and buffered bodies, all under `/tmp`, which is a tmpfs too.
   Each container has a memory limit without swap and a process limit (NFR-04): 768 MiB and 256 processes for the API, 64 MiB and 64 for nginx, at least 1.2 times the peak of the laptop's load tests with two workers; `deploy/compose.yaml` gives the measurements.
+  The monitoring's limits are 384 MiB for Prometheus, 192 MiB for cAdvisor and 64 MiB for node-exporter, at least three times what each used after the integration suite on a laptop (measurements below); Prometheus grows with the series it holds, and 384 MiB is about twice its estimated peak on the VM.
   The VM's [load test](load-testing.md#run-it-on-the-vm) of 2026-10-31 measured at most 295 MiB with one worker and 609 MiB with two.
   On the VM, Docker does not enforce the no-swap part: the kernel runs cgroup v1 without `swapaccount=1`, and Docker warns "No swap limit support" and ignores `memswap_limit`.
   That has no effect today, because the VM has no swap; it would matter if swap were added.
@@ -69,7 +75,7 @@ What each part guarantees:
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
-- **Docker** keeps each container's log in at most five files of 10 MB, so the two logs take at most 100 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
+- **Docker** keeps each container's log in at most five files of 10 MB, so the five logs take at most 250 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
 
 ## Run it locally
 
@@ -96,6 +102,8 @@ Measured on 2026-10-20 on a 4-core laptop (i5-10210U, 15 GB RAM) with Docker 29.
 | API container memory, idle after the smoke check (`docker stats`), measured on 2026-10-22 | 248 MiB with one worker; 539 MiB with two, a 52 MiB supervisor and two workers (nginx: 7 MiB) | below 1 GB under load (NFR-04, [load test](load-testing.md)) |
 | `docker compose up -d` to the first 200 from `/health` through nginx | 5.2 s, image already built | - |
 | SIGKILL of the API process to the next 200 from `/health` through nginx, 3 runs | 3.1 to 3.4 s | within 30 s (NFR-05) |
+| Memory of the monitoring after the full integration suite (`docker stats`), measured on 2026-11-04 | Prometheus 47 MiB of its 384 MiB, cAdvisor 16 MiB of 192 MiB, node-exporter 17 MiB of 64 MiB: 79 MiB together; the API 167 MiB and nginx 15 MiB, with CI's synthetic bundle | the whole stack within the VM's 3.8 GiB with headroom (NFR-04) |
+| `docker compose up -d --wait` of the five services, images present, measured on 2026-11-04 | 4.0 and 4.3 s in two runs | - |
 | SIGSTOP of the API's processes (a hang) to the next 200 from `/health` through nginx, measured on 2026-10-23 with the hardening of #200 | 19.4 to 20.8 s in 4 runs, the hang placed right after the API turned healthy, the latest point for a probe to catch it; at most about 21 s (5 s interval, two attempts of 6 s, about 4 s to restart) | within 30 s (NFR-05) |
 
 Measured on the VM on 2026-10-30 (1 vCPU, 3.8 GiB, Docker 28.1.1), with the stack and the runner up:
@@ -132,7 +140,7 @@ It covers what the in-process API tests cannot see:
 
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
-- on the Docker host: both containers run as a non-root user with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, the API's port is not published, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), and after a SIGKILL of the API process, and after the API hangs, `/health` is 200 again within 30 s (NFR-05);
+- on the Docker host: every container of `deploy/compose.yaml` runs with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, and as a non-root user except cAdvisor, whose host mounts are all read-only; no container but the proxy publishes a port; the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), every Prometheus target is up and the resource figures of [Monitoring](monitoring.md#the-questions-it-answers) reach Prometheus with a value, Prometheus keeps its TSDB in a named volume with both retention caps, and after a SIGKILL of the API process, and after the API hangs, `/health` is 200 again within 30 s (NFR-05);
 - the rollback drill: `deploy.sh` puts the previous tag back when a new one does not start, as a second Compose project beside the stack ([Every deploy](#every-deploy)).
 
 ```bash
@@ -149,7 +157,7 @@ They find the containers of the Compose project `COMPOSE_PROJECT_NAME` names, `r
 `make test` leaves the suite out (`-m "not integration"` in `pyproject.toml`).
 
 CI's `Integration (Compose stack)` job runs the suite on every pull request that touches the package, the `Dockerfile`, `deploy/`, the dependencies or the suite.
-CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version and writes a comparables index of the same fixture to `data/processed/comparables.parquet`), builds the image around both, starts the stack, runs the suite with their versions as the expected ones, prints both containers' logs if anything failed and always tears the stack down.
+CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthetic fixture into `models/` (`uv run python -m tests.fixtures.synthetic_bundle lgbm-basic models`, which prints the bundle's version and writes a comparables index of the same fixture to `data/processed/comparables.parquet`), builds the image around both, checks the Prometheus configuration with `make prometheus-check`, starts the stack, runs the suite with their versions as the expected ones, prints `docker stats` of every container, prints the containers' logs if anything failed and always tears the stack down.
 
 ## Continuous delivery
 
@@ -400,11 +408,17 @@ cat deploy-last-run.log                      # the whole output of the last depl
 docker compose -p recommenditos ps           # state and health of the containers
 docker compose -p recommenditos logs -f --tail 100   # the logs, joined by request_id (api.md#following-one-request)
 cat stack/compose.yaml                       # the stack files that run (The stack files on the VM)
+docker stats --no-stream                     # memory and CPU of every container against its limit
+docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env exec prometheus \
+  wget -qO- 'http://127.0.0.1:9090/api/v1/targets?state=active'   # is every target up?
 ```
+
+Prometheus publishes no port; [Monitoring](monitoring.md#reachable-only-inside-the-stack) has more queries and a temporary SSH tunnel to its web page.
 
 After a change to `.env`, `./deploy.sh deploy <the tag that runs>` starts the stack again with it, with the stack files that run.
 `rollback` goes back one step, to the tag and the stack files that ran before the last deploy; to go further back, deploy an older tag.
 After a successful deploy, `deploy.sh` removes the API and stack images of the tags it deployed before, except the one that runs and the previous one, since each costs disk, of which there is 20 GB; any other tag can be pulled again.
+It leaves the images of Prometheus, cAdvisor and node-exporter alone, so after an update of one, its old version stays until `docker image prune` removes the images no container uses (366 MB for the three on 2026-11-04).
 
 ### Turn continuous deployment on
 

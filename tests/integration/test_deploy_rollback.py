@@ -26,6 +26,7 @@ import time
 import httpx2
 import pytest
 from tests.integration.conftest import COMPOSE_PROJECT, Container, docker
+import yaml
 
 from recommenditos.config import PROJ_ROOT
 
@@ -53,6 +54,11 @@ TAGS = (GOOD, NEWER, NEWEST, BROKEN)
 NEVER_TRAVEL = {".dockerignore", "stack.Dockerfile", ".env.template"}
 #: A path a changed nginx.conf answers, which the API itself does not have.
 MARKER_PATH = "/drill-stack"
+
+#: The services of the stack files that were copied by hand before stack images
+#: existed (#279): those files were compose.yaml and nginx.conf alone, without
+#: the configuration folders that later services such as Prometheus mount.
+BY_HAND_SERVICES = ("api", "proxy")
 #: A service a newer compose.yaml adds, with a named volume of its own.
 EXTRA_SERVICE = """\
   extra:
@@ -414,8 +420,21 @@ def test_the_first_release_takes_over_the_stack_files_that_were_copied_by_hand(
     drill: Stack,
 ) -> None:
     """The VM before stack images: the files beside .env, started by the old deploy.sh."""
-    for name in ("compose.yaml", "nginx.conf"):
-        shutil.copy(PROJ_ROOT / "deploy" / name, drill.directory / name)
+    compose = yaml.safe_load((PROJ_ROOT / "deploy" / "compose.yaml").read_text(encoding="utf-8"))
+    services = {name: compose["services"][name] for name in BY_HAND_SERVICES}
+    mounted = {
+        str(mount).split(":", 1)[0]
+        for service in services.values()
+        for mount in service.get("volumes", [])
+    }
+    compose["services"] = services
+    compose["volumes"] = {
+        name: config for name, config in compose["volumes"].items() if name in mounted
+    }
+    (drill.directory / "compose.yaml").write_text(
+        yaml.safe_dump(compose, sort_keys=False), encoding="utf-8"
+    )
+    shutil.copy(PROJ_ROOT / "deploy" / "nginx.conf", drill.directory / "nginx.conf")
     nginx = drill.directory / "nginx.conf"
     text = nginx.read_text(encoding="utf-8").rstrip()
     nginx.write_text(

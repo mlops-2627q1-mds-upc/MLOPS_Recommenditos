@@ -1443,6 +1443,33 @@ How to add an entry:
 - **Other evidence:** [Issue #191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191), [PR #282](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/282), [Reading the log](../docs/docs/api.md#reading-the-log), [`prediction_log.py`](../recommenditos/api/prediction_log.py), EDN-86.
 - **In LaTeX:** yes
 
+### EDN-99: Prometheus, cAdvisor and node-exporter run in every stack, with no public port
+
+- **Date:** 2026-11-04
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Containerization
+- **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
+- **Decision:** Prometheus scrapes the API, cAdvisor (per container) and node-exporter (the host) every 15 s inside the Compose network and keeps at most 2 GB or 60 days.
+  None publishes a port, and all always run, without a Compose profile.
+- **Alternatives considered:**
+  - node-exporter only: no container's memory against its limit, and no restarts.
+  - cAdvisor only: a weak view of the host's disk, which NFR-04's 4 GB floor is about.
+  - A Compose profile: CI, laptops, and the VM would run different stacks.
+- **Rationale:** NFR-04 limits each container and the disk, and each exporter covers one of them.
+  The VM's ports 8080 to 8089 are public, so nothing new is published.
+  The three used 79 MiB of their 640 MiB of limits on a laptop.
+  cAdvisor runs as root with the Docker socket, the tested exception to the shared hardening.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI proposed the exporters, the retention, and the closed ports; Lukas took the package unchanged.
+  AI built it, with tests that every target is up, the retention is set, and only nginx publishes a port.
+  AI accepted the exporters' fixable Go findings in `.trivyignore` until 2026-12-04, each with a reason.
+- **AI interaction evidence:** Claude Code session of 2026-11-04.
+  Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "Exporters: cAdvisor (container RAM against limits, restarts) + node-exporter (host RAM, disk). No ports to the outside. Prometheus keeps at most 2 GB or 60 days."
+  Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
+- **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

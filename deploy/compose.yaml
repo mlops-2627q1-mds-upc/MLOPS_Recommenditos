@@ -1,4 +1,5 @@
-# The serving stack: the API behind nginx (docs/docs/deployment.md, EDN-87).
+# The serving stack: the API behind nginx (docs/docs/deployment.md, EDN-87), and
+# the resource monitoring beside it (docs/docs/monitoring.md, EDN-99).
 #
 # Locally, from the repository root after `dvc pull`:
 #     docker compose -f deploy/compose.yaml up -d --build --wait     (make stack)
@@ -16,8 +17,8 @@
 name: recommenditos
 
 # Docker keeps a container's log in json-file without a limit by default. Each
-# service keeps at most 5 files of 10 MB, 100 MB in all, of the VM's 20 GB
-# (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
+# service keeps at most 5 files of 10 MB, 250 MB for the five services, of the
+# VM's 20 GB (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
 # day, so the API's 50 MB hold about a week of it, and each service's 50 MB
 # hold about 120,000 requests of history.
 x-logging: &logging
@@ -26,13 +27,15 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
-# The hardening both containers share (NFR-09, #200). The root file system is
-# read-only, so a service writes only to the tmpfs mounts and the volume listed
-# under it; every Linux capability is dropped, since neither binds a port below
+# The hardening every service shares (NFR-09, #200). The root file system is
+# read-only, so a service writes only to the tmpfs mounts and the volumes listed
+# under it; every Linux capability is dropped, since none binds a port below
 # 1024, changes a file's owner or switches user; and `no-new-privileges` keeps a
-# setuid binary in an image from raising a process's privileges. Neither service
-# needed an exception: both run with no capability at all. The API needed one
-# writable path more than before, a tmpfs on /tmp (see there).
+# setuid binary in an image from raising a process's privileges. Every service
+# runs with no capability at all. The one exception is cAdvisor's user, root
+# (see there). The API needed one writable path more than before, a tmpfs on
+# /tmp (see there). tests/integration/test_deployed_container.py checks this
+# for every service of this file.
 x-hardening: &hardening
   read_only: true
   cap_drop:

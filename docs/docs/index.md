@@ -17,6 +17,7 @@ How to run the API, its endpoints and its error shape: [The API](api.md).
 The web page that a browser gets at the service's address, and how its traffic is marked: [The web page](web-ui.md).
 Every operation and field of the API contract, rendered from the committed OpenAPI document: [API reference](api-reference.md).
 How the API runs in Docker behind nginx, locally and on the VM: [Deployment](deployment.md).
+What the running system reports about itself and its machine, and how to look at it: [Monitoring](monitoring.md).
 How the system is put together, the patterns it uses and the decisions behind them: [Architecture](architecture.md).
 Where notebooks live, how they are run and which checks they pass: [Notebooks](notebooks.md).
 

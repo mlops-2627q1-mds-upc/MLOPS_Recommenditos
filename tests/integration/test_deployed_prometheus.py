@@ -82,7 +82,9 @@ def test_every_target_is_up(prometheus_container):
 def test_prometheus_keeps_at_most_2_gb_for_60_days_in_a_named_volume(prometheus_container):
     """The retention caps are configured, not just intended (NFR-04's deployment check)."""
     flags = api_get(prometheus_container, "/api/v1/status/flags")
-    assert flags["storage.tsdb.retention.size"] == "2GB", flags["storage.tsdb.retention.size"]
+    # Prometheus reads a size's units as powers of two, so compose.yaml's 2GB is
+    # 2 GiB, 2.15 GB, and the flag API writes it back so.
+    assert flags["storage.tsdb.retention.size"] == "2GiB", flags["storage.tsdb.retention.size"]
     assert flags["storage.tsdb.retention.time"] == "60d", flags["storage.tsdb.retention.time"]
 
     path = flags["storage.tsdb.path"]
