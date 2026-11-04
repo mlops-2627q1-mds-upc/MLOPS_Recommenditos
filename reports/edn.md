@@ -1505,6 +1505,38 @@ How to add an entry:
 - **Other evidence:** [Issue #227](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227), [PR #285](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/285), [PR #283](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/283), [Replay](../docs/docs/monitoring.md#replay), EDN-14.
 - **In LaTeX:** yes
 
+### EDN-101: A loop container tests each window for drift and keeps the results in SQLite
+
+- **Date:** 2026-11-04
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Containerization
+- **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
+- **Decision:** Alibi Detect 0.13 runs in its own uv project, a `KSDrift` or `ChiSquareDrift` per feature at 0.005 / 23, on windows of 1,000 logged requests; a new model version closes a window as partial.
+  A shell loop starts a pass every 15 minutes; it stores windows and p-values in `monitor.db` and exports the latest through node-exporter's textfile collector.
+  The NFR-11 test runs on the real samples in CD before any push; a pull request skips it.
+- **Alternatives considered:**
+  - uv `conflicts` groups or a workspace: break `default-groups` or force one resolution.
+  - `TabularDrift`: cannot drop missing values per feature.
+  - A systemd timer or a scheduled workflow: not versioned with the release, or against EDN-94.
+  - Tables in the prediction log, JSON files, or Prometheus alone: lock contention, hard to query, or lost to retention.
+  - Pushgateway, an own exporter, or the Grafana SQLite plugin: a service, code, or an unverified plugin.
+  - DagsHub credentials for pull requests: reverses EDN-91, exposes a write-capable token, and an outage fails every PR.
+  - Committing the samples: data outside DVC (NFR-06).
+- **Rationale:** Python runs only during a pass, and with no healthcheck a failing pass cannot fail a deploy.
+  The CD gate keeps EDN-91 at the cost of checking after the merge.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI proposed and built it.
+  The review of PR #283 added the age as-of rule; a measured pass peaked at 197 MiB.
+- **AI interaction evidence:** Claude Code session of 2026-11-04.
+  Question (translated from German): "How is the drift job (Alibi Detect, needs up to about 400 MiB per run) started regularly on the VM?"
+  Lukas answered: "Loop container. A tiny shell loop starts a Python run every 15 minutes, which then ends (about 2 MiB between runs). It comes and goes with every release (#279) and survives restarts. Cost: #228's criterion 'not kept running' becomes 'no permanently running Python process'." (translated)
+  Package question: "Adopt the remaining architecture recommendations as a package?", listing "Alibi Detect: own uv project", "Results: own SQLite file monitor.db; to Grafana through the node-exporter textfile", "Windows: 1,000 consecutive requests; a model change closes the window" (translated); Lukas answered: "Adopt all" (translated).
+  Question (translated): "EDN decision (#228): the NFR-11 test needs the real DVC data, but per EDN-91 the DagsHub credentials exist only for main, not for PR branches. Where does the test run?"
+  Lukas answered: "A: as a gate in CD. The test runs in CD after the data pull and before the push. If it fails or data is missing, nothing is shipped. In PR CI it is skipped with a reason, the PR shows the local run. EDN-91 stays, but the check comes only after the merge." (translated)
+- **Other evidence:** [Issue #228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228), [Drift job](../docs/docs/monitoring.md#drift-job), EDN-14.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

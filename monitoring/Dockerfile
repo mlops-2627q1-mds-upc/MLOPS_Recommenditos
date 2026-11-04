@@ -8,10 +8,11 @@
 # tag, and bakes in the samples of `dvc pull monitoring_samples`; without
 # data/monitoring/ the build fails at the COPY below.
 #
-# It runs as an unprivileged user and writes nothing: the stack starts it with a
-# read-only root file system and no capabilities (deploy/compose.yaml). The
-# environment comes from monitoring/uv.lock, apart from the project's own,
-# because the drift job's Alibi Detect needs numpy<2 and pandas<3.
+# It runs as an unprivileged user with a read-only root file system and no
+# capabilities (deploy/compose.yaml): the replay writes nothing, the drift job
+# (the stack's `monitor` service) only its volumes and /tmp. The environment
+# comes from monitoring/uv.lock, apart from the project's own, because the drift
+# job's Alibi Detect needs numpy<2 and pandas<3.
 
 # The same uv and Python images as the API's Dockerfile, pinned by digest, which
 # Dependabot moves together with the tag.
@@ -28,10 +29,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=monitoring/uv.lock,target=uv.lock \
     --mount=type=bind,source=monitoring/pyproject.toml,target=pyproject.toml \
     uv sync --locked --no-dev --no-install-project
+# Pillow out again: Alibi Detect 0.13 requires Pillow<11, which has dozens of
+# fixed HIGH and CRITICAL findings, and only its image detectors and
+# Matplotlib use it, none of which the jobs import. The stack's integration
+# suite checks that it is gone and that a pass still runs
+# (tests/integration/test_deployed_monitor.py).
+RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
 FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
 RUN groupadd --system --gid 10002 monitor \
     && useradd --system --uid 10002 --gid monitor --no-create-home --shell /usr/sbin/nologin monitor
+# The mount point of the drift job's volume `monitor-results`, owned by the user
+# the job runs as, the API's (10001, deploy/compose.yaml), so that Docker gives
+# a new volume that owner when it first mounts it.
+RUN mkdir -p /var/lib/recommenditos-monitor && chown 10001:10001 /var/lib/recommenditos-monitor
 COPY --from=dependencies /app/.venv /app/.venv
 # The package, compiled here, since the read-only root lets Python write no
 # bytecode at run time.
@@ -43,7 +54,15 @@ COPY data/monitoring /app/data/monitoring
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    RECOMMENDITOS_MONITORING_DATA_DIR=/app/data/monitoring
+    RECOMMENDITOS_MONITORING_DATA_DIR=/app/data/monitoring \
+    # Alibi Detect imports Matplotlib, Numba and transformers, which want a
+    # writable cache directory; the root is read-only, /tmp a tmpfs. Without
+    # PyTorch or TensorFlow, which the job does not need, transformers would
+    # warn about them on every pass.
+    MPLCONFIGDIR=/tmp/matplotlib \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    HF_HOME=/tmp/huggingface \
+    TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 WORKDIR /app
 USER 10002:10002
 ENTRYPOINT ["python", "-m", "recommenditos_monitoring"]

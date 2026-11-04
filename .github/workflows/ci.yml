@@ -216,9 +216,28 @@ jobs:
       # The monitoring jobs have a locked environment of their own (monitoring/),
       # with numpy 1.26 and pandas 2, so their tests run there, in this required
       # job rather than in one of their own that branch protection would not know.
+      # The NFR-11 test needs the real samples, which a pull request cannot pull
+      # (the DagsHub credentials are main's only, EDN-91): it skips here, says
+      # so in the job summary, and runs in CD's publish job before every release.
       - name: Run the tests of the monitoring jobs
         if: needs.changes.outputs.code == 'true'
-        run: make test-monitoring
+        shell: bash
+        env:
+          PYTEST_ADDOPTS: -rs
+        run: |
+          set -o pipefail
+          make test-monitoring | tee "$RUNNER_TEMP/monitoring-tests.log"
+      - name: Publish the skipped monitoring tests to the job summary
+        if: always() && needs.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          {
+            echo '## Monitoring tests skipped in this job'
+            echo
+            echo "The NFR-11 test runs on the real samples in CD's publish job before every release (docs/docs/monitoring.md#drift-job)."
+            echo
+            grep '^SKIPPED' "$RUNNER_TEMP/monitoring-tests.log" | sed 's/^/- /' || echo 'None.'
+          } >> "$GITHUB_STEP_SUMMARY"
       # NFR-07's 80 % is reviewed on the delivery commit, so put the coverage
       # of every run in the job summary instead of digging it out of the log.
       - name: Publish coverage to the job summary
@@ -361,13 +380,9 @@ jobs:
         if: needs.changes.outputs.stack == 'true'
         # CI cannot `dvc pull` the real samples (data/monitoring/), so the image
         # gets the six control and six ES listings of the monitoring tests, as
-        # the stage writes them, with the real manifest's reference date.
-        run: |
-          mkdir -p data/monitoring
-          for sample in control es; do
-            gzip -nc "monitoring/tests/fixtures/$sample.jsonl" > "data/monitoring/$sample.jsonl.gz"
-          done
-          cp monitoring/tests/fixtures/manifest.json data/monitoring/
+        # the stage writes them, with the real manifest's reference date, and a
+        # drift reference computed from the control listings (monitoring/tests/samples.py).
+        run: uv run --directory monitoring --locked python -m tests.samples ../data/monitoring
       - name: Build the images
         id: build
         if: needs.changes.outputs.stack == 'true'

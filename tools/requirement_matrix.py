@@ -45,11 +45,15 @@ import io
 import json
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 
 from loguru import logger
 import pytest
 import typer
 import yaml
+
+from tools.req_markers import MARKER, MarkerCollector, collect_arguments
 
 # Derived from this file's own location rather than imported from
 # `recommenditos.config`: the matrix is repository metadata about the checkout it
@@ -63,11 +67,12 @@ REQUIREMENTS_DOC = PROJ_ROOT / "docs" / "docs" / "requirements.md"
 SPECIFICATION_DOC = PROJ_ROOT / "docs" / "docs" / "specification.md"
 EXPECTED_COVERAGE_FILE = Path(__file__).resolve().parent / "expected_coverage.yaml"
 TESTS_DIR = PROJ_ROOT / "tests"
+#: The monitoring jobs' own uv project, whose tests run in its environment (numpy 1.26,
+#: pandas 2 and Alibi Detect), which the root project cannot import.
+MONITORING_DIR = PROJ_ROOT / "monitoring"
 MATRIX_MD = PROJ_ROOT / "reports" / "requirement-matrix.md"
 MATRIX_JSON = PROJ_ROOT / "reports" / "requirement-matrix.json"
 
-#: The marker a test uses to declare the requirements it verifies.
-MARKER = "req"
 
 #: How the specification's "Verified by" column tags an entry.
 AUTOMATED = "automated"
@@ -357,33 +362,6 @@ def unknown_marker_ids(marked_ids: tuple[str, ...]) -> list[str]:
 # --------------------------------------------------------------------------
 
 
-class _MarkerCollector:
-    """Records the `req` markers pytest sees, without running a single test."""
-
-    def __init__(self) -> None:
-        self.marked: dict[str, tuple[str, ...]] = {}
-        self.empty: list[str] = []
-
-    def pytest_collection_modifyitems(self, items) -> None:
-        for item in items:
-            markers = list(item.iter_markers(name=MARKER))
-            ids = tuple(dict.fromkeys(str(arg) for marker in markers for arg in marker.args))
-            # A parametrised test is one test in the matrix: twelve rows of the
-            # same node ID with a different `[case]` suffix say nothing extra.
-            test_id = item.nodeid.partition("[")[0]
-            if markers and not ids:
-                # Recorded rather than ignored. `@pytest.mark.req()` reads like a
-                # record of coverage and is none, and the per-test check in
-                # tests/conftest.py cannot see it on a test that never runs, so
-                # skipping it here left it caught by nothing at all.
-                if test_id not in self.empty:
-                    self.empty.append(test_id)
-                continue
-            if not ids:
-                continue
-            self.marked.setdefault(test_id, ids)
-
-
 def collect_req_markers(tests_dir: Path = TESTS_DIR) -> dict[str, tuple[str, ...]]:
     """Every test's `req` marker, read from a real pytest collection.
 
@@ -391,30 +369,8 @@ def collect_req_markers(tests_dir: Path = TESTS_DIR) -> dict[str, tuple[str, ...
     pytest sees, so a marker on a class or a module counts like one written
     above a function, and a test that was renamed cannot linger in the matrix.
     """
-    collector = _MarkerCollector()
-    # The configuration and the root are passed explicitly, so the matrix builds
-    # the same from any working directory, and nothing is cached because collecting
-    # is not a test run.
-    #
-    # `-o addopts=` drops the project's own `addopts` for this run, which is what
-    # keeps a collection from pretending to be one. Inheriting them made the
-    # collect-only run rewrite `reports/junit.xml` as a `tests="0"` document, so
-    # building the matrix after `make test` destroyed the record of the 114 tests
-    # that had just passed. The reports belong to the real test run; this run
-    # produces none.
-    arguments = [
-        "--collect-only",
-        "-q",
-        "-o",
-        "addopts=",
-        "-p",
-        "no:cacheprovider",
-        "-c",
-        str(PROJ_ROOT / "pyproject.toml"),
-        "--rootdir",
-        str(PROJ_ROOT),
-        str(tests_dir),
-    ]
+    collector = MarkerCollector()
+    arguments = collect_arguments(PROJ_ROOT / "pyproject.toml", PROJ_ROOT, tests_dir)
     # Swallowed on purpose: one line per collected test would bury the matrix in
     # the CI log. It is handed back in the error when collection fails, which is
     # the only case where anyone wants to read it.
@@ -433,6 +389,52 @@ def collect_req_markers(tests_dir: Path = TESTS_DIR) -> dict[str, tuple[str, ...
             "or take the marker off"
         )
     return collector.marked
+
+
+def collect_monitoring_markers(
+    project: Path = MONITORING_DIR, timeout_s: float = 600.0
+) -> dict[str, tuple[str, ...]]:
+    """The `req` markers of the monitoring jobs' tests, collected in their own environment.
+
+    Their tests import numpy 1.26, pandas 2 and Alibi Detect, which this project's
+    environment cannot hold, so pytest collects them in `monitoring/`'s, through
+    `uv run`, with the same collector (tools/req_markers.py, which imports nothing
+    but pytest). Their IDs count like any other: the NFR-11 test runs on the real
+    samples only where they can be pulled, in CD (docs/docs/monitoring.md), and is
+    evidence wherever it is collected.
+    """
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "markers.json"
+        command = [
+            "uv",
+            "run",
+            "--directory",
+            str(project),
+            "--locked",
+            "python",
+            str(Path(__file__).resolve().parent / "req_markers.py"),
+            str(project / "pyproject.toml"),
+            str(project),
+            str(project / "tests"),
+            str(output),
+        ]
+        result = subprocess.run(  # noqa: S603 - uv with paths of this checkout
+            command, capture_output=True, text=True, timeout=timeout_s, check=False
+        )
+        if result.returncode != 0 or not output.is_file():
+            raise TraceabilityError(
+                f"pytest could not collect the monitoring tests in {project} "
+                f"(exit code {result.returncode}):\n{result.stdout}{result.stderr}"
+            )
+        collected = json.loads(output.read_text(encoding="utf-8"))
+    prefix = project.relative_to(PROJ_ROOT).as_posix()
+    if collected["empty"]:
+        raise TraceabilityError(
+            f"@pytest.mark.{MARKER} names no requirement ID in "
+            f"{', '.join(f'{prefix}/{name}' for name in sorted(collected['empty']))}; "
+            "give it the IDs the test verifies or take the marker off"
+        )
+    return {f"{prefix}/{test}": tuple(ids) for test, ids in collected["marked"].items()}
 
 
 # --------------------------------------------------------------------------
@@ -671,7 +673,7 @@ def main(markdown_path: Path = MATRIX_MD, json_path: Path = MATRIX_JSON):
             requirements_text=REQUIREMENTS_DOC.read_text(encoding="utf-8"),
             specification_text=SPECIFICATION_DOC.read_text(encoding="utf-8"),
             coverage_text=EXPECTED_COVERAGE_FILE.read_text(encoding="utf-8"),
-            markers=collect_req_markers(),
+            markers={**collect_req_markers(), **collect_monitoring_markers()},
         )
     except TraceabilityError as error:
         # Logged rather than raised: a mismatch between the documents and the

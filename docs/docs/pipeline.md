@@ -523,7 +523,7 @@ Each is written twice, with the same listings in the same order:
 | `<numeric>__missing` for each of the eight numeric features | `str`, `missing` or `present` | categorical, chi-square | never |
 
 `model` is not a feature: its 349 levels leave well under one expected count per chi-square cell in a window of 1,000 (EDN-14).
-`age_years__missing`, `mileage_km_raw__missing` and `power_kw__missing` are always `present`, because their fields are among those FR-01 requires: the drift job has to give these constant features a test that accepts a single category, or leave them out and say so.
+`age_years__missing`, `mileage_km_raw__missing` and `power_kw__missing` are always `present`, because their fields are among those FR-01 requires: the drift job's `ChiSquareDrift` accepts such a one-category feature and gives it the p-value 1, so they stay among the 23 ([Drift job](monitoring.md#drift-job)).
 
 The features, the age rule and the month shift are in `recommenditos/data/drift_features.py`, which imports only numpy, pandas and the standard library, so the drift job's own environment (pandas 2, numpy 1.26 for Alibi Detect) can carry a byte-identical copy of it.
 The age rule keeps the age of a replayed listing the one the model was trained on:
