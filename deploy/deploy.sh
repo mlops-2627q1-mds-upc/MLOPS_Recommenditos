@@ -28,7 +28,8 @@
 # the API leaves every other container as it is.
 #
 # A tag CD pushed before the stack image existed has none: such a tag runs with
-# the stack files that run now, and the log says so. When an image cannot be
+# the stack files that run now, and the log says so; only its API image is
+# pulled, since it has no other images. When an image cannot be
 # pulled for any other reason, nothing changes. When the stack does not become
 # healthy, the previous tag goes back into `.env`, the previous stack files back
 # behind `stack`, and both start again; the script exits 1 (2 if the previous
@@ -442,7 +443,7 @@ go_back() {
 }
 
 deploy() {
-    local tag=$1 current current_stack target image images log
+    local tag=$1 current current_stack target image images lister log
     current=$(env_value API_IMAGE_TAG)
     adopt_copied_files
     current_stack=
@@ -468,9 +469,15 @@ deploy() {
         out "running: $current"
         exit 1
     fi
-    # The new compose.yaml names the images.
+    # The new compose.yaml names the images. A tag without a stack image has
+    # only its API image: the stack files that run now may name images of
+    # their own release, such as the monitoring image, that it never had.
     stack_dir=$STACKS_DIR/$target
-    if ! images=$(release_images "$tag"); then
+    lister=release_images
+    if [[ -z $fetched ]]; then
+        lister=image_of
+    fi
+    if ! images=$("$lister" "$tag"); then
         registry_logout
         record "deploy $tag pull-failed"
         say "the compose.yaml of $tag names no images Compose can list; nothing changed"

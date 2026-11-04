@@ -448,10 +448,15 @@ def test_a_stack_image_with_a_link_is_refused(tmp_path: Path):
 
 
 def with_monitoring_image(vm: FakeVM, tmp_path: Path) -> None:
-    """A release whose compose.yaml names the monitoring image too, and images elsewhere."""
+    """A release whose compose.yaml names the monitoring image too, and images elsewhere.
+
+    Two of those elsewhere share the namespace's prefix without being in it, so a
+    filter that matches the prefix instead of the namespace pulls them too.
+    """
     repositories = tmp_path / "release-repositories"
     repositories.write_text(
-        f"{MONITORING_IMAGE}\nghcr.io/elsewhere/tool\nrecommenditos-monitoring\n",
+        f"{MONITORING_IMAGE}\nghcr.io/elsewhere/tool\nghcr.io/example-evil/tool\n"
+        "ghcr.io/examples/monitoring\nrecommenditos-monitoring\n",
         encoding="utf-8",
     )
     vm.environment["FAKE_RELEASE_REPOSITORIES"] = str(repositories)
@@ -478,6 +483,26 @@ def test_every_image_of_the_release_in_its_namespace_is_pulled_with_the_one_logi
     assert pulled == [f"{MONITORING_IMAGE}:{SHA}"]
     assert f"pull of {MONITORING_IMAGE}:{SHA} with DOCKER_CONFIG={tmp_path}" in calls
     assert "--profile * config --images" in calls
+    assert f"API_IMAGE_TAG={SHA}\n" in vm.env_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13")
+def test_a_tag_without_a_stack_image_pulls_only_its_api_image(tmp_path: Path):
+    """The stack files that run now name a monitoring image such a tag never had."""
+    vm = FakeVM(tmp_path)
+    with_monitoring_image(vm, tmp_path)
+    vm.local_images.write_text("", encoding="utf-8")
+    pullable = tmp_path / "pullable"
+    pullable.write_text(f"{API_IMAGE}:{SHA}\n", encoding="utf-8")
+    vm.environment["FAKE_PULLABLE"] = str(pullable)
+
+    result = vm.run("deploy", SHA, FLAG)
+
+    calls = vm.log.read_text(encoding="utf-8")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"{SHA} has no stack image" in result.stdout
+    pulled = [line.split()[2] for line in calls.splitlines() if line.startswith("pull of ")]
+    assert pulled == [f"{STACK_IMAGE}:{SHA}", f"{API_IMAGE}:{SHA}"]
     assert f"API_IMAGE_TAG={SHA}\n" in vm.env_file.read_text(encoding="utf-8")
 
 
