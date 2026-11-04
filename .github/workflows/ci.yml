@@ -397,6 +397,7 @@ jobs:
         shell: bash
         run: |
           compose=(docker compose -f deploy/compose.yaml)
+          docker compose version
           # The six fixture listings at one per 20 s: still running at the check.
           "${compose[@]}" --profile replay run -d --name replay-during-deploy replay \
             --control 6 --rate 0.05

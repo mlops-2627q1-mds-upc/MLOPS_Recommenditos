@@ -2,7 +2,9 @@
 
 The API is an `httpx.MockTransport` that answers like the real one: a valuation
 with a `request_id`, a feedback with 201. The listings are six of each real
-sample (tests/fixtures/), some of them without optional fields such as `gears`.
+sample (tests/fixtures/), some of them without optional fields such as `gears`,
+all of makes and values the synthetic bundle of CI's integration job accepts
+(BMW, Porsche, Mercedes-Benz), because that job replays them against its stack.
 """
 
 from collections.abc import Callable, Iterator
