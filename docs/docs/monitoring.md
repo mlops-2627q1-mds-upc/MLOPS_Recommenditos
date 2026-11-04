@@ -179,14 +179,16 @@ The replay streams the samples a listing at a time and keeps only its counts: in
 
 Over SSH, with UPClink off campus, as `recommenditos`, from `/opt/recommenditos`, with the paths `deploy.sh` uses ([The stack files on the VM](deployment.md#the-stack-files-on-the-vm)).
 `deploy.sh` pulls the monitoring image of every release beside the API image, so the image of the running tag is there; `.env` names its repository in `MONITORING_IMAGE`, as `.env.template` does.
-A long run goes in the background, so a dropped SSH connection does not end it:
+A long run goes in the background, so a dropped SSH connection does not end it.
+Its output goes into a file beside `.env` as it is written, because the next deploy's `up --remove-orphans` removes a replay container that has ended, and its logs with it, so the summary must not wait in `docker logs`:
 
 ```bash
 ssh -p 22052 recommenditos@nattech.fib.upc.edu
 cd /opt/recommenditos
 docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env --profile replay \
     run -d --name replay replay --control 5000 --then es --rate 5
-docker logs -f replay          # the progress, and the summary at the end
+nohup docker logs -f replay > "replay-$(date -u +%Y-%m-%dT%H%M%SZ).log" 2>&1 &
+tail -f replay-*.log           # the progress, and the summary at the end
 docker rm replay               # once it has ended
 ```
 
