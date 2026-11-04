@@ -619,10 +619,8 @@ _PREPROCESS_PROCESS = textwrap.dedent(
     print(json.dumps({
         "seen": seen,
         "dispatch": list(__cpu_dispatch__),
-        "avx512_on": sorted(
-            name for name, on in __cpu_features__.items()
-            if on and name.startswith(("AVX512", "X86_V4"))
-        ),
+        "targets_on": [name for name in __cpu_dispatch__ if __cpu_features__[name]],
+        "cpu_has_avx512": __cpu_features__["AVX512F"],
         "bits": [float(value).hex() for value in log_price],
     }))
     """
@@ -677,12 +675,16 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
         "numpy loaded before recommenditos/__init__.py set NPY_DISABLE_CPU_FEATURES"
     )
     assert set(seen["dispatch"]) - {"X86_V3"} == set((disabled or "").split())
-    assert seen["avx512_on"] == []
+    # The variable turns off the dispatch targets; `__cpu_features__` still
+    # reports the CPU's own AVX-512 features (AVX512F and the rest) as present.
+    assert set(seen["targets_on"]) <= {"X86_V3"}
     if sys.platform != "win32":
         # Without AVX-512, numpy's float64 `log` comes from the C library, and
         # Windows's rounds 285,343 the other way (0x1.91f76036223acp+3, CI on
         # 2026-11-04): `log_price` matches Linux's on no Windows machine (#259).
-        assert seen["bits"] == list(_LOG_PRICE_BITS.values())
+        assert seen["bits"] == list(_LOG_PRICE_BITS.values()), (
+            f"AVX-512 on this CPU: {seen['cpu_has_avx512']}"
+        )
 
 
 def test_every_stage_declares_its_own_module_as_a_dependency(dvc_stages):
