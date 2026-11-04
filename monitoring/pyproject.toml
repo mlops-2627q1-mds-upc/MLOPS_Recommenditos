@@ -25,7 +25,7 @@ dependencies = [
     # observed prices to /v1/feedback.
     "httpx>=0.28.1",
     # What drift_features.py imports, at the versions Alibi Detect 0.13 accepts.
-    "numpy>=1.26.4,<2",
+    "numpy>=1.26.4,<3",
     "pandas>=2.2.3,<3",
 ]
 
