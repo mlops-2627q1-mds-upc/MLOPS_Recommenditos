@@ -1513,7 +1513,7 @@ How to add an entry:
 - **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
 - **Decision:** Alibi Detect 0.13 runs in its own uv project, a `KSDrift` or `ChiSquareDrift` per feature at 0.005 / 23, on windows of 1,000 logged requests; a new model version closes a window as partial.
   A shell loop starts a pass every 15 minutes; it stores windows and p-values in `monitor.db` and exports the latest through node-exporter's textfile collector.
-  A window's MdAPE and coverage come from its feedback, need 200 or 300 labels, and are compared with the test values.
+  A window's MdAPE and coverage come from its feedback, need 200 or 300 labels, and alert at a one-sided 0.005 per window: MdAPE above 1.25 times the test value, coverage 2.576 binomial standard errors below nominal.
   The NFR-11 test runs on the real samples in CD before any push; a pull request skips it.
 - **Alternatives considered:**
   - uv `conflicts` groups or a workspace: break `default-groups` or force one resolution.
