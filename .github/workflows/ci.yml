@@ -393,7 +393,7 @@ jobs:
       - name: Check that a deploy leaves a running replay alone
         if: needs.changes.outputs.stack == 'true'
         # deploy.sh runs `up --wait --remove-orphans` on every release; a replay
-        # started by hand on the VM must survive it, on this Compose version too.
+        # started by hand on the VM must survive it, with this Compose version too.
         shell: bash
         run: |
           compose=(docker compose -f deploy/compose.yaml)
