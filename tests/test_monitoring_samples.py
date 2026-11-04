@@ -10,6 +10,7 @@ back to its listing, and that the same seed writes the same bytes.
 import ast
 from collections.abc import Iterator
 from pathlib import Path
+import sys
 
 import pandas as pd
 import pytest
@@ -19,20 +20,22 @@ import yaml
 from recommenditos.api.schemas.partial_listing import PartialListing
 from recommenditos.api.schemas.predict import ValuationRequest
 from recommenditos.config import PROJ_ROOT
+from recommenditos.data import drift_features as drift_module
 from recommenditos.data import monitoring_samples
 from recommenditos.data.build_features import age_years, read_supported_makes
-from recommenditos.data.monitoring_samples import (
+from recommenditos.data.drift_features import (
     ABSENT,
     CATEGORICAL,
     DRIFT_FEATURES,
-    MANIFEST_FILE,
     MISSING,
     NUMERIC,
     PRESENT,
-    SAMPLES,
+    as_of_for,
     drift_features,
-    read_replay,
+    months_since_reference,
+    shifted_registration,
 )
+from recommenditos.data.monitoring_samples import MANIFEST_FILE, SAMPLES, read_replay
 from recommenditos.data.split_data import HOLDOUT_NAME
 
 REFERENCE_SIZE = 300
@@ -172,6 +175,17 @@ def test_the_stage_refuses_sizes_train_cannot_fill(processed, params, tmp_path):
         run_stage(processed, tmp_path, params, control_size=10**6)
 
 
+def _imports(path: Path) -> set[str]:
+    """Every module name `path` imports, by `import x.y` or by `from x.y import z`."""
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module)
+    return names
+
+
 def _imported_modules(path: Path) -> set[Path]:
     """The project modules `path` imports, directly or through other project modules."""
     seen: set[Path] = set()
@@ -181,13 +195,11 @@ def _imported_modules(path: Path) -> set[Path]:
         if module in seen:
             continue
         seen.add(module)
-        for node in ast.walk(ast.parse(module.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
-                "recommenditos"
-            ):
-                target = PROJ_ROOT / Path(*node.module.split("."))
-                if target.with_suffix(".py").is_file():
-                    pending.append(target.with_suffix(".py"))
+        for name in _imports(module):
+            if name.startswith("recommenditos"):
+                target = (PROJ_ROOT / Path(*name.split("."))).with_suffix(".py")
+                if target.is_file():
+                    pending.append(target)
     return seen
 
 
@@ -211,3 +223,69 @@ def test_the_stage_writes_nothing_but_its_samples_and_manifest(samples):
         [MANIFEST_FILE] + [f"{n}.jsonl.gz" for n in SAMPLES] + [f"{n}.parquet" for n in SAMPLES]
     )
     assert files == expected
+
+
+def test_the_drift_feature_module_imports_only_numpy_pandas_and_the_standard_library():
+    """#228's environment (pandas 2, numpy 1.26) carries a copy and has no `recommenditos`."""
+    path = Path(drift_module.__file__)
+    roots = {name.split(".")[0] for name in _imports(path)}
+
+    assert roots - {"numpy", "pandas"} <= set(sys.stdlib_module_names), roots
+
+
+def test_the_inlined_age_is_the_one_training_computes(params):
+    bodies = [{"registration_date": month} for month in ("1999-01", "2016-02", "2025-11")]
+    registered = pd.to_datetime(pd.Series(["1999-01-01", "2016-02-01", "2025-11-01"]))
+
+    expected = age_years(registered, params["reference_date"])
+    actual = drift_features(bodies, params["reference_date"])["age_years"]
+    assert actual.tolist() == expected.tolist()
+
+
+@pytest.mark.parametrize(
+    ("when", "months"),
+    [
+        ("2025-11-08T00:00:00Z", 0),
+        ("2026-11-07T23:59:59Z", 11),
+        ("2026-11-08T00:00:00Z", 12),
+        ("2026-11-08T00:30:00+01:00", 11),
+        ("2026-12-31T23:59:59Z", 13),
+        ("2027-01-01T00:00:00Z", 13),
+    ],
+)
+def test_a_month_is_counted_at_midnight_utc_on_the_reference_day(params, when, months):
+    assert months_since_reference(when, params["reference_date"]) == months
+    expected = pd.Timestamp(params["reference_date"]) + pd.DateOffset(months=months)
+    assert as_of_for(when, params["reference_date"]) == expected
+
+
+@pytest.mark.parametrize("name", list(SAMPLES))
+@pytest.mark.parametrize(
+    # In the past, because a shifted date has to lie before the current month.
+    "answered_at",
+    ["2026-11-04T09:15:00Z", "2026-03-08T00:00:01Z", "2026-10-07T23:59:59Z"],
+)
+def test_a_replayed_request_as_logged_has_the_drift_features_of_its_reference_row(
+    samples, params, name, answered_at
+):
+    """Shift, validate, log as #191 does, read back at `as_of_for`: the parquet's row again."""
+    reference_date = params["reference_date"]
+    months = months_since_reference(answered_at, reference_date)
+    logged = []
+    for record in replay(samples, name):
+        sent = {
+            **record["body"],
+            "registration_date": shifted_registration(record["body"]["registration_date"], months),
+        }
+        request = ValuationRequest.model_validate(sent)
+        logged.append(request.model_dump(mode="json", exclude_unset=True, exclude_none=True))
+    as_of = [as_of_for(answered_at, reference_date)] * len(logged)
+
+    actual = drift_features(logged, as_of)
+    expected = pd.read_parquet(samples / f"{name}.parquet")[list(DRIFT_FEATURES)]
+    others = [feature for feature in DRIFT_FEATURES if feature != "age_years"]
+    pd.testing.assert_frame_equal(actual[others], expected[others], check_dtype=False)
+    # The shifted months and the months after the reference date are the same
+    # number but not always the same days: February and the 31st make up to three.
+    days = (actual["age_years"] - expected["age_years"]) * 365.25
+    assert days.round(6).between(-3, 3).all(), days.describe()

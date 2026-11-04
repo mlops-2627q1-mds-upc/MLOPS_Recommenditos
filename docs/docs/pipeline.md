@@ -506,15 +506,15 @@ The price is that the model was fitted on the control listings, so the error and
 Only listings the API accepts are drawn: a supported make (FR-04) and a body that both `ValuationRequest` and `PartialListing` validate, which needs every field FR-01 requires.
 Nothing else reaches the prediction log, so a reference holding other rows would compare every window with listings that can never appear in it, such as the 1 % of supported training listings without `power_kw`.
 `manifest.json` counts what was left out of each source and why: of `train`'s 61,180 listings, 802 have an unsupported make and 1,514 are no valid request, and of the holdout's 6,079, 100 and 200.
-On the samples of the committed `dvc.lock`, the scipy emulation of `reports/analysis/nfr11_check.py` at Bonferroni `0.005 / 23` flags none of the 20 control windows and all 5 `ES` windows, each with at least 12 drifted features besides `country_code`.
+On the samples of the committed `dvc.lock`, the scipy emulation of `reports/analysis/nfr11_check.py` at Bonferroni `0.005 / 23` flags none of the 20 control windows and all 5 `ES` windows, each with at least 12 drifted features besides `country_code`, both on the files as written and on the requests as the replay sends and the log records them, read back with the age rule below.
 
 Every sample is in a random order, so any run of consecutive rows is a random sample of its set and a replay can stop after any window.
 Each is written twice, with the same listings in the same order:
 
 - `<sample>.jsonl.gz`, for the replay: one JSON object per line with `listing_id`, `observed_price_eur` and `body`.
   `body` is the request as a client sends it, built by `recommenditos/data/request_body.py`, which the load test uses too: a missing value is left out, never sent as `null`, and the body is valid for `/v1/predict` and `/v1/price-range` alike.
-  `registration_date` is the listing's own; the replay shifts it to the send date, so the age the API computes matches the one the model was trained on.
-- `<sample>.parquet`, for the drift job: `listing_id`, `observed_price_eur` and the 23 features EDN-14 validated NFR-11 with, in its representation, derived from the body by `drift_features`.
+  `registration_date` is the listing's own; the replay shifts it when it sends (see the age rule below).
+- `<sample>.parquet`, for the drift job: `listing_id`, `observed_price_eur` and the 23 features EDN-14 validated NFR-11 with, in its representation, derived from the body by `drift_features` with the age on `reference_date`.
 
 | Columns | Type | Test | Missing |
 |---|---|---|---|
@@ -523,6 +523,20 @@ Each is written twice, with the same listings in the same order:
 | `<numeric>__missing` for each of the eight numeric features | `str`, `missing` or `present` | categorical, chi-square | never |
 
 `model` is not a feature: its 349 levels leave well under one expected count per chi-square cell in a window of 1,000 (EDN-14).
+`age_years__missing`, `mileage_km_raw__missing` and `power_kw__missing` are always `present`, because their fields are among those FR-01 requires: the drift job has to give these constant features a test that accepts a single category, or leave them out and say so.
+
+The features, the age rule and the month shift are in `recommenditos/data/drift_features.py`, which imports only numpy, pandas and the standard library, so the drift job's own environment (pandas 2, numpy 1.26 for Alibi Detect) can carry a byte-identical copy of it.
+The age rule keeps the age of a replayed listing the one the model was trained on:
+
+- The model learned ages on `reference_date`, 2025-11-08, and the API computes a request's age on the day it answers.
+- The replay shifts each `registration_date` forward by `months_since_reference(send time)`, the whole months from `reference_date` to the send time (`shifted_registration`).
+- The drift job computes the age of a logged request on `as_of_for(answered_at)`, which is `reference_date` advanced by the whole months to the answer time.
+- The two shifts cancel to within three days, the most by which the shifted months and the months after `reference_date` differ in length.
+  Without the second one a window's ages are up to a month too high (+0.066 to +0.079 years on the 4th of a month), which flags `age_years` in 1 or 2 of 20 control windows and breaks NFR-11's control clause; with it, none of the 20 is flagged at any of four answer times tried.
+- A month is complete at 00:00 UTC on the 8th, `reference_date`'s day of the month, not at the end of a calendar month.
+  A request sent before that instant and answered after it is read one month older than it was sent; that touches only the requests in flight at the instant, a handful at the replay's rates against a window of 1,000, and is accepted.
+- Real traffic, whose registration dates nobody shifts, would be read up to one month younger than the API computed it.
+  All M6 traffic is the replay ([EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): no real users), so the rule is stated here rather than corrected for.
 `listing_id` is `<split frame>:<row position>`, for example `train:4711`, so `pd.read_parquet("data/processed/train.parquet").iloc[4711]` is the listing.
 `manifest.json` also lists the numeric, categorical and missing-indicator features, so the drift job reads which test applies to a column instead of restating it.
 The seven files take 5.0 MB on disk, the control's replay file 2.5 MB of it.

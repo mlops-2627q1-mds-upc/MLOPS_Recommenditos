@@ -29,7 +29,9 @@ Each sample is written twice:
 - `<name>.jsonl.gz`: one JSON object per line, `{"listing_id", "observed_price_eur",
   "body"}`, where `body` is the request as a client sends it (`request_body.to_body`):
   a missing value is left out, never sent as `null`. `registration_date` is the
-  listing's own; the replay shifts it to the send date.
+  listing's own; the replay shifts it by `months_since_reference` of the send
+  time, and the drift job computes the age at `as_of_for` of the answer time
+  (the rule is in `recommenditos/data/drift_features.py`).
 - `<name>.parquet`: the same listings as the drift job compares them, the 23
   features EDN-14 validated NFR-11 with (`DRIFT_FEATURES`), derived from the body
   by `drift_features` with the age on `reference_date`.
@@ -41,7 +43,7 @@ features are numeric and which categorical. "The monitoring samples" in
 docs/docs/pipeline.md describes the files for the jobs that read them.
 """
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 import gzip
 import json
 from pathlib import Path
@@ -55,7 +57,16 @@ import typer
 
 from recommenditos.api.schemas.partial_listing import PartialListing
 from recommenditos.config import DATA_DIR, PARAMS_FILE, PROCESSED_DATA_DIR
-from recommenditos.data.build_features import age_years, read_supported_makes
+from recommenditos.data.build_features import read_supported_makes
+from recommenditos.data.drift_features import (
+    ABSENT,
+    CATEGORICAL,
+    MISSING,
+    MISSING_INDICATORS,
+    NUMERIC,
+    PRESENT,
+    drift_features,
+)
 from recommenditos.data.request_body import to_body
 from recommenditos.data.split_data import HOLDOUT_NAME
 from recommenditos.pipeline import load_params, read_frame, write_frame, write_json
@@ -72,39 +83,6 @@ MONITORING_DATA_DIR = DATA_DIR / "monitoring"
 SAMPLES: dict[str, str] = {"reference": "train", "control": "train", "es": HOLDOUT_NAME}
 
 MANIFEST_FILE = "manifest.json"
-
-#: The numeric features EDN-14 tested, compared on their non-missing values (KS).
-NUMERIC: tuple[str, ...] = (
-    "age_years",
-    "mileage_km_raw",
-    "power_kw",
-    "nr_prev_owners",
-    "gears",
-    "cylinders_volume_cc",
-    "nr_seats",
-    "nr_doors",
-)
-#: The categorical features EDN-14 tested (chi-square). `model` is not one: its
-#: 349 levels leave well under one expected count per cell in a window of 1,000.
-CATEGORICAL: tuple[str, ...] = (
-    "make",
-    "body_type",
-    "fuel_category",
-    "transmission",
-    "drive_train",
-    "seller_type",
-    "country_code",
-)
-#: Whether each numeric feature was sent, tested as a categorical, because a KS
-#: test on the non-missing values cannot see a change in how often one is missing.
-MISSING_INDICATORS: tuple[str, ...] = tuple(f"{name}__missing" for name in NUMERIC)
-#: The 23 features of NFR-11, in EDN-14's order.
-DRIFT_FEATURES: tuple[str, ...] = NUMERIC + CATEGORICAL + MISSING_INDICATORS
-
-#: The value of a categorical feature the request did not send.
-MISSING = "__MISSING__"
-#: The two values of a missing indicator.
-ABSENT, PRESENT = "missing", "present"
 
 SAMPLE_SCHEMA = Schema(
     name="monitoring-sample",
@@ -137,33 +115,6 @@ def accepted_body(listing: Mapping[str, Any], supported: frozenset[str]) -> dict
     except ValidationError:
         return None
     return body
-
-
-def drift_features(bodies: Iterable[Mapping[str, Any]], reference_date: str) -> pd.DataFrame:
-    """The drift features of request bodies, as the reference holds them.
-
-    A field the body does not carry is null for a numeric feature and `MISSING`
-    for a categorical one. The age is computed from `registration_date` on
-    `reference_date` by the function training and serving use.
-    """
-    frame = pd.DataFrame.from_records(list(bodies))
-    rows = len(frame)
-    out = pd.DataFrame(index=range(rows))
-
-    def column(name: str) -> pd.Series:
-        if name in frame:
-            return frame[name].reset_index(drop=True)
-        return pd.Series([None] * rows, dtype="object")
-
-    registered = pd.to_datetime(column("registration_date"), format="%Y-%m")
-    out["age_years"] = age_years(registered, reference_date).astype("float64")
-    for name in NUMERIC[1:]:
-        out[name] = pd.to_numeric(column(name)).astype("float64")
-    for name in CATEGORICAL:
-        out[name] = column(name).astype("str").where(column(name).notna(), MISSING)
-    for name in NUMERIC:
-        out[f"{name}__missing"] = np.where(out[name].isna(), ABSENT, PRESENT)
-    return out.astype({name: "str" for name in CATEGORICAL + MISSING_INDICATORS})
 
 
 def accepted(

@@ -229,8 +229,9 @@ stages:
   # (#227, #228). Versioned here so a replay or a drift finding can be traced to
   # the exact listings behind it (NFR-06); a retrain regenerates the reference
   # from the new `train`. The request schemas are dependencies because they
-  # decide which listings are valid requests, and `build_features.py` because
-  # `age_years` is computed there. Its own directory, outside `data/processed/`,
+  # decide which listings are valid requests, and `build_features.py` for the
+  # supported makes it reads. `drift_features.py` holds the features and the age
+  # rule the replay and the drift job share. Its own directory, outside `data/processed/`,
   # which `features` and `comparables` read file by file. Nothing depends on it.
   # ----------------------------------------------------------------------
   monitoring_samples:
@@ -238,6 +239,7 @@ stages:
     deps:
       - recommenditos/data/monitoring_samples.py
       - recommenditos/data/request_body.py
+      - recommenditos/data/drift_features.py
       - recommenditos/data/build_features.py
       - recommenditos/data/split_data.py
       - recommenditos/api/schemas/common.py
