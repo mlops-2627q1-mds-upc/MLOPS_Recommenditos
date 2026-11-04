@@ -14,7 +14,7 @@ Three services of `deploy/compose.yaml` run beside the API and nginx, on a lapto
 | Service | What it reports | Memory limit |
 |---------|-----------------|--------------|
 | `prometheus` | Scrapes the four targets below every 15 s and stores the samples; its own figures too (TSDB size, failed scrapes) | 384 MiB |
-| `cadvisor` | Per container: CPU, memory against the container's limit, the start time, network and block I/O | 192 MiB |
+| `cadvisor` | Per container: CPU, memory against the container's limit, the start time and block I/O | 192 MiB |
 | `node-exporter` | The host: memory, CPU, load, and the free bytes of each file system, the root's among them | 64 MiB |
 
 Prometheus scrapes, by Compose service name and inside the Compose network:
@@ -44,12 +44,14 @@ Each figure answers a question someone on call would ask, and the integration su
 
 cAdvisor names a container's series by its Compose service and project, the labels `container_label_com_docker_compose_service` and `container_label_com_docker_compose_project`, and by no other label of the image, so that the series stay few.
 It is started with `--docker_only`, so it reports Docker's containers and the host's root cgroup and none of the host's other cgroups.
-It reads the cgroups every 30 s (`--housekeeping_interval`), which keeps its own CPU low on the VM's one vCPU, so a container's figures are up to 30 s old, and right after a restart they can still show the container as it started.
+It reads the cgroups every 30 s (`--housekeeping_interval`), which keeps its own CPU low on the VM's one vCPU, and up to 60 s when a container's figures do not change (dynamic housekeeping), so a container's figures are up to 60 s old, and right after a restart they can still show the container as it started.
 
 What the stack does not show:
 
 - **Out-of-memory kills of a worker.** cAdvisor's OOM events read the kernel log from `/dev/kmsg`, which it is not given; a kill of the API's main process shows as a restart, and a kill of one of several workers only as memory at the limit and in the API's log.
-- **The host's network traffic.** node-exporter does not use the host's network, so its network figures are those of its own container; cAdvisor reports every container's traffic.
+- **Network traffic, per container or of the host.** The request traffic comes from the API's own metrics (`http_requests_total` and its latency histogram, [API docs](api.md#metrics)).
+  Per-container network bytes are left out on purpose: cAdvisor reads them from the host's `/proc`, which it would need under `/rootfs` with `/var/lib/docker`, widening its root exception for no requirement.
+  node-exporter does not use the host's network, so its network figures are those of its own container.
 - **The CI runner.** The self-hosted runner is a process on the host, not a container: it shows in the host's memory and CPU, not per container.
 
 ### Retention
@@ -70,7 +72,7 @@ A writer has to write each file under a temporary name and rename it, so that a 
 ### Reachable only inside the stack
 
 None of the three publishes a port: the VM's ports 8080 to 8089 are public through the NAT ([The VM](deployment.md#the-vm)), and nothing but nginx is meant to be (NFR-09).
-The integration suite checks that no service but the proxy publishes one.
+The integration suite checks that no service but the proxy publishes one and that none uses the host's network, which would open its ports on the host without a `ports` entry.
 Grafana ([#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)) will be the way in, through an SSH tunnel to the VM.
 Until then, Prometheus' HTTP API is reached from inside its container, whose busybox `wget` asks it on `127.0.0.1:9090`:
 

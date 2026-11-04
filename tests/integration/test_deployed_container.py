@@ -107,6 +107,20 @@ def test_no_port_but_the_proxy_is_published_on_the_host(service, stack_container
     assert not published, f"the {service} container publishes {published}"
 
 
+@pytest.mark.req("NFR-09")
+@pytest.mark.parametrize("service", SERVICES)
+def test_the_container_shares_no_namespace_with_the_host(service, stack_container):
+    """No host network, which would open every port it listens on on the host with no
+    `ports` entry to show it, and no host PID or IPC namespace."""
+    host_config = stack_container(service).inspect()["HostConfig"]
+    shared = {
+        mode: host_config[mode]
+        for mode in ("NetworkMode", "PidMode", "IpcMode")
+        if host_config[mode] == "host"
+    }
+    assert not shared, f"the {service} container shares the host's {shared}"
+
+
 @pytest.mark.req("NFR-12")
 def test_the_image_holds_the_package_of_the_checkout(api_container):
     """The suite tests the checked-out code, not a package built from another checkout.

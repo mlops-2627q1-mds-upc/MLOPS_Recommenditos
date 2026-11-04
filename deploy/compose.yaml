@@ -203,7 +203,7 @@ services:
       retries: 3
 
   # Per container: CPU, memory against its limit, the start time (a changed one
-  # is a restart), network. For the cgroup v1 of the VM as well as the cgroup v2
+  # is a restart) and block I/O. For the cgroup v1 of the VM as well as the cgroup v2
   # of CI and laptops.
   #
   # The exception to the shared hardening: cAdvisor runs as root, because only
@@ -221,8 +221,11 @@ services:
       # one-vCPU host. Prometheus' 15 s scrape then reads each value twice.
       - --housekeeping_interval=30s
       # The collectors the dashboards and alerts read; the rest, the per-container
-      # disk usage above all, which walks every layer's files, stays off.
-      - --enable_metrics=cpu,memory,network,diskIO
+      # disk usage above all, which walks every layer's files, stays off. So does
+      # `network`: cAdvisor reads a container's traffic from the host's /proc,
+      # which it would need under /rootfs with /var/lib/docker, a wider root
+      # exception that no requirement asks for; the API counts its own requests.
+      - --enable_metrics=cpu,memory,diskIO
       # Labels only for the Compose service and project, not every image label,
       # so that a series is named by its service, as `container_label_com_docker_compose_service`.
       - --store_container_labels=false
@@ -251,7 +254,7 @@ services:
   # NFR-04's 4 GB floor. It reads the host's / under /host, read-only; without
   # host networking, which would open its port 9100 on the VM, and without the
   # host's PID namespace, which none of its figures needs. Its network figures
-  # are therefore its own container's; cAdvisor has every container's.
+  # are therefore its own container's, not the host's.
   node-exporter:
     <<: *hardening
     image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0

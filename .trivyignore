@@ -11,7 +11,7 @@
 # fixes. Both publish no port and answer only Prometheus and their healthcheck
 # inside the Compose network (docs/docs/monitoring.md). Accepted until a
 # release with the fixes, which Dependabot proposes; the expiry has them
-# reviewed again before the presentation of 2026-12-15.
+# reviewed again before the presentation of 2026-12-15 (tracked in #286).
 # crypto/x509 intermediate certificates (Go stdlib): the exporters open no TLS connection.
 CVE-2026-111943 exp:2026-12-04
 # encoding/asn1 recursion (Go stdlib): the exporters parse no ASN.1 from a client, as they serve no TLS.

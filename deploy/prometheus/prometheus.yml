@@ -27,7 +27,7 @@ scrape_configs:
     static_configs:
       - targets: ["api:8000"]
 
-  # Per container: CPU, memory against its limit, start time (restarts), network.
+  # Per container: CPU, memory against its limit, start time (restarts), block I/O.
   - job_name: cadvisor
     static_configs:
       - targets: ["cadvisor:8080"]
