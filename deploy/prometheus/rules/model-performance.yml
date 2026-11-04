@@ -1,0 +1,92 @@
+# Alerts on the model (FR-14, NFR-11): the inputs drifted, the real error grew,
+# or the price ranges no longer hold their confidence level, and the job that
+# measures them stopped (docs/docs/monitoring.md#model-alerts). Each finding is
+# a reason to start FR-15's retraining, which a person starts.
+#
+# The drift job writes the latest tested window's results into node-exporter's
+# textfile collector after every pass, every 15 minutes (EDN-101,
+# monitoring/recommenditos_monitoring/textfile.py), so these series hold one
+# window's values until the next window is tested. A figure with too few labels
+# is left out of the file, so the error and coverage rules cannot fire on it;
+# they require `labels_sufficient` as well, so that they stay quiet if a later
+# change wrote such a figure anyway.
+#
+# The error and coverage thresholds are one-sided tests at 0.005 per window,
+# NFR-11's false-alarm level for drift, against the model's own test values
+# (docs/docs/monitoring.md#why-these-model-thresholds):
+#   - coverage: below the nominal level by more than 2.576 binomial standard
+#     errors of the window's labelled ranges, sqrt(p (1 - p) / n);
+#   - MdAPE: above 1.25 times the test MdAPE, the 99.5th percentile of the MdAPE
+#     of 200 labelled answers (the fewest the job reports a figure for) drawn
+#     from the test set's errors of lgbm-basic.
+#
+# The annotations are the four that tests/test_monitoring_config.py requires
+# (deploy/prometheus/rules/service-health.yml says what each is for). The tests
+# are in ../tests/model-performance.test.yml.
+
+groups:
+  - name: model-performance
+    rules:
+      # NFR-11: a feature of the window is below 0.005 / 23 (Bonferroni). The
+      # value is the number of drifted features.
+      - alert: DriftDetected
+        expr: recommenditos_drift_window_drifted_features and recommenditos_drift_window_flagged == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Window {{ with query "recommenditos_drift_window_id" }}{{ . | first | value | printf "%.0f" }}{{ end }} of the prediction log drifted in {{ $value | printf "%.0f" }} of 23 input features (NFR-11).'
+          description: "Look at the drifted features on the panel and print the finding (`report` in the monitor container): `country_code` alone is a new market mix, several features besides it a population the model has not seen. Check that the data are real, not a client's bug or a replay. If the error or the coverage alert fires too, or the next window drifts as well, start the Retrain workflow (FR-15) with the finding as its reason."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#driftdetected"
+          dashboard_url: "http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-14"
+
+      # FR-14: the window's real MdAPE over its labelled answers, as a multiple
+      # of the test MdAPE. The value is that multiple.
+      - alert: ModelErrorHigh
+        expr: |
+          recommenditos_performance_mdape / recommenditos_performance_test_mdape > 1.25
+          and ignoring(figure) recommenditos_performance_labels_sufficient{figure="mdape"} == 1
+        labels:
+          severity: critical
+        annotations:
+          summary: 'The real MdAPE of window {{ with query "recommenditos_performance_window_id" }}{{ . | first | value | printf "%.0f" }}{{ end }} is {{ $value | printf "%.2f" }} times the test MdAPE, above 1.25 (FR-14).'
+          description: "The model prices this window's listings worse than its test set, which users notice. Look at the drift panel for which inputs changed, and check that the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor container) as its reason."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelerrorhigh"
+          dashboard_url: "http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-11"
+
+      # FR-14: the share of the window's labelled ranges that hold the observed
+      # price, against the level they promise. The value is that share.
+      - alert: ModelCoverageLow
+        expr: |
+          recommenditos_performance_coverage
+            < recommenditos_performance_nominal_level
+              - 2.576 * sqrt(
+                  recommenditos_performance_nominal_level * (1 - recommenditos_performance_nominal_level)
+                  / recommenditos_performance_labelled_ranges
+                )
+          and ignoring(figure) recommenditos_performance_labels_sufficient{figure="coverage"} == 1
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Only {{ $value | humanizePercentage }} of the {{ with query "recommenditos_performance_labelled_ranges" }}{{ . | first | value | printf "%.0f" }}{{ end }} labelled price ranges of window {{ with query "recommenditos_performance_window_id" }}{{ . | first | value | printf "%.0f" }}{{ end }} hold the observed price, significantly below their nominal level (FR-14).'
+          description: "The price ranges promise more than they hold for this window's listings, which users notice. Look at the drift panel for which inputs changed, and check that the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor container) as its reason; a retrain recalibrates the ranges."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelcoveragelow"
+          dashboard_url: "http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-12"
+
+      # The job runs every 15 minutes, so 45 minutes without a pass that
+      # succeeded are three missed passes: the panels and the three alerts above
+      # then show an old window. 40 minutes held for 5 are those 45 minutes,
+      # and the `for` keeps a fresh stack quiet until its first pass has written
+      # the series. Inhibited while node-exporter cannot be scraped
+      # (TargetDown), which empties the series too.
+      - alert: MonitorStale
+        expr: |
+          time() - recommenditos_monitor_last_success_timestamp_seconds > 40 * 60
+          or absent(recommenditos_monitor_last_success_timestamp_seconds)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The drift, error and coverage job has had no pass that succeeded for 45 minutes."
+          description: "The model panels and alerts show an old window. Read the monitor's log (`docker logs --since 1h recommenditos-monitor-1`) for `the drift pass failed`, and check that the container runs (`docker ps -a`); a pass by hand (`run-once`) shows the error. Until a pass succeeds, nothing watches the model."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#monitorstale"
+          dashboard_url: "http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-8"

@@ -1,0 +1,205 @@
+# Unit tests of ../rules/model-performance.yml (`promtool test rules`, run by
+# make prometheus-check and CI): for each alert, the values the drift job wrote
+# for the control and ES windows of reports/monitoring/laptop-es-replay-2026-11-04.md,
+# where it must stay quiet and where it must fire, and the edges of its
+# threshold. The series carry node-exporter's labels, which serves them from
+# the textfile collector. Series values: "axn" repeats a n more times, one
+# sample per `interval`.
+
+rule_files:
+- ../rules/model-performance.yml
+evaluation_interval: 1m
+tests:
+- name: DriftDetected fires when the ES window drifted, not for a control window
+  interval: 1m
+  input_series:
+  - series: recommenditos_drift_window_flagged{instance="node-exporter:9100",job="node"}
+    values: 0x14 1x14
+  - series: recommenditos_drift_window_drifted_features{instance="node-exporter:9100",job="node"}
+    values: 0x14 14x14
+  - series: recommenditos_drift_window_id{instance="node-exporter:9100",job="node"}
+    values: 2x14 3x14
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: DriftDetected
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: DriftDetected
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        job: node
+        instance: node-exporter:9100
+      exp_annotations:
+        summary: Window 3 of the prediction log drifted in 14 of 23 input features (NFR-11).
+        description: 'Look at the drifted features on the panel and print the finding (`report` in the
+          monitor container): `country_code` alone is a new market mix, several features besides it a
+          population the model has not seen. Check that the data are real, not a client''s bug or a replay.
+          If the error or the coverage alert fires too, or the next window drifts as well, start the Retrain
+          workflow (FR-15) with the finding as its reason.'
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#driftdetected
+        dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-14
+- name: ModelErrorHigh fires at the ES window's 1.40 times the test MdAPE, not at a control window's
+  interval: 1m
+  input_series:
+  - series: recommenditos_performance_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.0528x14 0.0941x14
+  - series: recommenditos_performance_test_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.0673x29
+  - series: recommenditos_performance_window_id{instance="node-exporter:9100",job="node"}
+    values: 2x14 3x14
+  - series: recommenditos_performance_labels_sufficient{figure="mdape",instance="node-exporter:9100",job="node"}
+    values: 1x29
+  - series: recommenditos_performance_labels_sufficient{figure="coverage",instance="node-exporter:9100",job="node"}
+    values: 1x29
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: ModelErrorHigh
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: ModelErrorHigh
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: node
+        instance: node-exporter:9100
+      exp_annotations:
+        summary: The real MdAPE of window 3 is 1.40 times the test MdAPE, above 1.25 (FR-14).
+        description: The model prices this window's listings worse than its test set, which users notice.
+          Look at the drift panel for which inputs changed, and check that the observed prices (feedback)
+          are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor
+          container) as its reason.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelerrorhigh
+        dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-11
+- name: ModelErrorHigh stays quiet at 1.24 times the test MdAPE, and without enough labels
+  interval: 1m
+  input_series:
+  - series: recommenditos_performance_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.083452x14 0.2x14
+  - series: recommenditos_performance_test_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.0673x29
+  - series: recommenditos_performance_labels_sufficient{figure="mdape",instance="node-exporter:9100",job="node"}
+    values: 1x14 0x14
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: ModelErrorHigh
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: ModelErrorHigh
+    exp_alerts: []
+- name: ModelCoverageLow fires at the ES window's 85.8 % of 500 labelled ranges, below the floor of 86.5
+    %
+  interval: 1m
+  input_series:
+  - series: recommenditos_performance_coverage{instance="node-exporter:9100",job="node"}
+    values: 0.954x14 0.858x14
+  - series: recommenditos_performance_nominal_level{instance="node-exporter:9100",job="node"}
+    values: 0.9x29
+  - series: recommenditos_performance_labelled_ranges{instance="node-exporter:9100",job="node"}
+    values: 500x29
+  - series: recommenditos_performance_window_id{instance="node-exporter:9100",job="node"}
+    values: 2x14 3x14
+  - series: recommenditos_performance_labels_sufficient{figure="coverage",instance="node-exporter:9100",job="node"}
+    values: 1x29
+  - series: recommenditos_performance_labels_sufficient{figure="mdape",instance="node-exporter:9100",job="node"}
+    values: 1x29
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: ModelCoverageLow
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: ModelCoverageLow
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        job: node
+        instance: node-exporter:9100
+      exp_annotations:
+        summary: Only 85.8% of the 500 labelled price ranges of window 3 hold the observed price, significantly
+          below their nominal level (FR-14).
+        description: The price ranges promise more than they hold for this window's listings, which users
+          notice. Look at the drift panel for which inputs changed, and check that the observed prices
+          (feedback) are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the
+          monitor container) as its reason; a retrain recalibrates the ranges.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelcoveragelow
+        dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-12
+- name: ModelCoverageLow stays quiet for 85.8 % of only 300 ranges, for 86.6 % of 500, and without enough
+    labels
+  interval: 1m
+  input_series:
+  - series: recommenditos_performance_coverage{instance="node-exporter:9100",job="node"}
+    values: 0.858x9 0.866x9 0.5x9
+  - series: recommenditos_performance_nominal_level{instance="node-exporter:9100",job="node"}
+    values: 0.9x29
+  - series: recommenditos_performance_labelled_ranges{instance="node-exporter:9100",job="node"}
+    values: 300x9 500x9 200x9
+  - series: recommenditos_performance_labels_sufficient{figure="coverage",instance="node-exporter:9100",job="node"}
+    values: 1x19 0x9
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: ModelCoverageLow
+    exp_alerts: []
+  - eval_time: 15m
+    alertname: ModelCoverageLow
+    exp_alerts: []
+  - eval_time: 25m
+    alertname: ModelCoverageLow
+    exp_alerts: []
+- name: MonitorStale stays quiet while a pass succeeds every 15 minutes
+  interval: 1m
+  input_series:
+  - series: recommenditos_monitor_last_success_timestamp_seconds{instance="node-exporter:9100",job="node"}
+    values: 0x14 900x14 1800x14 2700x14 3600x14 4500x14
+  alert_rule_test:
+  - eval_time: 44m
+    alertname: MonitorStale
+    exp_alerts: []
+  - eval_time: 89m
+    alertname: MonitorStale
+    exp_alerts: []
+- name: MonitorStale fires 45 minutes after the last pass that succeeded
+  interval: 1m
+  input_series:
+  - series: recommenditos_monitor_last_success_timestamp_seconds{instance="node-exporter:9100",job="node"}
+    values: '0x60'
+  alert_rule_test:
+  - eval_time: 44m
+    alertname: MonitorStale
+    exp_alerts: []
+  - eval_time: 46m
+    alertname: MonitorStale
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        job: node
+        instance: node-exporter:9100
+      exp_annotations:
+        summary: The drift, error and coverage job has had no pass that succeeded for 45 minutes.
+        description: The model panels and alerts show an old window. Read the monitor's log (`docker logs
+          --since 1h recommenditos-monitor-1`) for `the drift pass failed`, and check that the container
+          runs (`docker ps -a`); a pass by hand (`run-once`) shows the error. Until a pass succeeds, nothing
+          watches the model.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#monitorstale
+        dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-8
+- name: MonitorStale fires when no pass has ever written its series, after 5 minutes
+  interval: 1m
+  input_series:
+  - series: up{job="node",instance="node-exporter:9100"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: MonitorStale
+    exp_alerts: []
+  - eval_time: 6m
+    alertname: MonitorStale
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: The drift, error and coverage job has had no pass that succeeded for 45 minutes.
+        description: The model panels and alerts show an old window. Read the monitor's log (`docker logs
+          --since 1h recommenditos-monitor-1`) for `the drift pass failed`, and check that the container
+          runs (`docker ps -a`); a pass by hand (`run-once`) shows the error. Until a pass succeeds, nothing
+          watches the model.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#monitorstale
+        dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-8

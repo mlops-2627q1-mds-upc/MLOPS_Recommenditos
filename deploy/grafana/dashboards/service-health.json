@@ -1,7 +1,7 @@
 {
   "uid": "service-health",
   "title": "Service health",
-  "description": "The API's promises against their limits (NFR-02 to NFR-05) and the resources behind them. Provisioned from deploy/grafana/dashboards/service-health.json; change that file, not the UI (docs/docs/monitoring.md#grafana).",
+  "description": "The API's promises against their limits (NFR-02 to NFR-05) and the resources behind them; the model's drift, error and coverage are on the Model performance dashboard. Provisioned from deploy/grafana/dashboards/service-health.json; change that file, not the UI (docs/docs/monitoring.md#grafana).",
   "tags": [
     "recommenditos"
   ],
@@ -15,7 +15,22 @@
   "timepicker": {},
   "timezone": "utc",
   "refresh": "30s",
-  "links": [],
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "recommenditos"
+      ],
+      "asDropdown": false,
+      "title": "Dashboards",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "icon": "external link",
+      "tooltip": "",
+      "url": ""
+    }
+  ],
   "annotations": {
     "list": []
   },
@@ -1344,176 +1359,6 @@
         "rowHeight": 0.8,
         "legend": {
           "showLegend": false
-        }
-      }
-    },
-    {
-      "id": 103,
-      "type": "row",
-      "title": "Model outputs (FR-11)",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 45
-      }
-    },
-    {
-      "id": 17,
-      "type": "timeseries",
-      "title": "Predicted prices of /v1/predict",
-      "description": "Median and the 10th and 90th percentiles of the prices /v1/predict answered over 30 minutes, interpolated within the histogram's buckets.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 46
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "histogram_quantile(0.1, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m])))",
-          "legendFormat": "p10",
-          "refId": "A",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m])))",
-          "legendFormat": "median",
-          "refId": "B",
-          "range": true
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "histogram_quantile(0.9, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m])))",
-          "legendFormat": "p90",
-          "refId": "C",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyEUR",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": false,
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 18,
-      "type": "timeseries",
-      "title": "Prediction warnings by field",
-      "description": "Warnings per second in /v1/predict answers over 5 minutes, by the request field they point at (FR-05).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 46
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (field) (rate(recommenditos_prediction_warnings_total[5m]))",
-          "legendFormat": "{{field}}",
-          "refId": "A",
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "spanNulls": false,
-            "thresholdsStyle": {
-              "mode": "off"
-            },
-            "axisLabel": "warnings/s"
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
         }
       }
     }

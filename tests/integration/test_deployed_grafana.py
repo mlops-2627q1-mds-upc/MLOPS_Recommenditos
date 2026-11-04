@@ -17,8 +17,8 @@ from typing import Any
 
 import pytest
 from tests.integration.conftest import Container, docker
-from tests.integration.test_deployed_prometheus import api_get, eventually
-from tests.test_monitoring_config import ALERTS, dashboards
+from tests.integration.test_deployed_prometheus import api_get, eventually, query
+from tests.test_monitoring_config import ALERTS, dashboards, panels
 import yaml
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
@@ -82,6 +82,30 @@ def test_an_anonymous_viewer_sees_the_provisioned_dashboard(uid, grafana):
     assert found["meta"]["canSave"] is False and found["meta"]["canEdit"] is False
     served = {panel["id"]: panel["title"] for panel in found["dashboard"]["panels"]}
     assert served == {panel["id"]: panel["title"] for panel in dashboards()[uid]["panels"]}
+
+
+#: Grafana's own variables, which it replaces before it sends a query.
+GRAFANA_VARIABLES = {"$__range": "1h", "$__rate_interval": "1m", "$__interval": "15s"}
+
+
+def panel_queries() -> list[tuple[str, str, str]]:
+    return [
+        (uid, panel["title"], target["expr"])
+        for uid, dashboard in sorted(dashboards().items())
+        for panel in panels(dashboard)
+        for target in panel.get("targets", [])
+    ]
+
+
+@pytest.mark.req("FR-11", "FR-14")
+@pytest.mark.parametrize(
+    ("uid", "title", "expr"), panel_queries(), ids=[f"{u}:{t}" for u, t, _ in panel_queries()]
+)
+def test_prometheus_accepts_every_panel_query(uid, title, expr, prometheus_container):
+    """A query Prometheus cannot parse would leave its panel blank, and no other test sees it."""
+    for variable, value in GRAFANA_VARIABLES.items():
+        expr = expr.replace(variable, value)
+    query(prometheus_container, expr)
 
 
 @pytest.mark.req("NFR-09")

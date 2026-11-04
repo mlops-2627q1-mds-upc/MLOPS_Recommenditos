@@ -262,3 +262,8 @@ Each fit runs in a process of its own, as the stage runs it with CodeCarbon, wit
 `fit_cpu_threads_results.txt` is its output (2026-10-22): `train.num_threads` holds for LightGBM's boosting, and the CPU time beyond one thread comes from `Booster.predict` computing the training and validation L1 for the model record on every core, and from OpenBLAS's pool behind `b1`'s Ridge solver.
 `ridge_blas_threads.py` follows up on the one number the threads changed, `b1`'s L1: it fits `b1` at 1, 2, 4 and 8 OpenBLAS threads and compares the coefficients with each other and with the committed model.
 `ridge_blas_threads_results.txt` holds two runs: 2026-10-22, before the pin, where the coefficients differ at every count, and 2026-10-31, after `RidgeModel` pinned OpenBLAS to one thread (#215), where every count gives the same fit.
+
+## The thresholds of the model alerts (#230)
+
+`model_alert_thresholds.py` measures how far a window's MdAPE and range coverage stray from the test values by chance alone: it draws 20,000 windows of 200, 300, 500 and 1,000 labelled answers from the test set's errors and range outcomes of `lgbm-basic` and prints the 99.5th percentile of their MdAPE and the 0.5th percentile of their coverage, beside the binomial standard error at the nominal 0.9.
+`model_alert_thresholds_results.txt` is its output (2026-11-05): at 200 labelled answers the 99.5th percentile is 1.25 times the test MdAPE, ModelErrorHigh's multiple, and at every count the coverage's 0.5th percentile is within 0.15 points of the nominal level less 2.576 binomial standard errors, ModelCoverageLow's floor ([Why these model thresholds](../../docs/docs/monitoring.md#why-these-model-thresholds)).

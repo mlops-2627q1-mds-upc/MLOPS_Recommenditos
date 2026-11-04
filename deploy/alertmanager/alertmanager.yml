@@ -25,6 +25,10 @@ inhibit_rules:
   # The error rate above NFR-03 already says that server errors happen.
   - source_matchers: [alertname="ErrorRateHigh"]
     target_matchers: [alertname="ServerErrors"]
+  # With node-exporter unscraped, the drift job's series are gone from it, so
+  # MonitorStale's "no pass for 45 minutes" says nothing TargetDown has not.
+  - source_matchers: [alertname="TargetDown", job="node"]
+    target_matchers: [alertname="MonitorStale"]
 
 receivers:
   - name: discord

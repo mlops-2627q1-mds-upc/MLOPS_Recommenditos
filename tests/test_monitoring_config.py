@@ -123,15 +123,15 @@ def test_each_alert_has_a_unit_test_where_it_fires():
 def volatile_paths(node: Any, path: str = "") -> list[str]:
     """Where `node` holds a key Grafana assigns, other than a panel's own id.
 
-    An override's matcher and properties name what they match and set in an
-    `id` of their own ("byName", "color"), a string, where the ids Grafana
-    assigns are numbers.
+    An override's matcher and properties, and a transformation, name what they
+    match, set or do in an `id` of their own ("byName", "color", "organize"), a
+    string, where the ids Grafana assigns are numbers.
     """
     found = []
     if isinstance(node, dict):
         is_panel = "type" in node and "gridPos" in node
         for key, value in node.items():
-            schema_id = key == "id" and isinstance(value, str) and "/overrides/" in path
+            schema_id = key == "id" and isinstance(value, str)
             if key in VOLATILE_KEYS and not (is_panel and key == "id") and not schema_id:
                 found.append(f"{path}/{key}")
             found.extend(volatile_paths(value, f"{path}/{key}"))
