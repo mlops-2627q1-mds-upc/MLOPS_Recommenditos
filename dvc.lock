@@ -1177,3 +1177,75 @@ stages:
       hash: md5
       md5: 926116d95f0c283a5389d9b603dd8f54
       size: 1952083
+  monitoring_samples:
+    cmd: python3 -m recommenditos.data.monitoring_samples
+    deps:
+    - path: data/processed/holdout_es.parquet
+      hash: md5
+      md5: 5de07ddd663cedf202ddb704827fe2fe
+      size: 353867
+    - path: data/processed/supported_makes.json
+      hash: md5
+      md5: 86628c3cbd3a146091e85fe4e296e3fe
+      size: 768
+    - path: data/processed/train.parquet
+      hash: md5
+      md5: 412a8ff132f08b271edfda41d9e82ab8
+      size: 10290303
+    - path: recommenditos/api/schemas/common.py
+      hash: md5
+      md5: d6412cab36c9589208460bfc13be430f
+      size: 13119
+    - path: recommenditos/api/schemas/partial_listing.py
+      hash: md5
+      md5: c671fd1f9af94613f0a0bf317912b240
+      size: 3121
+    - path: recommenditos/api/schemas/predict.py
+      hash: md5
+      md5: 20dfe7fd29cf55b3287d2a6efff51ed0
+      size: 6270
+    - path: recommenditos/config.py
+      hash: md5
+      md5: a0a68dfc658598b27a5aa7d7e22e0672
+      size: 1488
+    - path: recommenditos/data/build_features.py
+      hash: md5
+      md5: 3ff2e1486cbfe0e25fabc05c0b1e4450
+      size: 38653
+    - path: recommenditos/data/drift_features.py
+      hash: md5
+      md5: f982ec54bd1d10a15aae230835f53616
+      size: 7648
+    - path: recommenditos/data/monitoring_samples.py
+      hash: md5
+      md5: fb027042ade32d1341bab4d1abbb3f90
+      size: 9971
+    - path: recommenditos/data/request_body.py
+      hash: md5
+      md5: db1c47ad2d88e695fd34e7002ee30d50
+      size: 2548
+    - path: recommenditos/data/split_data.py
+      hash: md5
+      md5: e07d409a340aab18d00de14dd561a9ae
+      size: 25470
+    - path: recommenditos/pipeline.py
+      hash: md5
+      md5: a11ab511e3a0030fdc25b9b53c0879c0
+      size: 5469
+    - path: recommenditos/schema.py
+      hash: md5
+      md5: 53fda2be439cb1a73b7afc593e6b6ab8
+      size: 36807
+    params:
+      params.yaml:
+        monitoring:
+          reference_size: 10000
+          control_size: 20000
+        reference_date: '2025-11-08'
+        seed: 20251108
+    outs:
+    - path: data/monitoring
+      hash: md5
+      md5: 4686274eaf4aff53a24ac1a63883811f.dir
+      size: 5016214
+      nfiles: 7

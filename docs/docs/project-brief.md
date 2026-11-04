@@ -75,6 +75,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   No `ES` row reaches training, validation or conformal calibration.
 - In M6 we replay the `ES` listings against the API as simulated traffic.
   Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
+  The replay's listings and the drift reference are versioned by the `monitoring_samples` stage in `data/monitoring/`: a 10,000-listing reference and an i.i.d. 20,000-listing control from `train`, and every `ES` listing the API accepts ([The monitoring samples](pipeline.md#the-monitoring-samples)).
   The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
