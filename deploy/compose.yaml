@@ -12,12 +12,14 @@
 #     docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env up -d --wait
 #
 # Values come from `.env`, on the VM the one in /opt/recommenditos (template:
-# .env.template); locally none is needed, and the defaults below apply.
+# .env.template). Two have no default, Grafana's admin password and the Discord
+# webhook of the alerts, so a stack without them does not start; `make stack`
+# sets throwaway ones for a local stack, and CI generates its own.
 
 name: recommenditos
 
 # Docker keeps a container's log in json-file without a limit by default. Each
-# service keeps at most 5 files of 10 MB, 250 MB for the five services, of the
+# service keeps at most 5 files of 10 MB, 350 MB for the seven services, of the
 # VM's 20 GB (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
 # day, so the API's 50 MB hold about a week of it, and each service's 50 MB
 # hold about 120,000 requests of history.
@@ -134,8 +136,9 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    # The only published port: HTTP_PORT, 8080 locally and on the VM. nginx
-    # itself listens on 8080 as a non-root user inside the container.
+    # The only port published to the network: HTTP_PORT, 8080 locally and on the
+    # VM; Grafana's is on the host's loopback only. nginx itself listens on 8080
+    # as a non-root user inside the container.
     ports:
       - "${HTTP_PORT:-8080}:8080"
     volumes:
@@ -156,9 +159,10 @@ services:
 
   # Resource monitoring (docs/docs/monitoring.md#resource-monitoring, EDN-99):
   # Prometheus scrapes the API, cAdvisor (per container) and node-exporter (the
-  # host) every 15 s. All three always run, with no Compose profile, so CI, a
-  # laptop and the VM start the same stack. None publishes a port: the VM's
-  # 8080 to 8089 are public through the NAT. A service that does not become
+  # host) every 15 s; Alertmanager and Grafana below. All always run, with no
+  # Compose profile, so CI, a laptop and the VM start the same stack. None
+  # publishes a port to the network, Grafana only one on the host's loopback:
+  # the VM's 8080 to 8089 are public through the NAT. A service that does not become
   # healthy fails `up --wait`, and with it a deploy, which then rolls the API
   # back too (deploy.sh), so their healthchecks probe only that they serve.
   prometheus:
@@ -177,8 +181,9 @@ services:
     expose:
       - "9090"
     volumes:
-      # A relative bind mount, so the file travels with the release (deploy.sh).
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # A relative bind mount, so the files travel with the release (deploy.sh):
+      # prometheus.yml, the alerting rules in rules/ and their tests in tests/.
+      - ./prometheus:/etc/prometheus:ro
       # The TSDB in a named volume: it survives a new image and a changed
       # configuration, which recreates the container (docs/docs/deployment.md).
       - prometheus-data:/prometheus
@@ -285,6 +290,136 @@ services:
       start_interval: 1s
       retries: 3
 
+  # Alertmanager: takes the alerts that fire in Prometheus (prometheus/rules/)
+  # and posts them to the team's Discord through a webhook
+  # (docs/docs/monitoring.md#alerts, EDN-99). No published port.
+  alertmanager:
+    <<: *hardening
+    # Pinned by digest as well as by tag, which Dependabot moves together.
+    image: quay.io/prometheus/alertmanager:v0.34.2@sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b
+    # The webhook URL is a secret, and Alertmanager reads it only from its
+    # configuration or a file (`webhook_url_file`). The image's busybox shell
+    # writes it from the environment to a file on the tmpfs below, readable by
+    # the service user alone, and starts Alertmanager without it in its
+    # environment. A Compose secret from the environment would keep it out of
+    # `docker inspect` too, but Compose refuses those for a read-only container.
+    # No cluster: one Alertmanager, so it opens no gossip port.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        umask 077
+        printf '%s' "$$DISCORD_WEBHOOK_URL" > /run/alertmanager/discord-webhook-url
+        exec env -u DISCORD_WEBHOOK_URL /bin/alertmanager \
+          --config.file=/etc/alertmanager/alertmanager.yml \
+          --storage.path=/alertmanager \
+          --cluster.listen-address= \
+          --web.external-url=http://localhost:9093/
+    environment:
+      # The team channel's webhook (Discord, channel settings, Integrations,
+      # Webhooks), from the stack's `.env`. No default: without it a stack
+      # would drop every alert, so Compose refuses to start one (NFR-15).
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:?set DISCORD_WEBHOOK_URL in the stack's .env, see deploy/.env.template}
+    expose:
+      - "9093"
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+      # Silences and which notifications went out, so a new release does not
+      # post the alerts that fire again.
+      - alertmanager-data:/alertmanager
+    # The webhook file, in memory, owned by the image's user `nobody`.
+    tmpfs:
+      - /run/alertmanager:uid=65534,gid=65534,mode=0700,size=1m
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 64
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 1s
+      retries: 3
+
+  # Grafana: the provisioned dashboard of the figures above against their
+  # limits (docs/docs/monitoring.md#grafana, EDN-99). The one service besides
+  # nginx with a published port, and only on the host's loopback: on the VM it
+  # is reached through an SSH tunnel, never through the NAT's public ports.
+  # Anonymous visitors are Viewers, which is safe only because nothing but the
+  # tunnel reaches it; the admin logs in with the password from `.env`.
+  grafana:
+    <<: *hardening
+    # Pinned by digest as well as by tag, which Dependabot moves together. Not
+    # the `-slim` variant, which leaves out the Prometheus data source.
+    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+    depends_on:
+      - prometheus
+    # 127.0.0.1 only. GRAFANA_PORT moves it for a second stack on the same
+    # host, as the rollback drill of the integration suite runs one.
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      # No default and no committed value (NFR-15): Compose refuses to start
+      # without it. Grafana sets it when it creates its database, on the first
+      # start; a later change needs `grafana cli admin reset-admin-password`.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in the stack's .env, see deploy/.env.template}
+      GF_SERVER_ROOT_URL: http://localhost:${GRAFANA_PORT:-3000}/
+      # Read-only for whoever reaches it, which is whoever has the tunnel.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/service-health.json
+      # The alerts are Prometheus' rules and Alertmanager's (EDN-99), not Grafana's.
+      GF_UNIFIED_ALERTING_ENABLED: "false"
+      # Nothing leaves the stack: no usage reports, update checks, news feed,
+      # avatars or plugin downloads at start-up.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # The data sources the image bundles besides Prometheus, each a process of
+      # its own once started: off, they neither start nor take memory and
+      # process slots (with them, Grafana ran into the 128 processes below), and
+      # their findings in .trivyignore stay in code that never runs.
+      GF_PLUGINS_DISABLE_PLUGINS: cloudwatch,elasticsearch,grafana-postgresql-datasource,grafana-pyroscope-datasource,influxdb,jaeger,loki,mssql,mysql,opentsdb,stackdriver,tempo,zipkin
+      # Its log to Docker's, not to a file in the read-only image.
+      GF_LOG_MODE: console
+      # Go collects garbage harder as the heap nears this, before the kernel
+      # kills Grafana at the container's limit below.
+      GOMEMLIMIT: 400MiB
+    volumes:
+      # The data source and the dashboard provider, then the dashboards.
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      # Grafana's SQLite database: users and sessions, since every data source
+      # and dashboard is provisioned.
+      - grafana-data:/var/lib/grafana
+    # The image runs as `grafana` (472).
+    tmpfs:
+      - /tmp:uid=472,gid=0,mode=0700,size=16m
+    # Grafana alone held 171 MiB of its own memory after starting, 369 MiB at
+    # its peak with the page cache, and 30 processes at most, on a laptop on
+    # 2026-11-04: 512 MiB and 128 processes.
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    restart: unless-stopped
+    logging: *logging
+    # The image's busybox `wget` on /api/health, which answers once the
+    # database is open; it does not need Prometheus.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      start_interval: 1s
+      retries: 3
+
   # M6's replay of held-out listings (#227, EDN-100): control listings, then the
   # ES market, sent through nginx like a client's, with each listing's observed
   # price sent to /v1/feedback inside this network. Behind a profile, so `up`,
@@ -327,3 +462,7 @@ volumes:
   prometheus-data:
   # The textfile collector's .prom files (node-exporter above).
   node-textfile:
+  # Alertmanager's silences and notification log.
+  alertmanager-data:
+  # Grafana's database.
+  grafana-data:

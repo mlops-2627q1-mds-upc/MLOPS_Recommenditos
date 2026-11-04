@@ -248,13 +248,19 @@ jobs:
             echo "::error::The image is $((size / 1000000)) MB, above NFR-04's 1 GB."
             exit 1
           fi
-      - name: Generate the API key of this run
+      - name: Generate the API key and the Grafana admin password of this run
         # As in CI's integration job: a fresh key, masked before it reaches
         # $GITHUB_ENV, which GitHub prints in each later step's env header.
+        # The Grafana admin password and the Discord webhook likewise, a
+        # throwaway password and a webhook that goes nowhere.
         run: |
           key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
           echo "::add-mask::$key"
           echo "RECOMMENDITOS_API_KEY=$key" >> "$GITHUB_ENV"
+          password=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
+          echo "::add-mask::$password"
+          echo "GRAFANA_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded" >> "$GITHUB_ENV"
       - name: Check that the stack runs the images this job pushes
         # Compose builds the replay's image from the checkout when the name it
         # resolves names no image, so a name that drifted from the built one

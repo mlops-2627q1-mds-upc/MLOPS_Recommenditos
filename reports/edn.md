@@ -1443,7 +1443,7 @@ How to add an entry:
 - **Other evidence:** [Issue #191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191), [PR #282](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/282), [Reading the log](../docs/docs/api.md#reading-the-log), [`prediction_log.py`](../recommenditos/api/prediction_log.py), EDN-86.
 - **In LaTeX:** yes
 
-### EDN-99: Prometheus, cAdvisor and node-exporter run in every stack, with no public port
+### EDN-99: Prometheus and two exporters in every stack, Grafana through SSH, alerts to Discord
 
 - **Date:** 2026-11-04
 - **Milestone:** M6: Monitoring
@@ -1451,10 +1451,13 @@ How to add an entry:
 - **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
 - **Decision:** Prometheus scrapes the API, cAdvisor (per container) and node-exporter (the host) every 15 s inside the Compose network and keeps at most 2 GB or 60 days.
   None publishes a port, and all always run, without a Compose profile.
+  Grafana answers on the VM's 127.0.0.1 through an SSH tunnel; tested Prometheus rules alert via Alertmanager to Discord, saying what to do.
 - **Alternatives considered:**
-  - node-exporter only: no container's memory against its limit, and no restarts.
-  - cAdvisor only: a weak view of the host's disk, which NFR-04's 4 GB floor is about.
+  - node-exporter only: no per-container memory or restarts.
+  - cAdvisor only: a weak view of the host's disk (NFR-04's 4 GB floor).
   - A Compose profile: CI, laptops, and the VM would run different stacks.
+  - Grafana behind nginx: login and query API public.
+  - Grafana alerting: untestable, silent when Grafana is down; email: SMTP credentials.
 - **Rationale:** NFR-04 limits each container and the disk, and each exporter covers one of them.
   The VM's ports 8080 to 8089 are public, so nothing new is published.
   The three used 79 MiB of their 640 MiB of limits on a laptop.
@@ -1464,10 +1467,15 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI proposed the exporters, the retention, and the closed ports; Lukas took the package unchanged.
   AI built it, with tests that every target is up, the retention is set, and only nginx publishes a port.
   AI accepted the exporters' fixable Go findings in `.trivyignore` until 2026-12-04, each with a reason.
+  AI found SSH from eduroam timing out (2026-11-04): the tunnel needs UPClink on campus too.
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "Exporters: cAdvisor (container RAM against limits, restarts) + node-exporter (host RAM, disk). No ports to the outside. Prometheus keeps at most 2 GB or 60 days."
   Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
-- **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [PR #284](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/284), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
+  Question (translated from German): "How should Grafana on the VM be reachable? (Important: the public URL does not work on the university network at all, SSH does. The VM's ports 8080-8089 are public.)"
+  Lukas answered: "Only through an SSH tunnel. Grafana listens only on 127.0.0.1 of the VM, opened with `ssh -L 3000:127.0.0.1:3000 ...`, from home with UPClink, on the university network directly. Nothing new becomes public (NFR-09), and it also works in the presentation room." (translated from German)
+  Question (translated from German): "Where should the monitoring alerts go (latency, error rate, disk, RAM, API down, drift, coverage)? According to the working agreements the team communicates through Discord."
+  Lukas answered: "Discord webhook. Prometheus rules plus Alertmanager (about 25 MiB, rules tested with promtool) send alerts into the team Discord, each with what to do." (translated from German)
+- **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [PR #284](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/284), [Issue #225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [Alerts](../docs/docs/monitoring.md#alerts), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
 - **In LaTeX:** yes
 
 ### EDN-100: Held-out listings are replayed by hand from a Compose profile

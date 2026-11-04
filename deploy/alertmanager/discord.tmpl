@@ -1,0 +1,22 @@
+{{/*
+  The Discord message of an alert group (alertmanager.yml): a title with the
+  state and the alert's name, then for each alert its summary and, while it
+  fires, what to do, the runbook and the dashboard panel. The panel's link
+  opens through the SSH tunnel (docs/docs/monitoring.md#grafana).
+*/}}
+{{ define "recommenditos.discord.title" -}}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+{{- end }}
+
+{{ define "recommenditos.discord.message" -}}
+{{ range .Alerts -}}
+**{{ .Annotations.summary }}**
+{{ if eq .Status "firing" -}}
+{{ .Annotations.description }}
+Runbook: {{ .Annotations.runbook_url }}
+Panel (through the SSH tunnel): {{ .Annotations.dashboard_url }}
+{{ else -}}
+Resolved at {{ .EndsAt.UTC.Format "2006-01-02 15:04 UTC" }}.
+{{ end }}
+{{ end -}}
+{{- end }}

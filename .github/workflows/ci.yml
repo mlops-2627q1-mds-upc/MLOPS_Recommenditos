@@ -341,16 +341,22 @@ jobs:
           echo "RECOMMENDITOS_EXPECTED_MODEL_VERSION=$version" >> "$GITHUB_ENV"
           index=$(md5sum data/processed/comparables.parquet | cut -d " " -f 1)
           echo "RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION=$index" >> "$GITHUB_ENV"
-      - name: Generate the API key of this run
+      - name: Generate the API key and the Grafana admin password of this run
         if: needs.changes.outputs.stack == 'true'
         # A fresh key per run, never committed (NFR-15): Compose hands it to the
         # api service, and tests/integration/test_deployed_feedback.py reads it
         # back from the container. Masked first, because GitHub prints every
-        # $GITHUB_ENV value in the env header of each later step.
+        # $GITHUB_ENV value in the env header of each later step. The same for
+        # Grafana's admin password, which compose.yaml requires; and a Discord
+        # webhook that goes nowhere, so CI's alerts reach no channel.
         run: |
           key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
           echo "::add-mask::$key"
           echo "RECOMMENDITOS_API_KEY=$key" >> "$GITHUB_ENV"
+          password=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
+          echo "::add-mask::$password"
+          echo "GRAFANA_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded" >> "$GITHUB_ENV"
       - name: Put the fixture samples where the monitoring image expects them
         if: needs.changes.outputs.stack == 'true'
         # CI cannot `dvc pull` the real samples (data/monitoring/), so the image
@@ -367,9 +373,10 @@ jobs:
         if: needs.changes.outputs.stack == 'true'
         # Every profile, so the monitoring image of the replay is built too.
         run: docker compose -f deploy/compose.yaml --profile '*' build
-      # Before the stack starts, so a configuration Prometheus would refuse fails
-      # here with promtool's message rather than as an unhealthy container.
-      - name: Check the Prometheus configuration (promtool)
+      # Before the stack starts, so a configuration Prometheus or Alertmanager
+      # would refuse fails here with promtool's or amtool's message rather than
+      # as an unhealthy container; with the alerting rules' unit tests.
+      - name: Check the Prometheus and Alertmanager configuration and the alerting rules (promtool, amtool)
         if: needs.changes.outputs.stack == 'true'
         run: make prometheus-check
       - name: Start the stack
@@ -605,10 +612,11 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # A scan that finds nothing is evidence only if it could have found
-      # something, and gitleaks has no rule of its own for a DagsHub token. The
-      # canary plants tokens in a throwaway history and scans it with the very
-      # command the next step runs, so it fails on whatever would blind that scan.
-      - name: Check that the scan still finds a DagsHub token
+      # something, and gitleaks has no rule of its own for a DagsHub token or a
+      # Discord webhook URL. The canary plants both in a throwaway history and
+      # scans it with the very command the next step runs, so it fails on
+      # whatever would blind that scan.
+      - name: Check that the scan still finds a DagsHub token and a Discord webhook URL
         run: python3 tools/secret_scan.py canary
       - name: Scan every commit GitHub publishes
         id: scan

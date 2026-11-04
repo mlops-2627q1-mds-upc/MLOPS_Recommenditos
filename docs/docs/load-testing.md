@@ -100,7 +100,7 @@ It could not run elsewhere anyway: the public URL does not answer from the UPC n
 Locust then shares the VM's one vCPU with the stack; the report gives its CPU beside the API container's.
 Its latency then contains no network, which is what NFR-02's "on the target VM" asks for.
 
-Every command below runs from a laptop on the UPC network or UPClink, over SSH as the deploy user, whose home is the stack's directory `/opt/recommenditos`.
+Every command below runs from a laptop with UPClink connected, on campus too (from the university's Wi-Fi, eduroam, the SSH port timed out on 2026-11-04, [The VM](deployment.md#the-vm)), over SSH as the deploy user, whose home is the stack's directory `/opt/recommenditos`.
 
 **Setup on the VM**, once: uv in the deploy user's home, a checkout of the public repository at the commit the VM runs, without any DagsHub token, and an environment with Locust and CodeCarbon alone (about 320 MB).
 The installer puts uv into `~/.local/bin`; `UV_NO_MODIFY_PATH=1` keeps it from editing the shell profiles, and the commands call uv by its path.

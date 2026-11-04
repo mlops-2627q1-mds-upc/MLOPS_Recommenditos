@@ -4,8 +4,9 @@
 # a commit is judged by the same rules wherever it is checked (EDN-71).
 #
 # The defaults stay on. They cover the credentials this project may yet acquire -
-# a private key, a cloud key, a GitHub token - and the one rule added here only
-# closes the gap they leave for the one secret every contributor already holds.
+# a private key, a cloud key, a GitHub token - and the two rules added here close
+# the gaps they leave for the secret every contributor already holds and for the
+# webhook the alerts post to.
 
 [extend]
 useDefault = true
@@ -54,3 +55,17 @@ regex = '''(?i)(?:(?:dagshub|mlflow|passw(?:or)?d|token|secret)[^\n]{0,40}?|://[
 secretGroup = 1
 entropy = 2.5
 keywords = ["dagshub", "mlflow", "passwd", "password", "token", "secret", "://"]
+
+# A Discord webhook URL is a credential on its own: whoever has it can post to
+# the team's channel. Alertmanager reads it from DISCORD_WEBHOOK_URL in the
+# stack's `.env` (docs/docs/monitoring.md#the-discord-webhook), and gitleaks'
+# defaults have rules for Discord's API token, client ID and client secret but
+# none for a webhook. The URL has a fixed shape, so the rule recognises it by
+# that: the numeric webhook ID and the token after it. A placeholder such as
+# `https://discord.com/api/webhooks/<id>/<token>` has no digits for the ID and
+# is not reported. The canary plants one, so the job proves it catches it.
+[[rules]]
+id = "discord-webhook-url"
+description = "Discord webhook URL, which posts to the team's channel"
+regex = '''https://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+'''
+keywords = ["discord"]

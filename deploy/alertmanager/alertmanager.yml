@@ -1,0 +1,39 @@
+# Where the alerts of deploy/prometheus/rules/ go: the team's Discord channel,
+# through a webhook (docs/docs/monitoring.md#alerts, EDN-99). CI checks this file
+# with `amtool check-config` (make prometheus-check).
+#
+# The webhook URL is a secret: it comes from DISCORD_WEBHOOK_URL in the stack's
+# `.env`, which the alertmanager service of ../compose.yaml writes to a file on
+# a tmpfs before Alertmanager starts. Alertmanager does not expand environment
+# variables in this file, and the file never leaves the container.
+
+route:
+  receiver: discord
+  # One message per alert name: a disk alert and a latency alert are separate
+  # problems, the same latency alert of two routes is one.
+  group_by: [alertname]
+  # Waits so that the alerts that fire together arrive in one message.
+  group_wait: 30s
+  group_interval: 5m
+  # A problem that lasts is posted again every 4 hours, not every 5 minutes.
+  repeat_interval: 4h
+
+inhibit_rules:
+  # With the API down, its latency and error alerts say nothing new.
+  - source_matchers: [alertname="ApiDown"]
+    target_matchers: ['alertname=~"PredictLatencyHigh|RangeLatencyHigh|ErrorRateHigh|ServerErrors"']
+  # The error rate above NFR-03 already says that server errors happen.
+  - source_matchers: [alertname="ErrorRateHigh"]
+    target_matchers: [alertname="ServerErrors"]
+
+receivers:
+  - name: discord
+    discord_configs:
+      - webhook_url_file: /run/alertmanager/discord-webhook-url
+        # A resolved alert is posted too, so the channel shows when it is over.
+        send_resolved: true
+        title: '{{ template "recommenditos.discord.title" . }}'
+        message: '{{ template "recommenditos.discord.message" . }}'
+
+templates:
+  - /etc/alertmanager/*.tmpl
