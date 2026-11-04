@@ -43,8 +43,9 @@ updates:
       - dependency-name: python
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
-  # The proxy image of deploy/compose.yaml. The API's own image there is built
-  # from the Dockerfile and has no registry to update from.
+  # The third-party images of deploy/compose.yaml: the proxy and the monitoring.
+  # The API's own image there is built from the Dockerfile and has no registry
+  # to update from.
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule:

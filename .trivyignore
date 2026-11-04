@@ -5,3 +5,46 @@
 #
 #   # Only in the builder stage's uv, which the runtime image does not contain.
 #   CVE-2026-12345 exp:2026-12-31
+
+# node-exporter v1.12.1 and cAdvisor v0.60.6 (deploy/compose.yaml), the newest
+# releases on 2026-11-04, are built with Go and libraries older than these
+# fixes. Both publish no port and answer only Prometheus and their healthcheck
+# inside the Compose network (docs/docs/monitoring.md). Accepted until a
+# release with the fixes, which Dependabot proposes; the expiry has them
+# reviewed again before the presentation of 2026-12-15 (tracked in #286).
+# crypto/x509 intermediate certificates (Go stdlib): the exporters open no TLS connection.
+CVE-2026-111943 exp:2026-12-04
+# encoding/asn1 recursion (Go stdlib): the exporters parse no ASN.1 from a client, as they serve no TLS.
+CVE-2026-33818 exp:2026-12-04
+# x/net/idna Punycode labels (Go stdlib): the exporters resolve only the Compose service names.
+CVE-2026-39821 exp:2026-12-04
+# x/net/dns/dnsmessage parsing (Go stdlib): the only DNS server they ask is Docker's embedded one.
+CVE-2026-46600 exp:2026-12-04
+# x/text Nickname profile: reached through IDNA host names, which the exporters never get from a client.
+CVE-2026-56851 exp:2026-12-04
+# net/http unencrypted HTTP/2 (Go stdlib): the exporters serve HTTP/1.1, and only to Prometheus in the Compose network.
+CVE-2026-56853 exp:2026-12-04
+# x/crypto/ssh source-address restrictions: neither exporter runs an SSH server.
+CVE-2026-56854 exp:2026-12-04
+# html/template (Go stdlib): the pages the exporters render are reached only from inside the Compose network.
+CVE-2026-56858 exp:2026-12-04
+# encoding/xml recursion (Go stdlib): the exporters decode no XML from a client.
+CVE-2026-56859 exp:2026-12-04
+# net/url path resolution (Go stdlib): only Prometheus and the healthcheck send the exporters a URL, from inside the Compose network.
+CVE-2026-56860 exp:2026-12-04
+# crypto/tls KeyUpdate (Go stdlib): the exporters serve and open no TLS connection.
+CVE-2026-56862 exp:2026-12-04
+# klauspost/compress dictionaries in cAdvisor: it decompresses nothing a client sends.
+CVE-2026-63209 exp:2026-12-04
+# net/http Range headers (Go stdlib): only Prometheus and the healthcheck reach the exporters, from inside the Compose network.
+CVE-2026-78667 exp:2026-12-04
+# net/http HTTP/2 SETTINGS frames (Go stdlib, x/net): the exporters serve no HTTP/2 and only inside the Compose network.
+CVE-2026-78669 exp:2026-12-04
+# gRPC-Go DATA frames in cAdvisor: it serves no gRPC, and its containerd client has no socket mounted to reach.
+CVE-2026-84304 exp:2026-12-04
+# gRPC-Go malformed requests in cAdvisor: it serves no gRPC.
+CVE-2026-84445 exp:2026-12-04
+# crypto/tls ECH extensions (Go stdlib): the exporters serve and open no TLS connection.
+CVE-2026-97031 exp:2026-12-04
+# gRPC-Go xDS RBAC in cAdvisor: it uses no xDS and serves no gRPC.
+GHSA-hrxh-6v49-42gf exp:2026-12-04

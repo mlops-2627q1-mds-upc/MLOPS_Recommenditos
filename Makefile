@@ -142,6 +142,17 @@ stack:
 stack-down:
 	$(COMPOSE) down
 
+# promtool from the Prometheus image the stack runs, so the check and the server
+# agree on the configuration's syntax. Checks deploy/prometheus/ as Compose
+# mounts it, the scrape configuration and, once there are any, its rule files.
+PROMETHEUS_IMAGE = $(shell $(COMPOSE) config --images prometheus)
+
+## Check the Prometheus configuration in deploy/prometheus/ with promtool
+.PHONY: prometheus-check
+prometheus-check:
+	docker run --rm --entrypoint promtool -v "$(CURDIR)/deploy/prometheus:/etc/prometheus:ro" \
+		$(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+
 # The integration suite of tests/integration/ against a running stack, through
 # its proxy. Without coverage, which measures this process and not the API's, and
 # with a JUnit file of its own, so the full suite's is kept. Against a remote URL

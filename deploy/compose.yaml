@@ -1,4 +1,5 @@
-# The serving stack: the API behind nginx (docs/docs/deployment.md, EDN-87).
+# The serving stack: the API behind nginx (docs/docs/deployment.md, EDN-87), and
+# the resource monitoring beside it (docs/docs/monitoring.md, EDN-99).
 #
 # Locally, from the repository root after `dvc pull`:
 #     docker compose -f deploy/compose.yaml up -d --build --wait     (make stack)
@@ -16,8 +17,8 @@
 name: recommenditos
 
 # Docker keeps a container's log in json-file without a limit by default. Each
-# service keeps at most 5 files of 10 MB, 100 MB in all, of the VM's 20 GB
-# (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
+# service keeps at most 5 files of 10 MB, 250 MB for the five services, of the
+# VM's 20 GB (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
 # day, so the API's 50 MB hold about a week of it, and each service's 50 MB
 # hold about 120,000 requests of history.
 x-logging: &logging
@@ -26,13 +27,15 @@ x-logging: &logging
     max-size: "10m"
     max-file: "5"
 
-# The hardening both containers share (NFR-09, #200). The root file system is
-# read-only, so a service writes only to the tmpfs mounts and the volume listed
-# under it; every Linux capability is dropped, since neither binds a port below
+# The hardening every service shares (NFR-09, #200). The root file system is
+# read-only, so a service writes only to the tmpfs mounts and the volumes listed
+# under it; every Linux capability is dropped, since none binds a port below
 # 1024, changes a file's owner or switches user; and `no-new-privileges` keeps a
-# setuid binary in an image from raising a process's privileges. Neither service
-# needed an exception: both run with no capability at all. The API needed one
-# writable path more than before, a tmpfs on /tmp (see there).
+# setuid binary in an image from raising a process's privileges. Every service
+# runs with no capability at all. The one exception is cAdvisor's user, root
+# (see there). The API needed one writable path more than before, a tmpfs on
+# /tmp (see there). tests/integration/test_deployed_container.py checks this
+# for every service of this file.
 x-hardening: &hardening
   read_only: true
   cap_drop:
@@ -151,5 +154,140 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # Resource monitoring (docs/docs/monitoring.md#resource-monitoring, EDN-99):
+  # Prometheus scrapes the API, cAdvisor (per container) and node-exporter (the
+  # host) every 15 s. All three always run, with no Compose profile, so CI, a
+  # laptop and the VM start the same stack. None publishes a port: the VM's
+  # 8080 to 8089 are public through the NAT. A service that does not become
+  # healthy fails `up --wait`, and with it a deploy, which then rolls the API
+  # back too (deploy.sh), so their healthchecks probe only that they serve.
+  prometheus:
+    <<: *hardening
+    # Pinned by digest as well as by tag, which Dependabot moves together.
+    image: quay.io/prometheus/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
+    # The image's own two flags, which a `command` replaces, and the retention:
+    # at most 2 GB of the VM's 20 GB disk (NFR-04), and at most 60 days, the
+    # rest of the term with room to spare. The size counts the TSDB's blocks and
+    # its write-ahead log; the oldest block goes first.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.size=2GB
+      - --storage.tsdb.retention.time=60d
+    expose:
+      - "9090"
+    volumes:
+      # A relative bind mount, so the file travels with the release (deploy.sh).
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # The TSDB in a named volume: it survives a new image and a changed
+      # configuration, which recreates the container (docs/docs/deployment.md).
+      - prometheus-data:/prometheus
+    # The image runs as `nobody`; Prometheus 3 sets Go's memory limit to 90 % of
+    # the container's, so it collects garbage harder before the kernel kills it.
+    # 384 MiB is about twice the 200 MiB peak estimated for a few weeks of
+    # retention of the four targets (docs/docs/deployment.md).
+    mem_limit: 384m
+    memswap_limit: 384m
+    pids_limit: 128
+    restart: unless-stopped
+    logging: *logging
+    # busybox `wget` is in the image. /-/ready answers 200 once the TSDB is
+    # open; replaying a long write-ahead log after a restart can take a while on
+    # the VM's one vCPU, hence the start period.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      start_interval: 1s
+      retries: 3
+
+  # Per container: CPU, memory against its limit, the start time (a changed one
+  # is a restart) and block I/O. For the cgroup v1 of the VM as well as the cgroup v2
+  # of CI and laptops.
+  #
+  # The exception to the shared hardening: cAdvisor runs as root, because only
+  # root can read the Docker socket and /var/lib/docker, and the socket is
+  # root-equivalent on the host (whoever can talk to it can start a privileged
+  # container), however read-only its mount. It still drops every capability,
+  # has a read-only root and `no-new-privileges`, and it publishes no port.
+  cadvisor:
+    <<: *hardening
+    image: ghcr.io/google/cadvisor:v0.60.6@sha256:b8e7d1093144fd088f425ff003d75a4aa405de075db78dae3bc563730b1bd07a
+    command:
+      # Only Docker's containers and the root cgroup, not every cgroup of the host.
+      - --docker_only=true
+      # Stats every 30 s rather than every second: cAdvisor's own CPU on a
+      # one-vCPU host. Prometheus' 15 s scrape then reads each value twice.
+      - --housekeeping_interval=30s
+      # The collectors the dashboards and alerts read; the rest, the per-container
+      # disk usage above all, which walks every layer's files, stays off. So does
+      # `network`: cAdvisor reads a container's traffic from the host's /proc,
+      # which it would need under /rootfs with /var/lib/docker, a wider root
+      # exception that no requirement asks for; the API counts its own requests.
+      - --enable_metrics=cpu,memory,diskIO
+      # Labels only for the Compose service and project, not every image label,
+      # so that a series is named by its service, as `container_label_com_docker_compose_service`.
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project
+    expose:
+      - "8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    mem_limit: 192m
+    memswap_limit: 192m
+    pids_limit: 128
+    restart: unless-stopped
+    logging: *logging
+    # The image's healthcheck (/usr/bin/healthcheck.sh, `wget` on /healthz),
+    # probed every second while it starts, so that `--wait` returns sooner.
+    healthcheck:
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 1s
+      retries: 3
+
+  # The host: memory, CPU, load and the root file system's free bytes against
+  # NFR-04's 4 GB floor. It reads the host's / under /host, read-only; without
+  # host networking, which would open its port 9100 on the VM, and without the
+  # host's PID namespace, which none of its figures needs. Its network figures
+  # are therefore its own container's, not the host's.
+  node-exporter:
+    <<: *hardening
+    image: quay.io/prometheus/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    command:
+      - --path.rootfs=/host
+      # The textfile collector: every *.prom file in this directory becomes
+      # metrics, which is how M6's drift job publishes its results (#228). The
+      # job writes the named volume; node-exporter only reads it.
+      - --collector.textfile.directory=/var/lib/node-exporter/textfile
+    expose:
+      - "9100"
+    volumes:
+      # `rslave`: a file system the host mounts later shows up here too.
+      - /:/host:ro,rslave
+      - node-textfile:/var/lib/node-exporter/textfile:ro
+    # The image runs as `nobody`.
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 64
+    restart: unless-stopped
+    logging: *logging
+    # busybox `wget` on the landing page, which collects nothing.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 1s
+      retries: 3
+
 volumes:
   prediction-log:
+  # Prometheus' TSDB, at most 2 GB by its retention.
+  prometheus-data:
+  # The textfile collector's .prom files (node-exporter above).
+  node-textfile:

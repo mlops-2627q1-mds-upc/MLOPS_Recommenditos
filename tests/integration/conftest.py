@@ -30,8 +30,9 @@ is the example to copy. Error shapes, limits and proxy rules are already covered
 for every route by `test_deployed_proxy.py`.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+import functools
 import ipaddress
 import json
 import os
@@ -260,3 +261,14 @@ def api_container() -> Container:
 @pytest.fixture(scope="session")
 def proxy_container() -> Container:
     return service_container("proxy")
+
+
+@pytest.fixture(scope="session")
+def prometheus_container() -> Container:
+    return service_container("prometheus")
+
+
+@pytest.fixture(scope="session")
+def stack_container() -> Callable[[str], Container]:
+    """The running container of any service of the stack, looked up once per service."""
+    return functools.cache(service_container)

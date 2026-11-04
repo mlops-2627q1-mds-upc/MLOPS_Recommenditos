@@ -236,7 +236,7 @@ In the deployment only Prometheus reads it, inside the Compose network: nginx re
 A method other than the standard ones is counted as `OTHER`.
 The latency histogram has bucket bounds at 0.25 s and 0.3 s, NFR-02's targets, so the share of answers within each target is read from one bucket.
 Every request is counted, a body refused before it was read and a last-resort 500 included, because the middleware that counts sits outside all others.
-The process's own CPU and memory are not here: cAdvisor or node-exporter report the container's (M6).
+The process's own CPU and memory are not here: cAdvisor reports the container's and node-exporter the host's ([Monitoring](monitoring.md#resource-monitoring)).
 
 The figures are correct for any number of uvicorn workers when `PROMETHEUS_MULTIPROC_DIR` names a writable directory.
 Each worker then writes its values to its own files there, and a scrape, answered by whichever worker, adds them up (prometheus_client's multiprocess mode).
