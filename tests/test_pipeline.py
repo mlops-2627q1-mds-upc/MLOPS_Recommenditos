@@ -8,6 +8,7 @@ synthetic fixture in a temporary directory, which covers the logic, and read
 `dvc repro` on a clean clone remains the manual check of NFR-06.
 """
 
+import importlib
 import json
 import os
 import platform
@@ -21,7 +22,11 @@ import pytest
 from tests.conftest import PII_COLUMNS, params_override
 import yaml
 
-from recommenditos import NUMPY_DISABLED_CPU_FEATURES
+from recommenditos import (
+    ANY_NUMPY_KERNEL_VARIABLE,
+    NUMPY_DISABLED_CPU_FEATURES,
+    check_numpy_kernels,
+)
 from recommenditos.config import PROJ_ROOT
 from recommenditos.data import (
     build_features,
@@ -590,8 +595,9 @@ def test_every_stage_runs_its_own_module(dvc_stages):
 
 
 #: `np.log` of the prices of the two listings whose `log_price` an AMD EPYC
-#: 9V74 with AVX-512 put one unit in the last place off (#259), as the AVX2
-#: kernels and glibc compute them: the correctly rounded values.
+#: 9V74 with AVX-512 put one unit in the last place off (#259), as glibc's
+#: `log` computes them, which numpy uses without its AVX-512 kernels: the
+#: correctly rounded values.
 _LOG_PRICE_BITS = {285_343.0: "0x1.91f76036223adp+3", 94_869.0: "0x1.6eba62f8cca24p+3"}
 
 #: Starts `preprocess` the way `python3 -m` does, short of running it, records
@@ -632,7 +638,7 @@ _PREPROCESS_PROCESS = textwrap.dedent(
     platform.machine().lower() not in {"x86_64", "amd64"},
     reason="numpy's AVX-512 kernels exist only on x86-64",
 )
-def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
+def test_a_stage_process_turns_numpys_avx512_kernels_off_before_numpy_loads():
     """`preprocess`, started as `dvc repro` starts it, computes `log_price` without AVX-512.
 
     numpy reads NPY_DISABLE_CPU_FEATURES only at its first import, so an import
@@ -650,7 +656,8 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
     removed from the child's environment, which then has to set it itself.
     numpy's Windows wheel has no AVX-512 kernels, so there the variable stays
     unset and the test checks that the wheel still has none; its bits differ
-    from Linux's without them, so they are checked on Linux only.
+    from Linux's without them, so they are checked on Linux only, where the
+    promise holds.
     """
     disabled = None if sys.platform == "win32" else NUMPY_DISABLED_CPU_FEATURES
     completed = subprocess.run(
@@ -678,13 +685,79 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
     # The variable turns off the dispatch targets; `__cpu_features__` still
     # reports the CPU's own AVX-512 features (AVX512F and the rest) as present.
     assert set(seen["targets_on"]) <= {"X86_V3"}
-    if sys.platform != "win32":
+    if sys.platform == "linux":
         # Without AVX-512, numpy's float64 `log` comes from the C library, and
         # Windows's rounds 285,343 the other way (0x1.91f76036223acp+3, CI on
-        # 2026-11-04): `log_price` matches Linux's on no Windows machine (#259).
+        # 2026-11-04): NFR-06's byte-for-byte promise is Linux's only (#259).
         assert seen["bits"] == list(_LOG_PRICE_BITS.values()), (
             f"AVX-512 on this CPU: {seen['cpu_has_avx512']}"
         )
+
+
+@pytest.mark.req("NFR-06")
+def test_the_target_is_refused_on_numpys_avx512_kernels(monkeypatch):
+    """A process that loaded numpy before `recommenditos` is refused, unless told to go on.
+
+    Such a process, a notebook that imports pandas first for example, runs
+    numpy's AVX-512 kernels on a CPU that has them, so the test hands
+    `check_numpy_kernels` the features such a CPU reports.
+    """
+    multiarray = importlib.import_module("numpy._core._multiarray_umath")
+    features = vars(multiarray)["__cpu_features__"]
+    monkeypatch.setattr(multiarray, "__cpu_features__", {**features, "X86_V4": True})
+    prices = pd.DataFrame({"price": list(_LOG_PRICE_BITS)})
+
+    monkeypatch.delenv(ANY_NUMPY_KERNEL_VARIABLE, raising=False)
+    with pytest.raises(RuntimeError, match=f"{ANY_NUMPY_KERNEL_VARIABLE}=1"):
+        preprocess.add_the_target(prices)
+
+    monkeypatch.setenv(ANY_NUMPY_KERNEL_VARIABLE, "1")
+    with pytest.warns(UserWarning, match=r"\(X86_V4\)"):
+        check_numpy_kernels()
+
+    monkeypatch.setattr(multiarray, "__cpu_features__", {**features, "X86_V4": False})
+    monkeypatch.delenv(ANY_NUMPY_KERNEL_VARIABLE)
+    assert "log_price" in preprocess.add_the_target(prices)
+
+
+_CPU_HAS_AVX512 = bool(
+    vars(importlib.import_module("numpy._core._multiarray_umath"))["__cpu_features__"].get(
+        "AVX512F"
+    )
+)
+
+
+@pytest.mark.req("NFR-06")
+@pytest.mark.skipif(
+    not _CPU_HAS_AVX512 or sys.platform != "linux",
+    reason="only a CPU with AVX-512 runs numpy's AVX-512 kernels",
+)
+def test_a_stage_process_that_keeps_the_avx512_kernels_on_is_refused():
+    """On an AVX-512 CPU, a `preprocess` whose caller kept X86_V4 on is refused.
+
+    The caller's NPY_DISABLE_CPU_FEATURES wins, so naming only AVX512_SPR
+    leaves X86_V4 on. Skipped on a CPU without AVX-512, such as the laptop's;
+    GitHub's runners land on AVX-512 CPUs some of the time, and CI runs it then.
+    """
+    probe = textwrap.dedent(
+        """
+        import runpy
+        stage = runpy.run_module("recommenditos.data.preprocess", alter_sys=True)
+        import pandas as pd
+        stage["add_the_target"](pd.DataFrame({"price": [285343.0]}))
+        """
+    )
+    environment = {k: v for k, v in os.environ.items() if k != ANY_NUMPY_KERNEL_VARIABLE}
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        env={**environment, "NPY_DISABLE_CPU_FEATURES": "AVX512_SPR"},
+        cwd=PROJ_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert "numpy runs its AVX-512 kernels (X86_V4" in completed.stderr
 
 
 def test_every_stage_declares_its_own_module_as_a_dependency(dvc_stages):

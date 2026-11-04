@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 import typer
 
+from recommenditos import check_numpy_kernels
 from recommenditos.config import INTERIM_DATA_DIR, PARAMS_FILE, RAW_DATA_DIR
 from recommenditos.pipeline import load_params, read_frame, write_frame
 from recommenditos.schema import INTERIM_SCHEMA, RAW_SCHEMA, Schema
@@ -321,8 +322,10 @@ def add_the_target(frame: pd.DataFrame) -> pd.DataFrame:
     """Step 7: the target, after the price range and never before.
 
     The raw file starts at 1 EUR, and `log(0)` is `-inf`, which no contract can
-    catch - it is a float like any other.
+    catch - it is a float like any other. numpy's AVX-512 `log` rounds some
+    prices differently (#259), so this refuses to run on it.
     """
+    check_numpy_kernels()
     return frame.assign(log_price=np.log(frame["price"]))
 
 
