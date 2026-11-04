@@ -1475,7 +1475,6 @@ How to add an entry:
   Lukas answered: "Only through an SSH tunnel. Grafana listens only on 127.0.0.1 of the VM, opened with `ssh -L 3000:127.0.0.1:3000 ...`, from home with UPClink, on the university network directly. Nothing new becomes public (NFR-09), and it also works in the presentation room." (translated from German)
   Question (translated from German): "Where should the monitoring alerts go (latency, error rate, disk, RAM, API down, drift, coverage)? According to the working agreements the team communicates through Discord."
   Lukas answered: "Discord webhook. Prometheus rules plus Alertmanager (about 25 MiB, rules tested with promtool) send alerts into the team Discord, each with what to do." (translated from German)
-  Orchestrator briefing (core, paraphrased): "provision the dashboard against the NFR-02 to NFR-05 targets, and alerts that fire before a limit is hit, each with what to do, delivered to the team's Discord."
 - **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [PR #284](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/284), [Issue #225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [Alerts](../docs/docs/monitoring.md#alerts), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
 - **In LaTeX:** yes
 

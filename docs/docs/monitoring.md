@@ -132,7 +132,7 @@ Grafana runs in the stack and shows one provisioned dashboard, **Service health*
 | Request rate per route | FR-11 | - |
 | p95 latency of `/v1/predict` | NFR-02: 250 ms ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) | [PredictLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) |
 | p95 latency of `/v1/price-range` and `/v1/comparables` | NFR-02: 300 ms | [RangeLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) |
-| Server error rate | NFR-03: 1 % | [ErrorRateHigh](#errorratehigh) |
+| Server error rate | NFR-03: 1 % | [ErrorRateHigh](#errorratehigh), [ServerErrors](#servererrors) |
 | API memory | its 768 MiB limit (NFR-04 caps it at 1 GB) | [ContainerMemoryNearLimit](#containermemorynearlimit) |
 | Memory of each container, share of its limit | 90 % | [ContainerMemoryNearLimit](#containermemorynearlimit) |
 | CPU of each container | the VM's one vCPU | - |
@@ -141,6 +141,7 @@ Grafana runs in the stack and shows one provisioned dashboard, **Service health*
 | Container restarts in the last 30 minutes | 3 | [ContainerRestarting](#containerrestarting) |
 | Predicted prices, prediction warnings by field | FR-11, FR-05 | drift and error follow in [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230) |
 
+Every target and limit is drawn in red, as a threshold line or, for the API's memory limit and the host's memory and disk floors, as a dashed series, so that none is mistaken for data.
 The uptime panel is the share of Prometheus' scrapes of the API that succeeded in the dashboard's time range, seen from inside the stack.
 It cannot see the VM or its network being gone; the uptime NFR-05 reports is Better Stack's, from outside ([External uptime check](deployment.md#external-uptime-check), EDN-10).
 
