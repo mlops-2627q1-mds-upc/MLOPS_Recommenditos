@@ -24,6 +24,21 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+import time
+import warnings
+TIMES: list[str] = []
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _probe():
+    for _ in range(3):
+        t = time.perf_counter()
+        subprocess.run([NODE, "--version"], capture_output=True, check=False, timeout=120)
+        TIMES.append(f"version={time.perf_counter() - t:.2f}")
+    yield
+    warnings.warn("NODE-TIMING " + " ".join(TIMES), stacklevel=1)
+
+
 def run(expression: str) -> Any:
     """The JSON value of `expression`, evaluated with app.js's exports as `app`."""
     assert NODE is not None, "CI is set, but Node is not installed"
@@ -31,6 +46,7 @@ def run(expression: str) -> Any:
         f"const app = await import({json.dumps((WEB_DIR / 'app.js').as_uri())});\n"
         f"console.log(JSON.stringify({expression}));"
     )
+    t = time.perf_counter()
     result = subprocess.run(
         [NODE, "--input-type=module", "-e", script],
         capture_output=True,
@@ -40,6 +56,7 @@ def run(expression: str) -> Any:
         check=False,
         cwd=Path(__file__).parent,
     )
+    TIMES.append(f"{time.perf_counter() - t:.2f}")
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 
