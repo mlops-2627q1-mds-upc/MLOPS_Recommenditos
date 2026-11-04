@@ -695,28 +695,42 @@ def test_a_stage_process_turns_numpys_avx512_kernels_off_before_numpy_loads():
 
 
 @pytest.mark.req("NFR-06")
-def test_the_target_is_refused_on_numpys_avx512_kernels(monkeypatch):
+@pytest.mark.parametrize("cpu_targets_on", [False, True], ids=["without-avx512", "avx512"])
+def test_the_target_is_refused_on_numpys_avx512_kernels(monkeypatch, cpu_targets_on: bool):
     """A process that loaded numpy before `recommenditos` is refused, unless told to go on.
 
     Such a process, a notebook that imports pandas first for example, runs
     numpy's AVX-512 kernels on a CPU that has them, so the test hands
-    `check_numpy_kernels` the features such a CPU reports.
+    `check_numpy_kernels` the features such a CPU reports. Every case replaces
+    the state of all three targets, so the CPU the suite runs on, whose own
+    targets are on in this process when it has AVX-512, does not leak in; the
+    parameter simulates both kinds of CPU as the starting state.
     """
     multiarray = importlib.import_module("numpy._core._multiarray_umath")
-    features = vars(multiarray)["__cpu_features__"]
-    monkeypatch.setattr(multiarray, "__cpu_features__", {**features, "X86_V4": True})
+    targets = NUMPY_DISABLED_CPU_FEATURES.split()
+    cpu = {**vars(multiarray)["__cpu_features__"], **dict.fromkeys(targets, cpu_targets_on)}
+
+    def run_on(*on: str) -> None:
+        features = {**cpu, **dict.fromkeys(targets, False), **dict.fromkeys(on, True)}
+        monkeypatch.setattr(multiarray, "__cpu_features__", features)
+
     prices = pd.DataFrame({"price": list(_LOG_PRICE_BITS)})
 
+    run_on("X86_V4")
     monkeypatch.delenv(ANY_NUMPY_KERNEL_VARIABLE, raising=False)
     with pytest.raises(RuntimeError, match=f"{ANY_NUMPY_KERNEL_VARIABLE}=1"):
         preprocess.add_the_target(prices)
 
     monkeypatch.setenv(ANY_NUMPY_KERNEL_VARIABLE, "1")
-    with pytest.warns(UserWarning, match=r"\(X86_V4\)"):
+    with pytest.warns(UserWarning, match=r"kernels \(X86_V4\) in"):
         check_numpy_kernels()
 
-    monkeypatch.setattr(multiarray, "__cpu_features__", {**features, "X86_V4": False})
+    run_on(*targets)
     monkeypatch.delenv(ANY_NUMPY_KERNEL_VARIABLE)
+    with pytest.raises(RuntimeError, match=r"kernels \(X86_V4, AVX512_ICL, AVX512_SPR\) in"):
+        check_numpy_kernels()
+
+    run_on()
     assert "log_price" in preprocess.add_the_target(prices)
 
 
