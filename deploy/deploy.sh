@@ -178,7 +178,7 @@ stack_repository() {
 
 # The registry login for the pulls of this run: with a registry token, a
 # throwaway Docker configuration logged in to ghcr.io, created at the first pull
-# that needs it and deleted by logout. The token goes to `docker login` through
+# that needs it and deleted by registry_logout. The token goes to `docker login` through
 # a pipe from the shell's builtin printf, so it is no process's argument.
 registry_config=
 login_for() {
@@ -200,13 +200,13 @@ login_for() {
         return 1
     fi
 }
-logout() {
+registry_logout() {
     if [[ -n $registry_config ]]; then
         rm -rf "$registry_config"
     fi
     registry_config=
 }
-trap logout EXIT
+trap registry_logout EXIT
 
 # Pulls the image $1, with the login when it is on ghcr.io; Docker's own output
 # goes to the file $2.
@@ -395,7 +395,7 @@ deploy() {
         current_stack=${stack_dir##*/}
     fi
     if ! fetch_stack "$tag"; then
-        logout
+        registry_logout
         record "deploy $tag pull-failed"
         say "the stack files of $tag are not available; nothing changed"
         out "running: $current"
@@ -407,7 +407,7 @@ deploy() {
         target=$current_stack
         say "$tag has no stack image, so it runs with the stack files that run now, stacks/$current_stack"
     else
-        logout
+        registry_logout
         record "deploy $tag no-stack-files"
         say "$tag has no stack image and there are no stack files on the VM; nothing changed"
         out "running: $current"
@@ -423,7 +423,7 @@ deploy() {
         if ! pull_image "$image" "$log"; then
             sed 's/^/  /' "$log" 2>/dev/null || true
             rm -f "$log"
-            logout
+            registry_logout
             record "deploy $tag pull-failed"
             say "pulling $image failed; nothing changed"
             out "running: $current"
@@ -431,7 +431,7 @@ deploy() {
         fi
         rm -f "$log"
     fi
-    logout
+    registry_logout
     say "deploying $tag with stacks/$target (running now: ${current:-nothing}, with stacks/${current_stack:-none})"
     set_tag "$tag"
     use_stack "$target"

@@ -63,7 +63,8 @@ repos:
     hooks:
       - id: nbstripout
 
-  # Lints the Dockerfiles of the API image and of the report's TeX Live image.
+  # Lints the Dockerfiles of the API image, the stack image and the report's TeX
+  # Live image.
   # hadolint-py installs the released hadolint binary as a Python wheel, so the
   # hook needs neither Docker nor a system package and runs the same on Linux,
   # macOS and Windows.
@@ -71,7 +72,7 @@ repos:
     rev: v2.15.1
     hooks:
       - id: hadolint
-        files: ^(reports/latex/)?Dockerfile$
+        files: ^((reports/latex/)?Dockerfile|deploy/stack\.Dockerfile)$
 
   # Lints the GitHub workflows: expressions, job and step references, action
   # inputs, and the shell of every `run:` with shellcheck, which the wheel of

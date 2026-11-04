@@ -194,7 +194,7 @@ flowchart TB
 | **DVC pipeline** | Turns the raw listings into the model bundle, its metrics and the gate's verdict | Built, `dvc.yaml`, [pipeline](pipeline.md) |
 | **DagsHub** | DVC remote for data and models; hosted MLflow for every run | Built, [data versioning](data-versioning.md) |
 | **CI** (GitHub Actions) | On every pull request: lint, tests on Linux and Windows, Serving runtime, Promotion gate, integration tests through nginx | Built, `.github/workflows/ci.yml` |
-| **CD** (GitHub Actions, GHCR) | On a merge to `main`, `cd.yml` builds and pushes the image; `deploy.yml` then deploys it to the VM, runs the smoke check and puts the previous tag back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying to the VM has been on since 2026-10-30 ([Deployment](deployment.md#turn-continuous-deployment-on)) |
+| **CD** (GitHub Actions, GHCR) | On a merge to `main`, `cd.yml` builds and pushes the API image and the stack image, which carries the commit's stack files; `deploy.yml` then deploys both to the VM, runs the smoke check and puts the previous release back if it fails (NFR-13) | Built, `.github/workflows/cd.yml` and `deploy.yml`; deploying to the VM has been on since 2026-10-30 ([Deployment](deployment.md#turn-continuous-deployment-on)) |
 
 The API calls no other service at request time: no DagsHub, no MLflow.
 The state it keeps outside the image is the prediction log on its volume and the workers' metric files in a tmpfs, so a worker or the whole container can be restarted or replaced without losing a request's context.
@@ -411,9 +411,9 @@ flowchart LR
   Both containers restart after a crash and after a reboot, and `proxy` starts once the API's health check passes (NFR-05).
 - **Storage.** The workers' metric files live in a tmpfs, the temporary files of SQLite and Python in another one on `/tmp`, and the prediction log on the named volume `prediction-log`, which survives a new image and which the drift job will mount; all are owned by the service user.
   Everything else in the API container is the image, mounted read-only ([Deployment](deployment.md#the-stack)).
-- **How the image gets there.** CD builds the image in GitHub Actions and pushes it to GHCR, and `deploy/deploy.sh` on the VM pulls the commit's tag and starts it, so the VM needs neither the repository, DVC nor a DagsHub token ([Deployment](deployment.md#how-the-image-gets-there)).
+- **How the image gets there.** CD builds the image in GitHub Actions and pushes it to GHCR with a stack image of the same tag, which holds the commit's `compose.yaml`, `nginx.conf` and configuration folders, and `deploy/deploy.sh` on the VM pulls both and starts them, so the VM needs neither the repository, DVC nor a DagsHub token, and its stack files never drift from the release ([Deployment](deployment.md#the-stack-files-on-the-vm)).
   The Deploy workflow's jobs on the VM run on a self-hosted runner there, which may run nothing but `deploy.sh` and hands it the job's token for the private package; the smoke check runs from outside ([EDN-94][edn]).
-  Rolling back is starting the previous tag, which `deploy.sh` does on its own when a new tag does not come up healthy; a laptop can still stream an image with `docker save | ssh docker load`.
+  Rolling back is starting the previous tag with its stack files, which `deploy.sh` does on its own when a new tag does not come up healthy; a laptop can still stream an image with `docker save | ssh docker load`.
 
 ## Patterns
 

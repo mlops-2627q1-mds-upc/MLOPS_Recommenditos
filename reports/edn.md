@@ -1153,14 +1153,14 @@ How to add an entry:
 
 ### EDN-87: The API runs on the VM as a Compose stack behind nginx from Milestone 4
 
-> **Revised on 2026-10-21**: the image size measured again with the interval boosters of #158; the decision is unchanged.
+> **Revised on 2026-10-21**: the image size measured again with the interval boosters of #158; on 2026-11-04 the copy by hand gave way to releases that CD publishes (EDN-94); the decision is unchanged.
 >
 - **Date:** 2026-10-20
 - **Milestone:** M4: Model Deployment
 - **Activity / Topic:** ML System Design, Containerization
 - **Participants:** @lukas2510 decided ([issue #142](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/142))
 - **Decision:** From M4 on, the API runs on the VM as a Docker Compose stack: the API image, with the serving runtime and the model bundle, behind nginx, the only published container, which refuses `/feedback` and `/metrics`.
-  Until CD exists, the image is built on a laptop and copied with `docker save | ssh docker load`.
+  Each release, the image and the stack files of one commit, comes from CD and GHCR (EDN-91, EDN-94); `docker save | ssh docker load` stays the fallback.
 - **Alternatives considered:**
   - The course demo's recipe (`uv sync`, `dvc pull`, uvicorn under systemd, nginx): M5 replaces it with containers, so two deployments to build and document.
   - Building the image on the VM: needs the repository, DVC and a DagsHub token on a shared machine.
@@ -1251,21 +1251,21 @@ How to add an entry:
 
 ### EDN-91: A green CI run on `main` publishes the API image to GHCR
 
-> **Revised on 2026-10-30**: the package stays private, because the organisation does not allow public packages; the VM pulls with the deploy job's token (EDN-94).
+> **Revised on 2026-10-30**: the packages stay private (EDN-94); since 2026-11-04 CD also pushes a stack image (#279).
 
 - **Date:** 2026-10-22
 - **Milestone:** M5: Model Packaging
 - **Activity / Topic:** CI/CD, Containerization, Security
 - **Participants:** @lukas2510 decided ([issue #197](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/197))
 - **Decision:** A workflow of its own, `cd.yml`, runs after CI passed on a push to `main` that changes more than documentation.
-  It pulls the model with a DagsHub token from the GitHub Environment `dagshub`, which only `main` may use, tests the image as a Compose stack, and pushes it to a private GHCR package.
+  It pulls the model with a DagsHub token from the GitHub Environment `dagshub`, which only `main` may use, tests the image as a Compose stack, and pushes it, with a stack image of the commit's stack files, to private GHCR.
 - **Alternatives considered:**
   - A read-only DagsHub account for CI: one more account, against a threat a three-person team with branch protection does not face.
   - A public package: the organisation's settings do not allow one.
-  - A job in `ci.yml`: the secret would sit in the workflow pull requests run, and the job would have to wait for every other job.
+  - A job in `ci.yml`: the secret would sit in the workflow pull requests run.
 - **Rationale:** DagsHub tokens have no read-only scope, so the protection is where the token can be used: one step of one job, after a push to `main`, never on a pull request (NFR-15).
-  The API key reaches the container at run time, so the image holds only code and the model the model card describes.
-  Built locally with the workflow's steps, the image is 704 MB (NFR-04: 1 GB) and passes the 27 integration tests against `dvc.lock`'s hashes.
+  The API key reaches the container at run time and the stack files travel in an image of their own, so the API image holds only code and the model the model card describes.
+  Built locally, the 704 MB image (NFR-04: 1 GB) passed the 27 integration tests.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out the three questions with their options in the issue and recommended the chosen ones; @lukas2510 decided all three as recommended.
@@ -1327,31 +1327,36 @@ How to add an entry:
 - **Other evidence:** [Issue #185](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/185), [deployment docs](../docs/docs/deployment.md), [`healthcheck.py`](../recommenditos/api/healthcheck.py), [hang drill](../tests/integration/test_deployed_recovery.py).
 - **In LaTeX:** yes
 
-### EDN-94: CD deploys through a runner on the VM that may only run `deploy.sh`
+### EDN-94: CD deploys releases through a VM runner that may only run `deploy.sh`
+
+> **Revised on 2026-11-04**: a release now carries its stack files ([#279](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/279)).
 
 - **Date:** 2026-10-30
 - **Milestone:** M5: Model Packaging
 - **Activity / Topic:** CI/CD, Deployment, Security
-- **Participants:** @lukas2510 decided ([issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198))
-- **Decision:** A self-hosted runner on the VM, as a user outside the `docker` group, runs the deploy and rollback jobs; sudo lets it run `deploy.sh` with its three commands and nothing else.
-  The smoke check runs on a GitHub-hosted runner against the public URL.
-  The deploy job hands its own token to `deploy.sh` on standard input for one GHCR pull.
+- **Participants:** Lukas Häußler decided ([issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [issue #279](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/279)); AI agents proposed the options in #279 and implemented them
+- **Decision:** A self-hosted runner on the VM, outside the `docker` group, runs the deploy and rollback jobs; sudo lets it run `deploy.sh` with its three commands only.
+  `deploy.sh` pulls the API and stack images of one tag with the job's token, copies the stack files beside `.env`, and a rollback restores both.
+  The smoke check runs on a GitHub-hosted runner.
 - **Alternatives considered:**
   - SSH from a GitHub-hosted runner: the VM's SSH port answers only from the UPC network.
-  - The smoke check on the VM runner too: needs the repository and Python on a 1-core VM and gives no outside view.
-  - The VM pulling on a timer: no deployment record, no gate, no rollback after a failed smoke check.
-  - A personal token in the VM's Docker configuration: a lasting credential on a shared VM.
-- **Rationale:** From outside the UPC network, SSH to the VM timed out while its HTTP port answered (#134), so only an outbound connection from the VM works.
-  No repository code runs on the runner; a fork pull request's workflows run only after a team member approved them, and a test keeps every other workflow on `main` off the runner.
-  In an Ubuntu 20.04 container, the VM's release, sudo 1.8.31 refused every other command tried.
+  - The smoke check on the VM runner: no outside view.
+  - Stack files copied by hand: a person on the VPN per merge, unnoticed drift, no rollback.
+  - Copying them from a checkout: repository content on the runner.
+- **Rationale:** Only an outbound connection from the VM works: from outside the UPC network, its SSH port timed out (#134).
+  No repository code runs on the runner: `deploy.sh` copies the stack files out of a never-started container of an image CD pushed after the API image's checks.
+  Fork pull requests' workflows need a team member's approval, and a test keeps other workflows off the runner.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI laid out the options for reaching the VM and for the private package and recommended the chosen ones; @lukas2510 decided both as recommended.
-  AI then wrote the workflow, the install script and the guard test, and probed the sudoers rule in the container.
-- **AI interaction evidence:** Claude Code session of 2026-10-30 on deploying to the VM.
+- **Assessment of the AI contribution:** AI laid out the options for reaching the VM, the private package and the stack files, and recommended the chosen ones; @lukas2510 took them, leaving open the stack files' carrier, for which AI chose an image of its own (EDN-91).
+  AI wrote the workflows, scripts and drill tests; in an Ubuntu 20.04 container, sudo 1.8.31 refused every other command tried, and GHCR answers `manifest unknown` for a missing tag.
+- **AI interaction evidence:** Session of 2026-10-30.
   Question: "How should CD reach the VM?".
-  Lukas answered: "A self-hosted runner on the VM, as a user outside the `docker` group, runs the deploy and rollback jobs and may run only `deploy.sh` through one sudo rule; the smoke check runs on a GitHub-hosted runner against the public URL." (the issue's option D, shortened)
-- **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [issue #198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198), [PR #237](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/237), [`deploy.yml`](../.github/workflows/deploy.yml), [deployment docs](../docs/docs/deployment.md#turn-continuous-deployment-on).
+  Lukas answered: "A self-hosted runner on the VM, as a user outside the `docker` group, runs the deploy and rollback jobs and may run only `deploy.sh` through one sudo rule; the smoke check runs on a GitHub-hosted runner against the public URL." (option D, shortened)
+  Session of 2026-11-04, question (translated from German): "#279 (EDN decision): how do the stack files (compose.yaml, nginx.conf, new monitoring configs) reach the VM? Almost every M6 issue changes the stack, so this should land before #224."
+  Orchestrator briefing (core, paraphrased): "implement option B with a stack image of its own, pushed by CD under the API image's SHA; .env, deploy.sh and the bootstrap scripts never travel."
+  Lukas answered: "B: with the release. CD puts deploy/ into an artifact with the same commit tag (in the API image or as a small image of its own), deploy.sh extracts it before compose up. Merge means rollout, rollback restores the matching files, the runner still runs no repository code (EDN-94)."
+- **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [PR #237](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/237), [issue #279](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/279), [`deploy.yml`](../.github/workflows/deploy.yml), [`deploy.sh`](../deploy/deploy.sh), [deployment docs](../docs/docs/deployment.md#the-stack-files-on-the-vm).
 - **In LaTeX:** yes
 
 ### EDN-95: CI fails on fixable image vulnerabilities, and the containers run locked down
