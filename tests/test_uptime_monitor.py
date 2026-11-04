@@ -141,8 +141,7 @@ def test_the_monitor_is_created_as_the_issue_asks() -> None:
 
     (monitor,) = api.monitors.values()
     assert monitor["url"] == "http://nattech.fib.upc.edu:40520/health"
-    assert monitor["monitor_type"] == "expected_status_code"
-    assert monitor["expected_status_codes"] == [200]
+    assert monitor["monitor_type"] == "status"
     assert monitor["check_frequency"] == 180
     assert monitor["request_timeout"] < monitor["check_frequency"]
     assert monitor["confirmation_period"] >= monitor["check_frequency"]

@@ -401,7 +401,7 @@ Better Stack (formerly Better Uptime, [#226](https://github.com/mlops-2627q1-mds
 | What | Value |
 |------|-------|
 | Checked URL | `http://nattech.fib.upc.edu:40520/health`, plain HTTP, the URL the deploy workflow's smoke job also requests from a GitHub-hosted runner |
-| Monitor | id `5183930`, type `expected_status_code` (up on a 200 and on nothing else), every 180 s, 15 s timeout, from the regions `eu` and `us` |
+| Monitor | id `5183930`, type `status` (down on any answer but a 2xx), every 180 s, 15 s timeout, from the regions `eu` and `us` |
 | Alert | an incident opens when the failure lasts 180 s (the confirmation period, so one lost packet or one slow answer sends nothing), and the account's team gets an email; it closes after 180 s of passing checks |
 | Status page | <https://recommenditos.betteruptime.com>, 90 days of history |
 | Plan | free: 3-minute checks, one status page, email alerts, no phone or SMS |
@@ -427,7 +427,25 @@ uv run python -m tools.uptime_monitor export --from 2026-11-04 --to 2026-12-15
 It writes `reports/uptime/availability.json`: availability in percent, total downtime in seconds, and the number and the length of the incidents.
 The status page shows the same figure per day.
 
-REHEARSAL
+### Rehearsal of the alert path
+
+NFR-05 promises no unplanned downtime and agents may not stop production, so the API was not stopped.
+A temporary second monitor with the same settings checked `http://nattech.fib.upc.edu:40520/v1/feedback`, which nginx answers with a 403, and was deleted afterwards (`tools/uptime_monitor.py create-monitor` and `delete-monitor`).
+Times are UTC on 2026-11-04, from the incident's timeline in the API ([Better Stack API docs](https://betterstack.com/docs/uptime/api/); the timeline endpoint `GET /incidents/<id>/timeline` is not in the docs I read, it was found by trying it):
+
+| Event | Time |
+|-------|------|
+| Monitor `5183933` created, its first check fails with 403 | 13:25:37 |
+| "Waiting for 3 minutes before starting the incident", the confirmation period begins | 13:28:08 |
+| Incident `1047238502` starts, "Sent an email to" the account owner | 13:31:11 |
+| Better Stack records that the email was loaded | 13:31:33 |
+
+The email went out 5 min 34 s after the first failing check, 3 min 3 s after the confirmation period began.
+The inbox was not read for this: the send and the load are the timeline's entries, and the load is Better Stack's tracking of the opened message.
+For a real outage, expect the email 3 to 6 minutes after the API stops answering: up to one 180 s check interval until a check fails, plus the 180 s confirmation.
+That is slow against the 30 s recovery target on purpose: a restart that the VM does itself within 30 s never reaches the confirmation period, so only an outage that a person has to fix sends an email.
+
+### Optional drill on the VM
 
 An optional drill that a person runs on the VM, over SSH with the UPClink VPN connected, to see a real outage reach the inbox.
 **Not run**, because NFR-05 promises no unplanned downtime and the rehearsal above has already shown the alert path:
