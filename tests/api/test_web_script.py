@@ -7,7 +7,7 @@ runners have it.
 """
 
 from collections.abc import Callable, Iterator
-import itertools
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -15,7 +15,7 @@ import queue
 import shutil
 import subprocess
 import threading
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 
@@ -38,91 +38,115 @@ Run = Callable[[str], Any]
 START_TIMEOUT = 120
 EXPRESSION_TIMEOUT = 30
 
-# Reads one request per line, {"id": ..., "expression": ...}, and answers each
-# with one line: {"id": ..., "value": ...} or {"id": ..., "error": ...}.
-# `app` is global, so the indirect eval sees it.
+# Reads one JSON-encoded expression per line and answers each with one line:
+# {"value": ...} or {"error": ...}. `app` is global, so the indirect eval sees it.
 EVALUATOR = """
 globalThis.app = await import(%s);
 const { createInterface } = await import("node:readline");
 console.log(JSON.stringify({ ready: true }));
 for await (const line of createInterface({ input: process.stdin })) {
-  const { id, expression } = JSON.parse(line);
   let reply;
   try {
-    reply = { id, value: (0, eval)(expression) };
+    reply = { value: (0, eval)(JSON.parse(line)) };
   } catch (error) {
-    reply = { id, error: String(error?.stack ?? error) };
+    reply = { error: String(error?.stack ?? error) };
   }
   console.log(JSON.stringify(reply));
 }
 """
 
 
-@pytest.fixture(scope="module")
-def run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Run]:
-    """`run(expression)` is the JSON value of `expression`, with app.js's exports as `app`."""
-    assert NODE is not None, "CI is set, but Node is not installed"
-    stderr_path = tmp_path_factory.mktemp("node") / "stderr.txt"
-    with stderr_path.open("w", encoding="utf-8") as stderr:
-        node = subprocess.Popen(
-            [
-                NODE,
-                "--input-type=module",
-                "-e",
-                EVALUATOR % json.dumps((WEB_DIR / "app.js").as_uri()),
-            ],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=stderr,
-            # Node writes UTF-8; Windows would decode it with its ANSI code page.
-            encoding="utf-8",
-            cwd=Path(__file__).parent,
-        )
-    assert node.stdin is not None and node.stdout is not None
-    stdin, stdout = node.stdin, node.stdout
-    # A blocking readline cannot time out, so a thread reads and the tests wait
-    # on the queue; `None` marks the end of Node's output.
-    lines: queue.Queue[str | None] = queue.Queue()
+class Evaluator:
+    """One Node process that has imported app.js and evaluates expressions."""
 
-    def read() -> None:
-        for line in stdout:
-            lines.put(line)
-        lines.put(None)
+    def __init__(self, node: str, stderr_path: Path) -> None:
+        self.stderr_path = stderr_path
+        with stderr_path.open("w", encoding="utf-8") as stderr:
+            self.process = subprocess.Popen(
+                [
+                    node,
+                    "--input-type=module",
+                    "-e",
+                    EVALUATOR % json.dumps((WEB_DIR / "app.js").as_uri()),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=stderr,
+                # Node writes UTF-8; Windows would decode it with its ANSI code page.
+                encoding="utf-8",
+                cwd=Path(__file__).parent,
+            )
+        assert self.process.stdin is not None and self.process.stdout is not None
+        self.stdin, self.stdout = self.process.stdin, self.process.stdout
+        # A blocking readline cannot time out, so a thread reads and the tests
+        # wait on the queue; `None` marks the end of Node's output.
+        self.lines: queue.Queue[str | None] = queue.Queue()
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
+        # The first reason Node can no longer answer. Once it is set, Node is
+        # killed and every later expression fails at once with it, instead of
+        # waiting out its own bound or writing into a closed pipe.
+        self.dead: str | None = None
 
-    threading.Thread(target=read, daemon=True).start()
+    def _read(self) -> None:
+        for line in self.stdout:
+            self.lines.put(line)
+        self.lines.put(None)
 
-    def reply(timeout: float, what: str) -> dict[str, Any]:
+    def _stop(self, cause: str) -> NoReturn:
+        if self.dead is None:
+            self.dead = cause
+            self.process.kill()
+        pytest.fail(self.dead)
+
+    def _reply(self, timeout: float, what: str) -> dict[str, Any]:
         try:
-            line = lines.get(timeout=timeout)
+            line = self.lines.get(timeout=timeout)
         except queue.Empty:
-            pytest.fail(f"Node gave no answer {what} within {timeout} s")
-        assert line is not None, f"Node exited {what}: {stderr_path.read_text('utf-8')}"
+            self._stop(f"Node gave no answer {what} within {timeout} s")
+        if line is None:
+            self.process.wait()
+            self._stop(f"Node exited {what}: {self.stderr_path.read_text('utf-8')}")
         answer: dict[str, Any] = json.loads(line)
         return answer
 
-    assert reply(START_TIMEOUT, "to the import of app.js") == {"ready": True}
+    def wait_until_ready(self) -> None:
+        assert self._reply(START_TIMEOUT, "to the import of app.js") == {"ready": True}
 
-    requests = itertools.count()
-
-    def evaluate(expression: str) -> Any:
-        request = next(requests)
-        stdin.write(json.dumps({"id": request, "expression": expression}) + "\n")
-        stdin.flush()
-        answer = reply(EXPRESSION_TIMEOUT, f"to {expression}")
-        # A late answer to an expression that timed out is not this one's.
-        while answer.get("id") != request:
-            answer = reply(EXPRESSION_TIMEOUT, f"to {expression}")
+    def evaluate(self, expression: str) -> Any:
+        """The JSON value of `expression`, with app.js's exports as `app`."""
+        if self.dead is not None:
+            self._stop(self.dead)
+        self.stdin.write(json.dumps(expression) + "\n")
+        self.stdin.flush()
+        answer = self._reply(EXPRESSION_TIMEOUT, f"to {expression}")
         assert "error" not in answer, answer["error"]
         assert "value" in answer, f"{expression} has no JSON value"
         return answer["value"]
 
-    yield evaluate
-    stdin.close()
+    def close(self) -> None:
+        # Node ends when its input does; a Node that is gone took the pipe along.
+        with contextlib.suppress(OSError):
+            self.stdin.close()
+        try:
+            self.process.wait(timeout=EXPRESSION_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+        self.reader.join(timeout=EXPRESSION_TIMEOUT)
+        self.stdout.close()
+
+
+@pytest.fixture(scope="module")
+def run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Run]:
+    """`run(expression)` is the JSON value of `expression`, with app.js's exports as `app`."""
+    assert NODE is not None, "CI is set, but Node is not installed"
+    node = Evaluator(NODE, tmp_path_factory.mktemp("node") / "stderr.txt")
     try:
-        node.wait(timeout=EXPRESSION_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        node.kill()
-        node.wait()
+        node.wait_until_ready()
+        yield node.evaluate
+    finally:
+        node.close()
 
 
 def test_a_problem_without_an_instance_names_no_reference(run: Run):
