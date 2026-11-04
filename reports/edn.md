@@ -1353,9 +1353,9 @@ How to add an entry:
 - **AI interaction evidence:** Session of 2026-10-30.
   Question: "How should CD reach the VM?".
   Lukas answered: "A self-hosted runner on the VM, as a user outside the `docker` group, runs the deploy and rollback jobs and may run only `deploy.sh` through one sudo rule; the smoke check runs on a GitHub-hosted runner against the public URL." (option D, shortened)
-  Session of 2026-11-04, question (translated from German): "#279 (EDN decision): how do the stack files (compose.yaml, nginx.conf, new monitoring configs) reach the VM? Almost every M6 issue changes the stack, so this should land before #224."
+  Session of 2026-11-04, question (translated): "#279 (EDN decision): how do the stack files (compose.yaml, nginx.conf, new monitoring configs) reach the VM? Almost every M6 issue changes the stack, so this should land before #224."
   Orchestrator briefing (core, paraphrased): "implement option B with a stack image of its own, pushed by CD under the API image's SHA; .env, deploy.sh and the bootstrap scripts never travel."
-  Lukas answered: "B: with the release. CD puts deploy/ into an artifact with the same commit tag (in the API image or as a small image of its own), deploy.sh extracts it before compose up. Merge means rollout, rollback restores the matching files, the runner still runs no repository code (EDN-94)."
+  Lukas answered: "B: with the release. CD puts deploy/ into an artifact with the same commit tag (in the API image or as a small image of its own), deploy.sh extracts it before compose up. Merge means rollout, rollback restores the matching files, the runner still runs no repository code (EDN-94)." (translated)
 - **Other evidence:** [Issue #134's result](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134), [PR #237](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/237), [issue #279](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/279), [`deploy.yml`](../.github/workflows/deploy.yml), [`deploy.sh`](../deploy/deploy.sh), [deployment docs](../docs/docs/deployment.md#the-stack-files-on-the-vm).
 - **In LaTeX:** yes
 
