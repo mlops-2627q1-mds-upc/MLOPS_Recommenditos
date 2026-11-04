@@ -341,9 +341,7 @@ def test_fr13_a_price_range_is_one_record_with_the_fields_the_client_sent(
             (body["request_id"],),
         ).fetchall()
     assert endpoint == PRICE_RANGE
-    sent = {**p1, "equipment_comfort": [], "equipment_entertainment": [], "equipment_extra": []}
-    sent |= {"equipment_safety": [], "has_full_service_history": False, "non_smoking": False}
-    assert json.loads(inputs) == {**sent, "is_rental": False}
+    assert json.loads(inputs) == p1
     assert json.loads(outputs) == {
         key: body[key] for key in ("price_eur", "lower_eur", "upper_eur", "confidence_level")
     }
