@@ -59,8 +59,15 @@ EXTRA_SERVICE = """\
     image: ${API_IMAGE}:${API_IMAGE_TAG}
     entrypoint: ["python", "-c", "import time; time.sleep(3600)"]
     init: true
+    # Its own probe instead of the image's, which asks a server this service
+    # does not run. Not `disable: true`: `up --wait` of the Compose v2 on CI's
+    # runners fails on such a service ("has no healthcheck configured"), where
+    # Compose 5 waits for it to run.
     healthcheck:
-      disable: true
+      test: ["CMD", "python", "-c", "pass"]
+      interval: 5s
+      start_period: 30s
+      start_interval: 1s
     volumes:
       - extra-data:/data
 """
