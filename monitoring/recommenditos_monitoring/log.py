@@ -18,9 +18,15 @@ A row is one the drift job compares when it is
 - a request with all ten fields FR-01 requires. `/v1/price-range` requires only
   `make`, so a range request may lack the others, and a window of such requests
   would show missing fields the reference never has.
+
+The labels of a window (#229) are the observed prices in the log's `feedback`
+table, joined to the window's requests by `request_id` (`labels`). Every
+answer is one row of the one SQLite file whichever worker wrote it, and
+`feedback` holds at most one price per answer, so a reader sees each answer
+once and every label committed before its read began (NFR-03).
 """
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -55,6 +61,17 @@ WHERE seq > ?
   AND (client IS NULL OR client = 'replay')
   AND endpoint IN (?, ?)
 ORDER BY seq
+"""
+
+
+#: The labelled answers among the log's rows from one `seq` to another. The same
+#: join as the log's view `labelled_predictions`, written out so that it reads
+#: only the columns it needs.
+_LABELS = """
+SELECT p.request_id, p.endpoint, p.outputs, f.observed_price_eur
+FROM predictions AS p JOIN feedback AS f USING (request_id)
+WHERE p.seq BETWEEN ? AND ?
+ORDER BY p.seq
 """
 
 
@@ -103,6 +120,51 @@ def rows_after(connection: sqlite3.Connection, seq: int) -> Iterator[LogRow]:
             model_version=row[5],
             inputs=json.loads(row[6]),
         )
+
+
+@dataclass(frozen=True)
+class Label:
+    """A logged answer with its observed price (FR-10): what the error is computed on."""
+
+    request_id: str
+    endpoint: str
+    observed_price_eur: float
+    price_eur: float
+    #: The range and its nominal level; only `/v1/price-range` answers have them.
+    lower_eur: float | None
+    upper_eur: float | None
+    confidence_level: float | None
+
+
+def labels(
+    connection: sqlite3.Connection, request_ids: Collection[str], first: int, last: int
+) -> list[Label]:
+    """The labels of the answers `request_ids`, which lie between `seq` `first` and `last`."""
+    try:
+        cursor = connection.execute(_LABELS, (first, last))
+    except sqlite3.OperationalError as error:
+        raise LogError(f"the feedback cannot be read: {error}") from error
+    wanted = set(request_ids)
+    found: list[Label] = []
+    for request_id, endpoint, outputs, observed in cursor:
+        if request_id not in wanted:
+            continue
+        answer = json.loads(outputs)
+        if "price_eur" not in answer:
+            raise LogError(f"the answer {request_id} has feedback and no price_eur")
+        ranged = endpoint == "/v1/price-range"
+        found.append(
+            Label(
+                request_id=request_id,
+                endpoint=endpoint,
+                observed_price_eur=float(observed),
+                price_eur=float(answer["price_eur"]),
+                lower_eur=float(answer["lower_eur"]) if ranged else None,
+                upper_eur=float(answer["upper_eur"]) if ranged else None,
+                confidence_level=float(answer["confidence_level"]) if ranged else None,
+            )
+        )
+    return found
 
 
 def first_seq(connection: sqlite3.Connection) -> int | None:

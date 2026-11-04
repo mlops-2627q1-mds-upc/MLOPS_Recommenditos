@@ -19,13 +19,17 @@ writer there would hold up the API's workers. The tables:
   can be joined to them, so a pass drops the rows of requests the log no longer
   holds (`drop_requests_before`). That bounds the table by the log's cap
   (NFR-04, docs/docs/monitoring.md#how-large-it-grows).
+- `window_performance`: per closed window, its real error and the coverage of
+  its price ranges, computed from the feedback of its requests (#229,
+  `performance.py`), with the test values they are compared with. A pass
+  recomputes a row until it is `final`.
 - `open_window`: the progress of the window being filled, one row.
 - `runs`: the last `RUNS_KEPT` passes of the job, so that its last success is
   on record.
 
-A later table, such as #229's `window_performance` keyed by `window_id`, is added
-with `CREATE TABLE IF NOT EXISTS` and leaves these as they are. `user_version`
-changes only with a change a reader of these tables would notice.
+A later table is added with `CREATE TABLE IF NOT EXISTS` and leaves these as
+they are, as `window_performance` was after #228's; `user_version` changes only
+with a change a reader of these tables would notice.
 """
 
 from collections.abc import Iterator, Sequence
@@ -41,6 +45,9 @@ from recommenditos_monitoring.drift import FeatureResult
 SCHEMA_VERSION = 1
 
 TESTED, PARTIAL = "tested", "partial"
+
+#: A figure of `window_performance` has a value (`OK`), or too few labels to have one.
+OK, INSUFFICIENT_LABELS = "ok", "insufficient_labels"
 
 #: Passes kept in `runs`: 104 days of one pass every 15 minutes.
 RUNS_KEPT = 10_000
@@ -82,6 +89,23 @@ CREATE TABLE IF NOT EXISTS window_requests (
     endpoint   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS window_requests_by_window ON window_requests (window_id);
+CREATE TABLE IF NOT EXISTS window_performance (
+    window_id       INTEGER PRIMARY KEY REFERENCES windows (window_id),
+    ranges          INTEGER NOT NULL,
+    labelled        INTEGER NOT NULL,
+    labelled_ranges INTEGER NOT NULL,
+    mdape_status    TEXT NOT NULL CHECK (mdape_status IN ('ok', 'insufficient_labels')),
+    mdape           REAL,
+    coverage_status TEXT NOT NULL CHECK (coverage_status IN ('ok', 'insufficient_labels')),
+    coverage        REAL,
+    nominal_level   REAL,
+    test_mdape      REAL,
+    test_coverage   REAL,
+    final           INTEGER NOT NULL CHECK (final IN (0, 1)),
+    computed_at     TEXT NOT NULL,
+    CHECK ((mdape_status = 'ok') = (mdape IS NOT NULL)),
+    CHECK ((coverage_status = 'ok') = (coverage IS NOT NULL))
+);
 CREATE TABLE IF NOT EXISTS open_window (
     singleton         INTEGER PRIMARY KEY CHECK (singleton = 1),
     requests          INTEGER NOT NULL,
@@ -152,8 +176,36 @@ class Request:
     endpoint: str
 
 
+@dataclass(frozen=True)
+class Performance:
+    """The error and coverage of a closed window, as `window_performance` holds them."""
+
+    window_id: int
+    #: Answers of `/v1/price-range` among the window's requests.
+    ranges: int
+    #: Requests with feedback, of both endpoints; `labelled_ranges` of them ranges.
+    labelled: int
+    labelled_ranges: int
+    mdape_status: str
+    #: median(|observed - price_eur| / observed) over the labelled requests.
+    mdape: float | None
+    coverage_status: str
+    #: The share of labelled ranges with lower_eur <= observed <= upper_eur.
+    coverage: float | None
+    #: The mean `confidence_level` of the labelled ranges, the coverage they promise.
+    nominal_level: float | None
+    #: The model's test MdAPE and coverage with every input given, when the evaluation has them.
+    test_mdape: float | None
+    test_coverage: float | None
+    #: No later pass changes the row: its labels are in, or its requests rotated away.
+    final: bool
+    computed_at: str
+
+
 #: Every column of `windows`, in `Window`'s order: the class's own field names.
 _SELECT_WINDOWS = f"SELECT {', '.join(Window.__dataclass_fields__)} FROM windows"  # noqa: S608
+_PERFORMANCE_COLUMNS = ", ".join(Performance.__dataclass_fields__)
+_SELECT_PERFORMANCE = f"SELECT {_PERFORMANCE_COLUMNS} FROM window_performance"  # noqa: S608
 
 
 class Store:
@@ -314,6 +366,34 @@ class Store:
         ).fetchall()
         return [Request(*row) for row in rows]
 
+    def unfinished_windows(self) -> list[Window]:
+        """The closed windows whose error and coverage a pass computes: none yet, or not final."""
+        rows = self._connection.execute(
+            f"{_SELECT_WINDOWS} WHERE window_id NOT IN "  # noqa: S608 - no value in the text
+            "(SELECT window_id FROM window_performance WHERE final = 1) ORDER BY window_id"
+        ).fetchall()
+        return [_window(row) for row in rows]
+
+    def set_performance(self, performance: Performance) -> None:
+        values = {**performance.__dict__, "final": int(performance.final)}
+        marks = ", ".join(f":{name}" for name in values)
+        with self.transaction() as connection:
+            connection.execute(
+                f"INSERT OR REPLACE INTO window_performance ({_PERFORMANCE_COLUMNS}) "  # noqa: S608
+                f"VALUES ({marks})",
+                values,
+            )
+
+    def performance(self, window_id: int) -> Performance | None:
+        row = self._connection.execute(
+            f"{_SELECT_PERFORMANCE} WHERE window_id = ?", (window_id,)
+        ).fetchone()
+        return None if row is None else _performance(row)
+
+    def performances(self) -> dict[int, Performance]:
+        rows = self._connection.execute(f"{_SELECT_PERFORMANCE} ORDER BY window_id").fetchall()
+        return {performance.window_id: performance for performance in map(_performance, rows)}
+
     def open_window(self) -> OpenWindow | None:
         row = self._connection.execute(
             "SELECT requests, window_size, first_seq, last_seq, model_version, updated_at "
@@ -333,3 +413,8 @@ def _window(row: Sequence[Any]) -> Window:
     if window.flagged is None:
         return window
     return Window(**{**window.__dict__, "flagged": bool(window.flagged)})
+
+
+def _performance(row: Sequence[Any]) -> Performance:
+    performance = Performance(*row)
+    return Performance(**{**performance.__dict__, "final": bool(performance.final)})

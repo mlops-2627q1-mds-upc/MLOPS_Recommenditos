@@ -1492,7 +1492,7 @@ How to add an entry:
   - A seller-grouped held-out set as control: EDN-14 measured that such a control gets flagged.
   - The replay inside the API image: NFR-04 keeps that image the serving runtime.
 - **Rationale:** There are no real users (EDN-13), so the replay is the traffic.
-  Only a control i.i.d. with the reference lets NFR-11's control clause pass; its error and coverage are in-sample, so #229 compares them with `metrics.json`.
+  Only a control i.i.d. with the reference lets NFR-11's control clause pass; its error and coverage are in-sample, so #229 compares them with the test values.
   Without the shift, a 2025 listing sent in November 2026 is a year older than in training, which flags `age_years` in every control window.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
@@ -1513,6 +1513,7 @@ How to add an entry:
 - **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
 - **Decision:** Alibi Detect 0.13 runs in its own uv project, a `KSDrift` or `ChiSquareDrift` per feature at 0.005 / 23, on windows of 1,000 logged requests; a new model version closes a window as partial.
   A shell loop starts a pass every 15 minutes; it stores windows and p-values in `monitor.db` and exports the latest through node-exporter's textfile collector.
+  A window's MdAPE and coverage come from its feedback, need 200 or 300 labels, and are compared with the test values.
   The NFR-11 test runs on the real samples in CD before any push; a pull request skips it.
 - **Alternatives considered:**
   - uv `conflicts` groups or a workspace: break `default-groups` or force one resolution.

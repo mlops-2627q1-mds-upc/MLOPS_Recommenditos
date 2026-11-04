@@ -9,10 +9,12 @@ image:
 
     uv run --directory monitoring --locked python -m tests.samples ../data/monitoring
 
-`PredictionLog` writes a prediction log with the columns of the API's
-(`recommenditos/api/prediction_log.py`) that the drift job reads.
+`PredictionLog` writes a prediction log with the API's tables
+(`recommenditos/api/prediction_log.py`): the answers the drift job reads, and
+the feedback it computes the error and coverage from.
 """
 
+import ast
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 import gzip
@@ -49,22 +51,26 @@ def write_fixture_samples(target: Path, reference_copies: int = 10) -> Path:
     return target
 
 
-_SCHEMA = """
-CREATE TABLE predictions (
-    seq           INTEGER PRIMARY KEY,
-    request_id    TEXT NOT NULL UNIQUE,
-    endpoint      TEXT NOT NULL,
-    answered_at   TEXT NOT NULL,
-    latency_ms    REAL NOT NULL,
-    model_variant TEXT NOT NULL,
-    model_version TEXT NOT NULL,
-    inputs        TEXT NOT NULL,
-    outputs       TEXT NOT NULL,
-    warnings      TEXT NOT NULL,
-    client        TEXT,
-    inputs_sent_only INTEGER
-)
-"""
+#: The API's prediction log module, whose schema the fixture log uses; the
+#: monitoring environment cannot import it, so its text is parsed.
+API_LOG_MODULE = Path(__file__).parents[2] / "recommenditos" / "api" / "prediction_log.py"
+
+
+def api_schema() -> str:
+    """The API's own `_SCHEMA`, so that the fixture log cannot drift from the real one."""
+    module = ast.parse(API_LOG_MODULE.read_text(encoding="utf-8"))
+    for node in module.body:
+        if (
+            isinstance(node, ast.Assign)
+            and [getattr(target, "id", None) for target in node.targets] == ["_SCHEMA"]
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            return node.value.value
+    raise LookupError(f"{API_LOG_MODULE} has no _SCHEMA string")
+
+
+_SCHEMA = api_schema()
 
 
 class PredictionLog:
@@ -76,7 +82,10 @@ class PredictionLog:
         self._connection.execute("PRAGMA journal_mode = WAL")
         # No sync per commit: a test's log need not survive a power cut.
         self._connection.execute("PRAGMA synchronous = OFF")
-        self._connection.execute(_SCHEMA)
+        # As the API's store: the rotation deletes an answer's feedback with it.
+        self._connection.execute("PRAGMA foreign_keys = ON")
+        if self._connection.execute("SELECT count(*) FROM sqlite_master").fetchone() == (0,):
+            self._connection.executescript(_SCHEMA)
 
     def add(  # noqa: PLR0913 - one keyword per column a test varies
         self,
@@ -87,17 +96,19 @@ class PredictionLog:
         client: str | None = "replay",
         inputs_sent_only: int | None = 1,
         model_version: str = "v1",
+        outputs: Mapping[str, Any] | None = None,
     ) -> int:
         cursor = self._connection.execute(
             "INSERT INTO predictions (request_id, endpoint, answered_at, latency_ms, "
             "model_variant, model_version, inputs, outputs, warnings, client, inputs_sent_only) "
-            "VALUES (?, ?, ?, 12.5, 'lgbm-basic', ?, ?, '{}', '[]', ?, ?)",
+            "VALUES (?, ?, ?, 12.5, 'lgbm-basic', ?, ?, ?, '[]', ?, ?)",
             (
                 str(uuid.uuid4()),
                 endpoint,
                 answered_at.isoformat(timespec="milliseconds"),
                 model_version,
                 json.dumps(inputs),
+                json.dumps(outputs or {}),
                 client,
                 inputs_sent_only,
             ),
@@ -109,6 +120,18 @@ class PredictionLog:
         self, bodies: list[dict[str, Any]], start: datetime, step: timedelta, **kwargs: Any
     ) -> list[int]:
         return [self.add(body, start + i * step, **kwargs) for i, body in enumerate(bodies)]
+
+    def add_feedback(self, seq: int, observed_price_eur: float, received_at: datetime) -> None:
+        """The observed price of the answer `seq`, as `POST /v1/feedback` stores it."""
+        self._connection.execute(
+            "INSERT INTO feedback (request_id, observed_price_eur, received_at) "
+            "SELECT request_id, ?, ? FROM predictions WHERE seq = ?",
+            (observed_price_eur, received_at.isoformat(timespec="milliseconds"), seq),
+        )
+
+    def rotate(self, up_to_seq: int) -> None:
+        """The API's rotation: the oldest answers go, with their feedback."""
+        self._connection.execute("DELETE FROM predictions WHERE seq <= ?", (up_to_seq,))
 
     def close(self) -> None:
         self._connection.close()

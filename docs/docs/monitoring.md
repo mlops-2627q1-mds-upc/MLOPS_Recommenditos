@@ -341,7 +341,7 @@ The listings come from the samples of the `monitoring_samples` stage, which CD b
 `--control N` sends the first N control listings, and `--then es` sends the ES listings after them, so a dashboard shows a clean before and after; `--then-count N` stops after N of them.
 The listings are in a random order, so any run of consecutive ones is a random sample of its set.
 The model was fitted on the control listings, so their error and coverage are in-sample and optimistic: they show that the labels flow, not how good the model is.
-The drift job compares the error and coverage of a window with the test values in `metrics.json` instead ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)).
+The drift job compares the error and coverage of a window with the model's test values instead ([The baseline](#the-baseline), [#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)).
 
 Each listing is sent with the body its sample holds: the fields the listing has, and nothing for a value it lacks, so the log records what such a client sends (#191).
 The listings alternate between `/v1/predict` and `/v1/price-range`, so both endpoints' panels move and a window gets about as many ranges as point estimates.
@@ -426,6 +426,7 @@ FROM labelled_predictions GROUP BY 1;
 ## Drift job
 
 The drift job ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228), [EDN-101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) compares each window of 1,000 logged requests with the 10,000 training listings of the drift reference, and says which input features drifted (FR-14, NFR-11).
+From the observed prices of the same window's requests it also computes how large the real error is and whether the price ranges still hold their confidence level ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)), so a window shows all three things FR-14 asks for: which properties changed, the error, and the coverage.
 It is the `monitor` service of the stack, in the monitoring image of the replay.
 
 ### What it compares
@@ -445,6 +446,46 @@ A feature has drifted when its p-value is below 0.005 / 23, about 0.000217, and 
 `TabularDrift`, which runs the same tests over a whole table, cannot leave out the missing values of one column alone, so the job runs one detector per feature and applies the Bonferroni correction itself, as the validated scipy check `reports/analysis/nfr11_check.py` did.
 The indicators `age_years__missing`, `mileage_km_raw__missing` and `power_kw__missing` are `present` in every accepted request; `ChiSquareDrift` accepts such a one-category feature and gives it the p-value 1, so they stay in the 23 and the threshold is the validated one.
 
+### Error and coverage
+
+Drift says the data changed, not that the model got worse; the error and the coverage say that.
+A window's labels are the observed prices in the log's `feedback` table (FR-10) of exactly its requests, joined through `request_id`, which `window_requests` keeps for every window; feedback of the load test or the web page in between is not counted.
+From them, per window:
+
+| Figure | What it is |
+|--------|------------|
+| `labelled` | The window's answers with an observed price, of both endpoints |
+| `mdape` | median(\|observed - `price_eur`\| / observed) over the labelled answers; for a range request with every field `/v1/predict` needs, `price_eur` is the point model's (EDN-85), so both endpoints count the same estimate |
+| `labelled_ranges` | The labelled answers of `/v1/price-range`, the only endpoint that returns a range |
+| `coverage` | The share of labelled ranges with `lower_eur` <= observed <= `upper_eur` |
+| `nominal_level` | The share the ranges promise: the mean `confidence_level` of the labelled ranges, 0.9 |
+
+A figure needs enough labels to mean something: an MdAPE at least 200 labelled answers and a coverage at least 300 labelled ranges.
+With fewer, its status is `insufficient_labels` and it has no value, in `monitor.db`, in the report and in Prometheus, so a quiet window, or one whose prices have not come in yet, is not read as a good one.
+At a coverage of 0.9 the standard error over 300 ranges is 1.7 percentage points, small against the 5 points below the nominal level at which #230 is to alert.
+A window of the replay, which alternates the endpoints, has about 500 of each, so both figures exist once its prices are in.
+
+Prices can come in after their window closed, so every pass recomputes the figures of every window that is not final, and a late price counts in the window of its request.
+Seven days after a window's last answer its figures are marked final and no later price changes them.
+The log's rotation deletes the oldest answers with their feedback ([Rotation](api.md#rotation)); once any of a window's requests is gone, a recount would rest on fewer labels, so the window keeps the figures it last had and is final from then on.
+A rotation while a pass runs is caught too: the pass finds fewer labels than the figures it last stored had, and labels otherwise only grow.
+A window that `monitor.db` held from before this table existed is counted once on what the log still has.
+
+Every answer is one row of the log's one SQLite file whichever worker wrote it, and `feedback` holds at most one price per answer, so with several workers each answer counts once, and the read-only job sees every price committed before its pass read the log; one committed later counts in the next pass (NFR-03).
+
+#### The baseline
+
+The figures are compared with the model's values on the test set with every input given, since a window holds only requests with all ten required fields.
+The MdAPE is the `evaluate` stage's test MdAPE in `metrics.json`, `variants.<model_variant>.mdape`, 6.73 % for `lgbm-basic`, which the stage measures on full inputs.
+The coverage is that of the `full` scenario, pooled over makes, in the stage's `reports/metrics/interval-coverage-by-make.csv`, 90.2 % for `lgbm-basic`.
+It is not `sc05_coverage`, 91.0 %, which is the coverage SC-05 judges for the partial-input scenario P1 (make, model, registration date, and mileage only), requests a window never holds.
+Both files are committed with the stage's outputs, and the monitoring image copies them for the model of its release; a variant the table has no row for, one without a range model, gets no test coverage.
+They are not compared with the replay's control listings: those are training listings, so their error and coverage are in-sample and optimistic, and they show only that the labels flow ([What it sends](#what-it-sends)).
+A window of the training distribution therefore has a lower MdAPE than the test value and a coverage above it; a window the model prices worse than its test set has a higher MdAPE and a lower coverage.
+`report` prints the ratio to the test MdAPE and the test coverage beside each figure; when to alert on them is #230's.
+
+On a laptop stack on 2026-11-04, after 2,000 control listings and 1,500 `ES` listings of the replay, the two control windows had an MdAPE of 5.38 % and 5.28 % and a coverage of 96.8 % and 95.4 %, and the `ES` window, flagged in 14 features, an MdAPE of 9.41 %, 1.40 times the test value, and a coverage of 85.8 % of its 500 labelled ranges ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)).
+
 ### How it runs
 
 The service is a shell loop, `monitoring/monitor-loop.sh`, that starts one pass, `python -m recommenditos_monitoring run-once`, and sleeps 15 minutes after it ends (`RECOMMENDITOS_MONITOR_INTERVAL_S`, 900 s).
@@ -455,7 +496,8 @@ A pass reads the log from the end of the last closed window, tests every window 
 A pass that fails prints `the drift pass failed: ...` to the service log, records the failure in `monitor.db`, leaves the last metrics in place, and the loop goes on.
 
 The service has no healthcheck at all: with none, `up --wait` waits only for the container to run, so a failing pass can never fail a deploy, and Compose 2.35 on CI and the VM fails `--wait` on `disable: true`.
-It is limited to 512 MiB and half a vCPU, which leaves the API's latency (NFR-02) the other half of the VM's one vCPU; passes that tested three windows peaked at 197 MiB in the container's cgroup (`memory.peak`) on a laptop, most of it Alibi Detect's import (it raised a Python process's peak resident memory from 110 MB with pandas and pyarrow alone to 291 MB), which a pass with no full window skips.
+It is limited to 512 MiB and half a vCPU, which leaves the API's latency (NFR-02) the other half of the VM's one vCPU; a pass that tested three windows peaked at 314 MiB of the Python process's resident memory (its `ru_maxrss`) on a laptop stack on 2026-11-04, 317 MiB with the error and coverage step, most of it Alibi Detect's import, which a pass with no full window skips (a pass that only recounted the error and coverage peaked at 136 MiB).
+The cgroup's `memory.peak`, 380 MiB in the same run, is higher because it counts the page cache of the files the pass read, which the kernel can reclaim within the limit.
 It runs as the API's user, 10001, not as the image's: SQLite's WAL needs the log's directory writable for its shared-memory file even to read it, and that directory on the `prediction-log` volume is the API user's.
 The job opens the log read-only all the same.
 
@@ -473,11 +515,14 @@ The image is 1.26 GB, most of it Alibi Detect's dependencies.
 | `windows` | Closed window: `status` (`tested` or `partial`), its first and last `seq`, its time range (`first_answered_at`, `last_answered_at`), the model, `es_share`, and when tested `flagged`, `drifted_features` and the threshold |
 | `window_features` | Feature of a tested window: the test (`ks` or `chi2`), the p-value, the statistic, the values compared, and `drifted` |
 | `window_requests` | Request of a window that the log still holds, with its `request_id`, so a window's labels are the feedback of exactly its requests ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)) |
+| `window_performance` | Closed window: its range answers, `labelled`, `labelled_ranges`, `mdape` and `coverage` each with its status (`ok` or `insufficient_labels`), `nominal_level`, the test values `test_mdape` and `test_coverage`, `final`, and when it was computed ([Error and coverage](#error-and-coverage)) |
 | `open_window` | The window being filled: n of 1,000 |
 | `runs` | Pass, with its outcome, the last 10,000 |
 
 After each pass the job writes `monitor.prom` into the volume `monitor-textfile`, which node-exporter serves ([The textfile collector](#the-textfile-collector)): the latest tested window's flag, its number of drifted features, each feature's p-value (`recommenditos_drift_feature_p_value{feature, test}`), the threshold, its number, last `seq`, end time and ES share, the open window's progress, and `recommenditos_monitor_last_success_timestamp_seconds`, the end of the last pass that succeeded.
 That last one, and node-exporter's `node_textfile_mtime_seconds`, show a job that stopped.
+Beside them, the same window's error and coverage: `recommenditos_performance_mdape`, `_coverage` and `_nominal_level`, the test values `_test_mdape` and `_test_coverage`, the counts `_requests`, `_ranges`, `_labelled_requests` and `_labelled_ranges`, `_labels_sufficient{figure}` with the thresholds in `_min_labels{figure}`, and `_final`.
+A figure with too few labels is left out of the file, not written as 0, so a panel shows no value and an alert on it cannot fire; `_labels_sufficient` says why.
 
 ### How large it grows
 
@@ -489,6 +534,7 @@ That last one, and node-exporter's `node_textfile_mtime_seconds`, show a job tha
   The log's 2 GB hold 820,000 answers of the replay's full listings (2,445 bytes each) or 3.1 million of the ten required fields alone (637 bytes each), so the table stays at about 100 MB with the replay's traffic and at about 380 MB in the worst case.
 - `windows` and `window_features` take about 2.7 KB a window of 1,000 requests, and stay: they are the evidence for the report and for retraining.
   At 5 requests a second around the clock, which only a replay sends, that is 1.2 MB a day and 0.4 GB a year, against the 20 GB disk with at least 8 GB free.
+- `window_performance` takes about 110 bytes a window (measured with `dbstat` over 1,000 rows) and stays too; a pass recomputes only the windows that are not final, at most those of the last seven days.
 - `runs` keeps the last 10,000 passes, 104 days of one every 15 minutes: 0.8 MB with one failed pass in ten.
 
 The sizes were measured with SQLite's `dbstat` on a log of 20,000 answers written by the API's own store, with 20 windows tested on it.
@@ -507,6 +553,15 @@ A flag on `country_code` alone is a new market mix; several features besides it,
 A control window of the training distribution is flagged in at most 1 of 20 windows (NFR-11), so a single flag between unflagged windows is a false alarm until the next window confirms it.
 A `partial` window was cut short by a new model and is not tested; an open window shows only its progress.
 
+The finding ends with the window's error and coverage against the test values, for example:
+
+```text
+... MdAPE 9.41 % over 1000 labelled answers, 1.40 x the test MdAPE of 6.73 %; coverage 85.80 % of 500 labelled ranges at a nominal 90.00 %, against 90.23 % on the test set (labels still arriving).
+```
+
+A drifted window with an error near the test value and a coverage near the nominal level is a change the model copes with; a higher error or a lower coverage is the user impact that makes the case for retraining.
+`report --all` prints one line per window with its drift, error and coverage, and `report --all --json` every field, the evidence to save in `reports/monitoring/`.
+
 ### Run it by hand
 
 Locally, on the stack of `make stack`, a pass and the reports; Compose refuses to read `compose.yaml` without the two variables of [Run it locally](#run-it-locally), and any value does for `exec`:
@@ -516,6 +571,7 @@ export GRAFANA_ADMIN_PASSWORD=unused DISCORD_WEBHOOK_URL=http://127.0.0.1:9/disc
 docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring run-once
 docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report
 docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report --window 3 --json
+docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report --all
 ```
 
 On the VM, from `/opt/recommenditos`, with the paths deploy.sh uses; the JSON evidence goes straight into a file on the laptop:

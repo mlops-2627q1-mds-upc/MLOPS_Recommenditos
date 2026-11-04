@@ -53,10 +53,18 @@ COPY monitoring/monitor-loop.sh /app/monitor-loop.sh
 # The samples of the `monitoring_samples` stage: the replay's control and ES
 # listings, the drift reference and the manifest with its reference date.
 COPY data/monitoring /app/data/monitoring
+# The evaluate stage's outputs of the commit the image is built from, the same
+# commit as the API image's model, both committed to git: the test MdAPE and the
+# full-input coverage the drift job compares each window's error and coverage
+# with (#229).
+COPY metrics.json /app/metrics.json
+COPY reports/metrics/interval-coverage-by-make.csv /app/interval-coverage-by-make.csv
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     RECOMMENDITOS_MONITORING_DATA_DIR=/app/data/monitoring \
+    RECOMMENDITOS_MONITOR_METRICS=/app/metrics.json \
+    RECOMMENDITOS_MONITOR_COVERAGE=/app/interval-coverage-by-make.csv \
     # Alibi Detect imports Matplotlib, Numba and transformers, which want a
     # writable cache directory; the root is read-only, /tmp a tmpfs. Without
     # PyTorch or TensorFlow, which the job does not need, transformers would

@@ -472,8 +472,9 @@ services:
     # ends the shell's loop at once instead of after the 10 s grace.
     init: true
     restart: unless-stopped
-    # Passes that tested three windows peaked at 197 MiB in the cgroup's
-    # memory.peak on a laptop (docs/docs/monitoring.md#drift-job); between
+    # A pass that tested three windows peaked at 314 MiB of the process's
+    # resident memory (ru_maxrss; the cgroup's memory.peak, 380 MiB, counts the
+    # page cache too) on a laptop (docs/docs/monitoring.md#drift-job); between
     # passes init, shell and sleep hold about 4 MiB. Half a vCPU at most, so that
     # a pass on the VM's one vCPU leaves the API's latency (NFR-02) half of it.
     mem_limit: 512m
