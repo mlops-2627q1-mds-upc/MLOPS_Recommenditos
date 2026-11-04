@@ -107,7 +107,14 @@ class Evaluator:
         if line is None:
             self.process.wait()
             self._stop(f"Node exited {what}: {self.stderr_path.read_text('utf-8')}")
-        answer: dict[str, Any] = json.loads(line)
+        # Answers carry no request id, so anything but one JSON object per line would
+        # shift every later answer onto the wrong expression: stop Node instead.
+        try:
+            answer = json.loads(line)
+        except ValueError:
+            self._stop(f"Node wrote a line that is not JSON {what}: {line!r}")
+        if not isinstance(answer, dict):
+            self._stop(f"Node wrote {answer!r} {what}, not a JSON object")
         return answer
 
     def wait_until_ready(self) -> None:
