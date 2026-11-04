@@ -5,7 +5,7 @@ The job is no server that Prometheus could scrape, so after each pass it writes
 (deploy/compose.yaml), and node-exporter serves its lines with its own metrics.
 Only the latest tested window is exported, with the open window's progress and
 the pass's time: the history is `monitor.db`'s, and Prometheus keeps the
-series over time anyway. About 30 series:
+series over time anyway. About 45 series:
 
     recommenditos_drift_window_flagged                    1 when the window drifted
     recommenditos_drift_window_drifted_features           how many of the 23 drifted
@@ -17,6 +17,26 @@ series over time anyway. About 30 series:
     recommenditos_drift_open_window_requests              n of the window being filled
     recommenditos_drift_window_size                       of 1,000
     recommenditos_monitor_last_success_timestamp_seconds  the end of the last good pass
+
+and the error and coverage of the same window (#229, `performance.py`):
+
+    recommenditos_performance_window_id                   the window they belong to
+    recommenditos_performance_requests                    its requests
+    recommenditos_performance_ranges                      its range answers
+    recommenditos_performance_labelled_requests           its answers with feedback
+    recommenditos_performance_labelled_ranges             its range answers with feedback
+    recommenditos_performance_labels_sufficient{figure}   1 when a figure has enough labels
+    recommenditos_performance_min_labels{figure}          how many it needs, 200 or 300
+    recommenditos_performance_mdape                       the real MdAPE
+    recommenditos_performance_coverage                    the share of prices in their range
+    recommenditos_performance_nominal_level               the share the ranges promise, 0.9
+    recommenditos_performance_test_mdape                  the model's test MdAPE
+    recommenditos_performance_test_coverage               the model's test coverage, full inputs
+    recommenditos_performance_final                       1 when no label can still arrive
+
+A figure without enough labels is left out, not written as 0 or NaN, so a
+panel shows no value and an alert on it cannot fire; `labels_sufficient` says
+why. The same holds for a test value the evaluation does not have.
 
 The last one, and node-exporter's own `node_textfile_mtime_seconds`, show a job
 that stopped (#230's staleness alert).
@@ -34,6 +54,7 @@ import os
 from pathlib import Path
 
 from recommenditos_monitoring.drift import THRESHOLD
+from recommenditos_monitoring.performance import MIN_LABELLED, MIN_LABELLED_RANGES
 from recommenditos_monitoring.store import Store
 
 FILE_NAME = "monitor.prom"
@@ -128,6 +149,87 @@ def drift_metrics(store: Store, now: datetime) -> list[Metric]:
             "recommenditos_drift_window_es_share",
             "The share of ES listings in the latest tested window.",
             (Sample(window.es_share),),
+        ),
+    ]
+
+
+def performance_metrics(store: Store) -> list[Metric]:
+    """The error and coverage of the latest tested window, the one `drift_metrics` exports."""
+    window = store.latest_tested()
+    if window is None:
+        return []
+    performance = store.performance(window.window_id)
+    if performance is None:
+        return []
+
+    def gauge(name: str, help_text: str, value: float | None) -> list[Metric]:
+        if value is None:
+            return []
+        return [Metric(f"recommenditos_performance_{name}", help_text, (Sample(value),))]
+
+    return [
+        *gauge(
+            "window_id",
+            "The window of monitor.db the error and coverage are of.",
+            window.window_id,
+        ),
+        *gauge("requests", "Requests in the window.", window.requests),
+        *gauge("ranges", "Answers of /v1/price-range in the window.", performance.ranges),
+        *gauge(
+            "labelled_requests",
+            "Answers in the window with an observed price (feedback).",
+            performance.labelled,
+        ),
+        *gauge(
+            "labelled_ranges",
+            "Answers of /v1/price-range in the window with an observed price.",
+            performance.labelled_ranges,
+        ),
+        Metric(
+            "recommenditos_performance_labels_sufficient",
+            "1 when the window has enough labels for the figure, 0 when it has too few.",
+            (
+                Sample(int(performance.mdape is not None), {"figure": "mdape"}),
+                Sample(int(performance.coverage is not None), {"figure": "coverage"}),
+            ),
+        ),
+        Metric(
+            "recommenditos_performance_min_labels",
+            "The labelled answers (mdape) or labelled ranges (coverage) a figure needs.",
+            (
+                Sample(MIN_LABELLED, {"figure": "mdape"}),
+                Sample(MIN_LABELLED_RANGES, {"figure": "coverage"}),
+            ),
+        ),
+        *gauge(
+            "mdape",
+            "Median absolute percentage error of the window's labelled answers.",
+            performance.mdape,
+        ),
+        *gauge(
+            "coverage",
+            "Share of the window's labelled ranges that contain the observed price.",
+            performance.coverage,
+        ),
+        *gauge(
+            "nominal_level",
+            "The share of prices the window's ranges state they contain.",
+            performance.nominal_level,
+        ),
+        *gauge(
+            "test_mdape",
+            "The model's MdAPE on the test set with every input given (metrics.json).",
+            performance.test_mdape,
+        ),
+        *gauge(
+            "test_coverage",
+            "The model's range coverage on the test set with every input given, all makes.",
+            performance.test_coverage,
+        ),
+        *gauge(
+            "final",
+            "1 when the window's labels are in and its figures no longer change.",
+            int(performance.final),
         ),
     ]
 

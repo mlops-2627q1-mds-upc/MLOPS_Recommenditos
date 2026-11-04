@@ -354,7 +354,8 @@ def test_the_pass_writes_the_latest_tested_window_for_node_exporter(paths, log):
     p_values = [name for name in series if name.startswith("recommenditos_drift_feature_p_value")]
     assert len(p_values) == len(DRIFT_FEATURES)
     assert 'recommenditos_drift_feature_p_value{feature="country_code",test="chi2"}' in series
-    assert len(series) == len(DRIFT_FEATURES) + 10
+    drift = [name for name in series if not name.startswith("recommenditos_performance_")]
+    assert len(drift) == len(DRIFT_FEATURES) + 10
 
 
 def test_a_failed_pass_leaves_the_last_metrics_in_place(paths, log):

@@ -1,0 +1,107 @@
+[
+  {
+    "window": {
+      "window_id": 1,
+      "status": "tested",
+      "first_seq": 1,
+      "last_seq": 1000,
+      "requests": 1000,
+      "window_size": 1000,
+      "first_answered_at": "2026-11-04T22:04:55.247+00:00",
+      "last_answered_at": "2026-11-04T22:05:45.150+00:00",
+      "model_variant": "lgbm-basic",
+      "model_version": "afc3335eefa80dafe3d9ae6ab85c1ae3",
+      "es_share": 0.0,
+      "flagged": false,
+      "drifted_features": 0,
+      "threshold": 0.0002173913043478261,
+      "reference_rows": 10000,
+      "closed_at": "2026-11-04T22:08:02.611+00:00"
+    },
+    "performance": {
+      "window_id": 1,
+      "ranges": 500,
+      "labelled": 1000,
+      "labelled_ranges": 500,
+      "mdape_status": "ok",
+      "mdape": 0.05379064588513552,
+      "coverage_status": "ok",
+      "coverage": 0.968,
+      "nominal_level": 0.9,
+      "test_mdape": 0.06733805931326535,
+      "test_coverage": 0.9101449275362319,
+      "final": false,
+      "computed_at": "2026-11-04T22:08:03.716+00:00"
+    }
+  },
+  {
+    "window": {
+      "window_id": 2,
+      "status": "tested",
+      "first_seq": 1001,
+      "last_seq": 2000,
+      "requests": 1000,
+      "window_size": 1000,
+      "first_answered_at": "2026-11-04T22:05:45.212+00:00",
+      "last_answered_at": "2026-11-04T22:06:37.479+00:00",
+      "model_variant": "lgbm-basic",
+      "model_version": "afc3335eefa80dafe3d9ae6ab85c1ae3",
+      "es_share": 0.0,
+      "flagged": false,
+      "drifted_features": 0,
+      "threshold": 0.0002173913043478261,
+      "reference_rows": 10000,
+      "closed_at": "2026-11-04T22:08:03.204+00:00"
+    },
+    "performance": {
+      "window_id": 2,
+      "ranges": 500,
+      "labelled": 1000,
+      "labelled_ranges": 500,
+      "mdape_status": "ok",
+      "mdape": 0.05282516608945907,
+      "coverage_status": "ok",
+      "coverage": 0.954,
+      "nominal_level": 0.9,
+      "test_mdape": 0.06733805931326535,
+      "test_coverage": 0.9101449275362319,
+      "final": false,
+      "computed_at": "2026-11-04T22:08:03.716+00:00"
+    }
+  },
+  {
+    "window": {
+      "window_id": 3,
+      "status": "tested",
+      "first_seq": 2001,
+      "last_seq": 3000,
+      "requests": 1000,
+      "window_size": 1000,
+      "first_answered_at": "2026-11-04T22:06:37.551+00:00",
+      "last_answered_at": "2026-11-04T22:07:27.416+00:00",
+      "model_variant": "lgbm-basic",
+      "model_version": "afc3335eefa80dafe3d9ae6ab85c1ae3",
+      "es_share": 1.0,
+      "flagged": true,
+      "drifted_features": 14,
+      "threshold": 0.0002173913043478261,
+      "reference_rows": 10000,
+      "closed_at": "2026-11-04T22:08:03.698+00:00"
+    },
+    "performance": {
+      "window_id": 3,
+      "ranges": 500,
+      "labelled": 1000,
+      "labelled_ranges": 500,
+      "mdape_status": "ok",
+      "mdape": 0.0941214924266282,
+      "coverage_status": "ok",
+      "coverage": 0.858,
+      "nominal_level": 0.9,
+      "test_mdape": 0.06733805931326535,
+      "test_coverage": 0.9101449275362319,
+      "final": false,
+      "computed_at": "2026-11-04T22:08:03.716+00:00"
+    }
+  }
+]

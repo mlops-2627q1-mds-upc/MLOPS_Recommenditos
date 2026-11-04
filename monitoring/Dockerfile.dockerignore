@@ -7,6 +7,8 @@
 !monitoring/recommenditos_monitoring/
 !monitoring/monitor-loop.sh
 !data/monitoring/
+!metrics.json
+!reports/metrics/interval-coverage-by-make.csv
 
 **/__pycache__
 **/*.py[co]

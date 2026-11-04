@@ -6,13 +6,16 @@ passes no Python process runs. Its results reach Prometheus through
 node-exporter's textfile collector, from a volume that is new in every CI run,
 so these tests also show that the job, which is not root, can write it.
 
-A test pass runs on a copy of the four requests the test sends, with windows of
-4 and a monitor.db of its own in the container's /tmp, so that it tests exactly
-one window however many requests the stack's log holds; it rewrites the
-metrics, which the next scheduled pass rewrites again.
+A test pass runs on a copy of the four requests the test sends, each with an
+observed price, with windows of 4 and a monitor.db of its own in the
+container's /tmp, so that it tests exactly one window however many requests
+the stack's log holds; it rewrites the metrics, which the next scheduled pass
+rewrites again.
 """
 
+import csv
 import json
+from pathlib import Path
 import time
 
 import pytest
@@ -24,6 +27,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 #: Docker's init, the shell's loop and its sleep: what runs between two passes.
 BETWEEN_PASSES = {"/sbin/docker-init", "sh", "sleep"}
 WINDOW = 4
+REPOSITORY = Path(__file__).parents[2]
 
 
 def processes(container: Container) -> list[str]:
@@ -33,22 +37,46 @@ def processes(container: Container) -> list[str]:
     return [line.split()[1] for line in listing if line.strip()]
 
 
-#: Copies the requests a test sent into a log of their own, with the API's schema,
-#: so that the test pass sees exactly one window, however busy the stack's log is.
+#: Copies the requests a test sent into a log of their own, with the API's tables,
+#: so that the test pass sees exactly one window, however busy the stack's log is,
+#: and gives each an observed price 10 % above its estimate, as feedback would.
 COPY_REQUESTS = """
 import json, sqlite3, sys
 ids = json.loads(sys.argv[1])
 source = sqlite3.connect("file:/var/lib/recommenditos/prediction-log.sqlite3?mode=ro", uri=True)
 target = sqlite3.connect("/tmp/integration-log.sqlite3")
-(schema,) = source.execute("SELECT sql FROM sqlite_master WHERE name = 'predictions'").fetchone()
+target.execute("DROP TABLE IF EXISTS feedback")
 target.execute("DROP TABLE IF EXISTS predictions")
-target.execute(schema)
+for table in ("predictions", "feedback"):
+    (schema,) = source.execute("SELECT sql FROM sqlite_master WHERE name = ?", (table,)).fetchone()
+    target.execute(schema)
 marks = ", ".join("?" for _ in ids)
 rows = source.execute(f"SELECT * FROM predictions WHERE request_id IN ({marks})", ids).fetchall()
 target.executemany(f"INSERT INTO predictions VALUES ({', '.join('?' for _ in rows[0])})", rows)
+target.execute(
+    "INSERT INTO feedback SELECT request_id, json_extract(outputs, '$.price_eur') * 1.1, "
+    "answered_at FROM predictions"
+)
 target.commit()
 print(len(rows))
 """
+
+
+def deployed_test_values() -> tuple[float, float]:
+    """The deployed model's test MdAPE and full-input coverage, as the evaluate stage wrote them.
+
+    Read at test time, since a retrain commits new ones (retrain.yml).
+    """
+    metrics = json.loads((REPOSITORY / "metrics.json").read_text(encoding="utf-8"))
+    variant = metrics["deployable_variant"]
+    table = REPOSITORY / "reports" / "metrics" / "interval-coverage-by-make.csv"
+    with table.open(newline="", encoding="utf-8") as rows:
+        (coverage,) = (
+            float(row["coverage"])
+            for row in csv.DictReader(rows)
+            if (row["variant"], row["scenario"], row["make"]) == (variant, "full", "(pooled)")
+        )
+    return float(metrics["variants"][variant]["mdape"]), coverage
 
 
 @pytest.fixture(scope="module")
@@ -152,3 +180,30 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
     assert len(success) == 1
     errors = query(prometheus_container, "node_textfile_scrape_error")
     assert [float(series["value"][1]) for series in errors] == [0.0]
+
+    # The window's error and coverage beside its drift (#229), every series of
+    # them: four labels of four point estimates are too few for a figure, which
+    # is then left out, and the test values are the image's copies of the
+    # evaluate outputs, the repository's.
+    mdape, coverage = deployed_test_values()
+    exported = {
+        (series["metric"]["__name__"], series["metric"].get("figure")): float(series["value"][1])
+        for series in query(prometheus_container, '{__name__=~"recommenditos_performance_.+"}')
+    }
+    assert exported == {
+        ("recommenditos_performance_window_id", None): 1,
+        ("recommenditos_performance_requests", None): WINDOW,
+        ("recommenditos_performance_ranges", None): 0,
+        ("recommenditos_performance_labelled_requests", None): WINDOW,
+        ("recommenditos_performance_labelled_ranges", None): 0,
+        ("recommenditos_performance_labels_sufficient", "mdape"): 0,
+        ("recommenditos_performance_labels_sufficient", "coverage"): 0,
+        ("recommenditos_performance_min_labels", "mdape"): 200,
+        ("recommenditos_performance_min_labels", "coverage"): 300,
+        ("recommenditos_performance_test_mdape", None): pytest.approx(mdape),
+        ("recommenditos_performance_test_coverage", None): pytest.approx(coverage),
+        ("recommenditos_performance_final", None): 0,
+    }
+    # Left out without labels: the two figures and the level the ranges state.
+    absent = {"mdape", "coverage", "nominal_level"}
+    assert not {name for name, _ in exported} & {f"recommenditos_performance_{n}" for n in absent}

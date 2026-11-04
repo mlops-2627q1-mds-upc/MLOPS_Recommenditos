@@ -1,14 +1,16 @@
 """The monitoring jobs' command line: `python -m recommenditos_monitoring <command>`.
 
     replay    send held-out listings to the API and their prices to /v1/feedback (#227)
-    run-once  test every window of 1,000 requests the prediction log completed (#228)
-    report    the finding and the evidence of one window of monitor.db (#228)
+    run-once  test every window of 1,000 requests the prediction log completed for drift
+              (#228), and compute every window's error and coverage from its feedback (#229)
+    report    the finding and the evidence of one window of monitor.db, or every window
 
 docs/docs/monitoring.md has the commands for a local stack and for the VM.
 """
 
 import argparse
 from collections.abc import Sequence
+import json
 import os
 from pathlib import Path
 import sys
@@ -24,6 +26,7 @@ from recommenditos_monitoring.job import (
     finding,
     run_once,
 )
+from recommenditos_monitoring.performance import describe
 from recommenditos_monitoring.replay import (
     THEN_SAMPLES,
     Replay,
@@ -33,7 +36,7 @@ from recommenditos_monitoring.replay import (
     phases_of,
     reference_date_of,
 )
-from recommenditos_monitoring.store import Store, Window
+from recommenditos_monitoring.store import Performance, Store, Window
 
 #: Where the image holds the samples; run from the repository, `data/monitoring`.
 DATA_DIR_VARIABLE = "RECOMMENDITOS_MONITORING_DATA_DIR"
@@ -42,6 +45,11 @@ API_KEY_VARIABLE = "RECOMMENDITOS_API_KEY"
 LOG_VARIABLE = "RECOMMENDITOS_PREDICTION_LOG"
 DB_VARIABLE = "RECOMMENDITOS_MONITOR_DB"
 TEXTFILE_VARIABLE = "RECOMMENDITOS_MONITOR_TEXTFILE_DIR"
+#: The evaluate stage's metrics.json, with the test MdAPE the error is compared with.
+METRICS_VARIABLE = "RECOMMENDITOS_MONITOR_METRICS"
+#: The evaluate stage's coverage table, with the test coverage the coverage is compared with.
+COVERAGE_VARIABLE = "RECOMMENDITOS_MONITOR_COVERAGE"
+COVERAGE_TABLE = "reports/metrics/interval-coverage-by-make.csv"
 
 
 def positive_rate(text: str) -> float:
@@ -146,6 +154,18 @@ def parser() -> argparse.ArgumentParser:
         help=f"where monitor.prom goes (default: ${TEXTFILE_VARIABLE}; unset writes none)",
     )
     run.add_argument(
+        "--metrics",
+        type=Path,
+        default=Path(os.environ.get(METRICS_VARIABLE, "metrics.json")),
+        help=f"the models' test MdAPE (default: ${METRICS_VARIABLE} or metrics.json)",
+    )
+    run.add_argument(
+        "--coverage",
+        type=Path,
+        default=Path(os.environ.get(COVERAGE_VARIABLE, COVERAGE_TABLE)),
+        help=f"the models' test coverage (default: ${COVERAGE_VARIABLE} or {COVERAGE_TABLE})",
+    )
+    run.add_argument(
         "--window-size",
         type=int,
         default=WINDOW_SIZE,
@@ -155,10 +175,15 @@ def parser() -> argparse.ArgumentParser:
         "report",
         help="the finding of one window, for retrain.yml's reason, or its evidence as JSON",
         description="Print the finding of a window of monitor.db: the latest tested one, "
-        "or the one --window names; with --json, the window and every feature's result.",
+        "or the one --window names; with --json, the window, every feature's result, and "
+        "its error and coverage. With --all, one line per window instead.",
     )
     _store_argument(report)
-    report.add_argument("--window", type=int, metavar="N", help="the window's number")
+    which = report.add_mutually_exclusive_group()
+    which.add_argument("--window", type=int, metavar="N", help="the window's number")
+    which.add_argument(
+        "--all", action="store_true", help="every window's drift, error and coverage"
+    )
     report.add_argument(
         "--json", action="store_true", help="print the evidence as JSON instead of the finding"
     )
@@ -188,7 +213,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def run_once_command(args: argparse.Namespace) -> int:
-    paths = Paths(log=args.log, db=args.db, data_dir=args.data_dir, textfile_dir=args.textfile_dir)
+    paths = Paths(
+        log=args.log,
+        db=args.db,
+        data_dir=args.data_dir,
+        textfile_dir=args.textfile_dir,
+        metrics=args.metrics,
+        coverage=args.coverage,
+    )
     try:
         outcome = run_once(paths, window_size=args.window_size)
     except Exception as error:  # noqa: BLE001 - every failure ends the pass with its cause
@@ -199,6 +231,8 @@ def run_once_command(args: argparse.Namespace) -> int:
         return 0
     for window in outcome.closed:
         print(f"{window.status} window {window.window_id}: " + _short(window))
+        print(f"  {describe(outcome.scored.get(window.window_id))}")
+    print(f"error and coverage computed for {len(outcome.scored)} windows not yet final")
     print(f"open window: {outcome.open_requests} of {args.window_size} requests")
     return 0
 
@@ -219,15 +253,96 @@ def report_command(args: argparse.Namespace) -> int:
         return 1
     store = Store.open(args.db)
     try:
+        if args.all:
+            print(_all_windows(store, args.json))
+            return 0
         window = chosen_window(store, args.window)
         features = store.features(window.window_id)
+        performance = store.performance(window.window_id)
     except JobError as error:
         print(str(error), file=sys.stderr)
         return 1
     finally:
         store.close()
-    print(evidence(window, features) if args.json else finding(window, features))
+    print(
+        evidence(window, features, performance)
+        if args.json
+        else finding(window, features, performance)
+    )
     return 0
+
+
+#: The columns of `report --all`.
+_ALL_COLUMNS = (
+    "window",
+    "status",
+    "seq",
+    "es",
+    "drift",
+    "labelled",
+    "mdape",
+    "test_mdape",
+    "ranges",
+    "coverage",
+    "nominal",
+    "final",
+)
+
+
+def _figure(value: float | None, status: str) -> str:
+    return status if value is None else f"{value:.4f}"
+
+
+def _as_dict(performance: Performance | None) -> dict[str, object] | None:
+    return None if performance is None else performance.__dict__
+
+
+def _all_windows(store: Store, as_json: bool) -> str:
+    """Every window's drift, error and coverage: a table, or JSON with every field."""
+    windows = store.windows()
+    performances = store.performances()
+    if as_json:
+        return json.dumps(
+            [
+                {
+                    "window": window.__dict__,
+                    "performance": _as_dict(performances.get(window.window_id)),
+                }
+                for window in windows
+            ],
+            indent=2,
+        )
+    rows = [_ALL_COLUMNS]
+    for window in windows:
+        p: Performance | None = performances.get(window.window_id)
+        drift = (
+            "untested"
+            if window.flagged is None
+            else f"{window.drifted_features} drifted"
+            if window.flagged
+            else "none"
+        )
+        rows.append(
+            (
+                str(window.window_id),
+                window.status,
+                f"{window.first_seq}-{window.last_seq}",
+                f"{window.es_share:.0%}",
+                drift,
+                "-" if p is None else str(p.labelled),
+                "-" if p is None else _figure(p.mdape, p.mdape_status),
+                "-" if p is None or p.test_mdape is None else f"{p.test_mdape:.4f}",
+                "-" if p is None else str(p.labelled_ranges),
+                "-" if p is None else _figure(p.coverage, p.coverage_status),
+                "-" if p is None or p.nominal_level is None else f"{p.nominal_level:.2f}",
+                "-" if p is None else ("yes" if p.final else "no"),
+            )
+        )
+    widths = [max(len(row[i]) for row in rows) for i in range(len(_ALL_COLUMNS))]
+    return "\n".join(
+        "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
+        for row in rows
+    )
 
 
 def replay_command(args: argparse.Namespace) -> int:
