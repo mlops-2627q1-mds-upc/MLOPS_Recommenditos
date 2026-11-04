@@ -21,12 +21,21 @@ version = "0"
 description = "The replay of held-out listings (#227) and the drift job of M6; not a published package."
 requires-python = "~=3.12.0"
 dependencies = [
+    # The drift job's detectors (#228, EDN-101): KSDrift and ChiSquareDrift.
+    # 0.13 is the latest release; it pins numpy<2, pandas<3 and Python<3.13
+    # (through numba), and pulls in transformers, opencv and scikit-image,
+    # which the job never imports. Licensed under the Business Source License
+    # 1.1 (docs/docs/monitoring.md#the-licence).
+    "alibi-detect>=0.13.0,<0.14",
     # The HTTP client of the replay, which sends listings to the API and the
     # observed prices to /v1/feedback.
     "httpx>=0.28.1",
     # What drift_features.py imports, at the versions Alibi Detect 0.13 accepts.
     "numpy>=1.26.4,<2",
     "pandas>=2.2.3,<3",
+    # The parquet reader of the drift reference (data/monitoring/reference.parquet).
+    # pyarrow 25 and later import only with numpy 2, which Alibi Detect excludes.
+    "pyarrow>=18.1.0,<25",
 ]
 
 [dependency-groups]
@@ -44,6 +53,11 @@ package = false
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "--strict-markers"
+# The same marker as the root project's: the requirement matrix
+# (tools/requirement_matrix.py) collects these tests too.
+markers = [
+    "req(*ids): the requirement IDs of docs/docs/requirements.md the test verifies",
+]
 
 # The same mode as the root project's (EDN-83): the default plus
 # `check_untyped_defs`, and pandas, which ships no types, ignored by name.
@@ -55,4 +69,10 @@ check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["pandas.*"]
+ignore_missing_imports = true
+
+# Alibi Detect ships no types either; the job reads two keys of its detectors'
+# answers (drift.py).
+[[tool.mypy.overrides]]
+module = ["alibi_detect.*"]
 ignore_missing_imports = true

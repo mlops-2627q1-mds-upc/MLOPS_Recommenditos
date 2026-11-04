@@ -12,7 +12,7 @@ images get a repository of their own, so deploy.sh's clean-up of old tags never
 reaches the stack's images.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import hashlib
 import io
 import os
@@ -38,6 +38,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 PROJECT = REPOSITORY = f"{COMPOSE_PROJECT}-drill"
 #: The two repositories of a release, named as CD names them (…/api and …/stack).
 API, STACK = f"{REPOSITORY}/api", f"{REPOSITORY}/stack"
+#: The monitoring image of a release, which the always-on drift job runs (…/monitoring).
+MONITORING = f"{REPOSITORY}/monitoring"
 BROKEN_DOCKERFILE = """\
 FROM {base}
 CMD ["python", "-c", "raise SystemExit('broken on purpose by the rollback drill')"]
@@ -251,12 +253,19 @@ def project_volumes() -> set[str]:
 
 
 @pytest.fixture
-def drill(tmp_path: Path, api_container: Container) -> Iterator[Stack]:
+def drill(
+    tmp_path: Path, api_container: Container, stack_container: Callable[[str], Container]
+) -> Iterator[Stack]:
     """The VM's stack directory, three good releases of the image under test and a broken one."""
     # The image ID, not its tag: another checkout's `make stack` may have moved the tag.
     good = api_container.inspect()["Image"]
     for tag in (GOOD, NEWER, NEWEST):
         docker("tag", good, f"{API}:{tag}")
+    # Every release has its monitoring image too, as CD pushes it: the drift job
+    # runs in every stack. The one the stack under test runs.
+    monitoring = stack_container("monitor").inspect()["Image"]
+    for tag in TAGS:
+        docker("tag", monitoring, f"{MONITORING}:{tag}")
     subprocess.run(
         ["docker", "build", "--quiet", "--tag", f"{API}:{BROKEN}", "-"],
         input=BROKEN_DOCKERFILE.format(base=f"{API}:{GOOD}"),
@@ -276,7 +285,8 @@ def drill(tmp_path: Path, api_container: Container) -> Iterator[Stack]:
     (directory / ".env").write_text(
         f"COMPOSE_PROJECT_NAME={PROJECT}\nAPI_IMAGE={API}\nAPI_IMAGE_TAG=\nHTTP_PORT={port}\n"
         f"GRAFANA_PORT={free_port()}\nGRAFANA_ADMIN_PASSWORD={secrets.token_urlsafe(24)}\n"
-        "DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded\n",
+        "DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded\n"
+        f"MONITORING_IMAGE={MONITORING}\n",
         encoding="utf-8",
     )
     stack = Stack(directory, port, tmp_path / "stack-images")
@@ -296,7 +306,7 @@ def drill(tmp_path: Path, api_container: Container) -> Iterator[Stack]:
             subprocess.run(
                 ["docker", "volume", "rm", volume], capture_output=True, timeout=60, check=False
             )
-        for repository in (API, STACK):
+        for repository in (API, STACK, MONITORING):
             for tag in TAGS:
                 subprocess.run(
                     ["docker", "image", "rm", f"{repository}:{tag}"],
@@ -555,40 +565,29 @@ def test_the_stack_image_holds_the_stack_files_and_nothing_else(drill: Stack) ->
 
 
 @pytest.mark.req("NFR-13")
-def test_a_deploy_needs_the_release_image_behind_a_profile_too(drill: Stack) -> None:
-    """The replay's monitoring image is behind a profile, which `up` never pulls.
+def test_a_deploy_needs_the_monitoring_image_of_the_release_too(drill: Stack) -> None:
+    """The monitoring image of the drift job and the replay is the release's, like the API's.
 
     deploy.sh lists the images of every profile with this machine's Compose and
-    pulls the release's own; without that image the release would come up, and
-    the replay by hand would find no image to run.
+    pulls the release's own; without the monitoring image the new release could
+    not start its drift job, so nothing changes.
     """
-    monitoring = f"{REPOSITORY}/monitoring"
     first = drill.deploy_sh("deploy", GOOD)
     assert first.returncode == 0, first.stdout + first.stderr
-    env_file = drill.directory / ".env"
-    env_file.write_text(
-        env_file.read_text(encoding="utf-8") + f"MONITORING_IMAGE={monitoring}\n",
-        encoding="utf-8",
-    )
-
-    missing = drill.deploy_sh("deploy", NEWER)
-
-    assert missing.returncode == 1, missing.stdout + missing.stderr
-    assert f"pulling {monitoring}:{NEWER} failed; nothing changed" in missing.stdout
-    assert drill.env_tag() == GOOD
-    assert drill.health().status_code == 200
-    # Any image will do: the replay does not run in this drill.
-    docker("tag", f"{API}:{GOOD}", f"{monitoring}:{NEWER}")
+    monitoring = docker("image", "inspect", "--format", "{{.Id}}", f"{MONITORING}:{NEWER}")
+    docker("image", "rm", f"{MONITORING}:{NEWER}")
     try:
-        present = drill.deploy_sh("deploy", NEWER)
+        missing = drill.deploy_sh("deploy", NEWER)
 
-        assert present.returncode == 0, present.stdout + present.stderr
-        assert f"{monitoring}:{NEWER} is on the VM already" in present.stdout
-        assert drill.env_tag() == NEWER
+        assert missing.returncode == 1, missing.stdout + missing.stderr
+        assert f"pulling {MONITORING}:{NEWER} failed; nothing changed" in missing.stdout
+        assert drill.env_tag() == GOOD
+        assert drill.health().status_code == 200
     finally:
-        subprocess.run(
-            ["docker", "image", "rm", f"{monitoring}:{NEWER}"],
-            capture_output=True,
-            timeout=60,
-            check=False,
-        )
+        docker("tag", monitoring, f"{MONITORING}:{NEWER}")
+
+    present = drill.deploy_sh("deploy", NEWER)
+
+    assert present.returncode == 0, present.stdout + present.stderr
+    assert f"{MONITORING}:{NEWER} is on the VM already" in present.stdout
+    assert drill.env_tag() == NEWER

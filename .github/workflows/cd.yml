@@ -175,6 +175,16 @@ jobs:
           uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
           uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
           uv run dvc pull "models/$MODEL_VARIANT" data/processed/comparables.parquet data/monitoring
+      - name: Test the drift job on the real samples (NFR-11)
+        # The tests of the monitoring jobs, the NFR-11 test among them, which
+        # runs the drift job's real detectors over 20 control windows and the
+        # first ES window of the samples just pulled. Pull requests cannot pull
+        # them (EDN-91), so this job is where it runs: before anything is built
+        # or pushed, so that a drift job that misses NFR-11 is never released.
+        # The variable turns a missing sample into a failure instead of a skip.
+        env:
+          RECOMMENDITOS_REQUIRE_MONITORING_SAMPLES: "1"
+        run: make test-monitoring
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -284,6 +294,7 @@ jobs:
           }
           check api "$IMAGE:$SHA"
           check replay "$MONITORING_REPOSITORY:$SHA"
+          check monitor "$MONITORING_REPOSITORY:$SHA"
       - name: Start the stack with the built image
         run: docker compose -f deploy/compose.yaml up -d --no-build --wait
       - name: Run the integration suite against the versions in dvc.lock

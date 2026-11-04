@@ -1,6 +1,8 @@
 """The monitoring jobs' command line: `python -m recommenditos_monitoring <command>`.
 
     replay    send held-out listings to the API and their prices to /v1/feedback (#227)
+    run-once  test every window of 1,000 requests the prediction log completed (#228)
+    report    the finding and the evidence of one window of monitor.db (#228)
 
 docs/docs/monitoring.md has the commands for a local stack and for the VM.
 """
@@ -13,6 +15,15 @@ import sys
 
 import httpx
 
+from recommenditos_monitoring.job import (
+    WINDOW_SIZE,
+    JobError,
+    Paths,
+    chosen_window,
+    evidence,
+    finding,
+    run_once,
+)
 from recommenditos_monitoring.replay import (
     THEN_SAMPLES,
     Replay,
@@ -22,10 +33,15 @@ from recommenditos_monitoring.replay import (
     phases_of,
     reference_date_of,
 )
+from recommenditos_monitoring.store import Store, Window
 
 #: Where the image holds the samples; run from the repository, `data/monitoring`.
 DATA_DIR_VARIABLE = "RECOMMENDITOS_MONITORING_DATA_DIR"
 API_KEY_VARIABLE = "RECOMMENDITOS_API_KEY"
+#: The API's own variable for its log, which the drift job reads.
+LOG_VARIABLE = "RECOMMENDITOS_PREDICTION_LOG"
+DB_VARIABLE = "RECOMMENDITOS_MONITOR_DB"
+TEXTFILE_VARIABLE = "RECOMMENDITOS_MONITOR_TEXTFILE_DIR"
 
 
 def positive_rate(text: str) -> float:
@@ -102,11 +118,119 @@ def parser() -> argparse.ArgumentParser:
         default=10.0,
         help=f"seconds to wait for an answer (default: 10, at most {MAX_TIMEOUT_SECONDS:g})",
     )
+
+    run = commands.add_parser(
+        "run-once",
+        help="test the windows the prediction log completed since the last pass",
+        description="Read the prediction log from the last closed window on, test every "
+        "full window of requests for input drift against the reference, store the "
+        "results in monitor.db, and write them for node-exporter's textfile collector.",
+    )
+    _store_argument(run)
+    run.add_argument(
+        "--log",
+        type=Path,
+        default=Path(os.environ.get(LOG_VARIABLE, "prediction-log.sqlite3")),
+        help=f"the API's prediction log (default: ${LOG_VARIABLE})",
+    )
+    run.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path(os.environ.get(DATA_DIR_VARIABLE, "data/monitoring")),
+        help=f"the samples' directory with the reference (default: ${DATA_DIR_VARIABLE})",
+    )
+    run.add_argument(
+        "--textfile-dir",
+        type=Path,
+        default=_optional_path(os.environ.get(TEXTFILE_VARIABLE)),
+        help=f"where monitor.prom goes (default: ${TEXTFILE_VARIABLE}; unset writes none)",
+    )
+    run.add_argument(
+        "--window-size",
+        type=int,
+        default=WINDOW_SIZE,
+        help=f"requests per window (default: {WINDOW_SIZE}, NFR-11's)",
+    )
+    report = commands.add_parser(
+        "report",
+        help="the finding of one window, for retrain.yml's reason, or its evidence as JSON",
+        description="Print the finding of a window of monitor.db: the latest tested one, "
+        "or the one --window names; with --json, the window and every feature's result.",
+    )
+    _store_argument(report)
+    report.add_argument("--window", type=int, metavar="N", help="the window's number")
+    report.add_argument(
+        "--json", action="store_true", help="print the evidence as JSON instead of the finding"
+    )
     return main
+
+
+def _optional_path(text: str | None) -> Path | None:
+    return Path(text) if text else None
+
+
+def _store_argument(command: argparse.ArgumentParser) -> None:
+    command.add_argument(
+        "--db",
+        type=Path,
+        default=Path(os.environ.get(DB_VARIABLE, "monitor.db")),
+        help=f"the job's results (default: ${DB_VARIABLE} or monitor.db)",
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    if args.command == "run-once":
+        return run_once_command(args)
+    if args.command == "report":
+        return report_command(args)
+    return replay_command(args)
+
+
+def run_once_command(args: argparse.Namespace) -> int:
+    paths = Paths(log=args.log, db=args.db, data_dir=args.data_dir, textfile_dir=args.textfile_dir)
+    try:
+        outcome = run_once(paths, window_size=args.window_size)
+    except Exception as error:  # noqa: BLE001 - every failure ends the pass with its cause
+        print(f"the drift pass failed: {type(error).__name__}: {error}", file=sys.stderr)
+        return 1
+    if outcome.skipped:
+        print("another pass is running; this one leaves it to finish")
+        return 0
+    for window in outcome.closed:
+        print(f"{window.status} window {window.window_id}: " + _short(window))
+    print(f"open window: {outcome.open_requests} of {args.window_size} requests")
+    return 0
+
+
+def _short(window: Window) -> str:
+    if window.flagged is None:
+        return f"seq {window.first_seq}-{window.last_seq}, {window.requests} requests, untested"
+    verdict = "flagged" if window.flagged else "not flagged"
+    return (
+        f"seq {window.first_seq}-{window.last_seq}, {verdict}, "
+        f"{window.drifted_features} drifted features, {window.es_share:.0%} ES"
+    )
+
+
+def report_command(args: argparse.Namespace) -> int:
+    if not args.db.is_file():
+        print(f"there is no monitor.db at {args.db}; has a pass run?", file=sys.stderr)
+        return 1
+    store = Store.open(args.db)
+    try:
+        window = chosen_window(store, args.window)
+        features = store.features(window.window_id)
+    except JobError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    finally:
+        store.close()
+    print(evidence(window, features) if args.json else finding(window, features))
+    return 0
+
+
+def replay_command(args: argparse.Namespace) -> int:
     if args.control < 0 or (args.then_count is not None and args.then_count < 0):
         print("counts are 0 or more", file=sys.stderr)
         return 2

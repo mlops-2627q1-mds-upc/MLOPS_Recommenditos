@@ -66,3 +66,16 @@ GHSA-hrxh-6v49-42gf exp:2026-12-04
 CVE-2026-21728 exp:2026-12-04
 # github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.10.3: the plugin is off.
 CVE-2026-28377 exp:2026-12-04
+
+# transformers 4.57.6 in the monitoring image (monitoring/Dockerfile): Alibi
+# Detect 0.13 requires transformers<5 and imports it when it is imported, but
+# the drift job never loads, saves or downloads a model, tokenizer or
+# configuration with it, and the image has no PyTorch or TensorFlow to run one.
+# Accepted until an Alibi Detect release allows transformers 5; reviewed again
+# before the presentation of 2026-12-15 (tracked in #286).
+# Remote code from a crafted config.json in from_pretrained(): the job loads no model.
+CVE-2026-4372 exp:2026-12-04
+# Code execution while initialising a LightGlue model: the job loads no model.
+CVE-2026-5241 exp:2026-12-04
+# Path traversal in save_pretrained() through chat template names: the job saves nothing with it.
+CVE-2026-9856 exp:2026-12-04

@@ -1,7 +1,7 @@
 Deployment
 ==========
 
-The API runs as a Docker Compose stack: the API image, which holds the serving runtime and one model bundle, nginx in front of it, and the resource monitoring beside them, Prometheus, cAdvisor and node-exporter ([Monitoring](monitoring.md#resource-monitoring)).
+The API runs as a Docker Compose stack: the API image, which holds the serving runtime and one model bundle, nginx in front of it, and the monitoring beside them: Prometheus, cAdvisor, node-exporter, Alertmanager, Grafana, and the drift job ([Monitoring](monitoring.md)).
 The same stack runs on a laptop and on the FIB Virtech VM ([EDN-87](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 This page says what the stack guarantees, how to run it locally, how CI builds and publishes the image, what the VM is, how to set up a fresh VM and deploy to it, and the checklist that was run on the VM.
 Milestone 5 adds CI/CD, the image scan and the hardening on top of this stack ([Continuous delivery](#continuous-delivery), [What M5 adds](#what-m5-adds)).
@@ -82,7 +82,7 @@ What each part guarantees:
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
-- **Docker** keeps each container's log in at most five files of 10 MB, so the seven logs take at most 350 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
+- **Docker** keeps each container's log in at most five files of 10 MB, so the eight logs take at most 400 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
 
 ## Run it locally
 
