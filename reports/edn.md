@@ -1435,7 +1435,7 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "#191 log: stores only the fields the client really sent, plus a marker column. Old rows stay (rewriting would be lossy), the drift job reads only new rows."
   Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
-- **Other evidence:** [Issue #191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191), [Reading the log](../docs/docs/api.md#reading-the-log), [`prediction_log.py`](../recommenditos/api/prediction_log.py), EDN-86.
+- **Other evidence:** [Issue #191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191), [PR #282](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/282), [Reading the log](../docs/docs/api.md#reading-the-log), [`prediction_log.py`](../recommenditos/api/prediction_log.py), EDN-86.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
