@@ -83,6 +83,7 @@ One module per stage, which is what lets a `deps` entry name exactly the code th
 | `validate-data` | `recommenditos/data/validate_data.py` | `reports/data-validation/`: the summary, the validation results and the Data Docs; a failed expectation fails the pipeline |
 | `split` | `recommenditos/data/split_data.py` | `data/processed/{train,validation,calibration,test,holdout_es}.parquet`, `supported_makes.json` |
 | `comparables` | `recommenditos/data/build_comparables.py` | `data/processed/comparables.parquet`, the index `/v1/comparables` serves |
+| `monitoring_samples` | `recommenditos/data/monitoring_samples.py` | `data/monitoring/`, the samples M6's replay sends and the drift job compares with (see [below](#the-monitoring-samples)) |
 | `features` | `recommenditos/data/build_features.py` | `data/processed/features/<set>/` |
 | `train` | `recommenditos/modeling/train.py`, and `intervals.py` for a variant with a price range | `models/<variant>/`, `reports/emissions/<variant>.csv` |
 | `evaluate` | `recommenditos/modeling/evaluate.py` | `metrics.json`, `reports/metrics/<variant>.json`, `reports/metrics/{segments,masked-inputs,interval-coverage-by-make}.csv` |
@@ -486,6 +487,45 @@ Its energy figures are estimates for the runner: CodeCarbon has no energy counte
 The MLflow runs carry `trained_on` and `energy_estimate` tags that say so.
 Merging a promotion from the workflow replaces the committed emissions files, `energy-vs-error` and the report's copy of that figure with these estimates, mixed with laptop rows when only some variants were retrained; the run's summary says so at the top.
 So the laptop stays NFR-10's reference only as long as no promotion trained on the runner is merged, and the report's NFR-10 caption has to be updated with such a merge.
+
+The monitoring samples
+----------------------
+
+M6 has no real users ([EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), so the replay ([#227](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227)) sends listings to the API and the drift job ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228)) compares each window of logged requests with a training reference (NFR-11).
+Both read what the `monitoring_samples` stage writes to `data/monitoring/`, so the listings behind a replay or a drift finding are the ones `dvc.lock` records (NFR-06), and a retrain regenerates the reference from the new `train`.
+`uv run dvc pull monitoring_samples` restores them.
+
+| Sample | Drawn from | Listings | What it is for |
+|---|---|---|---|
+| `reference` | `train` | `monitoring.reference_size`, 10,000 | The drift reference of NFR-11. |
+| `control` | `train`, none of the reference's | `monitoring.control_size`, 20,000 | Normal traffic: 20 control windows of 1,000. |
+| `es` | the `ES` holdout | every one the API accepts, 5,779 of 6,079 | The drift scenario ([EDN-03](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). |
+
+Reference and control are one random permutation of the same rows cut in two, with the top-level `seed`, so a control window is i.i.d. with the reference: EDN-14 measured that a seller-grouped control, which is what `test` is, gets flagged as drift.
+The price is that the model was fitted on the control listings, so the error and the coverage the replay measures on them are in-sample and optimistic; they show that the monitoring works, and the model is judged against `metrics.json` instead.
+Only listings the API accepts are drawn: a supported make (FR-04) and a body that both `ValuationRequest` and `PartialListing` validate, which needs every field FR-01 requires.
+Nothing else reaches the prediction log, so a reference holding other rows would compare every window with listings that can never appear in it, such as the 1 % of supported training listings without `power_kw`.
+`manifest.json` counts what was left out of each source and why: of `train`'s 61,180 listings, 802 have an unsupported make and 1,514 are no valid request, and of the holdout's 6,079, 100 and 200.
+On the samples of the committed `dvc.lock`, the scipy emulation of `reports/analysis/nfr11_check.py` at Bonferroni `0.005 / 23` flags none of the 20 control windows and all 5 `ES` windows, each with at least 12 drifted features besides `country_code`.
+
+Every sample is in a random order, so any run of consecutive rows is a random sample of its set and a replay can stop after any window.
+Each is written twice, with the same listings in the same order:
+
+- `<sample>.jsonl.gz`, for the replay: one JSON object per line with `listing_id`, `observed_price_eur` and `body`.
+  `body` is the request as a client sends it, built by `recommenditos/data/request_body.py`, which the load test uses too: a missing value is left out, never sent as `null`, and the body is valid for `/v1/predict` and `/v1/price-range` alike.
+  `registration_date` is the listing's own; the replay shifts it to the send date, so the age the API computes matches the one the model was trained on.
+- `<sample>.parquet`, for the drift job: `listing_id`, `observed_price_eur` and the 23 features EDN-14 validated NFR-11 with, in its representation, derived from the body by `drift_features`.
+
+| Columns | Type | Test | Missing |
+|---|---|---|---|
+| `age_years` (on `reference_date`), `mileage_km_raw`, `power_kw`, `nr_prev_owners`, `gears`, `cylinders_volume_cc`, `nr_seats`, `nr_doors` | `float64` | numeric, KS on the non-missing values | null |
+| `make`, `body_type`, `fuel_category`, `transmission`, `drive_train`, `seller_type`, `country_code` | `str` | categorical, chi-square | `__MISSING__` |
+| `<numeric>__missing` for each of the eight numeric features | `str`, `missing` or `present` | categorical, chi-square | never |
+
+`model` is not a feature: its 349 levels leave well under one expected count per chi-square cell in a window of 1,000 (EDN-14).
+`listing_id` is `<split frame>:<row position>`, for example `train:4711`, so `pd.read_parquet("data/processed/train.parquet").iloc[4711]` is the listing.
+`manifest.json` also lists the numeric, categorical and missing-indicator features, so the drift job reads which test applies to a column instead of restating it.
+The seven files take 5.0 MB on disk, the control's replay file 2.5 MB of it.
 
 Working on a stage
 ------------------

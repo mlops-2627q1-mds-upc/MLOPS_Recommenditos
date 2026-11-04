@@ -20,9 +20,9 @@ reproduced from `dvc.lock` instead of from an ad-hoc draw (NFR-06):
 Only listings the API accepts are drawn: a supported make (FR-04) and a body
 that `ValuationRequest` and `PartialListing` both validate, which needs every
 field FR-01 requires. Nothing else reaches the prediction log, so a reference
-holding such rows would differ from every window the drift job reads: a
-reference with 2 % of `power_kw` missing against windows with none flags
-`power_kw__missing` in each of them.
+holding such rows would compare every window the drift job reads with listings
+that can never appear in it, such as the 1 % of supported training listings
+without `power_kw`.
 
 Each sample is written twice:
 
