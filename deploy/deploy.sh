@@ -239,8 +239,11 @@ fetch_stack() {
     else
         log=$(mktemp "$STACKS_DIR/.pull.XXXXXX")
         if ! pull_image "$image" "$log"; then
-            # GHCR's answer for a tag a package does not have.
-            if grep -qiE 'manifest unknown|not found' "$log"; then
+            # GHCR's answer for a tag a package does not have, as Docker's
+            # classic image store (the VM's overlay2) prints it; checked on
+            # 2026-11-04. Nothing else counts: a "not found" of some other
+            # kind must not deploy a release with the wrong stack files.
+            if grep -qF 'manifest unknown' "$log"; then
                 rm -f "$log"
                 say "the registry has no $image, a tag from before stack images"
                 return 0
@@ -266,6 +269,13 @@ fetch_stack() {
         return 1
     fi
     docker rm "$container" >/dev/null 2>&1 || true
+    # Regular files and directories only: a link could point a bind mount at
+    # any path on the VM, and the content hash covers regular files alone.
+    if [[ -n $(find "$staging" -mindepth 1 ! -type f ! -type d -print -quit) ]]; then
+        say "$image holds something other than files and directories, such as a link; nothing changed"
+        rm -rf "$staging"
+        return 1
+    fi
     if [[ -e $staging/.env ]]; then
         say "$image holds a .env, which never travels with a release; nothing changed"
         rm -rf "$staging"

@@ -262,6 +262,13 @@ jobs:
           now=$(sed -n 's/^running: //p' "$RUNNER_TEMP/deploy.log" 2>/dev/null | tail -n 1)
           [[ $now =~ ^[0-9a-f]{40}$ ]] || now=
           said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/deploy.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' - || true)
+          # A release that kept the stack files that ran before, which the last
+          # two lines do not show: a tag from before stack images (#279).
+          grep -E '^deploy.sh: .*(has no stack image|no stack files are recorded)' "$RUNNER_TEMP/deploy.log" 2>/dev/null \
+            | sed 's/^deploy.sh: //' | while IFS= read -r line; do
+                echo "::warning::$line"
+                echo "Warning: $line" >> "$GITHUB_STEP_SUMMARY"
+              done || true
           echo "now=$now" >> "$GITHUB_OUTPUT"
           echo "said=$said" >> "$GITHUB_OUTPUT"
 
@@ -311,6 +318,13 @@ jobs:
           now=$(sed -n 's/^running: //p' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 1)
           [[ $now =~ ^[0-9a-f]{40}$ ]] || now=
           said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' - || true)
+          # A release that kept the stack files that ran before, which the last
+          # two lines do not show: a tag from before stack images (#279).
+          grep -E '^deploy.sh: .*(has no stack image|no stack files are recorded)' "$RUNNER_TEMP/rollback.log" 2>/dev/null \
+            | sed 's/^deploy.sh: //' | while IFS= read -r line; do
+                echo "::warning::$line"
+                echo "Warning: $line" >> "$GITHUB_STEP_SUMMARY"
+              done || true
           echo "now=$now" >> "$GITHUB_OUTPUT"
           echo "said=$said" >> "$GITHUB_OUTPUT"
 

@@ -345,19 +345,27 @@ In `/opt/recommenditos`:
 | `.env` | The stack's settings and secrets; never part of a release, and `deploy.sh` changes only `API_IMAGE_TAG` in it |
 | `deploy.sh`, `.env.template` | Installed by `bootstrap.sh`; never part of a release |
 | `stacks/<hash>/` | One set of stack files, copied out of a stack image and named by the hash of its contents |
-| `stack` | The link to the set that runs; Compose runs with `stack/compose.yaml` and `--env-file .env` |
+| `stack` | The link to the set that runs; `deploy.sh` runs Compose with the directory it names, `stacks/<hash>/compose.yaml`, and `--env-file .env` |
 | `.deploy-previous`, `.deploy-previous-stack` | The tag and the set that ran before the last deploy, for `rollback` |
 
-`deploy.sh` copies a stack image's files into a new directory under `stacks/` and points `stack` at it in one rename, after it has checked that `compose.yaml` is there and that Compose accepts it; it refuses a stack image that holds a `.env`.
-A release whose stack files equal the running ones keeps their directory, so its deploy leaves every container that mounts one of them as it is; a changed file has a new path, so Compose recreates the containers that mount it.
+`deploy.sh` copies a stack image's files into a new directory under `stacks/` and points `stack` at it in one rename, after it has checked that `compose.yaml` is there and that Compose accepts it; it refuses a stack image that holds a `.env`, a link or anything else but files and directories.
+A release whose stack files equal the running ones keeps their directory, so its deploy leaves every container with a bind mount as it is.
+A change to any stack file gives the whole set a new directory, so Compose recreates every container that bind-mounts one of its files, the proxy today, while a container without one, such as the API, is recreated only when its own configuration or image changes.
+
+A merge that touches `deploy/` therefore changes the production host's Docker setup, its ports, mounts, privileges and volume names, with no person involved.
+`compose config` checks only that Compose accepts the file; what decides whether a release stays are the health check of `deploy.sh` and the public smoke check, after which a failure rolls the tag and the stack files back together.
+Review a change to `deploy/` as a change to the VM.
 After a successful deploy, `deploy.sh` keeps the running set and the previous one and removes the others.
+
+To start the stack again by hand, for example after a change to `.env`, run `./deploy.sh deploy <the tag that runs>`.
+A Compose command by hand has to name the directory behind the link, as `deploy.sh` does, `docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env up -d --wait` from `/opt/recommenditos`: with `-f stack/compose.yaml`, the bind mounts get paths through the link, which differ from `deploy.sh`'s, so Compose recreates the proxy, and the next deploy recreates it again (`docker compose config --hash '*'` shows the difference).
 
 `docker compose up` runs with `--remove-orphans`, so the stack always matches its release: a service that the new `compose.yaml` no longer has, after a rollback for example, loses its container.
 Its named volumes stay, as do all others, since Compose removes a volume only when asked to with `down -v`; the prediction log survives every deploy and rollback.
 
 Two cases keep the stack files that run now, and `deploy.sh` says so in its log:
 
-- a tag CD pushed before stack images existed (before #279) has none, and GHCR answers `manifest unknown`; any other failure to pull the stack image stops the deploy with nothing changed;
+- a tag CD pushed before stack images existed (before #279) has none, and GHCR answers `manifest unknown` (Docker's classic image store, the VM's, prints it so; checked on 2026-11-04); any other failure to pull the stack image stops the deploy with nothing changed;
 - `rollback` to a previous tag that the older `deploy.sh` recorded, without its stack files.
 
 Before #279, the stack files were copied by hand beside `.env`; the first deploy of the new `deploy.sh` takes them over as `stacks/<hash>/`, as the previous release, and removes the copies once a release runs without them.

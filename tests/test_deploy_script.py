@@ -391,3 +391,42 @@ def test_the_repository_deploy_folder_is_not_a_stack_directory(tmp_path: Path):
     assert result.returncode == 1, result.stdout + result.stderr
     assert "the repository's deploy/" in result.stdout
     assert sorted(path.name for path in (PROJ_ROOT / "deploy").iterdir()) == before
+
+
+@pytest.mark.req("NFR-13")
+@pytest.mark.parametrize(
+    ("answer", "kept"),
+    [
+        ("manifest unknown", True),
+        ("manifest for ghcr.io/example/stack:x not found: manifest unknown", True),
+        ("failed to resolve reference ghcr.io/example/stack:x: not found", False),
+        ("Head https://ghcr.io/v2/example/stack/manifests/x: unauthorized", False),
+    ],
+    ids=["GHCR", "Docker Hub wording", "another not found", "unauthorized"],
+)
+def test_only_manifest_unknown_counts_as_a_tag_without_a_stack_image(
+    tmp_path: Path, answer: str, kept: bool
+):
+    vm = FakeVM(tmp_path)
+    vm.environment["FAKE_PULL_ANSWER"] = answer
+
+    result = vm.run("deploy", SHA)
+
+    assert (result.returncode == 0) is kept, result.stdout + result.stderr
+    assert (f"{SHA} has no stack image" in result.stdout) is kept
+
+
+@pytest.mark.req("NFR-13")
+def test_a_stack_image_with_a_link_is_refused(tmp_path: Path):
+    """A link could point a bind mount anywhere on the VM."""
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text(f"{API_IMAGE}:{SHA}\n{STACK_IMAGE}:{SHA}\n", encoding="utf-8")
+    (vm.files / "nginx.conf").symlink_to("/etc/shadow")
+    env_before = vm.env_file.read_text(encoding="utf-8")
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "such as a link" in result.stdout
+    assert vm.env_file.read_text(encoding="utf-8") == env_before
+    assert vm.stack_link() == "stacks/0123456789abcdef"

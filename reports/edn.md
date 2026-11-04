@@ -1348,7 +1348,7 @@ How to add an entry:
   Fork pull requests' workflows need a team member's approval, and a test keeps other workflows off the runner.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI laid out the options for reaching the VM, the private package and the stack files, and recommended the chosen ones; @lukas2510 took them, leaving open the stack files' carrier, for which AI chose an image of its own (EDN-91).
+- **Assessment of the AI contribution:** AI laid out the options for reaching the VM, the private package and the stack files, and recommended the chosen ones; Lukas Häußler took them, leaving open the stack files' carrier, for which AI chose an image of its own (EDN-91).
   AI wrote the workflows, scripts and drill tests; in an Ubuntu 20.04 container, sudo 1.8.31 refused every other command tried, and GHCR answers `manifest unknown` for a missing tag.
 - **AI interaction evidence:** Session of 2026-10-30.
   Question: "How should CD reach the VM?".

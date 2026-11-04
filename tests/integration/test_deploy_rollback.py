@@ -119,9 +119,14 @@ class Stack:
         if extra_service:
             compose = context / "compose.yaml"
             text = compose.read_text(encoding="utf-8")
-            volumes = "\nvolumes:\n  prediction-log:\n"
-            assert text.endswith(volumes), "compose.yaml no longer ends with its volumes"
-            text = text.removesuffix(volumes) + "\n" + EXTRA_SERVICE + volumes + "  extra-data:\n"
+            # Top-level keys start a line; the service and its volume go first
+            # under theirs, wherever they are and whatever else they hold.
+            assert "\nservices:\n" in text, "compose.yaml has no top-level services"
+            text = text.replace("\nservices:\n", "\nservices:\n" + EXTRA_SERVICE, 1)
+            if "\nvolumes:\n" in text:
+                text = text.replace("\nvolumes:\n", "\nvolumes:\n  extra-data:\n", 1)
+            else:
+                text += "\nvolumes:\n  extra-data:\n"
             compose.write_text(text, encoding="utf-8")
         subprocess.run(
             [
@@ -207,6 +212,25 @@ class Stack:
 
     def marker(self) -> httpx2.Response:
         return httpx2.get(f"http://127.0.0.1:{self.port}{MARKER_PATH}", timeout=10)
+
+
+def travelling_files() -> set[str]:
+    """The tracked files of deploy/ that a release carries, relative to deploy/."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "deploy"],
+        cwd=PROJ_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout.split()
+    relative = [path.removeprefix("deploy/") for path in tracked]
+    # Configuration folders travel whole; at the top, the scripts and NEVER_TRAVEL stay.
+    return {
+        path
+        for path in relative
+        if "/" in path or not (path.endswith(".sh") or path in NEVER_TRAVEL)
+    }
 
 
 def project_volumes() -> set[str]:
@@ -334,10 +358,12 @@ def test_a_change_to_the_stack_files_reaches_the_vm_and_leaves_env_as_it_is(
     # Only the tag changed in .env, and no stack file came beside it.
     env_after = (drill.directory / ".env").read_text(encoding="utf-8")
     assert env_after == env_before.replace(f"API_IMAGE_TAG={GOOD}\n", f"API_IMAGE_TAG={NEWER}\n")
-    assert sorted(path.name for path in drill.stack_files().iterdir()) == [
-        "compose.yaml",
-        "nginx.conf",
-    ]
+    files = {
+        path.relative_to(drill.stack_files()).as_posix()
+        for path in drill.stack_files().rglob("*")
+        if path.is_file()
+    }
+    assert files == travelling_files()
     assert not (drill.directory / "compose.yaml").exists()
 
 
@@ -484,21 +510,7 @@ def test_the_rollback_finishes_when_the_client_goes_away(drill: Stack) -> None:
 @pytest.mark.req("NFR-13", "NFR-15")
 def test_the_stack_image_holds_the_stack_files_and_nothing_else(drill: Stack) -> None:
     """No secret, template or script of the bootstrap layer travels with a release."""
-    tracked = subprocess.run(
-        ["git", "ls-files", "deploy"],
-        cwd=PROJ_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=True,
-    ).stdout.split()
-    relative = [path.removeprefix("deploy/") for path in tracked]
-    # Configuration folders travel whole; at the top, the scripts and NEVER_TRAVEL stay.
-    expected = {
-        path
-        for path in relative
-        if "/" in path or not (path.endswith(".sh") or path in NEVER_TRAVEL)
-    }
+    expected = travelling_files()
     container = docker("create", f"{STACK}:{GOOD}", "stack-files-only")
     try:
         listing = subprocess.run(
