@@ -52,8 +52,10 @@ API_TIMEOUT = 30
 HEALTH_URL = "http://nattech.fib.upc.edu:40520/health"
 DEFAULT_EXPORT = Path("reports/uptime/availability.json")
 
-#: The monitor, as the create and update monitor calls take it. `status` is the
-#: type that passes on a 2xx answer. 180 s is the shortest interval of the free
+#: The monitor, as the create and update monitor calls take it. `expected_status_code`
+#: is down on any answer but a 200, as `/health` promises; the plainer `status` type
+#: stayed "up" on the 403 that a rehearsal monitor was meant to fail on
+#: (2026-11-04). 180 s is the shortest interval of the free
 #: plan that the API accepted (the free plan advertises 3-minute checks), the
 #: 15 s timeout is far above the API's answer time and below the interval, and
 #: the confirmation period asks for the failure to last one more interval before
@@ -62,7 +64,8 @@ DEFAULT_EXPORT = Path("reports/uptime/availability.json")
 #: near the VM and one across the Atlantic, because an incident needs the
 #: failure from the regions that check. Email only, to the team's members.
 MONITOR: dict[str, Any] = {
-    "monitor_type": "status",
+    "monitor_type": "expected_status_code",
+    "expected_status_codes": [200],
     "pronounceable_name": "Recommenditos API health",
     "url": HEALTH_URL,
     "http_method": "get",
