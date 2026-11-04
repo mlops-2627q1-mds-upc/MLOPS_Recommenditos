@@ -651,7 +651,8 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
     place off. The pytest process imported `recommenditos`, so the variable is
     removed from the child's environment, which then has to set it itself.
     numpy's Windows wheel has no AVX-512 kernels, so there the variable stays
-    unset and the test checks that the wheel still has none.
+    unset and the test checks that the wheel still has none; its bits differ
+    from Linux's without them, so they are checked on Linux only.
     """
     disabled = None if sys.platform == "win32" else NUMPY_DISABLED_CPU_FEATURES
     completed = subprocess.run(
@@ -677,7 +678,11 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
     )
     assert set(seen["dispatch"]) - {"X86_V3"} == set((disabled or "").split())
     assert seen["avx512_on"] == []
-    assert seen["bits"] == list(_LOG_PRICE_BITS.values())
+    if sys.platform != "win32":
+        # Without AVX-512, numpy's float64 `log` comes from the C library, and
+        # Windows's rounds 285,343 the other way (0x1.91f76036223acp+3, CI on
+        # 2026-11-04): `log_price` matches Linux's on no Windows machine (#259).
+        assert seen["bits"] == list(_LOG_PRICE_BITS.values())
 
 
 def test_every_stage_declares_its_own_module_as_a_dependency(dvc_stages):
