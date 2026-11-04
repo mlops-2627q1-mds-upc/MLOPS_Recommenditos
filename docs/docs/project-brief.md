@@ -212,7 +212,7 @@ client --> nginx (gateway) --> FastAPI (model bundle: LightGBM boosters, which g
          SQLite file in WAL mode on a shared volume: prediction log, feedback
          MLflow experiment tracking (DagsHub), not called by the API
          Prometheus + Grafana (resources, latency, errors)                      M6
-         Better Uptime (external availability check, presentation windows)    M6, proposed
+         Better Stack (external availability check of /health, every 3 min)   M6
          Alibi Detect job (input drift on logged requests, interval coverage)   M6
 ```
 
@@ -265,7 +265,7 @@ Checked against our `uv.lock` (numpy 2.4.6, pandas 3.0.6, typer 0.26.8, ipython 
 | M3 | Quality assurance: energy, static analysis, data and model tests (optional: SHAP, AIF360, TrustML) | CodeCarbon, ruff/Pylint, Pynblint, Pytest, Great Expectations | 15 |
 | M4 | Deployment: system design, API, API tests | FastAPI, Pytest, FIB VM / cloud | 25 |
 | M5 | Packaging: containers, CI/CD | Docker, Docker Compose, GitHub Actions | 15 |
-| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Better Uptime, Alibi Detect | 10 |
+| M6 | Monitoring: resources, model performance, drift | Prometheus, Grafana, Better Stack (Better Uptime), Alibi Detect | 10 |
 
 Deliveries (via Atenea), with the dates as the course changed them from the [lab schedule](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/references/MLOps-lab.md); the laboratory sessions are on Tuesdays:
 

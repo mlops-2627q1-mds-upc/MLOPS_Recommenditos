@@ -35,7 +35,7 @@ flowchart LR
         u_team["<b>Team member</b><br/>«actor»"]
         u_cd["<b>CD</b><br/>«actor», GitHub Actions"]
         u_replay["<b>Replay job</b><br/>«actor», M6"]
-        u_monitor["<b>Monitoring</b><br/>«actor», Better Uptime,<br/>Prometheus, drift job, M6"]
+        u_monitor["<b>Monitoring</b><br/>«actor», Better Stack,<br/>Prometheus, drift job, M6"]
     end
 
     subgraph u_system["Price component"]
@@ -134,7 +134,7 @@ The system has two halves that meet only in the API image: the containers that a
 ```mermaid
 flowchart TB
     client["<b>HTTP client</b><br/>front end, script, browser"]
-    uptime["<b>Better Uptime</b><br/>external check<br/>M6"]
+    uptime["<b>Better Stack</b><br/>external check<br/>M6"]
 
     subgraph stack["Docker Compose stack"]
         proxy["<b>Gateway</b> [nginx]<br/>only published port<br/>403 for /feedback, /metrics"]
@@ -190,7 +190,7 @@ flowchart TB
 | **Replay job** | Sends the `ES` holdout as requests and its prices as feedback (NFR-11) | M6 |
 | **Drift job** (Alibi Detect, scheduled container) | Input drift, error and interval coverage per window of logged requests (FR-14, EDN-14) | M6 |
 | **Prometheus and Grafana** | Scrape `/metrics` inside the network; show latency, errors and resources | M6 |
-| **Better Uptime** | Checks `/health` from outside during the presentation windows (NFR-05, proposed) | M6 |
+| **Better Stack** (formerly Better Uptime) | Checks `/health` from outside every 3 minutes and emails on an outage; its status page and availability figure feed the report (NFR-05, [External uptime check](deployment.md#external-uptime-check)) | M6 |
 | **DVC pipeline** | Turns the raw listings into the model bundle, its metrics and the gate's verdict | Built, `dvc.yaml`, [pipeline](pipeline.md) |
 | **DagsHub** | DVC remote for data and models; hosted MLflow for every run | Built, [data versioning](data-versioning.md) |
 | **CI** (GitHub Actions) | On every pull request: lint, tests on Linux and Windows, Serving runtime, Promotion gate, integration tests through nginx | Built, `.github/workflows/ci.yml` |
@@ -377,7 +377,7 @@ Until the replay job exists, `tests/integration/test_deployed_feedback.py` takes
 ```mermaid
 flowchart LR
     d_user["<b>Client</b>"]
-    d_uptime["<b>Better Uptime</b><br/>M6"]
+    d_uptime["<b>Better Stack</b><br/>M6"]
     d_laptop["<b>Team laptop</b><br/>fallback"]
     d_ghcr[("<b>GHCR</b>")]
 

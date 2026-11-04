@@ -393,6 +393,75 @@ After the [bootstrap](#first-time-bootstrap-a-fresh-vm) and a first deploy by ha
 4. **The variables** (**Settings**, **Secrets and variables**, **Actions**, **Variables**): `SMOKE_URL`, the VM's public URL `http://<vm-host>:<port>` that `make smoke` checks, and then the switch `DEPLOY_TO_VM` = `true`.
 5. **The first run:** run the workflow by hand with the SHA of the newest image, then check its summary and the [rollback drill](#every-deploy) on the VM: deploy a tag whose image does not start, or one whose smoke check fails, and link the run that put the previous tag back in [#198](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/198).
 
+## External uptime check
+
+Prometheus and Grafana run on the VM, so they cannot tell that the VM itself is unreachable.
+Better Stack (formerly Better Uptime, [#226](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226), [EDN-10](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) therefore requests the API's public `/health` from outside, and its figure is the uptime that NFR-05 says is monitored and reported.
+
+| What | Value |
+|------|-------|
+| Checked URL | `http://nattech.fib.upc.edu:40520/health`, plain HTTP, the URL the deploy workflow's smoke job also requests from a GitHub-hosted runner |
+| Monitor | id `5183930`, type `status` (down on any answer but a 2xx), every 180 s, 15 s timeout, from the regions `eu` and `us` |
+| Alert | an incident opens when the failure lasts 180 s (the confirmation period, so one lost packet or one slow answer sends nothing), and the account's team gets an email; it closes after 180 s of passing checks |
+| Status page | <https://recommenditos.betteruptime.com>, 90 days of history |
+| Plan | free plan, as observed on the account: 3-minute checks, email alerts, a status page; the API refused advanced status-page settings (`hide_from_search_engines`) with HTTP 403 |
+
+The setup is `tools/uptime_monitor.py`, so the configuration is reviewed like code and the account can be rebuilt from the repository.
+It needs the team's Uptime API token (Better Stack, **Uptime**, **Settings**, **API tokens**) as `BETTERSTACK_API_TOKEN` in the gitignored `.env`; the script reads it from the environment only and never prints it.
+
+```bash
+set -a; . ./.env; set +a
+uv run python -m tools.uptime_monitor apply --dry-run   # what would change
+uv run python -m tools.uptime_monitor apply             # create or update; a second run says "unchanged"
+```
+
+The monitor, the status page and the status page's entry for the monitor are created when missing, and only the attributes that differ from `tools/uptime_monitor.py` are updated.
+A change to the check, such as its interval, is a change to that file.
+`apply` adopts a monitor only on the exact URL in the file, so a monitor made by hand on the same address with a trailing slash or another scheme would be duplicated, not adopted: delete it first in the Better Stack UI.
+
+The figure for the report comes from the monitor's availability endpoint, for the period the report states (from the day the monitor was created, `2026-11-04`):
+
+```bash
+uv run python -m tools.uptime_monitor export --from 2026-11-04 --to 2026-12-15
+```
+
+It writes `reports/uptime/availability.json`: availability in percent, total downtime in seconds, and the number and the length of the incidents.
+The status page shows the same figure per day.
+
+### Rehearsal of the alert path
+
+NFR-05 promises no unplanned downtime and agents may not stop production, so the API was not stopped.
+A temporary second monitor with the same settings checked `http://nattech.fib.upc.edu:40520/v1/feedback`, which nginx answers with a 403, and was deleted afterwards (`tools/uptime_monitor.py create-monitor` and `delete-monitor`).
+Times are UTC on 2026-11-04, from the incident's timeline in the API ([Better Stack API docs](https://betterstack.com/docs/uptime/api/); the timeline endpoint `GET /incidents/<id>/timeline` is not in Better Stack's API reference; it answers on the account, checked 2026-11-04):
+
+| Event | Time |
+|-------|------|
+| Monitor `5183933` created, its first check fails with 403 | 13:25:37 |
+| "Waiting for 3 minutes before starting the incident", the confirmation period begins | 13:28:08 |
+| Incident `1047238502` is created in the API, "Sent an email to" the account owner | 13:31:11 |
+| Better Stack records that the email was loaded; the email is in Lukas's inbox at 14:31 CET | 13:31:33 |
+
+The email went out 5 min 34 s after the first failing check and 3 min 3 s after the confirmation period began.
+Lukas confirmed it in his inbox (minute resolution): the "New incident started" email from `alerts@alerts.betterstack.com` arrived at 14:31 CET (13:31 UTC) and names "Started at: Nov 4, 2026 at 2:28pm CET" (13:28 UTC), the moment the confirmation period began, so the inbox time agrees with the API's timeline and the email came about 3 minutes after the incident's stated start.
+The first failing check ran 2 min 31 s before that start.
+The "Incident resolved" email, 2:32pm CET, "length 4 minutes", came from Better Stack closing the incident when the rehearsal monitor was deleted, not from a recovery.
+For a real outage, expect the email 3 to 6 minutes after the API stops answering: up to one 180 s check interval until a check fails, plus the 180 s confirmation.
+That is slow against the 30 s recovery target on purpose: a restart that the VM does itself within 30 s never reaches the confirmation period, so only an outage that a person has to fix sends an email.
+
+### Optional drill on the VM
+
+An optional drill that a person runs on the VM, over SSH with the UPClink VPN connected, to see a real outage reach the inbox.
+**Not run**, because NFR-05 promises no unplanned downtime and the rehearsal above has already shown the alert path:
+
+```bash
+ssh -p 22052 recommenditos@<vm>
+docker compose stop api     # nginx answers 503 from now on
+sleep 420                   # longer than the 180 s confirmation plus a 180 s check interval
+docker compose start api
+```
+
+The email arrives after about 3 to 6 minutes, the incident closes after the next passing checks, and the outage counts against the figure; do it well before the presentation window of 2026-12-15.
+
 ## Lab checklist
 
 The checklist was run on the VM on 2026-10-30 and its answers are in [#134](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/134) and in the [specification](specification.md#decisions-pending-confirmation).
