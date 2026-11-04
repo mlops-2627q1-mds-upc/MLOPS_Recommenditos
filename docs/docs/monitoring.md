@@ -366,6 +366,9 @@ From the repository root, with the samples, the model and the index:
 ```bash
 uv run dvc pull monitoring_samples models/lgbm-basic data/processed/comparables.parquet
 export RECOMMENDITOS_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+# The stack refuses to start without these two; locally, alerts go nowhere.
+export GRAFANA_ADMIN_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')
+export DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded
 docker compose -f deploy/compose.yaml up -d --build --wait
 docker compose -f deploy/compose.yaml --profile replay build replay
 docker compose -f deploy/compose.yaml --profile replay run --rm replay \
