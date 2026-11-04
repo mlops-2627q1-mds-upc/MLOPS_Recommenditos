@@ -1,0 +1,11 @@
+# The build context of monitoring/Dockerfile is the repository root; BuildKit
+# reads this file instead of the root .dockerignore for it. Only what the
+# monitoring image copies goes in.
+*
+!monitoring/pyproject.toml
+!monitoring/uv.lock
+!monitoring/recommenditos_monitoring/
+!data/monitoring/
+
+**/__pycache__
+**/*.py[co]

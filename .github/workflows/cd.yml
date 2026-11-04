@@ -7,9 +7,10 @@ run-name: CD of ${{ github.event.workflow_run.head_sha || github.sha }}
 
 # The release of every merge to main: the API image, built with the model and
 # comparables index that dvc.lock points to (FR-12, EDN-08), tested as a Compose
-# stack with the integration suite, and the stack image, the stack files of the
-# same commit (deploy/stack.Dockerfile), both pushed to GHCR as :<commit SHA> and
-# :latest (NFR-13, EDN-91, EDN-94). docs/docs/deployment.md#continuous-delivery
+# stack with the integration suite, the stack image, the stack files of the
+# same commit (deploy/stack.Dockerfile), and the monitoring image (monitoring/Dockerfile)
+# with the samples of the `monitoring_samples` stage, all pushed to GHCR as
+# :<commit SHA> and :latest (NFR-13, EDN-91, EDN-94, EDN-100). docs/docs/deployment.md#continuous-delivery
 # describes it.
 #
 # Started by a finished CI run rather than by the push itself, so that a commit
@@ -142,6 +143,11 @@ jobs:
             echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/api"
             # deploy.sh derives this name from the API image's: .../api -> .../stack.
             echo "STACK_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/stack"
+            # The VM's .env names it in MONITORING_IMAGE; deploy.sh pulls every
+            # image of the stack in this namespace with the release's tag. Not
+            # under that name here: Compose reads this job's environment, and
+            # with it the replay below would name an image nothing built.
+            echo "MONITORING_REPOSITORY=ghcr.io/${GITHUB_REPOSITORY,,}/monitoring"
             echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -149,7 +155,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --locked
-      - name: Pull the model bundle and the comparables index that dvc.lock points to
+      - name: Pull the model bundle, the comparables index and the monitoring samples that dvc.lock points to
         # The only step that sees the DagsHub token. DVC's HTTP remote reads no
         # environment variable, so the credentials go into .dvc/config.local, as
         # on a laptop, and are deleted again when the step ends, whatever the
@@ -168,7 +174,7 @@ jobs:
           trap 'rm -f .dvc/config.local' EXIT
           uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
           uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
-          uv run dvc pull "models/$MODEL_VARIANT" data/processed/comparables.parquet
+          uv run dvc pull "models/$MODEL_VARIANT" data/processed/comparables.parquet data/monitoring
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -211,6 +217,27 @@ jobs:
             org.opencontainers.image.version=${{ env.SHA }}
             org.opencontainers.image.created=${{ env.CREATED }}
             org.opencontainers.image.title=Recommenditos stack files
+      - name: Build the monitoring image
+        # M6's jobs with the samples just pulled (data/monitoring/), from the
+        # same checkout, so a tag names the jobs and the data they replay and
+        # compare with. Its own cache scope, so it does not evict the API's layers.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: monitoring/Dockerfile
+          load: true
+          push: false
+          tags: |
+            recommenditos-monitoring:${{ env.API_IMAGE_TAG }}
+            ${{ env.MONITORING_REPOSITORY }}:${{ env.SHA }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SHA }}
+            org.opencontainers.image.version=${{ env.SHA }}
+            org.opencontainers.image.created=${{ env.CREATED }}
+            org.opencontainers.image.title=Recommenditos monitoring
+          cache-from: type=gha,scope=monitoring
+          cache-to: type=gha,mode=max,scope=monitoring
       - name: Check the image size (NFR-04, at most 1 GB)
         shell: bash
         run: |
@@ -228,12 +255,41 @@ jobs:
           key=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
           echo "::add-mask::$key"
           echo "RECOMMENDITOS_API_KEY=$key" >> "$GITHUB_ENV"
+      - name: Check that the stack runs the images this job pushes
+        # Compose builds the replay's image from the checkout when the name it
+        # resolves names no image, so a name that drifted from the built one
+        # would test and scan a second build instead of the image pushed below.
+        shell: bash
+        run: |
+          check() {
+            local service=$1 pushed=$2 resolved ran built
+            # The service's own image: `config --images <service>` adds those of
+            # the services it depends on.
+            resolved=$(docker compose -f deploy/compose.yaml --profile '*' config --format json \
+              | jq -r --arg service "$service" '.services[$service].image')
+            built=$(docker image inspect --format '{{.Id}}' "$pushed")
+            if ! ran=$(docker image inspect --format '{{.Id}}' "$resolved" 2>/dev/null) || [ "$ran" != "$built" ]; then
+              msg="Compose runs $resolved for $service, which is not the image $pushed this job pushes."
+              echo "::error::$msg"
+              echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            echo "$service runs $resolved, the image $pushed ($built)."
+          }
+          check api "$IMAGE:$SHA"
+          check replay "$MONITORING_REPOSITORY:$SHA"
       - name: Start the stack with the built image
         run: docker compose -f deploy/compose.yaml up -d --no-build --wait
       - name: Run the integration suite against the versions in dvc.lock
         # No RECOMMENDITOS_EXPECTED_* override: /health has to report the hashes
         # dvc.lock records for the bundle and the index (FR-12).
         run: make test-integration
+      - name: Replay a few listings of the baked samples against the stack
+        # The monitoring image with the real samples and the real model: every
+        # listing priced and its price stored, or the replay exits 1.
+        run: |
+          docker compose -f deploy/compose.yaml --profile replay run --rm replay \
+            --control 20 --then es --then-count 20 --rate 10
       - name: Read the versions the image serves
         shell: bash
         run: |
@@ -245,18 +301,21 @@ jobs:
         run: docker compose -f deploy/compose.yaml logs --no-color --timestamps
       - name: Tear the stack down
         if: always()
-        run: docker compose -f deploy/compose.yaml down --volumes
+        run: docker compose -f deploy/compose.yaml --profile '*' down --volumes
 
       # NFR-09: no image with a HIGH or CRITICAL vulnerability that has a fix is
       # pushed. The same canary and scan as CI's integration job, over the images
-      # this stack ran (the API image as recommenditos-api:cd, and nginx), after
-      # the tests and before the push; the result goes into the job summary.
+      # this stack ran (the API image as recommenditos-api:cd, nginx, and the
+      # monitoring image as recommenditos-monitoring:cd, the very images pushed
+      # below, as the check before the start showed), after the tests and before
+      # the push; the result goes into the job summary.
       - uses: ./.github/actions/setup-trivy
       - name: Check that the scan still fails a known-vulnerable image
         run: python3 tools/image_scan.py canary
       - name: Scan the images of the stack (trivy)
         run: |
-          mapfile -t images < <(docker compose -f deploy/compose.yaml config --images)
+          # Every profile, so the monitoring image behind `replay` is scanned too.
+          mapfile -t images < <(docker compose -f deploy/compose.yaml --profile '*' config --images)
           python3 tools/image_scan.py scan "${images[@]}"
 
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -265,14 +324,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push :<commit SHA> and move :latest forward
-        # The stack image first: a commit whose API image is on GHCR has its
-        # stack image there too. :latest only moves forward, for both images
+        # The API image last: a commit whose API image is on GHCR has its
+        # stack and monitoring images there too. :latest only moves forward, for all three
         # together: when the CI runs of two merges finish in the opposite order,
         # the older commit's run must not take :latest back. It stays only where
         # it names a newer commit that contains this one.
         shell: bash
         run: |
-          for image in "$STACK_IMAGE" "$IMAGE"; do
+          for image in "$STACK_IMAGE" "$MONITORING_REPOSITORY" "$IMAGE"; do
             if ! docker push "$image:$SHA"; then
               msg="Pushing $image:$SHA failed. If the log above says denied or forbidden: the organisation must let members create packages, and an existing package must give this repository the Write role under Manage Actions access."
               echo "::error::$msg"
@@ -287,7 +346,7 @@ jobs:
             echo "::notice::Not moving :latest: it is $latest, a newer commit than $SHA."
             echo "LATEST=kept on \`$latest\`, a newer commit" >> "$GITHUB_ENV"
           else
-            for image in "$STACK_IMAGE" "$IMAGE"; do
+            for image in "$STACK_IMAGE" "$MONITORING_REPOSITORY" "$IMAGE"; do
               docker tag "$image:$SHA" "$image:latest"
               docker push "$image:latest"
             done
@@ -297,6 +356,8 @@ jobs:
           echo "DIGEST=${digest#*@}" >> "$GITHUB_ENV"
           digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$STACK_IMAGE:$SHA")
           echo "STACK_DIGEST=${digest#*@}" >> "$GITHUB_ENV"
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$MONITORING_REPOSITORY:$SHA")
+          echo "MONITORING_DIGEST=${digest#*@}" >> "$GITHUB_ENV"
       - name: Write the job summary
         shell: bash
         run: |
@@ -313,6 +374,7 @@ jobs:
             fi
             echo "| Digest | \`$DIGEST\` |"
             echo "| Stack image | \`$STACK_IMAGE:$SHA\`, \`$STACK_DIGEST\` |"
+            echo "| Monitoring image | \`$MONITORING_REPOSITORY:$SHA\`, \`$MONITORING_DIGEST\` |"
             echo "| Model (variant, version) | \`$MODEL_VERSION\` |"
             echo "| Comparables index version | \`$COMPARABLES_VERSION\` |"
             echo "| Size | $IMAGE_SIZE_MB MB (NFR-04: at most 1,000 MB) |"

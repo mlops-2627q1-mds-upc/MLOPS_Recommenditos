@@ -531,7 +531,7 @@ The age rule keeps the age of a replayed listing the one the model was trained o
 - The model learned ages on `reference_date`, 2025-11-08, and the API computes a request's age on the day it answers.
 - The replay shifts each `registration_date` forward by `months_since_reference(send time)`, the whole months from `reference_date` to the send time (`shifted_registration`).
 - The drift job computes the age of a logged request on `as_of_for(answered_at)`, which is `reference_date` advanced by the whole months to the answer time.
-- The two shifts cancel to within three days, the most by which the shifted months and the months after `reference_date` differ in length.
+- The two shifts cancel to within four days (three for a send in the year after `reference_date`), the most by which the shifted months and the months after `reference_date` differ in length.
   Without the second one a window's ages are up to a month too high (+0.066 to +0.079 years on the 4th of a month), which flags `age_years` in 1 or 2 of 20 control windows and breaks NFR-11's control clause; with it, none of the 20 is flagged at any of four answer times tried.
 - A month is complete at 00:00 UTC on the 8th, `reference_date`'s day of the month, not at the end of a calendar month.
   A request sent before that instant and answered after it is read one month older than it was sent; that touches only the requests in flight at the instant, a handful at the replay's rates against a window of 1,000, and is accepted.

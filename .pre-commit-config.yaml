@@ -57,6 +57,15 @@ repos:
         files: ^(recommenditos/|tools/|pyproject\.toml$|uv\.lock$)
         types_or: [python, toml]
         pass_filenames: false
+      # The monitoring jobs have an environment of their own (monitoring/), with
+      # the numpy and pandas Alibi Detect needs, so mypy runs there for them.
+      - id: mypy-monitoring
+        name: mypy (monitoring)
+        entry: uv run --directory monitoring --locked mypy
+        language: system
+        files: ^monitoring/
+        types_or: [python, toml]
+        pass_filenames: false
 
   - repo: https://github.com/kynan/nbstripout
     rev: "0.9.1"
@@ -72,7 +81,7 @@ repos:
     rev: v2.15.1
     hooks:
       - id: hadolint
-        files: ^((reports/latex/)?Dockerfile|deploy/stack\.Dockerfile)$
+        files: ^((reports/latex/|monitoring/)?Dockerfile|deploy/stack\.Dockerfile)$
 
   # Lints the GitHub workflows: expressions, job and step references, action
   # inputs, and the shell of every `run:` with shellcheck, which the wheel of

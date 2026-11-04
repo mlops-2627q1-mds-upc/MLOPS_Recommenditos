@@ -371,7 +371,7 @@ sequenceDiagram
 ```
 
 A 409 means that another price is stored for the answer, or that the answer gave no price, as one of `/v1/comparables` does.
-Until the replay job exists, `tests/integration/test_deployed_feedback.py` takes its place: it calls the endpoint from a sibling container with the key and reads the joined row from the log.
+The replay job is such a sibling container, the Compose service `replay` ([Replay](monitoring.md#replay)); `tests/integration/test_deployed_feedback.py` calls the endpoint the same way, with the key, and reads the joined row from the log.
 
 ## Physical view: deployment
 

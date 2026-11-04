@@ -161,19 +161,22 @@ CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthe
 
 ## Continuous delivery
 
-The `CD` workflow ([`.github/workflows/cd.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/cd.yml)) builds the release of every merge to `main`, the API image and the stack image, and pushes both to GHCR under the same tags (NFR-13, [EDN-91](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)):
+The `CD` workflow ([`.github/workflows/cd.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/cd.yml)) builds the release of every merge to `main`, the API image, the stack image and the monitoring image, and pushes all three to GHCR under the same tags (NFR-13, [EDN-91](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)):
 
 ```text
 ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<full commit SHA>
 ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:latest
 ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/stack:<full commit SHA>
 ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/stack:latest
+ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/monitoring:<full commit SHA>
+ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/monitoring:latest
 ```
 
 The stack image holds the stack files of the commit: everything in `deploy/` except what never travels with a release, which `deploy/.dockerignore` lists: `.env` and its template, and the scripts a person installs once, `bootstrap.sh`, `install-runner.sh` and `deploy.sh` itself.
 A new configuration folder such as `deploy/prometheus/` therefore travels without a change to any list.
 It is built `FROM scratch` and has no command: `deploy.sh` on the VM copies its files out and runs nothing of it, so it has no packages for the image scan to check.
 It stays out of the API image, which keeps holding only code and the model, and whose layers and scan stay as they are.
+The monitoring image (`monitoring/Dockerfile`) holds M6's jobs in their own environment and the samples of the `monitoring_samples` stage they read; the [replay](monitoring.md#replay) runs from it.
 
 It starts when a CI run on a push to `main` finishes, and only if that run passed, so a commit whose CI failed never publishes an image.
 It works on the commit CI tested (`github.event.workflow_run.head_sha`), not on the tip of `main`, which a later merge may have moved.
@@ -183,12 +186,12 @@ A failed step that depends on a GitHub setting, the DagsHub secrets or the permi
 
 For every other commit, one job:
 
-1. pulls `models/lgbm-basic` and `data/processed/comparables.parquet` at the versions `dvc.lock` points to (FR-12, EDN-08);
-2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache, and the stack image from `deploy/` with the same labels;
+1. pulls `models/lgbm-basic`, `data/processed/comparables.parquet` and `data/monitoring/` at the versions `dvc.lock` points to (FR-12, EDN-08);
+2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache, the stack image from `deploy/` and the monitoring image with the samples, with the same labels;
 3. fails if the image is larger than 1 GB (NFR-04);
-4. starts the Compose stack with it and runs the [integration suite](#integration-tests) with no expected-version override, so `/health` has to report the hashes `dvc.lock` records;
-5. scans the API image and the nginx image with trivy and fails on a HIGH or CRITICAL vulnerability that has a fix available ([Vulnerabilities and dependency updates](#vulnerabilities-and-dependency-updates));
-6. pushes `:<commit SHA>` of the stack image, then of the API image, so an API image on GHCR always has its stack image there, and moves `:latest` of both to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
+4. starts the Compose stack with it and runs the [integration suite](#integration-tests) with no expected-version override, so `/health` has to report the hashes `dvc.lock` records, and then a replay of 20 control and 20 ES listings, every one of which must be priced and its price stored;
+5. scans the API image, the nginx image and the monitoring image with trivy and fails on a HIGH or CRITICAL vulnerability that has a fix available ([Vulnerabilities and dependency updates](#vulnerabilities-and-dependency-updates));
+6. pushes `:<commit SHA>` of the stack image and the monitoring image, then of the API image, so an API image on GHCR always has the rest of its release there, and moves `:latest` of all three to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
 7. writes the pushed tags, the digests, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
 
 Only the `dvc pull` step sees the DagsHub token.
@@ -293,7 +296,7 @@ The two that act on the VM run on the self-hosted runner there, which may run no
 
 1. **Prepare** names the commit from the CD run's title (`CD of <SHA>`), and checks that `SMOKE_URL` is set and that CD pushed an image for the commit.
 2. **Deploy on the VM**, the job of the GitHub Environment `production`, reads the tag the VM runs, and skips the commit if the VM already runs a newer one that contains it, which happens when the CD runs of two merges finish in the opposite order (the rule that keeps `:latest` moving forward); GitHub's compare API answers that, since the runner has no clone.
-   It then runs `deploy.sh deploy <SHA> --registry-token-stdin`, which logs in to GHCR with the job's token, pulls the API image and the stack image, deletes the login, puts the stack files beside `.env`, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait --remove-orphans`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag with its stack files again and the run fails.
+   It then runs `deploy.sh deploy <SHA> --registry-token-stdin`, which logs in to GHCR with the job's token, pulls the stack image, then the API image and every other image the new `compose.yaml` names in the release's GHCR namespace with its tag, behind a profile or not, such as the monitoring image, deletes the login, puts the stack files beside `.env`, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait --remove-orphans`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag with its stack files again and the run fails.
 3. **Smoke check** checks out the deployed commit and runs `make smoke` against `SMOKE_URL`, the VM's public address, from outside the VM, the outside view the proxy rules are about.
    It starts once the deploy job has ended, so the new tag serves for as long as this job takes to start and install the environment before it is checked.
 4. **Put the previous tag back** runs on the VM only when the smoke check failed: `deploy.sh rollback` starts the previous tag with its stack files again and the run fails.
@@ -369,6 +372,8 @@ To start the stack again by hand, for example after a change to `.env`, run `./d
 A Compose command by hand has to name the directory behind the link, as `deploy.sh` does, `docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env up -d --wait` from `/opt/recommenditos`: with `-f stack/compose.yaml`, the bind mounts get paths through the link, which differ from `deploy.sh`'s, so Compose recreates the proxy, and the next deploy recreates it again (`docker compose config --hash '*'` shows the difference).
 
 `docker compose up` runs with `--remove-orphans`, so the stack always matches its release: a service that the new `compose.yaml` no longer has, after a rollback for example, loses its container.
+A service behind a profile, such as the [replay](monitoring.md#replay), is part of the release without being started by `up`, and a replay that runs while a deploy happens keeps running; CI's integration job checks that with the runners' Compose (v2.38.2 on 2026-11-04), and it holds for the VM's 2.35.1 too: the check that decides what is an orphan (`isOrphaned`) is the same in both versions, and 2.35.1's compose-go (v2.6.0) reads `--profile '*'`.
+`up` pulls without a login, and the GHCR packages are private, so `deploy.sh` pulls every image of the release itself, with the registry token, and `.env` names the monitoring image's repository in `MONITORING_IMAGE`.
 Its named volumes stay, as do all others, since Compose removes a volume only when asked to with `down -v`; the prediction log survives every deploy and rollback.
 
 Two cases keep the stack files that run now, and `deploy.sh` says so in its log:

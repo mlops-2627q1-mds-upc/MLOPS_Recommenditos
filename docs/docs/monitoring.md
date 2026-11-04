@@ -5,6 +5,7 @@ Milestone 6 watches the running system from three sides.
 Better Stack checks the public `/health` from outside, so it notices when the VM itself is gone ([External uptime check](deployment.md#external-uptime-check)).
 Prometheus, inside the stack, keeps the figures of the API and of the machine it runs on ([Resource monitoring](#resource-monitoring)).
 The drift job, a later part of M6, compares what the API is asked with what the model was trained on ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228)).
+With no real users, its traffic is the [replay](#replay) of held-out listings.
 Grafana's dashboards and the alerts follow in [#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225), on top of the Prometheus described here.
 
 ## Resource monitoring
@@ -117,3 +118,103 @@ The three services are part of the release, so a deploy waits for them as for th
 That is wanted for a broken configuration, which `make prometheus-check` and CI's integration job should catch first, and unwanted for a registry that cannot be reached: the images come from quay.io and ghcr.io, and a VM that cannot pull one keeps the release that runs.
 Their healthchecks therefore probe only that each serves (`/-/ready`, `/healthz`, the landing page), not what it scrapes, so a failing scrape target never fails a deploy.
 Each also restarts on its own after a crash and after a reboot (`restart: unless-stopped`, NFR-05).
+
+## Replay
+
+M6 has no real users ([EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), so the traffic that makes drift, error and coverage visible is a replay of held-out listings ([#227](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227), [EDN-100](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+It sends listings to the running API as a client would, and reports each listing's real price to `/v1/feedback` (FR-10), so the prediction log holds the requests the drift job compares with the training data and the labels it computes the error and the coverage from (NFR-11, FR-14).
+
+It is the service `replay` of `deploy/compose.yaml`, behind the profile `replay`, in the monitoring image (`monitoring/Dockerfile`), and it runs by hand, to its end.
+`up`, and with it every deploy, neither starts it nor removes a running one.
+The monitoring image is its own uv project, `monitoring/`, with numpy 1.26 and pandas 2, because the drift job's Alibi Detect needs them; the API image stays the serving runtime (NFR-04).
+
+### What it sends
+
+The listings come from the samples of the `monitoring_samples` stage, which CD bakes into the image ([The monitoring samples](pipeline.md#the-monitoring-samples)):
+
+| Sample | Listings | What it is |
+|--------|----------|------------|
+| `control` | 20,000 | Listings of `train` outside the drift reference, drawn at random from the same rows, so a control window is i.i.d. with the reference and the drift job must not flag it |
+| `es` | 5,779 | Every listing of the `ES` holdout the API accepts (EDN-03), the market the model never saw, which the drift job must flag |
+
+`--control N` sends the first N control listings, and `--then es` sends the ES listings after them, so a dashboard shows a clean before and after; `--then-count N` stops after N of them.
+The listings are in a random order, so any run of consecutive ones is a random sample of its set.
+The model was fitted on the control listings, so their error and coverage are in-sample and optimistic: they show that the labels flow, not how good the model is.
+The drift job compares the error and coverage of a window with the test values in `metrics.json` instead ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)).
+
+Each listing is sent with the body its sample holds: the fields the listing has, and nothing for a value it lacks, so the log records what such a client sends (#191).
+The listings alternate between `/v1/predict` and `/v1/price-range`, so both endpoints' panels move and a window gets about as many ranges as point estimates.
+They go through nginx, `http://proxy:8080`, as a client's requests do, with `X-Client: replay`, which the log records as `client`.
+
+`registration_date` is moved forward by the whole months from the samples' `reference_date`, 2025-11-08, to the send time.
+The model computes ages on 2025-11-08 and the API on the day it answers, so a listing of the 2025 snapshot replayed a year later would otherwise look a year older, and every control window would be flagged on `age_years`.
+A month is complete at 00:00 UTC on the 8th; the drift job computes the age of a logged request with the same rule, so the two shifts cancel to within four days, three in the year after 2025-11-08 (`drift_features.py`).
+
+After each priced answer, the listing's observed price goes to `http://api:8000/v1/feedback` with the answer's `request_id` and `RECOMMENDITOS_API_KEY` from `.env` in `X-API-Key`, inside the Compose network, because nginx refuses the path from outside.
+A feedback that fails is sent again, up to three times with a growing pause, because the same price again is answered 200 and changes nothing.
+A valuation is sent again only when it surely reached no route: no connection, or a 502 or 503.
+After a read timeout the API may have logged the answer, so it is counted and not sent again, and no listing is logged twice.
+That is why `--timeout` is at most 50 s: after 60 s without the API's answer nginx answers 503 itself (its default `proxy_read_timeout`, mapped to 503 in `deploy/nginx.conf`), the API may still log that listing, and a 503 is sent again, so the replay's own read timeout has to come first.
+A 401 from `/v1/feedback` stops the run, since no price could be stored with that key.
+
+The listings go one at a time at `--rate` per second (5 by default), so 5,000 control listings take about 17 minutes and all 25,779 about 86 minutes; when the API answers more slowly, the rate drops, and the summary says so.
+
+### Run it locally
+
+From the repository root, with the samples, the model and the index:
+
+```bash
+uv run dvc pull monitoring_samples models/lgbm-basic data/processed/comparables.parquet
+export RECOMMENDITOS_API_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+docker compose -f deploy/compose.yaml up -d --build --wait
+docker compose -f deploy/compose.yaml --profile replay build replay
+docker compose -f deploy/compose.yaml --profile replay run --rm replay \
+    --control 300 --then es --then-count 300 --rate 5
+```
+
+`run` starts the API and nginx first if they are not running, and waits for a healthy API.
+The replay streams the samples a listing at a time and keeps only its counts: in the run in [The summary](#the-summary) its container peaked at 76 MB (`memory.peak`, page cache included) of its 256 MiB limit.
+
+### Run it on the VM
+
+Over SSH, with UPClink off campus, as `recommenditos`, from `/opt/recommenditos`, with the paths `deploy.sh` uses ([The stack files on the VM](deployment.md#the-stack-files-on-the-vm)).
+`deploy.sh` pulls the monitoring image of every release beside the API image, so the image of the running tag is there; `.env` names its repository in `MONITORING_IMAGE`, as `.env.template` does.
+A long run goes in the background, so a dropped SSH connection does not end it.
+Its output goes into a file beside `.env` as it is written, because the next deploy's `up --remove-orphans` removes a replay container that has ended, and its logs with it, so the summary must not wait in `docker logs`:
+
+```bash
+ssh -p 22052 recommenditos@nattech.fib.upc.edu
+cd /opt/recommenditos
+docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env --profile replay \
+    run -d --name replay replay --control 5000 --then es --rate 5
+nohup docker logs -f replay > "replay-$(date -u +%Y-%m-%dT%H%M%SZ).log" 2>&1 &
+tail -f replay-*.log           # the progress, and the summary at the end
+docker rm replay               # once it has ended
+```
+
+The drift job's windows of 1,000 requests fill at the rate the replay is given; NFR-11's twenty control windows take the whole control sample.
+
+### The summary
+
+The run ends with one line per sample and a total: the listings sent, the valuations by answer and the feedback by answer, then the duration and the rate it reached.
+It exits 0 when every listing was priced (200) and its price stored (201, or 200 for a repeat), and 1 otherwise; a 409 or 404 from `/v1/feedback` is counted there.
+For example, the run of 300 and 300 listings above on a laptop on 2026-11-04:
+
+```text
+phase    sent  answered  feedback
+control  300   200: 300  201: 300
+es       300   200: 300  201: 300
+total    600   200: 600  201: 600
+duration 119.9 s, 5.01 listings/s (target 5)
+result: ok
+```
+
+### What it leaves in the log
+
+Every replayed answer is a row with `client = 'replay'` and `inputs_sent_only = 1`, which the drift job reads ([Reading the log](api.md#reading-the-log)), and each one with a price has its feedback, which `labelled_predictions` joins to it:
+
+```sql
+SELECT client, inputs_sent_only, endpoint, COUNT(*) FROM predictions GROUP BY 1, 2, 3;
+SELECT json_extract(inputs, '$.country_code') AS country, COUNT(*)
+FROM labelled_predictions GROUP BY 1;
+```

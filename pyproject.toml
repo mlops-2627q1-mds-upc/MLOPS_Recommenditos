@@ -326,12 +326,14 @@ extend-select = ["E", "F", "UP", "B", "SIM", "I", "PL", "S"]
 # of it takes outside input, and a `noqa` on each of those lines would repeat
 # this sentence.
 "tests/**/*.py" = ["PLR2004", "S101", "S310", "S603", "S607"]
+# The tests of the monitoring jobs, in their own uv project (monitoring/), by the same reasoning.
+"monitoring/tests/**/*.py" = ["PLR2004", "S101"]
 # A notebook's `assert` is its check that a figure still reproduces, run cell by
 # cell and never under `python -O`.
 "notebooks/*.ipynb" = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["recommenditos"]
+known-first-party = ["recommenditos", "recommenditos_monitoring"]
 force-sort-within-sections = true
 
 # EDN-83: mypy in its default mode plus `check_untyped_defs`, no `strict`. It reads

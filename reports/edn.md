@@ -1470,6 +1470,33 @@ How to add an entry:
 - **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [PR #284](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/284), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
 - **In LaTeX:** yes
 
+### EDN-100: Held-out listings are replayed by hand from a Compose profile
+
+- **Date:** 2026-11-04
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Containerization
+- **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
+- **Decision:** A `replay` service behind a Compose profile, in a monitoring image that CD pushes with each release, is started by hand, locally or on the VM over SSH.
+  It sends control listings of `train` outside the drift reference, then the `ES` holdout, and posts each observed price to `/v1/feedback`.
+  It shifts `registration_date` by the whole months since 2025-11-08.
+- **Alternatives considered:**
+  - A `deploy.sh replay` subcommand started from a workflow: no VPN needed, but it widens EDN-94's sudo rule for the runner.
+  - A seller-grouped held-out set as control: EDN-14 measured that such a control gets flagged.
+  - The replay inside the API image: NFR-04 keeps that image the serving runtime.
+- **Rationale:** There are no real users (EDN-13), so the replay is the traffic.
+  Only a control i.i.d. with the reference lets NFR-11's control clause pass; its error and coverage are in-sample, so #229 compares them with `metrics.json`.
+  Without the shift, a 2025 listing sent in November 2026 is a year older than in training, which flags `age_years` in every control window.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted with modifications
+- **Assessment of the AI contribution:** AI proposed the design and built it.
+  The review of PR #283 found that a whole-month shift against day-precise ages left up to a month between replay and reference, which flagged 1 or 2 of 20 control windows; a shared as-of rule fixed it before any traffic was sent.
+  A local run logged 600 of 600 listings with their prices.
+- **AI interaction evidence:** Claude Code session of 2026-11-04.
+  Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "Replay: a Compose service with a profile, started with docker compose --profile replay run (locally; on the VM over SSH). Data from a new DVC stage: 10,000 reference, 20,000 control (train without the reference), 6,079 ES. Shifts the registration date by the months since 2025-11-08, otherwise every car looks a year older."
+  Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
+- **Other evidence:** [Issue #227](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227), [PR #285](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/285), [PR #283](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/283), [Replay](../docs/docs/monitoring.md#replay), EDN-14.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

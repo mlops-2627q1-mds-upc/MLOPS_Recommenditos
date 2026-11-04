@@ -1,0 +1,58 @@
+# M6's monitoring jobs, in a locked environment of their own (docs/docs/monitoring.md).
+#
+# The drift job (#228) runs Alibi Detect 0.13, which pins numpy<2 and pandas<3,
+# while the project's uv.lock has numpy 2 and pandas 3, so the jobs cannot share
+# the project's environment; a uv workspace would resolve both into one set, and
+# uv `conflicts` groups break `default-groups = "all"`. This project is
+# its own resolution, with its own uv.lock, and the image monitoring/Dockerfile
+# builds from it. It is not a workspace member of the root project and installs
+# nothing from it: `recommenditos_monitoring/drift_features.py` is a byte-identical
+# copy of `recommenditos/data/drift_features.py`, which tests/test_monitoring_copy.py
+# keeps that way.
+#
+#     make test-monitoring     the tests, in this environment
+#     make typecheck           mypy over the root project and this one
+#
+# Refresh the lock with `uv lock --upgrade --project monitoring`.
+
+[project]
+name = "recommenditos-monitoring"
+version = "0"
+description = "The replay of held-out listings (#227) and the drift job of M6; not a published package."
+requires-python = "~=3.12.0"
+dependencies = [
+    # The HTTP client of the replay, which sends listings to the API and the
+    # observed prices to /v1/feedback.
+    "httpx>=0.28.1",
+    # What drift_features.py imports, at the versions Alibi Detect 0.13 accepts.
+    "numpy>=1.26.4,<2",
+    "pandas>=2.2.3,<3",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.2.0",
+]
+
+[tool.uv]
+# Run from this directory (`python -m recommenditos_monitoring`), never built or
+# installed: the image copies the package next to its environment.
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--strict-markers"
+
+# The same mode as the root project's (EDN-83): the default plus
+# `check_untyped_defs`, and pandas, which ships no types, ignored by name.
+[tool.mypy]
+files = ["recommenditos_monitoring", "tests"]
+python_version = "3.12"
+platform = "linux"
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["pandas.*"]
+ignore_missing_imports = true

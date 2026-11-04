@@ -167,8 +167,11 @@ def test_the_registry_flag_needs_one_token_on_standard_input(tmp_path: Path, std
 
 #: A stand-in for `docker` that records each call's arguments and environment,
 #: and what `docker login` reads on standard input. The images listed in
-#: $FAKE_LOCAL_IMAGES are on the VM; a pull fails with $FAKE_PULL_ANSWER; the
-#: stack image's files are those of $FAKE_STACK_FILES; `compose up` succeeds.
+#: $FAKE_LOCAL_IMAGES are on the VM; a pull of one listed in $FAKE_PULLABLE
+#: succeeds, any other fails with $FAKE_PULL_ANSWER; the stack image's files are
+#: those of $FAKE_STACK_FILES; `compose up` succeeds. The stack's images are the
+#: API image, nginx and one image per repository in $FAKE_RELEASE_REPOSITORIES,
+#: all with the tag but nginx.
 FAKE_DOCKER = """#!/usr/bin/env bash
 log=$FAKE_DOCKER_LOG
 { printf 'argv:'; printf ' %s' "$@"; printf '\\n'; env | sed 's/^/env: /'; } >>"$log"
@@ -176,6 +179,13 @@ case "$1" in
     compose)
         case "$*" in
             *"config --images api"*) echo "ghcr.io/example/api:$API_IMAGE_TAG" ;;
+            *"--profile * config --images"*)
+                echo "ghcr.io/example/api:$API_IMAGE_TAG"
+                echo "nginxinc/nginx-unprivileged:1.30-alpine-slim@sha256:0123"
+                while read -r repository; do
+                    echo "$repository:$API_IMAGE_TAG"
+                done <"${FAKE_RELEASE_REPOSITORIES:-/dev/null}"
+                ;;
         esac
         ;;
     image)
@@ -189,6 +199,10 @@ case "$1" in
         ;;
     pull)
         printf 'pull of %s with DOCKER_CONFIG=%s\\n' "$3" "${DOCKER_CONFIG:-}" >>"$log"
+        if grep -qxF "$3" "${FAKE_PULLABLE:-/dev/null}"; then
+            echo "$3" >>"$FAKE_LOCAL_IMAGES"
+            exit 0
+        fi
         echo "Error response from daemon: $FAKE_PULL_ANSWER" >&2
         exit 1
         ;;
@@ -200,6 +214,7 @@ esac
 OLD = "1" * 40
 API_IMAGE = "ghcr.io/example/api"
 STACK_IMAGE = "ghcr.io/example/stack"
+MONITORING_IMAGE = "ghcr.io/example/monitoring"
 
 
 class FakeVM:
@@ -430,3 +445,103 @@ def test_a_stack_image_with_a_link_is_refused(tmp_path: Path):
     assert "such as a link" in result.stdout
     assert vm.env_file.read_text(encoding="utf-8") == env_before
     assert vm.stack_link() == "stacks/0123456789abcdef"
+
+
+def with_monitoring_image(vm: FakeVM, tmp_path: Path) -> None:
+    """A release whose compose.yaml names the monitoring image too, and images elsewhere.
+
+    Two of those elsewhere share the namespace's prefix without being in it, so a
+    filter that matches the prefix instead of the namespace pulls them too.
+    """
+    repositories = tmp_path / "release-repositories"
+    repositories.write_text(
+        f"{MONITORING_IMAGE}\nghcr.io/elsewhere/tool\nghcr.io/example-evil/tool\n"
+        "ghcr.io/examples/monitoring\nrecommenditos-monitoring\n",
+        encoding="utf-8",
+    )
+    vm.environment["FAKE_RELEASE_REPOSITORIES"] = str(repositories)
+    vm.local_images.write_text(f"{API_IMAGE}:{SHA}\n{STACK_IMAGE}:{SHA}\n", encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13", "NFR-15")
+def test_every_image_of_the_release_in_its_namespace_is_pulled_with_the_one_login(
+    tmp_path: Path,
+):
+    """A service behind a profile, such as the replay, is one `up` would never pull."""
+    vm = FakeVM(tmp_path)
+    with_monitoring_image(vm, tmp_path)
+    pullable = tmp_path / "pullable"
+    pullable.write_text(f"{MONITORING_IMAGE}:{SHA}\n", encoding="utf-8")
+    vm.environment["FAKE_PULLABLE"] = str(pullable)
+
+    result = vm.run("deploy", SHA, FLAG)
+
+    calls = vm.log.read_text(encoding="utf-8")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls.count("argv: login") == 1
+    pulled = [line.split()[2] for line in calls.splitlines() if line.startswith("pull of ")]
+    assert pulled == [f"{MONITORING_IMAGE}:{SHA}"]
+    assert f"pull of {MONITORING_IMAGE}:{SHA} with DOCKER_CONFIG={tmp_path}" in calls
+    assert "--profile * config --images" in calls
+    assert f"API_IMAGE_TAG={SHA}\n" in vm.env_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13")
+def test_a_tag_without_a_stack_image_pulls_only_its_api_image(tmp_path: Path):
+    """The stack files that run now name a monitoring image such a tag never had."""
+    vm = FakeVM(tmp_path)
+    with_monitoring_image(vm, tmp_path)
+    vm.local_images.write_text("", encoding="utf-8")
+    pullable = tmp_path / "pullable"
+    pullable.write_text(f"{API_IMAGE}:{SHA}\n", encoding="utf-8")
+    vm.environment["FAKE_PULLABLE"] = str(pullable)
+
+    result = vm.run("deploy", SHA, FLAG)
+
+    calls = vm.log.read_text(encoding="utf-8")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"{SHA} has no stack image" in result.stdout
+    pulled = [line.split()[2] for line in calls.splitlines() if line.startswith("pull of ")]
+    assert pulled == [f"{STACK_IMAGE}:{SHA}", f"{API_IMAGE}:{SHA}"]
+    assert f"API_IMAGE_TAG={SHA}\n" in vm.env_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13")
+def test_a_release_image_that_cannot_be_pulled_changes_nothing(tmp_path: Path):
+    vm = FakeVM(tmp_path)
+    with_monitoring_image(vm, tmp_path)
+    vm.environment["FAKE_PULL_ANSWER"] = "denied"
+    env_before = vm.env_file.read_text(encoding="utf-8")
+
+    result = vm.run("deploy", SHA, FLAG)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"pulling {MONITORING_IMAGE}:{SHA} failed; nothing changed" in result.stdout
+    assert vm.env_file.read_text(encoding="utf-8") == env_before
+    assert vm.stack_link() == "stacks/0123456789abcdef"
+    assert " up " not in vm.log.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-04")
+def test_a_deploy_removes_the_old_tags_of_every_release_image(tmp_path: Path):
+    """Two deploys back goes, the previous tag stays, as for the API image."""
+    vm = FakeVM(tmp_path)
+    with_monitoring_image(vm, tmp_path)
+    older = "2" * 40
+    with vm.local_images.open("a", encoding="utf-8") as local:
+        for tag in (OLD, older):
+            local.write(f"{API_IMAGE}:{tag}\n{MONITORING_IMAGE}:{tag}\n")
+        local.write(f"{MONITORING_IMAGE}:{SHA}\n")
+    (vm.stack / "deploy-history.log").write_text(
+        f"2026-11-01T00:00:00Z deploy {older} ok\n2026-11-02T00:00:00Z deploy {OLD} ok\n",
+        encoding="utf-8",
+    )
+
+    result = vm.run("deploy", SHA)
+
+    calls = vm.log.read_text(encoding="utf-8")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"argv: image rm {API_IMAGE}:{older}" in calls
+    assert f"argv: image rm {MONITORING_IMAGE}:{older}" in calls
+    assert f"argv: image rm {MONITORING_IMAGE}:{OLD}" not in calls
+    assert f"argv: image rm {MONITORING_IMAGE}:{SHA}" not in calls
