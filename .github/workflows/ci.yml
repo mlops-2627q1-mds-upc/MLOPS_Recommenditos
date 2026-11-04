@@ -612,10 +612,11 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # A scan that finds nothing is evidence only if it could have found
-      # something, and gitleaks has no rule of its own for a DagsHub token. The
-      # canary plants tokens in a throwaway history and scans it with the very
-      # command the next step runs, so it fails on whatever would blind that scan.
-      - name: Check that the scan still finds a DagsHub token
+      # something, and gitleaks has no rule of its own for a DagsHub token or a
+      # Discord webhook URL. The canary plants both in a throwaway history and
+      # scans it with the very command the next step runs, so it fails on
+      # whatever would blind that scan.
+      - name: Check that the scan still finds a DagsHub token and a Discord webhook URL
         run: python3 tools/secret_scan.py canary
       - name: Scan every commit GitHub publishes
         id: scan

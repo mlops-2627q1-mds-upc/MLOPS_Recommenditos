@@ -190,14 +190,15 @@ The data sources the image bundles besides Prometheus are turned off: each would
 Prometheus evaluates the alerting rules in `deploy/prometheus/rules/` every 15 s and hands what fires to Alertmanager, which posts it to the team's Discord channel through a webhook ([EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 Each message carries the alert's summary, what to do, a link to its section below and a link to its dashboard panel through the [tunnel](#open-it).
 Alertmanager groups the alerts by name, waits 30 s so that alerts firing together arrive in one message, posts again every 4 hours while a problem lasts, and posts when it is resolved.
-While the API is down, its latency and error alerts are held back.
+While the API is down, its latency and error alerts are held back, and while ErrorRateHigh fires, so is ServerErrors.
 
 | Alert | Fires when | For | Severity |
 |-------|------------|-----|----------|
 | [ApiDown](#apidown) | Prometheus cannot scrape `api:8000` | 1 minute | critical |
-| [PredictLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) | more than 5 % of the `/v1/predict` answers of the last 5 minutes took over 250 ms, that is, the p95 is above NFR-02's target, with at least 100 answers | 5 minutes | warning |
+| [PredictLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) | more than 5 % of the `/v1/predict` answers of the last minute took over 250 ms, that is, the p95 is above NFR-02's target, with at least 20 answers in that minute | 5 minutes | warning |
 | [RangeLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) | the same for `/v1/price-range` or `/v1/comparables` and 300 ms, per route | 5 minutes | warning |
-| [ErrorRateHigh](#errorratehigh) | more than 1 % of the `/v1/` answers of the last 5 minutes are server errors (5xx), with at least 100 answers | 5 minutes | critical |
+| [ErrorRateHigh](#errorratehigh) | more than 1 % of the `/v1/` answers of the last minute are server errors (5xx), with at least 20 answers in that minute | 5 minutes | critical |
+| [ServerErrors](#servererrors) | the API answered at least 5 `/v1/` requests with a server error in the last 15 minutes, at any traffic | at once | warning |
 | [DiskFreeLow](#diskfreelow) | the host's root file system has less than 4 GB free | 5 minutes | critical |
 | [HostMemoryLow](#hostmemorylow) | the host has less than 512 MiB available | 5 minutes | warning |
 | [ContainerMemoryNearLimit](#containermemorynearlimit) | a container uses more than 90 % of its memory limit | 5 minutes | warning |
@@ -209,7 +210,12 @@ Why these thresholds:
 - **Latency** is read from the histogram's 0.25 s and 0.3 s buckets, which are NFR-02's targets, so "more than 5 % slower than the target" is exact where an interpolated p95 is not; five minutes are as long as NFR-03's load test.
 - **Errors** count server errors only: a 4xx is the API's correct answer to a bad request (FR-16), and the public internet sends many.
   The `/v1/` routes only, so that the healthcheck's `/health` every 5 s does not dilute the share; the dashboard shows the 4xx share beside it.
-- **At least 100 answers** in the 5 minutes, so that five slow answers or one server error on a quiet day do not fire.
+- **A one-minute share, for 5 minutes:** the share is taken over the last minute and must be above the target on every evaluation, every 15 s, for 5 minutes, so a breach fires only after it has lasted about 5 minutes; the rules' tests show a 6-minute breach at the replay's 5 requests per second firing 5 minutes 15 s after it began.
+  A share over 5 minutes would stay above the target for 5 minutes after a spike of 30 s, so with `for: 5m` it would fire on that spike: at the replay's rate, any half minute of a busy vCPU (the drift job runs every 15 minutes) would post a firing and a resolved message to Discord.
+  The tests show a one-minute spike of slow answers, and one of server errors, staying quiet.
+- **At least 20 answers** in that minute, the rate of 100 in 5 minutes, so that one slow answer or one server error on a quiet day does not fire.
+- **ServerErrors** has no such floor: outside the replay and the load tests the API gets almost no traffic ([EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), and ErrorRateHigh would not see an API that fails every one of its 10 requests a minute.
+  A healthy API answers no server errors at all, so five in 15 minutes are worth a look at any traffic; Prometheus' `increase` does not count the first answer of a status code the API has not given since it started, so it takes up to six.
 - **Disk:** NFR-04's 4 GB floor is headroom, not the end of the disk, so the alert fires with room left to act.
 - **Host memory:** the VM has no swap, so memory that runs out ends with the kernel killing a process; 512 MiB is the drift job's peak of up to 400 MiB per run with room to spare.
 - **Restarts:** one restart is NFR-05 working (a crash, or a hang the healthcheck ends, EDN-93); three in half an hour are a loop.
@@ -226,12 +232,14 @@ Alertmanager does not expand environment variables in its configuration, and rea
 A Compose secret would keep it out of `docker inspect` too, but Compose does not mount one from the environment into a read-only container.
 
 A local stack (`make stack`) and CI's get a webhook that goes nowhere, so a laptop's or a runner's alerts never reach the team; `make stack LOCAL_DISCORD_WEBHOOK_URL=<url>` sends them somewhere on purpose.
-The receiver was tested on 2026-11-04 with one test alert from a local Alertmanager to the team's channel.
+The receiver was tested on 2026-11-04: a local Alertmanager posted the test alert `DiscordReceiverTest` (about 18:15 UTC) to the team's channel, where it arrived.
 
 ### What the alerts do not cover
 
 - **Prometheus or Alertmanager down.** Nothing then evaluates or sends the alerts, and nothing says so; the dashboard's target health shows it, and Better Stack still notices the API being gone ([External uptime check](deployment.md#external-uptime-check)).
 - **The VM or its network down.** The same: Better Stack's check from outside sends its own email.
+- **Slowness on a quiet API.** The latency alerts need 20 answers a minute, so outside the replay and the load tests a slow API stays unnoticed; ServerErrors covers only its errors.
+- **Fewer than five server errors in 15 minutes**, and errors that nginx answers itself (a 502 or 503 when the API does not answer in time): the API's metrics count only the answers it gives, and ApiDown and Better Stack cover an API that gives none.
 - **Drift, error and coverage** of the model follow in [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230), as more rule files in `deploy/prometheus/rules/` and more panels.
 
 ### Runbook
@@ -261,6 +269,15 @@ More than 1 % of the `/v1/` answers were server errors for five minutes.
 
 1. `docker logs --since 10m recommenditos-api-1`: the failing requests, their status codes and request IDs, and the tracebacks.
 2. A full disk or a locked prediction log shows in the disk panel and the log; free space ([DiskFreeLow](#diskfreelow)).
+3. If the errors began with a deploy, `./deploy.sh rollback`.
+
+#### ServerErrors
+
+The API answered at least five `/v1/` requests with a server error (5xx) in the last 15 minutes, which a healthy API never does, at any traffic.
+On a busy API that stays above NFR-03's 1 %, [ErrorRateHigh](#errorratehigh) follows and holds this warning back.
+
+1. `docker logs --since 20m recommenditos-api-1`: the failing requests, their status codes, request IDs and tracebacks.
+2. One client's requests, or every request? A single malformed body that the API fails on instead of answering 422 is a bug: open an issue with the request ID.
 3. If the errors began with a deploy, `./deploy.sh rollback`.
 
 #### DiskFreeLow

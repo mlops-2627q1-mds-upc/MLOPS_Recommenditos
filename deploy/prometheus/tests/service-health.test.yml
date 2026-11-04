@@ -33,18 +33,21 @@ tests:
           it, roll back with `./deploy.sh rollback`.
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#apidown
         dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-1
+# The latency and error shares: series every 15 s, as Prometheus scrapes, since
+# the shares are taken over one minute. "a+bxn" with b = 15 is 1 request per
+# second, b = 75 is the replay's 5.
 - name: PredictLatencyHigh fires when more than 5 % of the valuations take over 250 ms for 5 minutes
-  interval: 1m
+  interval: 15s
   input_series:
   - series: http_request_duration_seconds_count{path="/v1/predict",method="POST",status="200"}
-    values: 0+60x20
+    values: 0+15x80
   - series: http_request_duration_seconds_bucket{path="/v1/predict",method="POST",status="200",le="0.25"}
-    values: 0+54x20
+    values: 0+13.5x80
   alert_rule_test:
   - eval_time: 5m
     alertname: PredictLatencyHigh
     exp_alerts: []
-  - eval_time: 10m
+  - eval_time: 6m
     alertname: PredictLatencyHigh
     exp_alerts:
     - exp_labels:
@@ -56,17 +59,17 @@ tests:
           check the API's CPU and the last deploy, and roll back if it brought the slowdown.
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#predictlatencyhigh-and-rangelatencyhigh
         dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-7
-- name: PredictLatencyHigh stays quiet below 5 % slow, and below 100 answers in 5 minutes
-  interval: 1m
+- name: PredictLatencyHigh stays quiet below 5 % slow, and below 20 answers a minute
+  interval: 15s
   input_series:
   - series: http_request_duration_seconds_count{path="/v1/predict",method="POST",status="200"}
-    values: 0+60x20
+    values: 0+15x80
   - series: http_request_duration_seconds_bucket{path="/v1/predict",method="POST",status="200",le="0.25"}
-    values: 0+58x20
+    values: 0+14.5x80
   - series: http_request_duration_seconds_count{path="/v1/price-range",method="POST",status="200"}
-    values: 0+10x20
+    values: 0+4x80
   - series: http_request_duration_seconds_bucket{path="/v1/price-range",method="POST",status="200",le="0.3"}
-    values: 0+5x20
+    values: 0+2x80
   alert_rule_test:
   - eval_time: 15m
     alertname: PredictLatencyHigh
@@ -74,17 +77,57 @@ tests:
   - eval_time: 15m
     alertname: RangeLatencyHigh
     exp_alerts: []
+# A spike of slow answers as a busy vCPU causes one, at the replay's rate: every
+# answer slower than 250 ms from 2m to 3m. The share is above 5 % for under
+# two minutes, so the alert stays pending and never posts.
+- name: PredictLatencyHigh stays quiet through a 1-minute spike at the replay's 5 requests per second
+  interval: 15s
+  input_series:
+  - series: http_request_duration_seconds_count{path="/v1/predict",method="POST",status="200"}
+    values: 0+75x80
+  - series: http_request_duration_seconds_bucket{path="/v1/predict",method="POST",status="200",le="0.25"}
+    values: 0+75x8 600x4 600+75x67
+  alert_rule_test:
+  - {eval_time: 3m, alertname: PredictLatencyHigh, exp_alerts: []}
+  - {eval_time: 4m, alertname: PredictLatencyHigh, exp_alerts: []}
+  - {eval_time: 7m30s, alertname: PredictLatencyHigh, exp_alerts: []}
+  - {eval_time: 10m, alertname: PredictLatencyHigh, exp_alerts: []}
+# Every answer slow from 2m to 8m: the share is above 5 % from 2m15s, so the
+# alert fires 5 minutes later, at 7m15s, and resolves once the minute after the
+# breach is clean.
+- name: PredictLatencyHigh fires 5 minutes 15 s into a 6-minute breach at the replay's rate
+  interval: 15s
+  input_series:
+  - series: http_request_duration_seconds_count{path="/v1/predict",method="POST",status="200"}
+    values: 0+75x80
+  - series: http_request_duration_seconds_bucket{path="/v1/predict",method="POST",status="200",le="0.25"}
+    values: 0+75x8 600x23 675+75x47
+  alert_rule_test:
+  - {eval_time: 7m, alertname: PredictLatencyHigh, exp_alerts: []}
+  - eval_time: 7m15s
+    alertname: PredictLatencyHigh
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: 'The p95 of /v1/predict is above NFR-02''s 250 ms: 100% of its answers took longer.'
+        description: Look at the dashboard for what else uses the one vCPU at the same time (the CPU panel)
+          and for a traffic peak. A load test or the replay running is expected to cause it; otherwise
+          check the API's CPU and the last deploy, and roll back if it brought the slowdown.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#predictlatencyhigh-and-rangelatencyhigh
+        dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-7
+  - {eval_time: 10m, alertname: PredictLatencyHigh, exp_alerts: []}
 - name: RangeLatencyHigh fires per route, against 300 ms
-  interval: 1m
+  interval: 15s
   input_series:
   - series: http_request_duration_seconds_count{path="/v1/price-range",method="POST",status="200"}
-    values: 0+60x20
+    values: 0+15x80
   - series: http_request_duration_seconds_bucket{path="/v1/price-range",method="POST",status="200",le="0.3"}
-    values: 0+54x20
+    values: 0+13.5x80
   - series: http_request_duration_seconds_count{path="/v1/comparables",method="POST",status="200"}
-    values: 0+60x20
+    values: 0+15x80
   - series: http_request_duration_seconds_bucket{path="/v1/comparables",method="POST",status="200",le="0.3"}
-    values: 0+59x20
+    values: 0+14.75x80
   alert_rule_test:
   - eval_time: 10m
     alertname: RangeLatencyHigh
@@ -100,14 +143,14 @@ tests:
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#predictlatencyhigh-and-rangelatencyhigh
         dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-8
 - name: ErrorRateHigh fires above 1 % server errors of the /v1/ answers
-  interval: 1m
+  interval: 15s
   input_series:
   - series: http_requests_total{path="/v1/predict",method="POST",status="200"}
-    values: 0+57x20
+    values: 0+14.25x80
   - series: http_requests_total{path="/v1/predict",method="POST",status="500"}
-    values: 0+3x20
+    values: 0+0.75x80
   - series: http_requests_total{path="/v1/predict",method="POST",status="422"}
-    values: 0+30x20
+    values: 0+7.5x80
   alert_rule_test:
   - eval_time: 10m
     alertname: ErrorRateHigh
@@ -122,18 +165,102 @@ tests:
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#errorratehigh
         dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-9
 - name: ErrorRateHigh ignores client errors and the routes outside /v1/
-  interval: 1m
+  interval: 15s
   input_series:
   - series: http_requests_total{path="/v1/predict",method="POST",status="200"}
-    values: 0+60x20
+    values: 0+15x80
   - series: http_requests_total{path="/v1/predict",method="POST",status="404"}
-    values: 0+30x20
+    values: 0+7.5x80
   - series: http_requests_total{path="/health",method="POST",status="500"}
-    values: 0+12x20
+    values: 0+3x80
   alert_rule_test:
   - eval_time: 15m
     alertname: ErrorRateHigh
     exp_alerts: []
+  - eval_time: 15m
+    alertname: ServerErrors
+    exp_alerts: []
+# Every answer a server error from 2m to 3m at the replay's rate: ErrorRateHigh
+# stays quiet, ServerErrors posts its warning (and Alertmanager would hold it
+# back only while ErrorRateHigh fires).
+- name: ErrorRateHigh stays quiet through a 1-minute burst of server errors at the replay's rate
+  interval: 15s
+  input_series:
+  - series: http_requests_total{path="/v1/predict",method="POST",status="200"}
+    values: 0+75x8 600x4 600+75x67
+  - series: http_requests_total{path="/v1/predict",method="POST",status="500"}
+    values: 0x8 0+75x4 300x67
+  alert_rule_test:
+  - {eval_time: 3m, alertname: ErrorRateHigh, exp_alerts: []}
+  - {eval_time: 4m, alertname: ErrorRateHigh, exp_alerts: []}
+  - {eval_time: 7m30s, alertname: ErrorRateHigh, exp_alerts: []}
+  - eval_time: 4m
+    alertname: ServerErrors
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: The API answered 300 /v1/ requests with a server error in the last 15 minutes.
+        description: Read the API's log for the 5xx answers and their request IDs (`docker logs --since 20m
+          recommenditos-api-1`). A healthy API answers none, at any traffic; if they started with a deploy,
+          roll back with `./deploy.sh rollback`.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#servererrors
+        dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-9
+- name: ErrorRateHigh fires 5 minutes 15 s into a 6-minute breach at the replay's rate
+  interval: 15s
+  input_series:
+  - series: http_requests_total{path="/v1/predict",method="POST",status="200"}
+    values: 0+75x8 600x23 675+75x47
+  - series: http_requests_total{path="/v1/predict",method="POST",status="500"}
+    values: 0x8 75+75x23 1800x48
+  alert_rule_test:
+  - {eval_time: 7m, alertname: ErrorRateHigh, exp_alerts: []}
+  - eval_time: 7m15s
+    alertname: ErrorRateHigh
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+      exp_annotations:
+        summary: 100% of the /v1/ answers are server errors, above NFR-03's 1 %.
+        description: Read the API's log for the 5xx answers and their request IDs (`docker logs recommenditos-api-1`).
+          If they started with a deploy, roll back with `./deploy.sh rollback`; if the prediction log's
+          disk or lock is the cause, see the disk and memory panels.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#errorratehigh
+        dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-9
+  - {eval_time: 10m, alertname: ErrorRateHigh, exp_alerts: []}
+# A quiet API, 10 requests a minute, every one a server error for 30 minutes:
+# below ErrorRateHigh's 20 answers a minute, so only ServerErrors sees it,
+# within its first minute. Its
+# status 500 series appears with the first error, which `increase` does not
+# count.
+- name: ServerErrors fires on a quiet API that ErrorRateHigh cannot see
+  interval: 15s
+  input_series:
+  - series: http_requests_total{path="/v1/predict",method="POST",status="500"}
+    values: 1+2.5x120
+  alert_rule_test:
+  - {eval_time: 15s, alertname: ServerErrors, exp_alerts: []}
+  - {eval_time: 30m, alertname: ErrorRateHigh, exp_alerts: []}
+  - eval_time: 30m
+    alertname: ServerErrors
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: The API answered 150 /v1/ requests with a server error in the last 15 minutes.
+        description: Read the API's log for the 5xx answers and their request IDs (`docker logs --since 20m
+          recommenditos-api-1`). A healthy API answers none, at any traffic; if they started with a deploy,
+          roll back with `./deploy.sh rollback`.
+        runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#servererrors
+        dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-9
+- name: ServerErrors stays quiet for four server errors in 15 minutes
+  interval: 1m
+  input_series:
+  - series: http_requests_total{path="/v1/predict",method="POST",status="500"}
+    values: 0 1 2 3 4x30
+  alert_rule_test:
+  - {eval_time: 5m, alertname: ServerErrors, exp_alerts: []}
+  - {eval_time: 16m, alertname: ServerErrors, exp_alerts: []}
 - name: DiskFreeLow fires below NFR-04's 4 GB on the root file system only
   interval: 1m
   input_series:

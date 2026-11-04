@@ -15,9 +15,17 @@
 # ../tests/service-health.test.yml (make prometheus-check, CI).
 #
 # The API's figures count only the /v1/ routes, the ones the NFRs are about:
-# the healthcheck's /health every 5 s would dilute every share. A share needs at
-# least 100 answers in its 5 minutes, so that a handful of answers on a quiet
-# day cannot make one.
+# the healthcheck's /health every 5 s would dilute every share.
+#
+# The latency and error shares are taken over the last minute and must stay
+# above their target on every evaluation for 5 minutes, so a breach has to last
+# about 4 to 5 minutes to fire. A 5-minute window held for 5 minutes would fire
+# on a spike of under a minute instead, as long as the spike stays in the
+# window, and at the replay's 5 requests per second the drift job's run every
+# 15 minutes could then post firing and resolved messages to Discord. A share
+# needs at least 20 answers in its minute, the same rate as 100 in 5 minutes, so
+# that a handful of answers on a quiet day cannot make one; ServerErrors covers
+# the quiet API instead.
 
 groups:
   - name: service-health
@@ -44,10 +52,10 @@ groups:
       - alert: PredictLatencyHigh
         expr: |
           (
-            1 - sum(rate(http_request_duration_seconds_bucket{path="/v1/predict",le="0.25"}[5m]))
-              / sum(rate(http_request_duration_seconds_count{path="/v1/predict"}[5m]))
+            1 - sum(rate(http_request_duration_seconds_bucket{path="/v1/predict",le="0.25"}[1m]))
+              / sum(rate(http_request_duration_seconds_count{path="/v1/predict"}[1m]))
           ) > 0.05
-          and sum(increase(http_request_duration_seconds_count{path="/v1/predict"}[5m])) >= 100
+          and sum(increase(http_request_duration_seconds_count{path="/v1/predict"}[1m])) >= 20
         for: 5m
         labels:
           severity: warning
@@ -61,10 +69,10 @@ groups:
       - alert: RangeLatencyHigh
         expr: |
           (
-            1 - sum by (path) (rate(http_request_duration_seconds_bucket{path=~"/v1/(price-range|comparables)",le="0.3"}[5m]))
-              / sum by (path) (rate(http_request_duration_seconds_count{path=~"/v1/(price-range|comparables)"}[5m]))
+            1 - sum by (path) (rate(http_request_duration_seconds_bucket{path=~"/v1/(price-range|comparables)",le="0.3"}[1m]))
+              / sum by (path) (rate(http_request_duration_seconds_count{path=~"/v1/(price-range|comparables)"}[1m]))
           ) > 0.05
-          and sum by (path) (increase(http_request_duration_seconds_count{path=~"/v1/(price-range|comparables)"}[5m])) >= 100
+          and sum by (path) (increase(http_request_duration_seconds_count{path=~"/v1/(price-range|comparables)"}[1m])) >= 20
         for: 5m
         labels:
           severity: warning
@@ -80,10 +88,10 @@ groups:
       - alert: ErrorRateHigh
         expr: |
           (
-            sum(rate(http_requests_total{path=~"/v1/.+",status=~"5.."}[5m]))
-              / sum(rate(http_requests_total{path=~"/v1/.+"}[5m]))
+            sum(rate(http_requests_total{path=~"/v1/.+",status=~"5.."}[1m]))
+              / sum(rate(http_requests_total{path=~"/v1/.+"}[1m]))
           ) > 0.01
-          and sum(increase(http_requests_total{path=~"/v1/.+"}[5m])) >= 100
+          and sum(increase(http_requests_total{path=~"/v1/.+"}[1m])) >= 20
         for: 5m
         labels:
           severity: critical
@@ -91,6 +99,22 @@ groups:
           summary: "{{ $value | humanizePercentage }} of the /v1/ answers are server errors, above NFR-03's 1 %."
           description: "Read the API's log for the 5xx answers and their request IDs (`docker logs recommenditos-api-1`). If they started with a deploy, roll back with `./deploy.sh rollback`; if the prediction log's disk or lock is the cause, see the disk and memory panels."
           runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#errorratehigh"
+          dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-9"
+
+      # ErrorRateHigh needs 20 answers a minute, which only the replay and the
+      # load tests send (EDN-13): a quiet API that answers every request with a
+      # server error would never reach it. A healthy API answers none, so five
+      # in 15 minutes are worth a look at any traffic. Prometheus' `increase`
+      # does not count the first answer of a status code the API has not
+      # answered before since its start, so it takes up to six.
+      - alert: ServerErrors
+        expr: sum(increase(http_requests_total{path=~"/v1/.+",status=~"5.."}[15m])) >= 5
+        labels:
+          severity: warning
+        annotations:
+          summary: 'The API answered {{ $value | printf "%.0f" }} /v1/ requests with a server error in the last 15 minutes.'
+          description: "Read the API's log for the 5xx answers and their request IDs (`docker logs --since 20m recommenditos-api-1`). A healthy API answers none, at any traffic; if they started with a deploy, roll back with `./deploy.sh rollback`."
+          runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#servererrors"
           dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-9"
 
       # NFR-04: at least 4 GB of the VM's 20 GB disk stay free. The floor is the

@@ -727,7 +727,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "API memory against its 768 MiB limit",
-      "description": "The API container's working set, the memory the kernel counts against its limit, from cAdvisor; the line is the container's limit from deploy/compose.yaml. Up to 60 s old.",
+      "description": "The API container's working set, the memory the kernel counts against its limit, from cAdvisor; the red dashed line is the container's limit from deploy/compose.yaml. Up to 60 s old.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -792,7 +792,33 @@
           },
           "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "limit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -951,7 +977,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Host memory available",
-      "description": "MemAvailable of the host and its total; the VM has 3.8 GiB and no swap. The line is HostMemoryLow's 512 MiB: the drift job needs up to 400 MiB for a run.",
+      "description": "MemAvailable of the host and its total; the VM has 3.8 GiB and no swap. The red dashed line is HostMemoryLow's 512 MiB: the drift job needs up to 400 MiB for a run.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -982,6 +1008,16 @@
           "legendFormat": "total",
           "refId": "B",
           "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "vector(536870912)",
+          "legendFormat": "HostMemoryLow's 512 MiB",
+          "refId": "C",
+          "range": true
         }
       ],
       "fieldConfig": {
@@ -994,7 +1030,7 @@
             "showPoints": "never",
             "spanNulls": false,
             "thresholdsStyle": {
-              "mode": "line"
+              "mode": "off"
             }
           },
           "color": {
@@ -1004,18 +1040,40 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
                 "color": "green",
-                "value": 536870912
+                "value": null
               }
             ]
           },
           "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HostMemoryLow's 512 MiB"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -1033,7 +1091,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Disk free against NFR-04's 4 GB floor",
-      "description": "Free bytes of the host's root file system; the line is NFR-04's 4 GB. Prometheus' TSDB, the second-largest grower, is shown beside it. Alert: DiskFreeLow.",
+      "description": "Free bytes of the host's root file system; the red dashed line is NFR-04's 4 GB. Prometheus' TSDB, the second-largest grower, is shown beside it. Alert: DiskFreeLow.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1064,6 +1122,16 @@
           "legendFormat": "Prometheus TSDB",
           "refId": "B",
           "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "vector(4000000000)",
+          "legendFormat": "NFR-04's 4 GB",
+          "refId": "C",
+          "range": true
         }
       ],
       "fieldConfig": {
@@ -1076,7 +1144,7 @@
             "showPoints": "never",
             "spanNulls": false,
             "thresholdsStyle": {
-              "mode": "line"
+              "mode": "off"
             }
           },
           "color": {
@@ -1086,18 +1154,40 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
                 "color": "green",
-                "value": 4000000000.0
+                "value": null
               }
             ]
           },
           "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NFR-04's 4 GB"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {

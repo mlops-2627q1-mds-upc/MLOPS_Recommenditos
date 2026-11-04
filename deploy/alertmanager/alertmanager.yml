@@ -21,7 +21,10 @@ route:
 inhibit_rules:
   # With the API down, its latency and error alerts say nothing new.
   - source_matchers: [alertname="ApiDown"]
-    target_matchers: ['alertname=~"PredictLatencyHigh|RangeLatencyHigh|ErrorRateHigh"']
+    target_matchers: ['alertname=~"PredictLatencyHigh|RangeLatencyHigh|ErrorRateHigh|ServerErrors"']
+  # The error rate above NFR-03 already says that server errors happen.
+  - source_matchers: [alertname="ErrorRateHigh"]
+    target_matchers: [alertname="ServerErrors"]
 
 receivers:
   - name: discord
