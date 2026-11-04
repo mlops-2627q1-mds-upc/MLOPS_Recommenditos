@@ -26,6 +26,12 @@ more. `SqliteStore` implements it:
   WAL file small after each checkpoint.
 - **No PII (NFR-08).** A row holds the validated request body, which has no
   PII field, and no column for the caller's address.
+- **What the client sent (#191).** `inputs` holds only the fields the client
+  sent with a value, the ones the model is given as known (`sent_fields` in
+  `recommenditos.api.serving`), not the defaults of the fields it left out.
+  `inputs_sent_only` is 1 on such a row and NULL on a row an older image wrote,
+  whose `inputs` hold the defaults as well; M6's drift job reads only the
+  first kind, since a default would look like a real value to it.
 - **Who asked, by kind (#269).** `client` names a known kind of client that
   marked its requests with the `X-Client` header, such as the web page
   (`web-ui`), and is NULL for every other request, so M6's drift job can leave
@@ -62,14 +68,15 @@ SCHEMA_VERSION = 1
 #: Columns of `predictions` added after `_SCHEMA` was first deployed, each NULL
 #: in the rows written before it and by an image that does not know it, and
 #: added to a file that lacks it when the store opens.
-ADDED_COLUMNS = {"client": "TEXT"}
+ADDED_COLUMNS = {"client": "TEXT", "inputs_sent_only": "INTEGER"}
 
 #: The request header a client marks its requests with, and the values stored
 #: from it in `client`; any other value is stored as NULL (#269).
 CLIENT_HEADER = "X-Client"
 #: `web-ui` is the web page, `smoke` the integration suite and the post-deployment
-#: smoke check, `loadtest` the load test (docs/docs/web-ui.md).
-KNOWN_CLIENTS = frozenset({"web-ui", "smoke", "loadtest"})
+#: smoke check, `loadtest` the load test (docs/docs/web-ui.md), `replay` M6's
+#: replay of held-out listings, the traffic the drift job compares.
+KNOWN_CLIENTS = frozenset({"web-ui", "smoke", "loadtest", "replay"})
 
 #: How long a writer waits for another process's write before it gives up.
 BUSY_TIMEOUT_S = 5.0
@@ -104,7 +111,8 @@ CREATE TABLE predictions (
     inputs        TEXT NOT NULL,
     outputs       TEXT NOT NULL,
     warnings      TEXT NOT NULL,
-    client        TEXT
+    client        TEXT,
+    inputs_sent_only INTEGER
 );
 CREATE TABLE feedback (
     request_id         TEXT PRIMARY KEY
@@ -132,6 +140,8 @@ class AnswerRecord:
     latency_ms: float
     model_variant: str
     model_version: str
+    #: The fields the client sent with a value, none of the defaults; the store
+    #: marks the row with `inputs_sent_only` = 1 for it.
     inputs: dict[str, Any]
     outputs: dict[str, Any]
     warnings: list[dict[str, Any]]
@@ -268,8 +278,8 @@ class SqliteStore:
             with self._lock, self._transaction() as connection:
                 connection.execute(
                     "INSERT INTO predictions (request_id, endpoint, answered_at, latency_ms, "
-                    "model_variant, model_version, inputs, outputs, warnings, client) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "model_variant, model_version, inputs, outputs, warnings, client, "
+                    "inputs_sent_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
                     (
                         record.request_id,
                         record.endpoint,
@@ -468,6 +478,10 @@ class PredictionLog:
     def record(self, request: BaseModel, answer: Answer) -> None:
         """Write the row for `answer` to the validated `request`.
 
+        The row's inputs are the fields the client sent with a value, the set
+        `sent_fields` gives: a field it left out, or sent as null, is not in
+        them, and one it sent with its default value is.
+
         Called by the route right before it returns the answer, so that the
         client gets no answer the log does not hold (NFR-03). Raises `StoreError`
         when the store cannot write; the route lets it through, and the client
@@ -484,7 +498,7 @@ class PredictionLog:
                 latency_ms=(time.perf_counter() - self._started) * 1000,
                 model_variant=answer.model.variant,
                 model_version=answer.model.version,
-                inputs=request.model_dump(mode="json", exclude_none=True),
+                inputs=request.model_dump(mode="json", exclude_unset=True, exclude_none=True),
                 outputs=answer.model_dump(
                     mode="json", exclude={"model", "request_id", "warnings"}
                 ),

@@ -6,6 +6,7 @@ check what lands on disk rather than what the store says it wrote.
 
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import dataclasses
 from datetime import UTC, datetime, timedelta
 import json
@@ -36,6 +37,7 @@ from tests.conftest import PII_COLUMNS
 
 from recommenditos.api import prediction_log
 from recommenditos.api.app import create_app
+from recommenditos.api.comparables import DEFAULT_K
 from recommenditos.api.prediction_log import (
     AnswerLoggedTwice,
     AnswerRecord,
@@ -45,9 +47,11 @@ from recommenditos.api.prediction_log import (
     StoreError,
 )
 from recommenditos.api.routes import V1_ROUTERS
-from recommenditos.api.schemas.common import ModelInfo
+from recommenditos.api.schemas.common import ListingFields, ModelInfo
+from recommenditos.api.schemas.comparables import ComparablesRequest
+from recommenditos.api.schemas.partial_listing import PartialListing
 from recommenditos.api.schemas.predict import Explanation, Valuation, ValuationRequest
-from recommenditos.api.serving import Estimate, ServedModel
+from recommenditos.api.serving import Estimate, ServedModel, sent_fields
 from recommenditos.api.settings import API_KEY_ENV_VAR, PREDICTION_LOG_ENV_VAR, Settings
 
 PREDICT = "/v1/predict"
@@ -65,6 +69,7 @@ PREDICTION_COLUMNS = {
     "outputs",
     "warnings",
     "client",
+    "inputs_sent_only",
 }
 FEEDBACK_COLUMNS = {"request_id", "observed_price_eur", "received_at"}
 
@@ -110,9 +115,8 @@ def test_fr13_an_answer_is_one_record_with_its_inputs_outputs_warnings_version_t
     assert len(records) == 1
     record = records[0]
     assert record["endpoint"] == PREDICT
-    assert json.loads(record["inputs"]) == ValuationRequest(
-        **{**listing, "country_code": "ES"}
-    ).model_dump(mode="json", exclude_none=True)
+    assert json.loads(record["inputs"]) == {**listing, "country_code": "ES"}
+    assert record["inputs_sent_only"] == 1
     assert json.loads(record["outputs"]) == {
         "price_eur": body["price_eur"],
         "explanation": body["explanation"],
@@ -158,6 +162,39 @@ def test_fr13_every_valuation_endpoint_records_each_answer_once(
 def test_the_valuation_endpoints_include_predict_and_price_range():
     """Guards the test above against passing on no endpoint, or on fewer than there are."""
     assert {PREDICT, "/v1/price-range"} <= set(_valuation_paths())
+
+
+#: Every endpoint that logs its answers, with the body type it validates.
+LOGGING_ENDPOINTS = [
+    (PREDICT, ValuationRequest),
+    ("/v1/price-range", PartialListing),
+    ("/v1/comparables", ComparablesRequest),
+]
+
+
+@pytest.mark.req("FR-13")
+@pytest.mark.parametrize(("endpoint", "schema"), LOGGING_ENDPOINTS)
+def test_fr13_a_record_holds_only_the_fields_the_client_sent(
+    client: TestClient, listing: dict, log_file: Path, endpoint: str, schema: type[ListingFields]
+):
+    """#191: a field left out, or sent as null, is not logged as its default.
+
+    A field sent with its default value is logged all the same, so that the
+    drift job sees a client's `false` or empty list as the value it is.
+    """
+    defaults_sent = {"is_rental": False, "equipment_comfort": [], "non_smoking": False}
+    if endpoint == "/v1/comparables":
+        defaults_sent["k"] = DEFAULT_K
+    body = {**listing, **defaults_sent, "gears": None}
+
+    response = client.post(endpoint, json=body)
+
+    assert response.status_code == 200, response.text
+    (record,) = _record_of(log_file, response.json()["request_id"])
+    logged = json.loads(record["inputs"])
+    assert logged == {**listing, **defaults_sent}
+    assert set(logged) == sent_fields(schema.model_validate_json(json.dumps(body)))
+    assert record["inputs_sent_only"] == 1
 
 
 @pytest.mark.req("FR-13")
@@ -586,6 +623,15 @@ FIRST_INSERT = (
     "model_variant, model_version, inputs, outputs, warnings) "
     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
+FIRST_ROW = ("2026-11-01T00:00:00Z", 1.0, "v", "1", "{}", "{}", "[]")
+
+#: The insert of an image from `client` (#269) to before `inputs_sent_only`
+#: (#191), word for word.
+SECOND_INSERT = (
+    "INSERT INTO predictions (request_id, endpoint, answered_at, latency_ms, "
+    "model_variant, model_version, inputs, outputs, warnings, client) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
 
 
 @pytest.mark.parametrize(
@@ -594,6 +640,7 @@ FIRST_INSERT = (
         ("web-ui", "web-ui"),
         ("smoke", "smoke"),
         ("loadtest", "loadtest"),
+        ("replay", "replay"),
         (None, None),
         ("someone@example.com", None),
         ("Web-UI", None),
@@ -614,13 +661,11 @@ def test_a_record_names_the_kind_of_client_only_when_it_is_a_known_one(
         assert record["client"] == stored, endpoint
 
 
-def test_a_file_of_the_first_layout_gets_the_client_column_and_keeps_its_rows(tmp_path: Path):
+def test_a_file_of_the_first_layout_gets_the_added_columns_and_keeps_its_rows(tmp_path: Path):
     path = tmp_path / "log.sqlite3"
     connection = sqlite3.connect(path)
     connection.executescript(FIRST_LAYOUT)
-    connection.execute(
-        FIRST_INSERT, ("old", PREDICT, "2026-11-01T00:00:00Z", 1.0, "v", "1", "{}", "{}", "[]")
-    )
+    connection.execute(FIRST_INSERT, ("old", PREDICT, *FIRST_ROW))
     connection.commit()
     connection.close()
 
@@ -630,23 +675,111 @@ def test_a_file_of_the_first_layout_gets_the_client_column_and_keeps_its_rows(tm
     finally:
         store.close()
 
-    rows = {row["request_id"]: row["client"] for row in _rows(path, "SELECT * FROM predictions")}
-    assert rows == {"old": None, "new": "web-ui"}
+    rows = {
+        row["request_id"]: (row["client"], row["inputs_sent_only"])
+        for row in _rows(path, "SELECT * FROM predictions")
+    }
+    assert rows == {"old": (None, None), "new": ("web-ui", 1)}
     assert _rows(path, "PRAGMA user_version")[0][0] == prediction_log.SCHEMA_VERSION
 
 
-def test_an_image_from_before_the_client_column_still_writes_to_the_extended_file(
-    store: SqliteStore,
+@pytest.mark.parametrize(
+    ("insert", "row"),
+    [
+        (FIRST_INSERT, ("older", PREDICT, *FIRST_ROW)),
+        (SECOND_INSERT, ("older", PREDICT, *FIRST_ROW, "smoke")),
+    ],
+    ids=["before-client", "before-inputs-sent-only"],
+)
+def test_an_older_image_still_writes_to_the_extended_file(
+    store: SqliteStore, insert: str, row: tuple
 ):
-    """A rollback to an older image keeps the prediction log working (NFR-13)."""
+    """A rollback to an older image keeps the prediction log working (NFR-13).
+
+    Its insert names its columns, so the ones it does not know get NULL: no
+    `inputs_sent_only`, which is right, since its `inputs` hold the defaults.
+    """
     store.record_answer(dataclasses.replace(answer_record("new"), client="web-ui"))
     older = sqlite3.connect(store.path)
-    older.execute(
-        FIRST_INSERT, ("older", PREDICT, "2026-11-01T00:00:00Z", 1.0, "v", "1", "{}", "{}", "[]")
-    )
+    older.execute(insert, row)
     older.commit()
     older.close()
-    assert _record_of(store.path, "older")[0]["client"] is None
+    (record,) = _record_of(store.path, "older")
+    assert record["inputs_sent_only"] is None
+    assert record["client"] == (row[-1] if insert == SECOND_INSERT else None)
+
+
+# --------------------------------------------------------------------------
+# #191: only what the client sent, and a mark that says so
+# --------------------------------------------------------------------------
+
+
+def _file_as_deployed_before_191(path: Path) -> None:
+    """The file on the VM's volume before #191: the first layout, `client` added by #269.
+
+    It holds two rows the old way, with the defaults of the fields left out.
+    """
+    connection = sqlite3.connect(path)
+    connection.executescript(FIRST_LAYOUT)
+    connection.execute("ALTER TABLE predictions ADD COLUMN client TEXT")
+    with_defaults = json.dumps({"make": "Audi", "is_rental": False, "equipment_comfort": []})
+    for request_id, client in (("old-load-test", None), ("old-smoke", "smoke")):
+        connection.execute(
+            SECOND_INSERT,
+            (request_id, PREDICT, "2026-10-31T00:00:00Z", 1.0, "v", "1")
+            + (with_defaults, "{}", "[]", client),
+        )
+    connection.commit()
+    connection.close()
+
+
+def test_the_deployed_file_gets_inputs_sent_only_in_place_and_keeps_its_rows(tmp_path: Path):
+    path = tmp_path / "log.sqlite3"
+    _file_as_deployed_before_191(path)
+    before = {row["request_id"]: dict(row) for row in _rows(path, "SELECT * FROM predictions")}
+
+    store = SqliteStore(path, max_bytes=10**9)
+    try:
+        store.record_answer(answer_record("new"))
+    finally:
+        store.close()
+
+    after = {row["request_id"]: dict(row) for row in _rows(path, "SELECT * FROM predictions")}
+    assert {key: after[key] for key in before} == {
+        key: {**row, "inputs_sent_only": None} for key, row in before.items()
+    }
+    assert after["new"]["inputs_sent_only"] == 1
+    assert _rows(path, "PRAGMA user_version")[0][0] == prediction_log.SCHEMA_VERSION
+    # How the drift job reads the log (docs/docs/api.md#reading-the-log).
+    sent_only = _rows(path, "SELECT request_id FROM predictions WHERE inputs_sent_only = 1")
+    assert [row["request_id"] for row in sent_only] == ["new"]
+
+
+def test_an_image_from_before_191_opens_the_extended_file_and_writes_unmarked_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A rollback image starts on the file this one extended and records there (NFR-13).
+
+    It checks the schema version, which #191 leaves at 1, and adds only the
+    columns it knows, so the extra one does not stop it; `_configure` is the
+    same code in both images, with `ADDED_COLUMNS` the only difference. Its
+    insert names its columns, so its rows read as not sent-only.
+    """
+    path = tmp_path / "log.sqlite3"
+    newer = SqliteStore(path, max_bytes=10**9)
+    newer.record_answer(answer_record("newer"))
+    newer.close()
+    monkeypatch.setattr(prediction_log, "ADDED_COLUMNS", {"client": "TEXT"})
+
+    older = SqliteStore(path, max_bytes=10**9)
+    try:
+        with closing(sqlite3.connect(path)) as connection, connection:
+            connection.execute(SECOND_INSERT, ("older", PREDICT, *FIRST_ROW, "smoke"))
+    finally:
+        older.close()
+
+    rows = _rows(path, "SELECT request_id, client, inputs_sent_only FROM predictions ORDER BY seq")
+    assert [tuple(row) for row in rows] == [("newer", None, 1), ("older", "smoke", None)]
 
 
 def test_the_labelled_view_carries_the_client(client: TestClient, listing: dict, log_file: Path):

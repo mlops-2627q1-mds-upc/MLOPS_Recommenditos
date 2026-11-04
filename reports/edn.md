@@ -1411,6 +1411,33 @@ How to add an entry:
 - **Other evidence:** [Issue #269](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/269), [web page docs](../docs/docs/web-ui.md#the-design), [deployment docs](../docs/docs/deployment.md#the-stack).
 - **In LaTeX:** yes
 
+### EDN-98: The prediction log stores only the fields a client sent, marked per row
+
+- **Date:** 2026-11-04
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, API Design
+- **Participants:** Lukas Häußler (decided), AI agents (architecture proposal, implementation)
+- **Decision:** A record's `inputs` hold only the fields the client sent with a value, the set the model reads as known, and a new column `inputs_sent_only` is 1 on such rows.
+  Older rows stay as they are, with NULL, and the drift job reads only rows marked 1.
+  The schema version stays 1.
+- **Alternatives considered:**
+  - The full request with its defaults plus a list of the sent fields: two sources every reader must combine, and bigger rows.
+  - Only the sent fields, without a marker: old and new rows look alike, so the older rows, the VM load tests of 2026-10-31 among them, would read as real traffic.
+  - Rewriting the older rows: lossy, because a `false` a client sent cannot be told from a default.
+- **Rationale:** The drift job compares input distributions, so a default nobody sent, such as an empty equipment list, would look like a real value.
+  The marker uses the existing path for added columns, which keeps a rollback working: the previous image names the columns it inserts and leaves the new one NULL, while a new schema version would make it refuse the file.
+  A record of the ten required fields shrinks by 166 bytes.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI found that the served `lgbm-basic` never reads the logged defaults, which are `lgbm-extended` inputs, so the old log broke FR-13's reconstruction promise for the extended model rather than any served prediction.
+  Lukas took the package unchanged.
+  AI built it; tests check a default sent explicitly, the in-place migration, and the previous image's insert on the migrated file.
+- **AI interaction evidence:** Claude Code session of 2026-11-04.
+  Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "#191 log: stores only the fields the client really sent, plus a marker column. Old rows stay (rewriting would be lossy), the drift job reads only new rows."
+  Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
+- **Other evidence:** [Issue #191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191), [PR #282](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/282), [Reading the log](../docs/docs/api.md#reading-the-log), [`prediction_log.py`](../recommenditos/api/prediction_log.py), EDN-86.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.
