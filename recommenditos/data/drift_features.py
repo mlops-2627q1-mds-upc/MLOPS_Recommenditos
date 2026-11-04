@@ -42,7 +42,7 @@ request: a constant feature, which the drift job has to give a test that
 accepts one category or leave out and say so.
 """
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from typing import Any
 
@@ -86,7 +86,7 @@ ABSENT, PRESENT = "missing", "present"
 DAYS_PER_YEAR = 365.25
 
 #: A point in time: an ISO string, a date, a datetime or a pandas timestamp.
-type Instant = str | date | datetime | pd.Timestamp
+type Instant = str | date | datetime | pd.Timestamp | np.datetime64
 
 
 def _utc(when: Instant) -> pd.Timestamp:
@@ -113,14 +113,16 @@ def as_of_for(answered_at: Instant, reference_date: Instant) -> pd.Timestamp:
 
 
 def drift_features(
-    bodies: Iterable[Mapping[str, Any]], as_of: Instant | Sequence[Instant]
+    bodies: Iterable[Mapping[str, Any]], as_of: Instant | Iterable[Instant]
 ) -> pd.DataFrame:
     """The drift features of request bodies, as the reference holds them.
 
     `as_of` is the date the age is computed at: one for every body, such as
-    `reference_date` for the reference, or one per body, `as_of_for` of each
-    request's answer time for the log. A field the body does not carry is null
-    for a numeric feature and `MISSING` for a categorical one.
+    `reference_date` for the reference, or one per body in any iterable (a list,
+    a numpy array or a pandas Series), `as_of_for` of each request's answer time
+    for the log. No bodies give an empty frame with the 23 columns. A field the
+    body does not carry is null for a numeric feature and `MISSING` for a
+    categorical one.
     """
     frame = pd.DataFrame.from_records(list(bodies))
     rows = len(frame)
@@ -131,13 +133,18 @@ def drift_features(
             return frame[name].reset_index(drop=True)
         return pd.Series([None] * rows, dtype="object")
 
-    if isinstance(as_of, Sequence) and not isinstance(as_of, str):
-        if len(as_of) != rows:
-            raise ValueError(f"{len(as_of)} `as_of` dates for {rows} bodies")
-        at = pd.Series([_utc(when).normalize() for when in as_of])
+    if isinstance(as_of, str | date | np.datetime64):
+        dates = [_utc(as_of).normalize()] * rows
     else:
-        at = pd.Series([_utc(as_of).normalize()] * rows)
-    registered = pd.to_datetime(column("registration_date"), format="%Y-%m")
+        dates = [_utc(when).normalize() for when in as_of]
+        if len(dates) != rows:
+            raise ValueError(f"{len(dates)} `as_of` dates for {rows} bodies")
+    # An explicit dtype, because an empty list would otherwise give an object
+    # Series that cannot be subtracted from the registration dates.
+    at = pd.Series(dates, dtype="datetime64[ns]")
+    registered = pd.to_datetime(column("registration_date"), format="%Y-%m").astype(
+        "datetime64[ns]"
+    )
     out["age_years"] = ((at - registered).dt.days / DAYS_PER_YEAR).astype("float64")
     for name in NUMERIC[1:]:
         out[name] = pd.to_numeric(column(name)).astype("float64")

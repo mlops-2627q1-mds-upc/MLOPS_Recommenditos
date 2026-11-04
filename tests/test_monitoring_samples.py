@@ -289,3 +289,33 @@ def test_a_replayed_request_as_logged_has_the_drift_features_of_its_reference_ro
     # number but not always the same days: February and the 31st make up to three.
     days = (actual["age_years"] - expected["age_years"]) * 365.25
     assert days.round(6).between(-3, 3).all(), days.describe()
+
+
+def test_no_bodies_give_an_empty_frame_with_every_drift_feature(params):
+    features = drift_features([], params["reference_date"])
+
+    assert features.empty and list(features.columns) == list(DRIFT_FEATURES)
+    assert drift_features([], []).shape == (0, len(DRIFT_FEATURES))
+
+
+def _datetime64(dates: list[str]):
+    return pd.to_datetime(pd.Series(dates)).to_numpy()
+
+
+def _utc_series(dates: list[str]) -> pd.Series:
+    return pd.Series(pd.to_datetime(dates, utc=True))
+
+
+@pytest.mark.parametrize(
+    "as_of",
+    [list, pd.Series, _datetime64, _utc_series],
+    ids=["list", "series-of-strings", "numpy-datetime64", "series-of-utc-timestamps"],
+)
+def test_one_age_date_per_body_may_come_as_any_array_like(as_of):
+    bodies = [{"registration_date": "2020-11"}, {"registration_date": "2020-11"}]
+    dates = ["2025-11-08", "2026-11-08"]
+
+    ages = drift_features(bodies, as_of(dates))["age_years"].tolist()
+    assert ages == [drift_features(bodies[:1], date)["age_years"][0] for date in dates]
+    with pytest.raises(ValueError, match="dates for 2 bodies"):
+        drift_features(bodies, as_of(dates[:1]))
