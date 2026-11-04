@@ -1,0 +1,15 @@
+# The build context of the stack image (stack.Dockerfile) is deploy/, and
+# everything in it travels with the release except what is listed here: a new
+# configuration folder such as prometheus/ reaches the VM without a change to
+# this file. tests/integration/test_deploy_rollback.py checks what the image holds.
+#
+# The bootstrap layer, which a person installs once (bootstrap.sh,
+# install-runner.sh, and deploy.sh, which must not replace itself).
+/*.sh
+# Secrets: the VM's `.env` stays on the VM, and a local one never leaves the
+# laptop. The template documents `.env` and is installed by bootstrap.sh.
+**/.env
+**/.env.*
+# The image's own recipe.
+/stack.Dockerfile
+/.dockerignore

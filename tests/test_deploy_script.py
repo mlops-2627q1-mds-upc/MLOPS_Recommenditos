@@ -166,75 +166,228 @@ def test_the_registry_flag_needs_one_token_on_standard_input(tmp_path: Path, std
 
 
 #: A stand-in for `docker` that records each call's arguments and environment,
-#: and what `docker login` reads on standard input. The image is not on the VM,
-#: and the pull fails, so deploy.sh stops before it starts anything.
+#: and what `docker login` reads on standard input. The images listed in
+#: $FAKE_LOCAL_IMAGES are on the VM; a pull fails with $FAKE_PULL_ANSWER; the
+#: stack image's files are those of $FAKE_STACK_FILES; `compose up` succeeds.
 FAKE_DOCKER = """#!/usr/bin/env bash
 log=$FAKE_DOCKER_LOG
 { printf 'argv:'; printf ' %s' "$@"; printf '\\n'; env | sed 's/^/env: /'; } >>"$log"
-case "$*" in
-    *"config --images api"*) echo "ghcr.io/example/api:$API_IMAGE_TAG" ;;
-    "image inspect "*) exit 1 ;;
-    "login "*)
+case "$1" in
+    compose)
+        case "$*" in
+            *"config --images api"*) echo "ghcr.io/example/api:$API_IMAGE_TAG" ;;
+        esac
+        ;;
+    image)
+        if [ "$2" = inspect ]; then
+            grep -qxF "$3" "$FAKE_LOCAL_IMAGES" || exit 1
+        fi
+        ;;
+    login)
         printf 'stdin: %s\\n' "$(cat)" >>"$log"
         printf 'config exists: %s\\n' "$([ -d "$DOCKER_CONFIG" ] && echo yes)" >>"$log"
         ;;
-    *" pull "*)
-        printf 'pull with DOCKER_CONFIG=%s\\n' "${DOCKER_CONFIG:-}" >>"$log"
+    pull)
+        printf 'pull of %s with DOCKER_CONFIG=%s\\n' "$3" "${DOCKER_CONFIG:-}" >>"$log"
+        echo "Error response from daemon: $FAKE_PULL_ANSWER" >&2
         exit 1
         ;;
+    create) echo fake-container ;;
+    cp) cp -R "$FAKE_STACK_FILES/." "$3" ;;
 esac
 """
 
+OLD = "1" * 40
+API_IMAGE = "ghcr.io/example/api"
+STACK_IMAGE = "ghcr.io/example/stack"
 
-def fake_docker_stack(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
-    """A stack directory, the fake docker's log, and the environment that puts it first."""
-    stack = tmp_path / "stack"
-    stack.mkdir()
-    (stack / ".env").write_text(f"API_IMAGE_TAG={'1' * 40}\n", encoding="utf-8")
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    docker = bin_dir / "docker"
-    docker.write_text(FAKE_DOCKER, encoding="utf-8")
-    docker.chmod(0o755)
-    log = tmp_path / "docker.log"
-    log.touch()
-    environment = {
-        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-        "FAKE_DOCKER_LOG": str(log),
-        "TMPDIR": str(tmp_path),
-    }
-    return stack, log, environment
+
+class FakeVM:
+    """A stack directory as the VM has it, with `docker` and `curl` stand-ins first on PATH."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.stack = tmp_path / "recommenditos"
+        self.stack.mkdir()
+        self.env_file = self.stack / ".env"
+        self.env_file.write_text(
+            f"API_IMAGE={API_IMAGE}\nAPI_IMAGE_TAG={OLD}\nRECOMMENDITOS_API_KEY=keep-me\n",
+            encoding="utf-8",
+        )
+        # The stack files that run now, behind the link deploy.sh keeps.
+        running = self.stack / "stacks" / "0123456789abcdef"
+        running.mkdir(parents=True)
+        (running / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+        (self.stack / "stack").symlink_to("stacks/0123456789abcdef")
+        self.files = tmp_path / "stack-image"
+        self.files.mkdir()
+        (self.files / "compose.yaml").write_text("services: {new: {}}\n", encoding="utf-8")
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        for name, script in (("docker", FAKE_DOCKER), ("curl", "#!/bin/sh\nexit 0\n")):
+            (bin_dir / name).write_text(script, encoding="utf-8")
+            (bin_dir / name).chmod(0o755)
+        self.local_images = tmp_path / "local-images"
+        self.local_images.write_text(f"{API_IMAGE}:{SHA}\n", encoding="utf-8")
+        self.log = tmp_path / "docker.log"
+        self.log.touch()
+        self.environment = {
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_DOCKER_LOG": str(self.log),
+            "FAKE_LOCAL_IMAGES": str(self.local_images),
+            "FAKE_STACK_FILES": str(self.files),
+            "FAKE_PULL_ANSWER": "manifest unknown",
+            "TMPDIR": str(tmp_path),
+        }
+
+    def run(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        return run_directly(self.stack, list(arguments), extra_environment=self.environment)
+
+    def stack_link(self) -> str:
+        return os.readlink(self.stack / "stack")
 
 
 @pytest.mark.req("NFR-15")
 def test_the_registry_token_reaches_docker_login_on_stdin_and_nothing_keeps_it(tmp_path: Path):
-    stack, log, environment = fake_docker_stack(tmp_path)
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text("", encoding="utf-8")
+    vm.environment["FAKE_PULL_ANSWER"] = "denied"
 
-    result = run_directly(stack, ["deploy", SHA, FLAG], extra_environment=environment)
+    result = vm.run("deploy", SHA, FLAG)
 
-    calls = log.read_text(encoding="utf-8")
+    calls = vm.log.read_text(encoding="utf-8")
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "pulling ghcr.io/example/api:" in result.stdout
+    assert f"pulling {STACK_IMAGE}:{SHA} failed" in result.stdout
     assert f"stdin: {SENTINEL}" in calls
     assert "config exists: yes" in calls
     # Only `docker login` saw the token, on its standard input.
     assert calls.count(SENTINEL) == 1
-    pull_config = calls.split("pull with DOCKER_CONFIG=")[1].splitlines()[0]
+    pull_config = calls.split("with DOCKER_CONFIG=")[1].splitlines()[0]
     assert pull_config.startswith(str(tmp_path))
     assert not Path(pull_config).exists()
-    for path in stack.iterdir():
-        assert SENTINEL not in path.read_text(encoding="utf-8"), path.name
+    for path in vm.stack.rglob("*"):
+        if path.is_file():
+            assert SENTINEL not in path.read_text(encoding="utf-8"), path.name
     assert SENTINEL not in result.stdout + result.stderr
+
+
+@pytest.mark.req("NFR-15")
+def test_one_login_serves_the_pulls_of_both_images(tmp_path: Path):
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text("", encoding="utf-8")
+
+    result = vm.run("deploy", SHA, FLAG)
+
+    calls = vm.log.read_text(encoding="utf-8")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert calls.count("argv: login") == 1
+    assert f"pull of {STACK_IMAGE}:{SHA}" in calls
+    assert f"pull of {API_IMAGE}:{SHA}" in calls
+    assert f"pulling {API_IMAGE}:{SHA} failed; nothing changed" in result.stdout
 
 
 @pytest.mark.req("NFR-15")
 def test_no_login_happens_when_the_throwaway_configuration_cannot_be_made(tmp_path: Path):
     """An empty DOCKER_CONFIG would make docker keep the login in ~/.docker."""
-    stack, log, environment = fake_docker_stack(tmp_path)
-    environment["TMPDIR"] = str(tmp_path / "missing")
+    vm = FakeVM(tmp_path)
+    vm.environment["TMPDIR"] = str(tmp_path / "missing")
 
-    result = run_directly(stack, ["deploy", SHA, FLAG], extra_environment=environment)
+    result = vm.run("deploy", SHA, FLAG)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "could not create a Docker configuration" in result.stdout
-    assert "argv: login" not in log.read_text(encoding="utf-8")
+    assert "argv: login" not in vm.log.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13")
+def test_a_tag_without_a_stack_image_runs_with_the_stack_files_that_run_now(tmp_path: Path):
+    """CD pushed no stack image before #279: such a tag keeps the files, and says so."""
+    vm = FakeVM(tmp_path)
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"{SHA} has no stack image" in result.stdout
+    assert vm.stack_link() == "stacks/0123456789abcdef"
+    assert vm.env_file.read_text(encoding="utf-8") == (
+        f"API_IMAGE={API_IMAGE}\nAPI_IMAGE_TAG={SHA}\nRECOMMENDITOS_API_KEY=keep-me\n"
+    )
+    assert (vm.stack / ".deploy-previous").read_text(encoding="utf-8") == f"{OLD}\n"
+
+
+@pytest.mark.req("NFR-13")
+def test_a_rollback_to_a_tag_deployed_before_stack_images_keeps_the_stack_files(tmp_path: Path):
+    """The old deploy.sh recorded the previous tag, but no stack files with it."""
+    vm = FakeVM(tmp_path)
+    (vm.stack / ".deploy-previous").write_text(f"{SHA}\n", encoding="utf-8")
+
+    result = vm.run("rollback")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"no stack files are recorded for {SHA}" in result.stdout
+    assert vm.stack_link() == "stacks/0123456789abcdef"
+    assert f"API_IMAGE_TAG={SHA}\n" in vm.env_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13")
+def test_a_stack_image_that_cannot_be_pulled_changes_nothing(tmp_path: Path):
+    """Only GHCR's answer for a missing tag means "no stack image"; anything else stops."""
+    vm = FakeVM(tmp_path)
+    vm.environment["FAKE_PULL_ANSWER"] = (
+        "Head https://ghcr.io/v2/example/stack/manifests/x: denied"
+    )
+    env_before = vm.env_file.read_text(encoding="utf-8")
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "nothing changed" in result.stdout
+    assert vm.env_file.read_text(encoding="utf-8") == env_before
+    assert vm.stack_link() == "stacks/0123456789abcdef"
+    assert " up " not in vm.log.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13", "NFR-15")
+def test_a_stack_image_with_a_dot_env_is_refused_and_env_stays(tmp_path: Path):
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text(f"{API_IMAGE}:{SHA}\n{STACK_IMAGE}:{SHA}\n", encoding="utf-8")
+    (vm.files / ".env").write_text("RECOMMENDITOS_API_KEY=stolen\n", encoding="utf-8")
+    env_before = vm.env_file.read_text(encoding="utf-8")
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "holds a .env" in result.stdout
+    assert vm.env_file.read_text(encoding="utf-8") == env_before
+    assert vm.stack_link() == "stacks/0123456789abcdef"
+
+
+@pytest.mark.req("NFR-13")
+def test_the_stack_files_of_a_release_are_swapped_in_beside_env(tmp_path: Path):
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text(f"{API_IMAGE}:{SHA}\n{STACK_IMAGE}:{SHA}\n", encoding="utf-8")
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    link = vm.stack_link()
+    assert link.startswith("stacks/") and link != "stacks/0123456789abcdef"
+    assert (vm.stack / link / "compose.yaml").read_text(encoding="utf-8") == (
+        "services: {new: {}}\n"
+    )
+    # The previous files stay for `rollback`, named with the previous tag.
+    assert (vm.stack / ".deploy-previous-stack").read_text(encoding="utf-8") == (
+        "0123456789abcdef\n"
+    )
+    assert (vm.stack / "stacks" / "0123456789abcdef" / "compose.yaml").exists()
+    assert "--remove-orphans" in vm.log.read_text(encoding="utf-8")
+
+
+def test_the_repository_deploy_folder_is_not_a_stack_directory(tmp_path: Path):
+    """Run from deploy/ itself, the script would take its compose.yaml for copied files."""
+    before = sorted(path.name for path in (PROJ_ROOT / "deploy").iterdir())
+
+    result = run_directly(PROJ_ROOT / "deploy", ["status"])
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "the repository's deploy/" in result.stdout
+    assert sorted(path.name for path in (PROJ_ROOT / "deploy").iterdir()) == before
