@@ -307,8 +307,8 @@ When the record cannot be written, the client gets a 503 instead of the answer, 
 An answer the log does not hold would break exactly-once silently, and the load test counts a 503 as an error, so a failing log is visible at once.
 
 Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 250 ms NFR-02 gives `/predict`.
-A record took about 940 bytes while the log held the defaults of the fields a request left out, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold at least 2.1 million answers, fewer when requests fill more optional fields.
-Since #191 a request with only the ten required fields writes 166 bytes less, the defaults of its optional fields.
+A record took about 940 bytes while the log held the defaults of the fields a request left out, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold about 2.1 million answers of that size.
+Since #191 a request with only the ten required fields writes 166 bytes less, the defaults of its optional fields, so more such answers fit, and fewer when requests fill more optional fields.
 
 ### Feedback
 

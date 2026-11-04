@@ -6,6 +6,7 @@ check what lands on disk rather than what the store says it wrote.
 
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import dataclasses
 from datetime import UTC, datetime, timedelta
 import json
@@ -754,24 +755,31 @@ def test_the_deployed_file_gets_inputs_sent_only_in_place_and_keeps_its_rows(tmp
     assert [row["request_id"] for row in sent_only] == ["new"]
 
 
-def test_an_image_from_before_191_opens_the_extended_file(
+def test_an_image_from_before_191_opens_the_extended_file_and_writes_unmarked_rows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    """A rollback image starts on the file this one extended (NFR-13).
+    """A rollback image starts on the file this one extended and records there (NFR-13).
 
     It checks the schema version, which #191 leaves at 1, and adds only the
     columns it knows, so the extra one does not stop it; `_configure` is the
-    same code in both images, with `ADDED_COLUMNS` the only difference.
+    same code in both images, with `ADDED_COLUMNS` the only difference. Its
+    insert names its columns, so its rows read as not sent-only.
     """
     path = tmp_path / "log.sqlite3"
-    SqliteStore(path, max_bytes=10**9).close()
+    newer = SqliteStore(path, max_bytes=10**9)
+    newer.record_answer(answer_record("newer"))
+    newer.close()
     monkeypatch.setattr(prediction_log, "ADDED_COLUMNS", {"client": "TEXT"})
 
-    SqliteStore(path, max_bytes=10**9).close()
+    older = SqliteStore(path, max_bytes=10**9)
+    try:
+        with closing(sqlite3.connect(path)) as connection, connection:
+            connection.execute(SECOND_INSERT, ("older", PREDICT, *FIRST_ROW, "smoke"))
+    finally:
+        older.close()
 
-    assert "inputs_sent_only" in {
-        row["name"] for row in _rows(path, "PRAGMA table_info(predictions)")
-    }
+    rows = _rows(path, "SELECT request_id, client, inputs_sent_only FROM predictions ORDER BY seq")
+    assert [tuple(row) for row in rows] == [("newer", None, 1), ("older", "smoke", None)]
 
 
 def test_the_labelled_view_carries_the_client(client: TestClient, listing: dict, log_file: Path):
