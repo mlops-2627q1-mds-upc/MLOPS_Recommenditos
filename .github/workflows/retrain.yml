@@ -100,6 +100,23 @@ jobs:
           uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
           uv run dvc pull
 
+      # numpy's AVX-512 kernels round some logarithms differently (#259), so the
+      # run records whether the runner it landed on has AVX-512: a GitHub job
+      # cannot ask for one, and only such a run checks that the pipeline turns
+      # them off.
+      - name: Record the runner's CPU
+        run: |
+          model=$(lscpu | sed -n 's/^Model name: *//p')
+          avx512=$(grep -o -w 'avx512[a-z0-9_]*' /proc/cpuinfo | sort -u | tr '\n' ' ')
+          echo "CPU: $model"
+          echo "AVX-512 flags: ${avx512:-none}"
+          {
+            echo "### Runner CPU"
+            echo ""
+            echo "- Model: $model"
+            echo "- AVX-512 flags: ${avx512:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # RECOMMENDITOS_REQUIRE_TRACKING: a run that cannot reach MLflow fails
       # instead of training untracked, because a promotion cites these runs.
       - name: Reproduce the pipeline

@@ -22,10 +22,16 @@ import tempfile
 
 import pandas as pd
 
+from recommenditos import ANY_NUMPY_KERNEL_VARIABLE
 from recommenditos.config import PARAMS_FILE
 from recommenditos.data import build_comparables, build_features, preprocess, split_data
 from recommenditos.data.synthetic import generate_raw_listings
 from recommenditos.pipeline import load_params
+
+# A stand-in bundle, never compared with `dvc.lock`, built in a process that
+# loaded numpy before `recommenditos` (pandas above), so `preprocess` would
+# refuse it on a CPU with AVX-512 (#259): CI's integration job runs this module.
+os.environ.setdefault(ANY_NUMPY_KERNEL_VARIABLE, "1")
 
 #: Small enough to keep the suite fast and fit every variant in seconds, large
 #: enough that a seller-grouped split and a per-make count still mean something.

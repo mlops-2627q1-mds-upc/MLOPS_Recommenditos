@@ -68,6 +68,7 @@ from tests.lockfile import (
     runtime_closure,
 )
 
+from recommenditos import ANY_NUMPY_KERNEL_VARIABLE
 from recommenditos.api.app import create_app
 from recommenditos.api.serving import ServingError
 from recommenditos.api.settings import PREDICTION_LOG_ENV_VAR, Settings
@@ -86,6 +87,12 @@ from recommenditos.modeling.model import (
 )
 from recommenditos.pipeline import load_params, read_frame
 from recommenditos.schema import PROCESSED_SCHEMA
+
+# `make test-serving` runs this file without `tests/conftest.py`, so it sets the
+# escape that conftest sets for the rest of the suite: this process loaded numpy
+# above, before `recommenditos` could turn its AVX-512 kernels off, and the
+# fixture's `preprocess` would refuse to run on a CPU that has them (#259).
+os.environ.setdefault(ANY_NUMPY_KERNEL_VARIABLE, "1")
 
 #: Set by `make test-serving`, and only there: it is the one place that knows the
 #: environment was built from the runtime list and the `test` group alone.
