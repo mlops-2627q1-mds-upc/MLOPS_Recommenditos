@@ -1467,7 +1467,7 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "Exporters: cAdvisor (container RAM against limits, restarts) + node-exporter (host RAM, disk). No ports to the outside. Prometheus keeps at most 2 GB or 60 days."
   Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
-- **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
+- **Other evidence:** [Issue #224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224), [PR #284](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/284), [Resource monitoring](../docs/docs/monitoring.md#resource-monitoring), [`compose.yaml`](../deploy/compose.yaml), EDN-87.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
