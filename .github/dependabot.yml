@@ -23,12 +23,12 @@ updates:
       actions:
         patterns: ["*"]
 
-  # The FROM lines of the API's Dockerfile, uv's stage included, and of the
-  # report's TeX Live image. A tag and the digest pinned beside it move together,
+  # The FROM lines of the API's Dockerfile, uv's stage included, of the
+  # monitoring image and of the report's TeX Live image. A tag and the digest pinned beside it move together,
   # and a new digest under the same tag (the rebuild of a base image with
   # Debian's security fixes) is a pull request too.
   - package-ecosystem: docker
-    directories: ["/", "/reports/latex"]
+    directories: ["/", "/monitoring", "/reports/latex"]
     schedule:
       interval: weekly
       day: monday
@@ -58,16 +58,19 @@ updates:
         patterns: ["*"]
     ignore:
       - dependency-name: recommenditos-api
+      - dependency-name: recommenditos-monitoring
       # nginx's odd minor versions are its mainline; 1.30 is the stable branch,
       # whose patch releases and rebuilt digests still update.
       - dependency-name: nginxinc/nginx-unprivileged
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
-  # uv.lock and pyproject.toml. Minor and patch updates in one pull request a
-  # week; a major update comes on its own, as it is the one likely to need code
-  # changes.
+  # uv.lock and pyproject.toml, the project's and the monitoring image's
+  # (monitoring/). Minor and patch updates in one pull request a week; a major
+  # update comes on its own, as it is the one likely to need code changes.
+  # monitoring/ caps numpy below 2 and pandas below 3 for Alibi Detect: a pull
+  # request that lifts a cap waits until Alibi Detect allows the new major.
   - package-ecosystem: uv
-    directory: /
+    directories: ["/", "/monitoring"]
     schedule:
       interval: weekly
       day: monday

@@ -201,14 +201,19 @@ def test_from_images_finds_every_pulled_image(dockerfile, images):
 
 def dockerfile_images() -> list[str]:
     images = []
-    for dockerfile in (PROJ_ROOT / "Dockerfile", PROJ_ROOT / "reports" / "latex" / "Dockerfile"):
+    for dockerfile in (
+        PROJ_ROOT / "Dockerfile",
+        PROJ_ROOT / "monitoring" / "Dockerfile",
+        PROJ_ROOT / "reports" / "latex" / "Dockerfile",
+    ):
         images += from_images(dockerfile.read_text(encoding="utf-8"))
     return images
 
 
 def compose_images() -> list[str]:
     compose = yaml.safe_load((PROJ_ROOT / "deploy" / "compose.yaml").read_text(encoding="utf-8"))
-    # The API's own image is built from the Dockerfile above and has no digest.
+    # The API's and the monitoring jobs' own images are built from the Dockerfiles
+    # above and have no digest.
     return [s["image"] for s in compose["services"].values() if "build" not in s]
 
 

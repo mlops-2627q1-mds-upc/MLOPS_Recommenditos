@@ -76,6 +76,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
 - In M6 we replay the `ES` listings against the API as simulated traffic.
   Alibi Detect should flag the input drift, and because every replayed listing has a price, we can also show the real MAE and interval coverage getting worse in Grafana.
   The replay's listings and the drift reference are versioned by the `monitoring_samples` stage in `data/monitoring/`: a 10,000-listing reference and an i.i.d. 20,000-listing control from `train`, and every `ES` listing the API accepts ([The monitoring samples](pipeline.md#the-monitoring-samples)).
+  The replay is the Compose service `replay` behind a profile, in the monitoring image, started by hand locally or on the VM; it shifts each `registration_date` by the whole months since 2025-11-08, so ages match training ([Replay](monitoring.md#replay)), **[decided]**, [EDN-100](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
   The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.

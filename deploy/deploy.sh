@@ -11,10 +11,12 @@
 #                               the same, logged in to ghcr.io for the pulls with the
 #                               token on the first line of standard input
 #
-# A release is two images that CD pushes under the same commit SHA: the API
-# image and the stack image (deploy/stack.Dockerfile), which holds compose.yaml,
-# nginx.conf and the configuration folders beside them. `deploy` pulls both
-# unless the VM has them, copies the stack image's files into stacks/<hash>
+# A release is the images that CD pushes under the same commit SHA: the API
+# image, the stack image (deploy/stack.Dockerfile), which holds compose.yaml,
+# nginx.conf and the configuration folders beside them, and every other image
+# that compose.yaml names in the same GHCR namespace with that tag, behind a
+# profile or not, such as the monitoring image of the replay (EDN-100). `deploy`
+# pulls them unless the VM has them, copies the stack image's files into stacks/<hash>
 # beside this script, named by a hash of their content, sets API_IMAGE_TAG in
 # `.env`, points the link `stack` at the new files in one rename, starts the
 # stack with `docker compose up -d --wait --remove-orphans` and asks the proxy
@@ -164,15 +166,24 @@ adopt_copied_files() {
     say "took the stack files beside .env as stacks/$stored, the ones that run now"
 }
 
-# The stack image's repository: API_IMAGE's with its last component `api`
-# replaced by `stack`, the two names CD pushes to (ghcr.io/<owner>/<repo>/api
-# and .../stack). Empty for an API_IMAGE without that component, such as the
-# local recommenditos-api: such an image has no stack image.
-stack_repository() {
+# The namespace CD pushes a release to: API_IMAGE without its last component
+# `api` (ghcr.io/<owner>/<repo> for ghcr.io/<owner>/<repo>/api). Empty for an
+# API_IMAGE without that component, such as the local recommenditos-api: such an
+# image has no stack image and no other images of its release.
+namespace() {
     local api
     api=$(env_value API_IMAGE)
     if [[ $api == */api ]]; then
-        out "${api%/api}/stack"
+        out "${api%/api}"
+    fi
+}
+
+# The stack image's repository, <namespace>/stack, the name CD pushes it to.
+stack_repository() {
+    local release
+    release=$(namespace)
+    if [[ -n $release ]]; then
+        out "$release/stack"
     fi
 }
 
@@ -297,6 +308,28 @@ image_of() {
     API_IMAGE_TAG=$1 compose config --images api
 }
 
+# The images of tag $1 that the stack files in $stack_dir name and that CD
+# pushed with the release, one per line: the API image first, then every other
+# image of every service, behind a profile or not, in the release's namespace
+# with the same tag, such as the monitoring image. The GHCR packages are private
+# and `up` pulls without a login, so these are pulled here with the registry
+# token; an image anywhere else, such as nginx, `up` pulls itself as before.
+release_images() {
+    local tag=$1 api release image images
+    api=$(image_of "$tag") || return 1
+    out "$api"
+    release=$(namespace)
+    if [[ -z $release ]]; then
+        return 0
+    fi
+    images=$(API_IMAGE_TAG=$tag compose --profile '*' config --images) || return 1
+    while read -r image; do
+        if [[ $image == "$release"/*:"$tag" && $image != "$api" ]]; then
+            out "$image"
+        fi
+    done < <(sort -u <<<"$images")
+}
+
 record() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >>"$HISTORY_FILE"; }
 
 # Starts the stack with the tag in .env and the files behind `stack`, and checks
@@ -330,19 +363,31 @@ look_closer() {
 # deployed stays. Removes the stack files no release needs any more, and the
 # files beside .env that were copied by hand, which no container mounts now.
 settle() {
-    local repository stacks old dir keep_previous
+    local repository stacks old dir keep_previous image others=()
     repository=$(image_of "$1")
     repository=${repository%:*}
     stacks=$(stack_repository)
+    # The release's other repositories, such as the monitoring image's; the old
+    # tags of one that this release no longer has stay.
+    while read -r image; do
+        if [[ -n $image && ${image%:*} != "$repository" ]]; then
+            others+=("${image%:*}")
+        fi
+    done < <(release_images "$1" || true)
+    if [[ -n $stacks ]]; then
+        others+=("$stacks")
+    fi
     while read -r old; do
         if [[ $old != "$1" && $old != "$2" ]]; then
             if docker image inspect "$repository:$old" >/dev/null 2>&1 &&
                 docker image rm "$repository:$old" >/dev/null 2>&1; then
                 say "removed the image of $old, which ran before"
             fi
-            if [[ -n $stacks ]] && docker image inspect "$stacks:$old" >/dev/null 2>&1; then
-                docker image rm "$stacks:$old" >/dev/null 2>&1 || true
-            fi
+            for image in "${others[@]}"; do
+                if docker image inspect "$image:$old" >/dev/null 2>&1; then
+                    docker image rm "$image:$old" >/dev/null 2>&1 || true
+                fi
+            done
         fi
     done < <(awk '$2 == "deploy" { print $3 }' "$HISTORY_FILE" | sort -u)
     keep_previous=$(cat "$PREVIOUS_STACK_FILE" 2>/dev/null || true)
@@ -397,7 +442,7 @@ go_back() {
 }
 
 deploy() {
-    local tag=$1 current current_stack target image log
+    local tag=$1 current current_stack target image images log
     current=$(env_value API_IMAGE_TAG)
     adopt_copied_files
     current_stack=
@@ -423,14 +468,22 @@ deploy() {
         out "running: $current"
         exit 1
     fi
-    # The new compose.yaml names the image.
+    # The new compose.yaml names the images.
     stack_dir=$STACKS_DIR/$target
-    image=$(image_of "$tag")
-    if docker image inspect "$image" >/dev/null 2>&1; then
-        say "$image is on the VM already"
-    else
+    if ! images=$(release_images "$tag"); then
+        registry_logout
+        record "deploy $tag pull-failed"
+        say "the compose.yaml of $tag names no images Compose can list; nothing changed"
+        out "running: $current"
+        exit 1
+    fi
+    while read -r image; do
+        if docker image inspect "$image" >/dev/null 2>&1; then
+            say "$image is on the VM already"
+            continue
+        fi
         log=$(mktemp "$STACKS_DIR/.pull.XXXXXX")
-        if ! pull_image "$image" "$log"; then
+        if ! pull_image "$image" "$log" </dev/null; then
             sed 's/^/  /' "$log" 2>/dev/null || true
             rm -f "$log"
             registry_logout
@@ -440,7 +493,7 @@ deploy() {
             exit 1
         fi
         rm -f "$log"
-    fi
+    done <<<"$images"
     registry_logout
     say "deploying $tag with stacks/$target (running now: ${current:-nothing}, with stacks/${current_stack:-none})"
     set_tag "$tag"

@@ -292,7 +292,7 @@ exclude_also = [
 
 [tool.ruff]
 line-length = 99
-src = ["recommenditos", "monitoring"]
+src = ["recommenditos"]
 # No `include`: pre-commit passes changed files to ruff explicitly and ruff does
 # not apply `include` to explicit paths, so an `include` would only make a local
 # `ruff check` blind to files CI still lints. Default discovery keeps the two in

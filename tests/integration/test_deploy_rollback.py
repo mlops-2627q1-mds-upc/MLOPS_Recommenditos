@@ -545,3 +545,43 @@ def test_the_stack_image_holds_the_stack_files_and_nothing_else(drill: Stack) ->
         }
     assert files == expected
     assert "compose.yaml" in files and "nginx.conf" in files
+
+
+@pytest.mark.req("NFR-13")
+def test_a_deploy_needs_the_release_image_behind_a_profile_too(drill: Stack) -> None:
+    """The replay's monitoring image is behind a profile, which `up` never pulls.
+
+    deploy.sh lists the images of every profile with this machine's Compose and
+    pulls the release's own; without that image the release would come up, and
+    the replay by hand would find no image to run.
+    """
+    monitoring = f"{REPOSITORY}/monitoring"
+    first = drill.deploy_sh("deploy", GOOD)
+    assert first.returncode == 0, first.stdout + first.stderr
+    env_file = drill.directory / ".env"
+    env_file.write_text(
+        env_file.read_text(encoding="utf-8") + f"MONITORING_IMAGE={monitoring}\n",
+        encoding="utf-8",
+    )
+
+    missing = drill.deploy_sh("deploy", NEWER)
+
+    assert missing.returncode == 1, missing.stdout + missing.stderr
+    assert f"pulling {monitoring}:{NEWER} failed; nothing changed" in missing.stdout
+    assert drill.env_tag() == GOOD
+    assert drill.health().status_code == 200
+    # Any image will do: the replay does not run in this drill.
+    docker("tag", f"{API}:{GOOD}", f"{monitoring}:{NEWER}")
+    try:
+        present = drill.deploy_sh("deploy", NEWER)
+
+        assert present.returncode == 0, present.stdout + present.stderr
+        assert f"{monitoring}:{NEWER} is on the VM already" in present.stdout
+        assert drill.env_tag() == NEWER
+    finally:
+        subprocess.run(
+            ["docker", "image", "rm", f"{monitoring}:{NEWER}"],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
