@@ -49,6 +49,7 @@ STAGE_MODULES = {
     "validate-data": "recommenditos.data.validate_data",
     "split": "recommenditos.data.split_data",
     "comparables": "recommenditos.data.build_comparables",
+    "monitoring_samples": "recommenditos.data.monitoring_samples",
     "features": "recommenditos.data.build_features",
     "train": "recommenditos.modeling.train",
     "evaluate": "recommenditos.modeling.evaluate",
