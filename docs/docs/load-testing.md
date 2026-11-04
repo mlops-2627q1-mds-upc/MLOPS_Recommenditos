@@ -84,7 +84,7 @@ make loadtest LOADTEST_DURATION=60s LOADTEST_OUT=reports/loadtest/<name> \
 make stack-down
 ```
 
-`make loadtest` takes `LOADTEST_URL` (default `http://localhost:8080`), `LOADTEST_RATE` (20), `LOADTEST_DURATION` (`5m`) and `LOADTEST_OUT`, and passes `LOADTEST_ARGS` on: `--idle 0` skips the 60 s idle baseline, `--no-energy` skips CodeCarbon, and `--no-docker` measures from Locust alone, for a target whose Docker daemon this machine cannot reach.
+`make loadtest` takes `LOADTEST_URL` (default `http://localhost:8080`, or the port `HTTP_PORT` names), `LOADTEST_RATE` (20), `LOADTEST_DURATION` (`5m`) and `LOADTEST_OUT`, and passes `LOADTEST_ARGS` on: `--idle 0` skips the 60 s idle baseline, `--no-energy` skips CodeCarbon, and `--no-docker` measures from Locust alone, for a target whose Docker daemon this machine cannot reach.
 It writes `<out>.md`, the figures beside their targets, `<out>.json`, every figure, and Locust's statistics, `<out>-locust.json`.
 
 A laptop run is a dry run of the procedure and is labelled as one: [`reports/loadtest/laptop-dry-run-2026-10-22.md`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/laptop-dry-run-2026-10-22.md) is the latest, with two workers at 20 requests/s for 60 s.

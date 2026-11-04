@@ -149,7 +149,8 @@ stack-down:
 # post-deployment check, always deselects them: a smoke run on the VM itself or
 # through an SSH tunnel would otherwise kill the production API or inspect the
 # containers of the machine it runs on.
-STACK_URL ?= http://localhost:8080
+# The local stack's port follows HTTP_PORT, as Compose's does.
+STACK_URL ?= http://localhost:$(or $(HTTP_PORT),8080)
 INTEGRATION_MARKERS ?= integration
 
 ## Run the integration suite against a running stack: make test-integration [STACK_URL=...]
@@ -161,7 +162,7 @@ test-integration:
 # The load test of docs/docs/load-testing.md (issue #143): Locust against a base
 # URL, with the measurements taken on the Docker host of the stack it targets.
 # `make loadtest-bodies` first, which needs `dvc pull data/processed/test.parquet`.
-LOADTEST_URL ?= http://localhost:8080
+LOADTEST_URL ?= http://localhost:$(or $(HTTP_PORT),8080)
 LOADTEST_RATE ?= 20
 LOADTEST_DURATION ?= 5m
 LOADTEST_OUT ?= reports/loadtest/local

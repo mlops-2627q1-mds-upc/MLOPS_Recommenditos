@@ -13,8 +13,10 @@ Every test here is marked `integration`, which `make test` deselects. The base
 URL comes from `RECOMMENDITOS_STACK_URL` and defaults to the local stack. Tests
 marked `docker_host` inspect or kill containers, so they need the machine that
 runs the stack: they run when the base URL is a loopback address and are skipped
-otherwise. `make smoke`, the post-deployment check, deselects them whatever the
-URL, so it never kills or inspects a container (docs/docs/deployment.md).
+otherwise. They find the containers of the Compose project `COMPOSE_PROJECT_NAME`
+names, `recommenditos` by default. `make smoke`, the post-deployment check,
+deselects them whatever the URL, so it never kills or inspects a container
+(docs/docs/deployment.md).
 
 The model version `/health` reports is compared with `dvc.lock`, as FR-12 asks,
 unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` names another one: CI builds the
@@ -51,9 +53,10 @@ EXPECTED_VERSION_ENV_VAR = "RECOMMENDITOS_EXPECTED_MODEL_VERSION"
 EXPECTED_COMPARABLES_ENV_VAR = "RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION"
 DEFAULT_STACK_URL = "http://localhost:8080"
 
-#: The Compose project of deploy/compose.yaml (`name:`), on the laptop, in CI and
-#: on the VM alike, so its containers are found by label without the file.
-COMPOSE_PROJECT = "recommenditos"
+#: The Compose project whose containers the `docker_host` tests find by label:
+#: deploy/compose.yaml's `name:`, unless `COMPOSE_PROJECT_NAME` overrides it for
+#: Compose and this suite alike, as for a second stack beside the default one.
+COMPOSE_PROJECT = os.environ.get("COMPOSE_PROJECT_NAME") or "recommenditos"
 
 #: Long enough for a valuation on a cold API, short enough that a hung proxy
 #: fails the run instead of stalling it.

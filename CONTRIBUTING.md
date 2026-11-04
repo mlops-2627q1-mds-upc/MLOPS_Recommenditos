@@ -170,6 +170,9 @@ It only matters when you change a dependency or what a serving module imports, b
 
 `make test-integration` runs `tests/integration/` against a running stack, through nginx, the way a client reaches the API: the image as built, the proxy's rules and limits, the healthcheck and the restart policy ([Deployment](docs/docs/deployment.md#integration-tests)).
 `make test` leaves it out, because it needs the stack: start it with `make stack` after `dvc pull`, run the suite, and stop it with `make stack-down`.
+A second stack beside the default one, for a second checkout or a parallel agent, needs its own Compose project, port and image tag.
+Export `COMPOSE_PROJECT_NAME` (default `recommenditos`), `HTTP_PORT` (default 8080) and `API_IMAGE_TAG` (default `local`) in the shell, not in `deploy/.env`, which the suite does not read.
+Then `make stack`, `make test-integration`, `make loadtest` and `make stack-down` all work on that stack and never stop or kill someone else's, and the rollback drill runs as the project `<COMPOSE_PROJECT_NAME>-drill`.
 Run it when you change the API, the `Dockerfile`, `deploy/` or the dependencies; CI's `Integration (Compose stack)` job runs it on every pull request that touches them.
 Its `docker_host` tests fail when the image does not hold the checkout's `recommenditos` package; the `Dockerfile` builds that package from the build context in every build and bypasses uv's cache for it, because the cache is shared by every build on the machine and would otherwise hand over a wheel built from another worktree ([#180](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/180)).
 

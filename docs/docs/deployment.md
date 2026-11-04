@@ -141,6 +141,7 @@ make test-integration STACK_URL=http://<host>:<port> # against another stack
 
 The base URL is `RECOMMENDITOS_STACK_URL`, which the make targets set.
 The tests that need the Docker host, the crash test among them, run when that URL is a loopback address and are skipped otherwise.
+They find the containers of the Compose project `COMPOSE_PROJECT_NAME` names, `recommenditos` by default, so a second stack on the same machine runs the whole suite with its own project ([Contributing](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/CONTRIBUTING.md#before-opening-a-pr)).
 `make smoke` never touches containers: it deselects those tests whatever the URL, so a smoke run on the VM, from a runner on it, or through an SSH tunnel cannot kill the production API or inspect the machine's own containers.
 `make test-integration` is the full run, for CI and the local stack.
 `/health` is compared with the hashes `dvc.lock` records for the bundle and the index (FR-12), unless `RECOMMENDITOS_EXPECTED_MODEL_VERSION` and `RECOMMENDITOS_EXPECTED_COMPARABLES_VERSION` name other versions.

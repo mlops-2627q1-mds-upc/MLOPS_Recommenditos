@@ -20,14 +20,15 @@ import time
 
 import httpx2
 import pytest
-from tests.integration.conftest import Container, docker
+from tests.integration.conftest import COMPOSE_PROJECT, Container, docker
 
 from recommenditos.config import PROJ_ROOT
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 
-PROJECT = "recommenditos-drill"
-REPOSITORY = "recommenditos-drill"
+#: Named after the stack under test, so the drills of two stacks never share a
+#: project or tear down each other's images.
+PROJECT = REPOSITORY = f"{COMPOSE_PROJECT}-drill"
 BROKEN_DOCKERFILE = """\
 FROM {base}
 CMD ["python", "-c", "raise SystemExit('broken on purpose by the rollback drill')"]
@@ -121,12 +122,13 @@ class Stack:
 @pytest.fixture
 def drill(tmp_path: Path, api_container: Container) -> Iterator[Stack]:
     """The VM's stack directory, three good tags of the image under test and a broken one."""
-    good = api_container.inspect()["Config"]["Image"]
+    # The image ID, not its tag: another checkout's `make stack` may have moved the tag.
+    good = api_container.inspect()["Image"]
     for tag in (GOOD, NEWER, NEWEST):
         docker("tag", good, f"{REPOSITORY}:{tag}")
     subprocess.run(
         ["docker", "build", "--quiet", "--tag", f"{REPOSITORY}:{BROKEN}", "-"],
-        input=BROKEN_DOCKERFILE.format(base=good),
+        input=BROKEN_DOCKERFILE.format(base=f"{REPOSITORY}:{GOOD}"),
         capture_output=True,
         text=True,
         timeout=120,
