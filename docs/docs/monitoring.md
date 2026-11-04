@@ -4,7 +4,7 @@ Monitoring
 Milestone 6 watches the running system from three sides.
 Better Stack checks the public `/health` from outside, so it notices when the VM itself is gone ([External uptime check](deployment.md#external-uptime-check)).
 Prometheus, inside the stack, keeps the figures of the API and of the machine it runs on ([Resource monitoring](#resource-monitoring)).
-The drift job, a later part of M6, compares what the API is asked with what the model was trained on ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228)).
+The [drift job](#drift-job) compares what the API is asked with what the model was trained on.
 With no real users, its traffic is the [replay](#replay) of held-out listings.
 [Grafana](#grafana) shows Prometheus' figures against the limits the requirements set, and [alerts](#alerts) post to the team's Discord before a limit is reached, each with what to do ([#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)).
 
@@ -65,10 +65,11 @@ The integration suite checks both flags and the volume, as NFR-04's "a deploymen
 
 ### The textfile collector
 
-node-exporter also exports every `*.prom` file in `/var/lib/node-exporter/textfile` of its container, which is the named volume `node-textfile`, mounted read-only there.
-That is how a job that is not a server publishes figures: M6's drift job ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228)) will mount the same volume writable and write its results there, without a port or a push gateway of its own.
-Nothing writes there yet.
-A writer has to write each file under a temporary name and rename it, so that a scrape never reads half a file, and leave it readable to all, because node-exporter runs as `nobody`.
+node-exporter also exports every `*.prom` file in `/var/lib/node-exporter/textfile` of its container, which is the named volume `monitor-textfile`, mounted read-only there.
+That is how a job that is not a server publishes figures: the [drift job](#drift-job) mounts the same volume writable and writes `monitor.prom` there after every pass, without a port or a push gateway of its own.
+It writes the file under a temporary name and renames it, so that a scrape never reads half a file, and leaves it readable to all, because node-exporter runs as `nobody`.
+The volume is a tmpfs that Docker mounts with the job's user, 10001, as its owner: a volume on disk would be root's when node-exporter, which runs as `nobody` from an image without that directory, mounted it first, and the job could not write it.
+A reboot empties it until the next pass, and the volume `node-textfile` of the first stacks is no longer used.
 
 ### Reachable only inside the stack
 
@@ -421,3 +422,123 @@ SELECT client, inputs_sent_only, endpoint, COUNT(*) FROM predictions GROUP BY 1,
 SELECT json_extract(inputs, '$.country_code') AS country, COUNT(*)
 FROM labelled_predictions GROUP BY 1;
 ```
+
+## Drift job
+
+The drift job ([#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228), [EDN-101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)) compares each window of 1,000 logged requests with the 10,000 training listings of the drift reference, and says which input features drifted (FR-14, NFR-11).
+It is the `monitor` service of the stack, in the monitoring image of the replay.
+
+### What it compares
+
+A window is 1,000 consecutive rows of the prediction log by `seq` that are answers of `/v1/predict` or `/v1/price-range`, with `inputs_sent_only = 1`, from no marked client or from the replay ([Reading the log](api.md#reading-the-log)), and with all ten fields FR-01 requires.
+The load test, the smoke checks, the web page and the rows from before #191 are left out by `client` and `inputs_sent_only`; a range request with only some fields is left out by the last rule, because the reference has every required field.
+A change of `model_version` closes the window being filled as `partial`, untested, so that every window belongs to one model.
+
+Each request becomes the 23 features of `drift_features.py`, its age computed on `as_of_for(answered_at)`, the rule that cancels the replay's shift of `registration_date` ([What it sends](#what-it-sends)).
+Each feature has an Alibi Detect detector of its own, fitted on `data/monitoring/reference.parquet`:
+
+- the eight numeric features, `KSDrift` on their non-missing values, of the reference and of the window alike;
+- the seven categorical features and the eight missing indicators, `ChiSquareDrift`, over the categories of the reference and of the window together, so a category the reference never saw counts.
+
+A feature has drifted when its p-value is below 0.005 / 23, about 0.000217, and a window is flagged when any feature has (NFR-11, EDN-14).
+`model` is not compared: its 349 levels leave well under one expected count per cell of a chi-square on 1,000 requests.
+`TabularDrift`, which runs the same tests over a whole table, cannot leave out the missing values of one column alone, so the job runs one detector per feature and applies the Bonferroni correction itself, as the validated scipy check `reports/analysis/nfr11_check.py` did.
+The indicators `age_years__missing`, `mileage_km_raw__missing` and `power_kw__missing` are `present` in every accepted request; `ChiSquareDrift` accepts such a one-category feature and gives it the p-value 1, so they stay in the 23 and the threshold is the validated one.
+
+### How it runs
+
+The service is a shell loop, `monitoring/monitor-loop.sh`, that starts one pass, `python -m recommenditos_monitoring run-once`, and sleeps 15 minutes after it ends (`RECOMMENDITOS_MONITOR_INTERVAL_S`, 900 s).
+An interval that is not a positive whole number of seconds would make `sleep` fail at once and run the passes back to back, so the loop prints a warning to the service log and sleeps 900 s instead.
+The Python process ends after every pass, so between passes only the shell, its `sleep` and Docker's init run, 4 MiB of resident memory in `docker top` (10.5 MiB in `docker stats`, which counts the page cache).
+A pass runs at the container's start too, so every deploy runs one.
+A pass reads the log from the end of the last closed window, tests every window that has filled since, stores each with its results in one transaction, and records the progress of the window being filled; a rerun never stores a window twice, and a second pass while one runs leaves it to finish.
+A pass that fails prints `the drift pass failed: ...` to the service log, records the failure in `monitor.db`, leaves the last metrics in place, and the loop goes on.
+
+The service has no healthcheck at all: with none, `up --wait` waits only for the container to run, so a failing pass can never fail a deploy, and Compose 2.35 on CI and the VM fails `--wait` on `disable: true`.
+It is limited to 512 MiB and half a vCPU, which leaves the API's latency (NFR-02) the other half of the VM's one vCPU; passes that tested three windows peaked at 197 MiB in the container's cgroup (`memory.peak`) on a laptop, most of it Alibi Detect's import (it raised a Python process's peak resident memory from 110 MB with pandas and pyarrow alone to 291 MB), which a pass with no full window skips.
+It runs as the API's user, 10001, not as the image's: SQLite's WAL needs the log's directory writable for its shared-memory file even to read it, and that directory on the `prediction-log` volume is the API user's.
+The job opens the log read-only all the same.
+
+Alibi Detect 0.13 pins Pillow below 11 and transformers below 5, both with fixed HIGH findings that the image scan of NFR-09 fails on.
+The image leaves Pillow out, because only Alibi Detect's image detectors and Matplotlib use it and the job imports neither; the integration suite checks that it is gone and that a pass runs.
+transformers stays, since Alibi Detect imports it on import; its three findings are about loading and saving models, which the job never does, and are accepted in `.trivyignore` until 2026-12-04.
+The image is 1.26 GB, most of it Alibi Detect's dependencies.
+
+### Where the results go
+
+`monitor.db`, on the volume `monitor-results`, keeps everything; it survives a new image and a rollback, and only `down -v` removes it.
+
+| Table | One row per |
+|-------|-------------|
+| `windows` | Closed window: `status` (`tested` or `partial`), its first and last `seq`, its time range (`first_answered_at`, `last_answered_at`), the model, `es_share`, and when tested `flagged`, `drifted_features` and the threshold |
+| `window_features` | Feature of a tested window: the test (`ks` or `chi2`), the p-value, the statistic, the values compared, and `drifted` |
+| `window_requests` | Request of a window that the log still holds, with its `request_id`, so a window's labels are the feedback of exactly its requests ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)) |
+| `open_window` | The window being filled: n of 1,000 |
+| `runs` | Pass, with its outcome, the last 10,000 |
+
+After each pass the job writes `monitor.prom` into the volume `monitor-textfile`, which node-exporter serves ([The textfile collector](#the-textfile-collector)): the latest tested window's flag, its number of drifted features, each feature's p-value (`recommenditos_drift_feature_p_value{feature, test}`), the threshold, its number, last `seq`, end time and ES share, the open window's progress, and `recommenditos_monitor_last_success_timestamp_seconds`, the end of the last pass that succeeded.
+That last one, and node-exporter's `node_textfile_mtime_seconds`, show a job that stopped.
+
+### How large it grows
+
+`monitor.db` is bounded, as NFR-04 asks of storage that grows: it never holds more than the log's cap allows, and its evidence grows by a few kilobytes a window.
+
+- `window_requests` takes 121 bytes a request, its two indexes included.
+  The log's rotation deletes the oldest answers with their feedback ([Rotation](api.md#rotation)), after which no label can be joined to them, so every pass drops the rows of requests below the log's lowest `seq`.
+  The table therefore holds at most the requests the log holds.
+  The log's 2 GB hold 820,000 answers of the replay's full listings (2,445 bytes each) or 3.1 million of the ten required fields alone (637 bytes each), so the table stays at about 100 MB with the replay's traffic and at about 380 MB in the worst case.
+- `windows` and `window_features` take about 2.7 KB a window of 1,000 requests, and stay: they are the evidence for the report and for retraining.
+  At 5 requests a second around the clock, which only a replay sends, that is 1.2 MB a day and 0.4 GB a year, against the 20 GB disk with at least 8 GB free.
+- `runs` keeps the last 10,000 passes, 104 days of one every 15 minutes: 0.8 MB with one failed pass in ten.
+
+The sizes were measured with SQLite's `dbstat` on a log of 20,000 answers written by the API's own store, with 20 windows tested on it.
+SQLite reuses the pages a deletion frees, so the file does not grow past its largest content.
+
+### How to read a finding
+
+`report` prints a finding for a window, the latest tested one by default:
+
+```text
+Input drift in window 3 (log seq 2001 to 3000, 1000 requests answered ... by lgbm-basic ..., 100% ES): 14 of 23 features are below p 0.000217 (0.005 / 23, NFR-11): country_code (p 0), nr_prev_owners__missing (p 0), body_type (p 2.7e-34), ...
+```
+
+A flagged window says the requests of that window are unlikely to come from the training distribution; the features are sorted by p-value, the strongest evidence first.
+A flag on `country_code` alone is a new market mix; several features besides it, as the `ES` replay gives, are a population the model has not seen, which is the case for retraining (FR-15): the finding is the text for `retrain.yml`'s `reason`.
+A control window of the training distribution is flagged in at most 1 of 20 windows (NFR-11), so a single flag between unflagged windows is a false alarm until the next window confirms it.
+A `partial` window was cut short by a new model and is not tested; an open window shows only its progress.
+
+### Run it by hand
+
+Locally, on the stack of `make stack`, a pass and the reports; Compose refuses to read `compose.yaml` without the two variables of [Run it locally](#run-it-locally), and any value does for `exec`:
+
+```bash
+export GRAFANA_ADMIN_PASSWORD=unused DISCORD_WEBHOOK_URL=http://127.0.0.1:9/discarded
+docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring run-once
+docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report
+docker compose -f deploy/compose.yaml exec monitor python -m recommenditos_monitoring report --window 3 --json
+```
+
+On the VM, from `/opt/recommenditos`, with the paths deploy.sh uses; the JSON evidence goes straight into a file on the laptop:
+
+```bash
+ssh -p 22052 recommenditos@nattech.fib.upc.edu \
+  'cd /opt/recommenditos && docker compose -f stack/compose.yaml --env-file .env exec -T monitor python -m recommenditos_monitoring report --window 3 --json' \
+  > reports/monitoring/window-3.json
+```
+
+`docker compose ... cp monitor:/var/lib/recommenditos-monitor/monitor.db .` copies the whole file off the container instead.
+
+### NFR-11, tested on the real samples
+
+`monitoring/tests/test_nfr11.py` runs the job's own pass with the real detectors over a log of 20 control windows of 1,000 and the first 1,000 `ES` listings of the versioned samples, sent as the replay sends them, across a month boundary of the age rule.
+It asserts at most 1 flagged control window, and the `ES` window flagged with at least three features besides `country_code`.
+On the samples of 2026-11-04, no control window was flagged, the lowest p-value of any control feature was 0.0035 against the threshold of 0.000217, and the `ES` window was flagged in 14 features.
+The test needs `dvc pull data/monitoring`, which only main can do (the DagsHub credentials are main's, EDN-91), so it runs in CD's publish job, before any image is built or pushed, where a missing sample fails it (`RECOMMENDITOS_REQUIRE_MONITORING_SAMPLES=1`).
+A pull request's Tests job skips it and lists the skip in its job summary; run it locally with `make test-monitoring` after `dvc pull data/monitoring`.
+The requirement matrix collects the monitoring tests in their own environment, so NFR-11 and FR-14 count as verified by a test.
+
+### The licence
+
+Alibi Detect is licensed under the Business Source License 1.1, not an open-source licence: it permits non-production use, and its Additional Use Grant lets non-profit educational institutions use it in production as long as nothing built on it is sold.
+A course project of the UPC is such a use.
+Each version becomes Apache 2.0 four years after its release, 0.13.0 on 2029-12-11.

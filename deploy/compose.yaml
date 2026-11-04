@@ -1,5 +1,6 @@
 # The serving stack: the API behind nginx (docs/docs/deployment.md, EDN-87), and
-# the resource monitoring beside it (docs/docs/monitoring.md, EDN-99).
+# the resource monitoring and the drift job beside it (docs/docs/monitoring.md,
+# EDN-99, EDN-101).
 #
 # Locally, from the repository root after `dvc pull`:
 #     docker compose -f deploy/compose.yaml up -d --build --wait     (make stack)
@@ -19,7 +20,7 @@
 name: recommenditos
 
 # Docker keeps a container's log in json-file without a limit by default. Each
-# service keeps at most 5 files of 10 MB, 350 MB for the seven services, of the
+# service keeps at most 5 files of 10 MB, 400 MB for the eight services, of the
 # VM's 20 GB (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
 # day, so the API's 50 MB hold about a week of it, and each service's 50 MB
 # hold about 120,000 requests of history.
@@ -266,15 +267,16 @@ services:
     command:
       - --path.rootfs=/host
       # The textfile collector: every *.prom file in this directory becomes
-      # metrics, which is how M6's drift job publishes its results (#228). The
-      # job writes the named volume; node-exporter only reads it.
+      # metrics, which is how M6's drift job publishes its results (the
+      # `monitor` service below). The job writes the volume; node-exporter
+      # only reads it.
       - --collector.textfile.directory=/var/lib/node-exporter/textfile
     expose:
       - "9100"
     volumes:
       # `rslave`: a file system the host mounts later shows up here too.
       - /:/host:ro,rslave
-      - node-textfile:/var/lib/node-exporter/textfile:ro
+      - monitor-textfile:/var/lib/node-exporter/textfile:ro
     # The image runs as `nobody`.
     mem_limit: 64m
     memswap_limit: 64m
@@ -420,6 +422,66 @@ services:
       start_interval: 1s
       retries: 3
 
+  # M6's drift job (#228, EDN-101): every 15 minutes, one pass of
+  # `run-once`, which tests each window of 1,000 requests the prediction log
+  # completed for input drift against the training reference with Alibi
+  # Detect, stores the results in monitor.db and writes the latest window's for
+  # node-exporter (docs/docs/monitoring.md#drift-job). The Python process ends
+  # after each pass, so between passes only the shell and its `sleep` run. A
+  # pass that fails prints why to the service log and the loop goes on; the
+  # job's last-success metric shows it. No healthcheck at all: Compose 2.35
+  # fails `up --wait` on `disable: true`, and with none `--wait` waits only for
+  # the container to run, so a failing pass can never fail a deploy. Always on,
+  # no profile, so it ships and rolls back with every release.
+  monitor:
+    <<: *hardening
+    # The image of the replay below.
+    image: ${MONITORING_IMAGE:-recommenditos-monitoring}:${API_IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: monitoring/Dockerfile
+    # The API's user, not the image's: the job reads the API's SQLite file in
+    # WAL mode, which needs its directory writable for the shared-memory file
+    # even to read (docs/docs/api.md#the-records), and the API's volume is the
+    # API user's. The job opens the log read-only all the same.
+    user: "10001:10001"
+    # The loop of monitoring/monitor-loop.sh: a pass, then the interval below.
+    entrypoint: ["sh", "/app/monitor-loop.sh"]
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      RECOMMENDITOS_PREDICTION_LOG: /var/lib/recommenditos/prediction-log.sqlite3
+      RECOMMENDITOS_MONITOR_DB: /var/lib/recommenditos-monitor/monitor.db
+      RECOMMENDITOS_MONITOR_TEXTFILE_DIR: /var/lib/node-exporter/textfile
+      # Seconds between the end of one pass and the start of the next; the loop
+      # takes 900 and says so in the service log when it is not a positive
+      # whole number.
+      RECOMMENDITOS_MONITOR_INTERVAL_S: ${RECOMMENDITOS_MONITOR_INTERVAL_S:-900}
+    volumes:
+      # The API's volume, read-write for WAL's shared-memory file (see `user`).
+      - prediction-log:/var/lib/recommenditos
+      # monitor.db: the windows and their results, the evidence for the report.
+      - monitor-results:/var/lib/recommenditos-monitor
+      - monitor-textfile:/var/lib/node-exporter/textfile
+    # Where Matplotlib and Numba, which Alibi Detect imports, keep their caches;
+    # the root is read-only. The user's, like the API's.
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700,size=64m
+    # Docker's init (tini) as PID 1 in front of the shell, so a stop's SIGTERM
+    # ends the shell's loop at once instead of after the 10 s grace.
+    init: true
+    restart: unless-stopped
+    # Passes that tested three windows peaked at 197 MiB in the cgroup's
+    # memory.peak on a laptop (docs/docs/monitoring.md#drift-job); between
+    # passes init, shell and sleep hold about 4 MiB. Half a vCPU at most, so that
+    # a pass on the VM's one vCPU leaves the API's latency (NFR-02) half of it.
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.5
+    pids_limit: 64
+    logging: *logging
+
   # M6's replay of held-out listings (#227, EDN-100): control listings, then the
   # ES market, sent through nginx like a client's, with each listing's observed
   # price sent to /v1/feedback inside this network. Behind a profile, so `up`,
@@ -460,9 +522,20 @@ volumes:
   prediction-log:
   # Prometheus' TSDB, at most 2 GB by its retention.
   prometheus-data:
-  # The textfile collector's .prom files (node-exporter above).
-  node-textfile:
   # Alertmanager's silences and notification log.
   alertmanager-data:
   # Grafana's database.
   grafana-data:
+  # The drift job's monitor.db, which survives a new image and a rollback.
+  monitor-results:
+  # The textfile collector's .prom files (node-exporter above), which the drift
+  # job rewrites after every pass. In memory, mounted by Docker with the job's
+  # user as its owner whichever container mounts it first: on disk the volume
+  # would be root's, which node-exporter's image gives it, and the job, not
+  # root, could not write it. A reboot empties it until the next pass.
+  monitor-textfile:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "uid=10001,gid=10001,mode=0755,size=1m"

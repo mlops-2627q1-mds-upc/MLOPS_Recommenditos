@@ -715,6 +715,7 @@ def _as_the_repository(tmp_path, monkeypatch, coverage=COVERAGE, markers=None):
         path.write_text(text, encoding="utf-8")
         monkeypatch.setattr(matrix_tool, name, path)
     monkeypatch.setattr(matrix_tool, "collect_req_markers", lambda: markers or {})
+    monkeypatch.setattr(matrix_tool, "collect_monitoring_markers", dict)
     return tmp_path / "matrix.md", tmp_path / "matrix.json"
 
 

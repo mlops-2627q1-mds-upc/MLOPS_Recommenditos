@@ -148,7 +148,7 @@ Copy the three files of each run back into `reports/loadtest/` and commit them i
 scp -P 22052 'recommenditos@nattech.fib.upc.edu:loadtest/reports/loadtest/vm-<date>-*' reports/loadtest/
 ```
 
-The prediction log keeps the run's records; they are 2 x 6,000 requests of about 750 bytes, far below its 2 GB cap; the report's start time and duration mark them, so M6's drift job can leave them out.
+The prediction log keeps the run's records; they are 2 x 6,000 requests of about 750 bytes, far below its 2 GB cap. M6's drift job leaves them out: the runs of 2026-10-31 predate #191, so their `inputs_sent_only` is NULL, and a later run's requests carry `X-Client: loadtest` ([Reading the log](api.md#reading-the-log)).
 
 **Results of 2026-10-31.**
 Both runs were made against image 902de35, with Locust on the VM: [one worker](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-1.md) and [two workers](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-10-31-workers-2.md).
