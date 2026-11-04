@@ -650,7 +650,10 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
     without the variable, the 9V74 computed both values one unit in the last
     place off. The pytest process imported `recommenditos`, so the variable is
     removed from the child's environment, which then has to set it itself.
+    numpy's Windows wheel has no AVX-512 kernels, so there the variable stays
+    unset and the test checks that the wheel still has none.
     """
+    disabled = None if sys.platform == "win32" else NUMPY_DISABLED_CPU_FEATURES
     completed = subprocess.run(
         [
             sys.executable,
@@ -669,10 +672,10 @@ def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
     assert completed.returncode == 0, completed.stderr[-3000:]
     seen = json.loads(completed.stdout.strip().splitlines()[-1])
 
-    assert seen["seen"] == [NUMPY_DISABLED_CPU_FEATURES], (
+    assert seen["seen"] == [disabled], (
         "numpy loaded before recommenditos/__init__.py set NPY_DISABLE_CPU_FEATURES"
     )
-    assert set(seen["dispatch"]) - {"X86_V3"} == set(NUMPY_DISABLED_CPU_FEATURES.split())
+    assert set(seen["dispatch"]) - {"X86_V3"} == set((disabled or "").split())
     assert seen["avx512_on"] == []
     assert seen["bits"] == list(_LOG_PRICE_BITS.values())
 
