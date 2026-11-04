@@ -31,8 +31,9 @@ pytestmark = pytest.mark.skipif(
 # What the `run` fixture gives a test: the JSON value of an expression.
 Run = Callable[[str], Any]
 
-# The first Node start on a fresh Windows runner has taken more than 30 s, while
-# every later one takes a fraction of a second (run 41898404296). So Node starts
+# The first Node start on a runner, and its first import of app.js, read from a
+# cold disk: 2-3 s on GitHub's runners against 0.04-0.09 s for every later start
+# (#294), and more than 30 s once on Windows (run 41898404296). So Node starts
 # once, with room for that, and each expression gets a bound of its own.
 START_TIMEOUT = 120
 EXPRESSION_TIMEOUT = 30
