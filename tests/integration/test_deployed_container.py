@@ -1,4 +1,9 @@
-"""The running containers, inspected on the Docker host: user, packages, ports, hardening."""
+"""The running containers, inspected on the Docker host: user, packages, ports, hardening.
+
+The checks of user, ports, hardening and limits run for every service that
+deploy/compose.yaml has, so a new service passes them or is named as an
+exception here, with the reason.
+"""
 
 import hashlib
 import json
@@ -6,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from tests.lockfile import PROJECT, normalise, read_lock, runtime_closure
+import yaml
 
 from recommenditos.config import PROJ_ROOT
 
@@ -13,6 +19,24 @@ pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 
 #: NFR-04's cap on the API container's memory, 1 GB.
 NFR04_API_MEMORY_BYTES = 10**9
+
+
+def compose_services() -> list[str]:
+    """Every service of deploy/compose.yaml that `up` starts, so that a new one is
+    checked like the others; a service behind a profile runs only when asked for."""
+    compose = yaml.safe_load((PROJ_ROOT / "deploy" / "compose.yaml").read_text(encoding="utf-8"))
+    services = compose["services"].items()
+    return sorted(name for name, service in services if not service.get("profiles"))
+
+
+SERVICES = compose_services()
+
+#: The one service that publishes a port, nginx's (FR-10, NFR-09).
+PUBLISHING_SERVICES = {"proxy"}
+
+#: The services that run as root, each with the reason (deploy/compose.yaml):
+#: cAdvisor reads the Docker socket and /var/lib/docker, which only root can.
+ROOT_SERVICES = {"cadvisor"}
 
 #: Prints the distributions the API's interpreter can import, which is the
 #: image's virtual environment: it is created without the system site-packages.
@@ -41,11 +65,22 @@ def package_digests(root: Path) -> dict[str, str]:
 
 
 @pytest.mark.req("NFR-09")
-@pytest.mark.parametrize("service", ["api", "proxy"])
-def test_the_container_runs_as_a_non_root_user(service, request):
-    container = request.getfixturevalue(f"{service}_container")
-    uid = container.exec("id", "-u")
+@pytest.mark.parametrize("service", sorted(set(SERVICES) - ROOT_SERVICES))
+def test_the_container_runs_as_a_non_root_user(service, stack_container):
+    uid = stack_container(service).exec("id", "-u")
     assert uid.isdigit() and int(uid) != 0, f"{service} runs as uid {uid}"
+
+
+@pytest.mark.req("NFR-09")
+@pytest.mark.parametrize("service", sorted(ROOT_SERVICES))
+def test_a_root_container_mounts_the_host_read_only(service, stack_container):
+    """The exception stays narrow: every bind mount of the host is read-only."""
+    mounts = stack_container(service).inspect()["Mounts"]
+    binds = [mount for mount in mounts if mount["Type"] == "bind"]
+
+    assert binds, f"{service} mounts nothing of the host, so it need not run as root"
+    writable = [mount["Source"] for mount in binds if mount["RW"]]
+    assert not writable, f"{service} runs as root and may write {writable} on the host"
 
 
 @pytest.mark.req("NFR-09")
@@ -63,11 +98,13 @@ def test_the_image_holds_the_serving_runtime_and_no_dependency_group(api_contain
 
 
 @pytest.mark.req("FR-10", "NFR-09")
-def test_the_api_port_is_not_published_on_the_host(api_container):
-    """Only nginx is reachable from outside; the API only inside the Compose network."""
-    ports = api_container.inspect()["NetworkSettings"]["Ports"]
+@pytest.mark.parametrize("service", sorted(set(SERVICES) - PUBLISHING_SERVICES))
+def test_no_port_but_the_proxy_is_published_on_the_host(service, stack_container):
+    """Only nginx is reachable from outside; the API and the monitoring only inside
+    the Compose network. The VM's ports 8080 to 8089 are public (docs/docs/deployment.md)."""
+    ports = stack_container(service).inspect()["NetworkSettings"]["Ports"]
     published = {port: bindings for port, bindings in ports.items() if bindings}
-    assert not published, f"the API container publishes {published}"
+    assert not published, f"the {service} container publishes {published}"
 
 
 @pytest.mark.req("NFR-12")
@@ -127,10 +164,10 @@ def root_mount_options(container, pid: int | None = None) -> list[str]:
 
 
 @pytest.mark.req("NFR-09")
-@pytest.mark.parametrize("service", ["api", "proxy"])
-def test_the_container_has_a_read_only_root_and_no_privileges(service, request):
+@pytest.mark.parametrize("service", SERVICES)
+def test_the_container_has_a_read_only_root_and_no_privileges(service, stack_container):
     """Compose's hardening, as configured and as the image's command sees it."""
-    container = request.getfixturevalue(f"{service}_container")
+    container = stack_container(service)
     host_config = container.inspect()["HostConfig"]
     status = process_status(container)
 
@@ -146,10 +183,10 @@ def test_the_container_has_a_read_only_root_and_no_privileges(service, request):
 
 
 @pytest.mark.req("NFR-04")
-@pytest.mark.parametrize("service", ["api", "proxy"])
-def test_the_container_has_memory_and_process_limits(service, request):
+@pytest.mark.parametrize("service", SERVICES)
+def test_the_container_has_memory_and_process_limits(service, stack_container):
     """Each container has a memory limit without swap and a process limit (deploy/compose.yaml)."""
-    host_config = request.getfixturevalue(f"{service}_container").inspect()["HostConfig"]
+    host_config = stack_container(service).inspect()["HostConfig"]
 
     memory, pids = host_config["Memory"], host_config["PidsLimit"]
     assert memory > 0, f"{service} has no memory limit"

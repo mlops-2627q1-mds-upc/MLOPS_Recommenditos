@@ -344,12 +344,22 @@ jobs:
         id: build
         if: needs.changes.outputs.stack == 'true'
         run: docker compose -f deploy/compose.yaml build
+      # Before the stack starts, so a configuration Prometheus would refuse fails
+      # here with promtool's message rather than as an unhealthy container.
+      - name: Check the Prometheus configuration (promtool)
+        if: needs.changes.outputs.stack == 'true'
+        run: make prometheus-check
       - name: Start the stack
         if: needs.changes.outputs.stack == 'true'
         run: docker compose -f deploy/compose.yaml up -d --wait
       - name: Run the integration suite through the proxy
         if: needs.changes.outputs.stack == 'true'
         run: make test-integration
+      # What the stack holds after the suite's traffic, for the memory budget of
+      # NFR-04 (docs/docs/deployment.md#the-stack).
+      - name: Print the containers' memory and CPU
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: docker stats --no-stream
       - name: Print the container logs
         if: failure() && needs.changes.outputs.stack == 'true'
         run: docker compose -f deploy/compose.yaml logs --no-color --timestamps
