@@ -27,7 +27,10 @@ answer's `request_id` and the key in `X-API-Key`, straight to the API inside the
 Compose network, because the proxy refuses the path from outside. The same price
 again is answered 200, so a feedback is retried on any failure; a valuation is
 retried only when it surely reached no route (no connection, or 502/503), so a
-retry never logs a listing twice. Listings are sent one at a time at `--rate`
+retry never logs a listing twice. That holds because the wait for an answer
+(`--timeout`) is at most 50 s: nginx answers 503 itself after 60 s without the
+API's answer, which the API may still log, and the replay's read timeout, which
+is never retried, comes first. Listings are sent one at a time at `--rate`
 per second, and a summary of what was sent and answered ends the run.
 
     python -m recommenditos_monitoring replay --control 5000 --then es --rate 5

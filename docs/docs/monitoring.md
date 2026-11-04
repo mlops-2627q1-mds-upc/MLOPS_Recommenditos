@@ -148,12 +148,13 @@ They go through nginx, `http://proxy:8080`, as a client's requests do, with `X-C
 
 `registration_date` is moved forward by the whole months from the samples' `reference_date`, 2025-11-08, to the send time.
 The model computes ages on 2025-11-08 and the API on the day it answers, so a listing of the 2025 snapshot replayed a year later would otherwise look a year older, and every control window would be flagged on `age_years`.
-A month is complete at 00:00 UTC on the 8th; the drift job computes the age of a logged request with the same rule, so the two shifts cancel to within three days (`drift_features.py`).
+A month is complete at 00:00 UTC on the 8th; the drift job computes the age of a logged request with the same rule, so the two shifts cancel to within four days, three in the year after 2025-11-08 (`drift_features.py`).
 
 After each priced answer, the listing's observed price goes to `http://api:8000/v1/feedback` with the answer's `request_id` and `RECOMMENDITOS_API_KEY` from `.env` in `X-API-Key`, inside the Compose network, because nginx refuses the path from outside.
 A feedback that fails is sent again, up to three times with a growing pause, because the same price again is answered 200 and changes nothing.
 A valuation is sent again only when it surely reached no route: no connection, or a 502 or 503.
 After a read timeout the API may have logged the answer, so it is counted and not sent again, and no listing is logged twice.
+That is why `--timeout` is at most 50 s: after 60 s without the API's answer nginx answers 503 itself (its default `proxy_read_timeout`, mapped to 503 in `deploy/nginx.conf`), the API may still log that listing, and a 503 is sent again, so the replay's own read timeout has to come first.
 A 401 from `/v1/feedback` stops the run, since no price could be stored with that key.
 
 The listings go one at a time at `--rate` per second (5 by default), so 5,000 control listings take about 17 minutes and all 25,779 about 86 minutes; when the API answers more slowly, the rate drops, and the summary says so.

@@ -35,6 +35,24 @@ def positive_rate(text: str) -> float:
     return rate
 
 
+#: The longest wait for an answer: below nginx's default proxy_read_timeout of
+#: 60 s, after which the proxy answers 503 (deploy/nginx.conf) for a valuation the
+#: API may still answer and log. The replay retries a 503, so with a longer wait
+#: that listing would be logged twice; with this one its own read timeout comes
+#: first, and a read timeout is never sent again.
+MAX_TIMEOUT_SECONDS = 50.0
+
+
+def answer_timeout(text: str) -> float:
+    seconds = float(text)
+    if not 0 < seconds <= MAX_TIMEOUT_SECONDS:
+        raise argparse.ArgumentTypeError(
+            f"the timeout is above 0 and at most {MAX_TIMEOUT_SECONDS:g} s, "
+            "below the proxy's 60 s, after which it answers 503"
+        )
+    return seconds
+
+
 def parser() -> argparse.ArgumentParser:
     main = argparse.ArgumentParser(prog="python -m recommenditos_monitoring")
     commands = main.add_subparsers(dest="command", required=True)
@@ -79,7 +97,10 @@ def parser() -> argparse.ArgumentParser:
         "--retries", type=int, default=3, help="further attempts of a failed request"
     )
     replay.add_argument(
-        "--timeout", type=float, default=10.0, help="seconds to wait for an answer"
+        "--timeout",
+        type=answer_timeout,
+        default=10.0,
+        help=f"seconds to wait for an answer (default: 10, at most {MAX_TIMEOUT_SECONDS:g})",
     )
     return main
 

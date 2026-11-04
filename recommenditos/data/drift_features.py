@@ -5,11 +5,11 @@ and the drift job (#228) computes the same features from each logged request
 with it, so the two sides cannot disagree about a feature's representation.
 The drift job runs in its own uv project (`monitoring/`, pandas 2 and numpy 1.26
 for Alibi Detect), which cannot install this package, so it carries a copy of
-this file that a test there keeps byte-identical to this one. This module
-therefore imports nothing but numpy, pandas and the standard library
-(`tests/test_monitoring_samples.py` checks that), and it computes the age
-itself rather than through `build_features.age_years`; a test checks the two
-agree.
+this file that `tests/test_monitoring_copy.py` keeps byte-identical to this
+one. This module therefore imports nothing but numpy, pandas and the standard
+library (`tests/test_monitoring_samples.py` checks that), and it computes the
+age itself rather than through `build_features.age_years`; a test checks the
+two agree.
 
 The age rule. The model was trained on ages at `reference_date` (2025-11-08),
 while the API computes a request's age at the day it answers it. The replay
@@ -19,11 +19,13 @@ months from `reference_date` to the send time, with `shifted_registration`. The
 drift job computes the age of a logged request at `as_of_for(answered_at)`:
 `reference_date` advanced by the whole months to the answer time. The two shifts
 cancel, and the age of a replayed listing is its age at `reference_date` to
-within three days, the most by which the shifted months and the months after
-`reference_date` can differ in length, so a control window compares like with
-like. Without the second shift the age would be off by up to one month (+0.066
-to +0.079 years on the 4th of a month), which flags `age_years` in 1 or 2 of 20
-control windows and breaks NFR-11's control clause.
+within four days (three for a send in the year after `reference_date`), the
+most by which the shifted months and the months after `reference_date` differ
+in length for any registration month since 1990 and any send in the five years
+after it, so a control window compares like with like. Without the second
+shift the age would be off by up to one month (+0.066 to +0.079 years on the
+4th of a month), which flags `age_years` in 1 or 2 of 20 control windows and
+breaks NFR-11's control clause.
 
 A month is counted at 00:00 UTC on `reference_date`'s day of the month (the
 8th), not at the end of a calendar month. A request sent before that instant

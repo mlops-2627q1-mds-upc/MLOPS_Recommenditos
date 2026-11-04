@@ -460,6 +460,21 @@ def test_the_command_line_refuses_a_run_that_sends_nothing(
     assert api.requests == []
 
 
+@pytest.mark.parametrize("timeout", ["60", "50.5", "0"])
+def test_the_command_line_refuses_a_wait_the_proxy_would_cut_short(
+    timeout: str, command_line: tuple[Path, FakeAPI], capsys
+):
+    """nginx answers 503 after 60 s, and a 503 is sent again, which could log a listing twice."""
+    data_dir, api = command_line
+
+    with pytest.raises(SystemExit) as stopped:
+        cli.main(["replay", "--control", "2", "--timeout", timeout, "--data-dir", str(data_dir)])
+
+    assert stopped.value.code == 2
+    assert "at most 50 s" in capsys.readouterr().err
+    assert api.requests == []
+
+
 def test_the_command_line_needs_the_key_before_it_sends_anything(
     data_dir: Path, api: FakeAPI, monkeypatch: pytest.MonkeyPatch
 ):
