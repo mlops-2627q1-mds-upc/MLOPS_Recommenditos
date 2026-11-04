@@ -9,13 +9,19 @@ synthetic fixture in a temporary directory, which covers the logic, and read
 """
 
 import json
+import os
+import platform
 import shutil
+import subprocess
+import sys
+import textwrap
 
 import pandas as pd
 import pytest
 from tests.conftest import PII_COLUMNS, params_override
 import yaml
 
+from recommenditos import NUMPY_DISABLED_CPU_FEATURES
 from recommenditos.config import PROJ_ROOT
 from recommenditos.data import (
     build_features,
@@ -575,10 +581,100 @@ def test_dvc_yaml_defines_exactly_the_stages_the_package_implements(dvc_stages):
 
 
 def test_every_stage_runs_its_own_module(dvc_stages):
+    # `-m recommenditos.<module>` also runs `recommenditos/__init__.py` before the
+    # module, which is what disables numpy's AVX-512 kernels in time (below).
     for stage, module in STAGE_MODULES.items():
         definition = dvc_stages[stage]
         body = definition.get("do", definition)
         assert f"-m {module}" in body["cmd"], stage
+
+
+#: `np.log` of the prices of the two listings whose `log_price` an AMD EPYC
+#: 9V74 with AVX-512 put one unit in the last place off (#259), as the AVX2
+#: kernels and glibc compute them: the correctly rounded values.
+_LOG_PRICE_BITS = {285_343.0: "0x1.91f76036223adp+3", 94_869.0: "0x1.6eba62f8cca24p+3"}
+
+#: Starts `preprocess` the way `python3 -m` does, short of running it, records
+#: NPY_DISABLE_CPU_FEATURES at numpy's first import, and prints as JSON which
+#: numpy kernels the process runs and the bits of the stage's `log_price`.
+_PREPROCESS_PROCESS = textwrap.dedent(
+    """
+    import json, os, runpy, sys
+
+    seen = []
+
+    class FirstNumpyImport:
+        def find_spec(self, name, path=None, target=None):
+            if name == "numpy" and not seen:
+                seen.append(os.environ.get("NPY_DISABLE_CPU_FEATURES"))
+
+    sys.meta_path.insert(0, FirstNumpyImport())
+    stage = runpy.run_module("recommenditos.data.preprocess", alter_sys=True)
+
+    import pandas as pd
+    from numpy._core._multiarray_umath import __cpu_dispatch__, __cpu_features__
+
+    prices = pd.DataFrame({"price": json.loads(sys.argv[1])})
+    log_price = stage["add_the_target"](prices)["log_price"]
+    print(json.dumps({
+        "seen": seen,
+        "dispatch": list(__cpu_dispatch__),
+        "avx512_on": sorted(
+            name for name, on in __cpu_features__.items()
+            if on and name.startswith(("AVX512", "X86_V4"))
+        ),
+        "bits": [float(value).hex() for value in log_price],
+    }))
+    """
+)
+
+
+@pytest.mark.req("NFR-06")
+@pytest.mark.skipif(
+    platform.machine().lower() not in {"x86_64", "amd64"},
+    reason="numpy's AVX-512 kernels exist only on x86-64",
+)
+def test_a_stage_process_runs_numpys_avx2_kernels_whatever_the_cpu():
+    """`preprocess`, started as `dvc repro` starts it, computes `log_price` without AVX-512.
+
+    numpy reads NPY_DISABLE_CPU_FEATURES only at its first import, so an import
+    hook records the variable's value at that moment: that part fails on any
+    CPU when something loads numpy before `recommenditos/__init__.py` sets it.
+    The variable must name exactly numpy's AVX-512 dispatch targets, so a numpy
+    that adds or renames one fails here too, and an ImportWarning (a name numpy
+    does not dispatch) is an error.
+
+    The kernels and the bits pass on a CPU without AVX-512 with or without the
+    variable, as on the laptop's i5-10210U. GitHub's runners land on AVX-512 CPUs
+    (AMD EPYC 9V74 or 9V45) some of the time, and a CI run on one exercises them:
+    without the variable, the 9V74 computed both values one unit in the last
+    place off. The pytest process imported `recommenditos`, so the variable is
+    removed from the child's environment, which then has to set it itself.
+    """
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-W",
+            "error::ImportWarning",
+            "-c",
+            _PREPROCESS_PROCESS,
+            json.dumps(list(_LOG_PRICE_BITS)),
+        ],
+        env={k: v for k, v in os.environ.items() if k != "NPY_DISABLE_CPU_FEATURES"},
+        cwd=PROJ_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-3000:]
+    seen = json.loads(completed.stdout.strip().splitlines()[-1])
+
+    assert seen["seen"] == [NUMPY_DISABLED_CPU_FEATURES], (
+        "numpy loaded before recommenditos/__init__.py set NPY_DISABLE_CPU_FEATURES"
+    )
+    assert set(seen["dispatch"]) - {"X86_V3"} == set(NUMPY_DISABLED_CPU_FEATURES.split())
+    assert seen["avx512_on"] == []
+    assert seen["bits"] == list(_LOG_PRICE_BITS.values())
 
 
 def test_every_stage_declares_its_own_module_as_a_dependency(dvc_stages):
