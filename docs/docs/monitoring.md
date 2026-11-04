@@ -147,9 +147,9 @@ Every target and limit is drawn in red, as a threshold line or, for the API's me
 The uptime panel is the share of Prometheus' scrapes of the API that succeeded in the dashboard's time range, seen from inside the stack.
 It cannot see the VM or its network being gone; the uptime NFR-05 reports is Better Stack's, from outside ([External uptime check](deployment.md#external-uptime-check), EDN-10).
 
-![The Service health dashboard on a laptop's stack under a light load](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-service-health-local.png)
+![The Service health dashboard on a laptop's stack under the replay](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-service-health-local.png)
 
-The screenshot is a local stand-in, taken on a laptop's stack under 5 requests per second for two and a half minutes; the one for the report is taken on the VM under NFR-03's load test.
+The screenshot is a local stand-in, taken on a laptop's stack during the replay of [A local stand-in](#a-local-stand-in), whose three model alerts the Firing alerts stat counts; the one for the report is taken on the VM under NFR-03's load test.
 
 ### Provisioned, not clicked
 
@@ -224,7 +224,8 @@ A table of every window for the report comes from `report --all`, or `report --a
 
 ![The Model performance dashboard on a laptop's stack: control traffic, then the ES holdout](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-model-performance-local.png)
 
-The screenshot is a local stand-in, taken on a laptop's stack on 2026-11-05 with the replay: 2,000 control listings and a pass, then 1,500 `ES` listings and a pass; the one for the report is taken on the VM.
+The screenshot is a local stand-in, taken on a laptop's stack on 2026-11-04 with the replay: 2,000 control listings and a pass, five minutes later 1,500 `ES` listings and a pass, at 15 to 19 listings a second.
+DriftDetected, ModelErrorHigh, and ModelCoverageLow were firing and had reached Alertmanager when the screenshot was taken, four minutes after the pass; the screenshot for the report is taken on the VM.
 
 ## Alerts
 
