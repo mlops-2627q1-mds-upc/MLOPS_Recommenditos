@@ -57,6 +57,13 @@ os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
 # fits on that kernel. `tests/test_model.py` checks the pin in fresh processes.
 os.environ.setdefault("RECOMMENDITOS_ANY_OPENBLAS_KERNEL", "1")
 
+# Likewise `check_numpy_kernels` (recommenditos/__init__.py) refuses numpy's
+# AVX-512 kernels, which this process runs on a CPU that has them, because it
+# loaded numpy before `recommenditos` could turn them off. No in-process test
+# compares a value with `dvc.lock`; `tests/test_pipeline.py` checks a stage's
+# own process, and the refusal, in fresh processes.
+os.environ.setdefault("RECOMMENDITOS_ANY_NUMPY_KERNEL", "1")
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _prediction_log_outside_the_repository(tmp_path_factory: pytest.TempPathFactory):
