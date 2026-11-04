@@ -3,28 +3,35 @@
 \ednentry{
   id = {EDN-10},
   title = {The availability target is recovery within 30 seconds},
+  note = {\textbf{Revised on 2026-11-04}: records how uptime is monitored (\#226); the target is unchanged.},
   date = {2026-09-22},
   milestone = {M6: Monitoring},
   topic = {Resource Monitoring, Requirements},
-  participants = {@lukas2510},
+  participants = {Lukas Häußler (decided), AI agents (compared alternatives, implemented)},
   decision = {NFR-05 no longer promises 99\,\% uptime.
 The API recovers by itself within 30 seconds of a crash or a reboot, which a rehearsed crash verifies.
 It has no unplanned downtime during a graded presentation and its warm-up.
-Outside those windows, uptime is monitored with Better Uptime and Grafana and reported, not promised.},
+Outside those windows, uptime is monitored and reported, not promised: Better Stack requests the public \texttt{/\allowbreak{}health} every 3 minutes, emails the team after 3 minutes of failures, and gives a status page and the uptime figure.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item Keep 99\,\% uptime: nothing backs it on one VM without redundancy, SLA, or on-call, and its measurement window was unbounded.
 \item Lower the number to 95\,\%: as unverifiable as 99\,\%.
+\item UptimeRobot: 5-minute checks. HetrixTools: little known. Freshping: shut down in 2026.
+\item Uptime Kuma: self-hosted, so on the VM it cannot see the VM go down.
 \end{itemize}
 \par
 \emph{Why:} M6 grades whether monitoring gives actionable insight, not whether a percentage was hit.
-The new requirement separates what we control, recovery and the presentation days, from what we can only observe.
-The recovery clause is testable today.},
+The requirement separates what we control from what we can only observe.
+Better Stack is the course's tool, and its free plan covers the need.
+A monitor on a URL that fails on purpose emailed 5 min 34 s after its first failing check, and the production API stayed up.},
   ai = {Information seeking, Alternative generation, Alternative assessment, Recommendation},
   response = {Accepted},
-  assessment = {AI had flagged that Prometheus's \texttt{up} metric cannot see the host going down and that Better Uptime, a course tool, was missing from the docs.
-Asked which target is feasible, it proposed the three-part requirement.
-Lukas confirmed it.},
-  aievidence = {Claude Code session of 2026-09-22, review of PR \#19; Lukas asked: ``what NFR that goes in the uptime direction is feasible with our system and constraints?''.},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{Requirements} NFR-05, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{specification} NFR-05, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}.},
+  assessment = {AI had flagged that Prometheus's \texttt{up} metric cannot see the host going down.
+It proposed the requirement, compared the alternatives and wrote the setup script.
+Lukas confirmed the requirement, created the account and kept Better Stack; the rehearsal was checked against the API's timeline.},
+  aievidence = {Claude Code session of 2026-09-22, review of PR \#19; Lukas asked: ``what NFR that goes in the uptime direction is feasible with our system and constraints?''.
+Session of 2026-11-04, AI asked (translated): ``Better Uptime (NFR-05, \#226): the API at nattech.fib.upc.edu:40520/health answers publicly, so an external check is possible. It needs a Better Stack account that only you can create. How do we do it?''
+Lukas answered (translated): ``You create a free Better Stack account and put an Uptime API token into .env as BETTERSTACK\_API\_TOKEN. An agent creates the monitor, the alert (email) and the status page by API; the configuration lives as a script in the repo.''
+He then asked (translated): ``Are we sure we want to use it? Is it the best for us? Or are there newer, better alternatives?''; AI answered: keep Better Stack, the course's tool.},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/requirements.md}{Requirements} NFR-05, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/specification.md}{specification} NFR-05, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md\#external-uptime-check}{External uptime check}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19}{PR \#19}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226}{\#226}.},
 }
