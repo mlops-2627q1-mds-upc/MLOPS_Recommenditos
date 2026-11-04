@@ -129,13 +129,14 @@ Contrast is listed under [The design](#the-design); both animations are switched
 The page marks every request it sends with the header `X-Client: web-ui`.
 Two other kinds of test traffic are marked the same way: the integration suite, which `make smoke` runs against the VM after every deploy, sends `X-Client: smoke`, and the load test (`tools/loadtest/locustfile.py`) sends `X-Client: loadtest`.
 The prediction log stores the mark in the column `client` of `predictions`, which is NULL for every other request ([API docs](api.md#what-a-record-holds)).
-M6's drift job compares real requests with the training data, so it should leave all marked requests out:
+M6's drift job compares real requests with the training data, so it leaves these three marks out; it keeps a fourth, `replay`, the replay of held-out listings that M6 sends as stand-in traffic ([Reading the log](api.md#reading-the-log)):
 
 ```sql
-SELECT inputs FROM predictions WHERE client IS NULL;
+SELECT inputs FROM predictions
+WHERE inputs_sent_only = 1 AND (client IS NULL OR client = 'replay');
 ```
 
-Only the values the API knows (`KNOWN_CLIENTS` in `recommenditos/api/prediction_log.py`: `web-ui`, `smoke` and `loadtest`) are stored; any other value of the header is stored as NULL, because the header is the client's to choose and a free value could identify the caller (NFR-08).
+Only the values the API knows (`KNOWN_CLIENTS` in `recommenditos/api/prediction_log.py`: `web-ui`, `smoke`, `loadtest` and `replay`) are stored; any other value of the header is stored as NULL, because the header is the client's to choose and a free value could identify the caller (NFR-08).
 The mark is a convention, not a control: a client can send it or leave it out, so it separates the page's traffic from callers that do not imitate it.
 
 ## Rate limiting

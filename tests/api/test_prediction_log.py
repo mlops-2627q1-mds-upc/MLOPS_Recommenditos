@@ -639,6 +639,7 @@ SECOND_INSERT = (
         ("web-ui", "web-ui"),
         ("smoke", "smoke"),
         ("loadtest", "loadtest"),
+        ("replay", "replay"),
         (None, None),
         ("someone@example.com", None),
         ("Web-UI", None),

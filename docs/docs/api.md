@@ -260,16 +260,32 @@ The API reaches them through the interface `PredictionStore` in `recommenditos/a
 | `answered_at` | When the answer was recorded, ISO 8601 in UTC |
 | `latency_ms` | From the arrival of the request to the record: validation and the model, without the serialisation of the response |
 | `model_variant`, `model_version` | The model that answered, as in the answer's `model` |
-| `inputs` | The validated request body as JSON, omitted optional fields left out |
+| `inputs` | The fields the client sent with a value, as JSON, the same set the model reads as known: a field left out or sent as null is not in it, and neither is its default, while a field sent with its default value, such as `"is_rental": false`, is (#191) |
 | `outputs` | The answer as JSON, without `model`, `request_id` and `warnings`, which have their own columns |
 | `warnings` | The answer's `warnings` as JSON |
-| `client` | The kind of test traffic a request is, from its `X-Client` header: `web-ui` for the [web page](web-ui.md), `smoke` for the integration suite and the smoke check, `loadtest` for the load test; NULL for every other request and every other value of the header, so that M6's drift job can leave test traffic out (#269) |
+| `client` | The kind of marked traffic a request is, from its `X-Client` header: `web-ui` for the [web page](web-ui.md), `smoke` for the integration suite and the smoke check, `loadtest` for the load test, `replay` for M6's replay of held-out listings; NULL for every other request and every other value of the header, so that M6's drift job can leave test traffic out (#269) |
+| `inputs_sent_only` | 1 when `inputs` holds only the fields the client sent; NULL on a row an image from before #191 wrote, whose `inputs` hold the defaults of the fields left out as well |
 
 The request bodies have no PII field, and no column holds the caller's address (NFR-08).
-`client` was added after the first deployed images: the store adds the column, NULL for older rows, to a file that lacks it when it opens, and an older image writes its rows without it, so a rollback keeps working with the same file and the schema version stays 1.
+`client` and `inputs_sent_only` were added after the first deployed images: the store adds such a column, NULL for older rows, to a file that lacks it when it opens, and an older image names the columns it writes and leaves the newer ones NULL, so a rollback keeps working with the same file and the schema version stays 1.
+The rows from before #191 are kept as they are: rewriting their `inputs` would lose information, because a `false` the client sent cannot be told from a default.
 A refused request (422, 413) is not an answer and has no record; it shows in the access log and the metrics.
 `feedback` holds `request_id`, `observed_price_eur` and `received_at`, and the view `labelled_predictions` is the join of the two tables.
 A reader opens the file with SQLite in the same way the API does; it needs write access to the directory for WAL's shared-memory file, even when it only reads.
+
+### Reading the log
+
+M6's drift job compares what clients sent with the training data, so it reads only the rows whose `inputs` hold nothing else, and leaves the test traffic out:
+
+```sql
+SELECT seq, endpoint, inputs FROM predictions
+WHERE inputs_sent_only = 1 AND (client IS NULL OR client = 'replay')
+ORDER BY seq;
+```
+
+A row with NULL in `inputs_sent_only` is older than #191, such as the load tests on the VM of 2026-10-31, and its defaults would look like real values: an empty equipment list or `"is_rental": false` that no client sent.
+A field missing from `inputs` is one the client left out, and the model treated it as unknown.
+A reader that wants the request as the API validated it gets the default of every field left out from the request model of the endpoint (`ValuationRequest`, `PartialListing` or `ComparablesRequest`), for example `k` for `/v1/comparables`.
 
 ### Exactly once
 
@@ -291,7 +307,8 @@ When the record cannot be written, the client gets a 503 instead of the answer, 
 An answer the log does not hold would break exactly-once silently, and the load test counts a 503 as an error, so a failing log is visible at once.
 
 Writing a record takes 0.15 ms at the median and 0.23 ms at the 95th percentile, measured over 2,000 answers of `lgbm-basic` on a development laptop, against the 250 ms NFR-02 gives `/predict`.
-A record takes about 940 bytes, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold about 2.1 million answers, fewer when requests fill more optional fields.
+A record took about 940 bytes while the log held the defaults of the fields a request left out, most of it the explanation in `outputs`, so the 2 GB of NFR-04 hold at least 2.1 million answers, fewer when requests fill more optional fields.
+Since #191 a request with only the ten required fields writes 166 bytes less, the defaults of its optional fields.
 
 ### Feedback
 
