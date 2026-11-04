@@ -534,7 +534,11 @@ def main() -> None:
     parser.add_argument("--bodies", type=Path, default=ROOT / "data/interim/loadtest/bodies.jsonl")
     parser.add_argument("--idle", type=int, default=60, help="Idle energy baseline in s (0: none)")
     parser.add_argument("--note", default="", help="Text for the report: machine, conditions")
-    parser.add_argument("--project", default="recommenditos", help="Compose project name")
+    parser.add_argument(
+        "--project",
+        default=os.environ.get("COMPOSE_PROJECT_NAME") or "recommenditos",
+        help="Compose project name (default: COMPOSE_PROJECT_NAME, else recommenditos)",
+    )
     parser.add_argument("--service", default="api", help="Compose service of the API")
     parser.add_argument("--no-docker", action="store_true", help="Measure from Locust alone")
     parser.add_argument("--no-energy", action="store_true", help="Skip CodeCarbon")
