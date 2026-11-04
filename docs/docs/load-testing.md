@@ -173,5 +173,26 @@ A second worker adds no CPU on one vCPU: it doubles the memory and makes the tai
 Locust's 2 % is confirmed by `ps`: 6 s of CPU time over the 299 s the process ran.
 CodeCarbon took a TDP of 4 W from its table for the VM's CPU ("Intel Core Processor (Broadwell, no TSX, IBRS)"), so its CPU term is low; 86 to 87 % of each run's energy is the constant 10 W it assumes for the RAM.
 
+**Results of 2026-11-05, with the full M6 stack.**
+One run of 20 requests/s for 5 minutes, one worker, with the eight services of the stack up (api, proxy, prometheus, cadvisor, node-exporter, alertmanager, grafana, monitor): [the report](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-11-05-full-stack.md).
+It differs from the runs of 2026-10-31 in where Locust ran: on the laptop, against the public URL `http://nattech.fib.upc.edu:40520` with UPClink disconnected, over the internet with a round trip of about 30 ms (3 pings, 19 to 49 ms), through nginx.
+So its latencies contain the network, which the runs on the VM did not, and are not directly comparable with them.
+The run used `--no-docker --no-energy --idle 0`: the laptop reaches neither the VM's Docker daemon nor `/metrics` (the proxy answers 403), so memory, energy, the server-side share within 250 and 300 ms, and the exactly-once check were not measured.
+The window was 2026-11-04 23:08:01 to 23:13:03 UTC, 00:08:01 to 00:13:03 CET on 2026-11-05, for reading the dashboards of that time.
+
+| Figure | 2026-10-31, 1 worker, Locust on the VM | 2026-11-05, full stack, Locust on the laptop | Target |
+|--------|----------|-----------|--------|
+| Achieved rate, errors | 19.61 of 20 requests/s, 0 of 5,883 | 20.04 of 20 requests/s, 0 of 6,013 | 95 % of 20/s, below 1 % (NFR-03) |
+| `/v1/predict` p50 / p95 / p99 | 65 / 210 / 340 ms | 97 / 280 / 1,100 ms | p95 at most 250 ms (NFR-02) |
+| `/v1/price-range` p50 / p95 / p99 | 52 / 170 / 320 ms | 82 / 270 / 1,200 ms | p95 at most 300 ms (NFR-02) |
+| `/v1/comparables` p50 / p95 / p99 | 5 / 16 / 23 ms | 31 / 120 / 950 ms | p95 at most 300 ms (NFR-02) |
+
+NFR-03 holds: the rate was reached, and there were no errors.
+NFR-02 is not confirmed by this run for `/v1/predict`: its client-side p95 of 280 ms is above 250 ms, `/v1/price-range` and `/v1/comparables` are within 300 ms.
+The comparison is not like for like, because the client side now includes the network: the median of `/v1/comparables`, which does almost no work, went from 5 to 31 ms, about the round trip, and its p95 from 16 to 120 ms, so the tail of the network alone is of the order of 100 ms.
+The p99 of about 1 s on every endpoint, `/v1/comparables` included, points to stalls that do not depend on the endpoint's work (the network, the proxy, the laptop, or the VM's single vCPU shared with the other seven services); which of them it was is not known from this run.
+The server-side answer is in the stack's own Prometheus: the histogram of `/metrics` for the window above gives the share within 250 and 300 ms the way the runs on the VM measured it, and the dashboard shows the API container's CPU and memory in the same window ([Monitoring](monitoring.md)).
+The verdict on NFR-02 with the full stack rests on that reading.
+
 **The decision.**
 On 2026-10-31 the team raised NFR-02's `/predict` target to 250 ms, confirmed NFR-03, NFR-04 and NFR-10 as measured, and kept one API worker in production ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), issue #143).
