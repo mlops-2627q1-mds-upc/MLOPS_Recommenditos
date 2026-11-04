@@ -348,6 +348,20 @@ def test_an_http_error_is_reported_without_the_token() -> None:
     assert SENTINEL not in str(error.value)
 
 
+def test_a_token_cut_by_the_length_limit_is_redacted_first() -> None:
+    body = "x" * 490 + SENTINEL
+
+    def opener(request: Any, timeout: float) -> Response:
+        raise urllib.error.HTTPError(
+            request.full_url, 500, "Error", Message(), io.BytesIO(body.encode())
+        )
+
+    with pytest.raises(um.UptimeError) as error:
+        um.BetterStack(SENTINEL, opener=opener).request("GET", "/monitors")
+
+    assert SENTINEL[:10] not in str(error.value)
+
+
 def test_the_token_never_reaches_output_or_logs(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

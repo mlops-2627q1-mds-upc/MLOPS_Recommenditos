@@ -154,7 +154,7 @@ class BetterStack:
             with self._open(request, timeout=API_TIMEOUT) as response:
                 payload = response.read()
         except urllib.error.HTTPError as error:
-            detail = redact(error.read().decode(errors="replace")[:500], self._token)
+            detail = redact(error.read().decode(errors="replace"), self._token)[:500]
             raise UptimeError(f"{method} {path} failed with HTTP {error.code}: {detail}") from None
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             reason = redact(str(getattr(error, "reason", error)), self._token)

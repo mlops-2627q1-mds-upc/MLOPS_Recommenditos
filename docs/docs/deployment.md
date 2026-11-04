@@ -404,7 +404,7 @@ Better Stack (formerly Better Uptime, [#226](https://github.com/mlops-2627q1-mds
 | Monitor | id `5183930`, type `status` (down on any answer but a 2xx), every 180 s, 15 s timeout, from the regions `eu` and `us` |
 | Alert | an incident opens when the failure lasts 180 s (the confirmation period, so one lost packet or one slow answer sends nothing), and the account's team gets an email; it closes after 180 s of passing checks |
 | Status page | <https://recommenditos.betteruptime.com>, 90 days of history |
-| Plan | free: 3-minute checks, one status page, email alerts, no phone or SMS |
+| Plan | free plan, as observed on the account: 3-minute checks, email alerts, a status page; the API refused advanced status-page settings (`hide_from_search_engines`) with HTTP 403 |
 
 The setup is `tools/uptime_monitor.py`, so the configuration is reviewed like code and the account can be rebuilt from the repository.
 It needs the team's Uptime API token (Better Stack, **Uptime**, **Settings**, **API tokens**) as `BETTERSTACK_API_TOKEN` in the gitignored `.env`; the script reads it from the environment only and never prints it.
@@ -417,6 +417,7 @@ uv run python -m tools.uptime_monitor apply             # create or update; a se
 
 The monitor, the status page and the status page's entry for the monitor are created when missing, and only the attributes that differ from `tools/uptime_monitor.py` are updated.
 A change to the check, such as its interval, is a change to that file.
+`apply` adopts a monitor only on the exact URL in the file, so a monitor made by hand on the same address with a trailing slash or another scheme would be duplicated, not adopted: delete it first in the Better Stack UI.
 
 The figure for the report comes from the monitor's availability endpoint, for the period the report states (from the day the monitor was created, `2026-11-04`):
 
@@ -431,7 +432,7 @@ The status page shows the same figure per day.
 
 NFR-05 promises no unplanned downtime and agents may not stop production, so the API was not stopped.
 A temporary second monitor with the same settings checked `http://nattech.fib.upc.edu:40520/v1/feedback`, which nginx answers with a 403, and was deleted afterwards (`tools/uptime_monitor.py create-monitor` and `delete-monitor`).
-Times are UTC on 2026-11-04, from the incident's timeline in the API ([Better Stack API docs](https://betterstack.com/docs/uptime/api/); the timeline endpoint `GET /incidents/<id>/timeline` is not in the docs I read, it was found by trying it):
+Times are UTC on 2026-11-04, from the incident's timeline in the API ([Better Stack API docs](https://betterstack.com/docs/uptime/api/); the timeline endpoint `GET /incidents/<id>/timeline` is not in Better Stack's API reference; it answers on the account, checked 2026-11-04):
 
 | Event | Time |
 |-------|------|

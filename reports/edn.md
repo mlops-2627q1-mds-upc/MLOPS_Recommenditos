@@ -222,7 +222,7 @@ How to add an entry:
 
 ### EDN-10: The availability target is recovery within 30 seconds
 
-> **Revised on 2026-11-04**: records how uptime is monitored (#226); the target is unchanged.
+> **Revised on 2026-11-04**: records how uptime is monitored (#226).
 
 - **Date:** 2026-09-22
 - **Milestone:** M6: Monitoring
@@ -231,16 +231,17 @@ How to add an entry:
 - **Decision:** NFR-05 no longer promises 99 % uptime.
   The API recovers by itself within 30 seconds of a crash or a reboot, which a rehearsed crash verifies.
   It has no unplanned downtime during a graded presentation and its warm-up.
-  Outside those windows, uptime is monitored and reported, not promised: Better Stack requests the public `/health` every 3 minutes, emails the team after 3 minutes of failures, and gives a status page and the uptime figure.
+  Outside those windows, uptime is reported, not promised: Better Stack requests the public `/health` every 3 minutes, emails after 3 minutes of failures and gives a status page and the uptime figure, beside Grafana.
 - **Alternatives considered:**
   - Keep 99 % uptime: nothing backs it on one VM without redundancy, SLA, or on-call, and its measurement window was unbounded.
-  - 95 %: as unverifiable.
-  - UptimeRobot: 5-minute checks. HetrixTools: little known. Freshping: shut down in 2026.
-  - Uptime Kuma: self-hosted, so on the VM it cannot see the VM go down.
+  - Lower it to 95 %: as unverifiable as 99 %.
+  - UptimeRobot: 5-minute checks. HetrixTools: 1-minute checks, but not the course tool and little known. Freshping: shut down in 2026, per a 2026 comparison.
+  - Uptime Kuma: self-hosted, so it cannot see its own VM go down.
 - **Rationale:** M6 grades whether monitoring gives actionable insight, not whether a percentage was hit.
-  The requirement separates what we control from what we can only observe.
+  The requirement separates what we control, recovery and the presentation days, from what we can only observe.
+  The recovery clause is testable today.
   Better Stack is the course's tool; its free plan covers the need.
-  A monitor on a URL that fails on purpose emailed 5 min 34 s after its first failing check, 3 minutes after the incident's start (seen in Lukas's inbox).
+  A monitor that fails on purpose emailed 5 min 34 s after its first failing check.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI had flagged that Prometheus's `up` metric cannot see the host going down.
@@ -250,7 +251,7 @@ How to add an entry:
   Session of 2026-11-04, AI asked (translated): "Better Uptime (NFR-05, #226): the API at nattech.fib.upc.edu:40520/health answers publicly, so an external check is possible. It needs a Better Stack account that only you can create. How do we do it?"
   Lukas answered (translated): "You create a free Better Stack account and put an Uptime API token into .env as BETTERSTACK_API_TOKEN. An agent creates the monitor, the alert (email) and the status page by API; the configuration lives as a script in the repo."
   He then asked (translated): "Are we sure we want to use it? Is it the best for us? Or are there newer, better alternatives?"; AI answered: keep Better Stack, the course's tool.
-- **Other evidence:** [Requirements](../docs/docs/requirements.md) NFR-05, [specification](../docs/docs/specification.md) NFR-05, [External uptime check](../docs/docs/deployment.md#external-uptime-check), [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19), [#226](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226).
+- **Other evidence:** [Requirements](../docs/docs/requirements.md) NFR-05, [specification](../docs/docs/specification.md) NFR-05, [deployment](../docs/docs/deployment.md#external-uptime-check), [PR #19](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/19), [#226](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226).
 - **In LaTeX:** yes
 
 ### EDN-11: Serving explains predictions without the `shap` package
