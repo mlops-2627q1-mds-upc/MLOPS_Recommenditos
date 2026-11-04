@@ -23,9 +23,10 @@ client --HTTP--> proxy (nginx, host port 8080, on a laptop and on the VM)
 | `Dockerfile`, `.dockerignore` | The API image |
 | `deploy/compose.yaml` | The stack: the API and the proxy |
 | `deploy/nginx.conf` | The proxy's configuration |
+| `deploy/stack.Dockerfile`, `deploy/.dockerignore` | The stack image: the stack files of one commit, which travel with its release |
 | `deploy/.env.template` | The template of the stack's `.env` on the VM |
 | `deploy/bootstrap.sh` | Prepares a fresh VM |
-| `deploy/deploy.sh` | Runs one image tag on the VM and puts the previous one back if it fails |
+| `deploy/deploy.sh` | Runs one release on the VM, the API image and the stack files of a commit, and puts the previous one back if it fails |
 | `tests/integration/` | The integration suite: tests a running stack through its proxy (`make test-integration`, `make smoke`) |
 
 What each part guarantees:
@@ -152,12 +153,19 @@ CI cannot `dvc pull` the real bundle, so the job fits `lgbm-basic` on the synthe
 
 ## Continuous delivery
 
-The `CD` workflow ([`.github/workflows/cd.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/cd.yml)) builds the API image of every merge to `main` and pushes it to GHCR (NFR-13, [EDN-91](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)):
+The `CD` workflow ([`.github/workflows/cd.yml`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/.github/workflows/cd.yml)) builds the release of every merge to `main`, the API image and the stack image, and pushes both to GHCR under the same tags (NFR-13, [EDN-91](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)):
 
 ```text
 ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:<full commit SHA>
 ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api:latest
+ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/stack:<full commit SHA>
+ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/stack:latest
 ```
+
+The stack image holds the stack files of the commit: everything in `deploy/` except what never travels with a release, which `deploy/.dockerignore` lists: `.env` and its template, and the scripts a person installs once, `bootstrap.sh`, `install-runner.sh` and `deploy.sh` itself.
+A new configuration folder such as `deploy/prometheus/` therefore travels without a change to any list.
+It is built `FROM scratch` and has no command: `deploy.sh` on the VM copies its files out and runs nothing of it, so it has no packages for the image scan to check.
+It stays out of the API image, which keeps holding only code and the model, and whose layers and scan stay as they are.
 
 It starts when a CI run on a push to `main` finishes, and only if that run passed, so a commit whose CI failed never publishes an image.
 It works on the commit CI tested (`github.event.workflow_run.head_sha`), not on the tip of `main`, which a later merge may have moved.
@@ -168,12 +176,12 @@ A failed step that depends on a GitHub setting, the DagsHub secrets or the permi
 For every other commit, one job:
 
 1. pulls `models/lgbm-basic` and `data/processed/comparables.parquet` at the versions `dvc.lock` points to (FR-12, EDN-08);
-2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache;
+2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache, and the stack image from `deploy/` with the same labels;
 3. fails if the image is larger than 1 GB (NFR-04);
 4. starts the Compose stack with it and runs the [integration suite](#integration-tests) with no expected-version override, so `/health` has to report the hashes `dvc.lock` records;
 5. scans the API image and the nginx image with trivy and fails on a HIGH or CRITICAL vulnerability that has a fix available ([Vulnerabilities and dependency updates](#vulnerabilities-and-dependency-updates));
-6. pushes `:<commit SHA>` and moves `:latest` to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
-7. writes the pushed tags, the digest, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
+6. pushes `:<commit SHA>` of the stack image, then of the API image, so an API image on GHCR always has its stack image there, and moves `:latest` of both to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
+7. writes the pushed tags, the digests, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
 
 Only the `dvc pull` step sees the DagsHub token.
 It is a secret of the GitHub Environment `dagshub`, which only `main` may use, and the step writes it into `.dvc/config.local`, as on a laptop, and deletes that file when it ends.
@@ -233,8 +241,9 @@ Verified on 2026-10-30 by the first bootstrap and deploy ([#134](https://github.
 
 ### How the image gets there
 
-[Continuous delivery](#continuous-delivery) pushes the image of every merge to GHCR, and the VM pulls it from there: `deploy/deploy.sh` on the VM pulls the commit's tag, logged in with a token it is handed for that pull, and starts it.
-The VM therefore needs Docker, the stack's four files and the [runner](#turn-continuous-deployment-on), and none of the repository, uv, DVC, a DagsHub token or a lasting registry credential, which would otherwise sit on a shared university machine.
+[Continuous delivery](#continuous-delivery) pushes the release of every merge to GHCR, and the VM pulls it from there: `deploy/deploy.sh` on the VM pulls the commit's API image and stack image, logged in with a token it is handed for those pulls, and starts them.
+The VM therefore needs Docker, `deploy.sh`, the stack's `.env` and the [runner](#turn-continuous-deployment-on), and none of the repository, uv, DVC, a DagsHub token or a lasting registry credential, which would otherwise sit on a shared university machine.
+The stack files reach it with every release ([The stack files on the VM](#the-stack-files-on-the-vm)).
 It also keeps the DVC cache and the build cache off the VM's 20 GB disk (NFR-04).
 When GHCR cannot be reached, a laptop builds the image and streams it to the VM with `docker save | ssh docker load` instead ([Every deploy](#every-deploy)).
 
@@ -248,14 +257,15 @@ scp -P 22052 -r deploy <admin>@<vm>:
 ssh -t -p 22052 <admin>@<vm> sudo bash deploy/bootstrap.sh
 ```
 
-Run the same two commands to bring a changed `bootstrap.sh`, `compose.yaml`, `nginx.conf` or `deploy.sh` to the VM: `scp -r deploy <vm>:` replaces the files of `~/deploy`, whereas a named target directory that already exists, such as `<vm>:some-dir`, would receive a nested `some-dir/deploy/` and leave the old files in place.
+Run the same two commands to bring a changed `bootstrap.sh` or `deploy.sh` to the VM: `scp -r deploy <vm>:` replaces the files of `~/deploy`, whereas a named target directory that already exists, such as `<vm>:some-dir`, would receive a nested `some-dir/deploy/` and leave the old files in place.
+The stack files need neither: they come with every release.
 
 `bootstrap.sh` is idempotent and does four things:
 
 1. installs Docker Engine and the compose plugin from Docker's apt repository, following Docker's install page (it first removes the distribution's conflicting packages, such as `docker.io`), and enables Docker at boot;
 2. creates the deploy user `recommenditos`, a member of the `docker` group, whose home `/opt/recommenditos` holds the stack;
 3. lets every SSH key of the account that ran it log in as `recommenditos`, so that every later step is `ssh recommenditos@<vm>` without sudo;
-4. copies `compose.yaml`, `nginx.conf`, `.env.template` and `deploy.sh` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists.
+4. installs `deploy.sh` and `.env.template` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists; the stack files come with the first deploy.
 
 The `.env` starts from the template with `HTTP_PORT=8080`, the VM port that the public port 40520 reaches ([The VM](#the-vm)); check it:
 
@@ -275,10 +285,10 @@ The two that act on the VM run on the self-hosted runner there, which may run no
 
 1. **Prepare** names the commit from the CD run's title (`CD of <SHA>`), and checks that `SMOKE_URL` is set and that CD pushed an image for the commit.
 2. **Deploy on the VM**, the job of the GitHub Environment `production`, reads the tag the VM runs, and skips the commit if the VM already runs a newer one that contains it, which happens when the CD runs of two merges finish in the opposite order (the rule that keeps `:latest` moving forward); GitHub's compare API answers that, since the runner has no clone.
-   It then runs `deploy.sh deploy <SHA> --registry-token-stdin`, which logs in to GHCR with the job's token, pulls the image, deletes the login, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag again and the run fails.
+   It then runs `deploy.sh deploy <SHA> --registry-token-stdin`, which logs in to GHCR with the job's token, pulls the API image and the stack image, deletes the login, puts the stack files beside `.env`, sets `API_IMAGE_TAG` in `.env`, runs `docker compose up -d --wait --remove-orphans`, and asks the proxy for `/health`; if the stack does not come up healthy, `deploy.sh` starts the previous tag with its stack files again and the run fails.
 3. **Smoke check** checks out the deployed commit and runs `make smoke` against `SMOKE_URL`, the VM's public address, from outside the VM, the outside view the proxy rules are about.
    It starts once the deploy job has ended, so the new tag serves for as long as this job takes to start and install the environment before it is checked.
-4. **Put the previous tag back** runs on the VM only when the smoke check failed: `deploy.sh rollback` starts the previous tag again and the run fails.
+4. **Put the previous tag back** runs on the VM only when the smoke check failed: `deploy.sh rollback` starts the previous tag with its stack files again and the run fails.
 5. **Write the summary** writes the deployed commit, the outcome and the tag that runs now into the run's summary.
 
 Deploys never overlap and are never cancelled: the workflow's runs queue in the order they arrive (`concurrency` with `queue: max`), and `deploy.sh` holds a lock on the VM, so a deploy by hand waits for a running one.
@@ -299,35 +309,82 @@ make smoke SMOKE_URL=http://<vm-host>:<port>
 Run it from outside the VM, because the proxy rules it checks are about requests from outside.
 
 The rollback is rehearsed against the local stack by `tests/integration/test_deploy_rollback.py`, part of `make test-integration` and CI's integration job.
-It copies the VM's stack directory (`compose.yaml`, `nginx.conf`, `.env` and `deploy.sh`) into a temporary directory and runs it as a second Compose project on a port of its own.
-It deploys the image under test, then the same image with a server that exits as soon as it starts, and checks that the first tag is back in `.env`, runs and answers through the proxy; a second test checks `deploy.sh rollback`, the step that follows a failed smoke check.
-A third test closes `deploy.sh`'s output as soon as it starts the broken tag, as a cancelled run or a closed terminal would, and checks that the rollback still finishes; a fourth checks that a deploy removes the image of the tag two deploys back and keeps the rest.
+It sets up the VM's stack directory (`.env` and `deploy.sh`) in a temporary directory and runs it as a second Compose project on a port of its own, with releases of its own: the API image under test, and stack images built from the checkout's `deploy/`, some with a changed `nginx.conf` or an extra service.
+It deploys a good release, then one whose server exits as soon as it starts, and checks that the first tag and its stack files are back, run and answer through the proxy; another test checks `deploy.sh rollback`, the step that follows a failed smoke check, and that it brings back the previous stack files too.
+Further tests check that a changed `nginx.conf` reaches the proxy and leaves `.env` as it was, that rolling back to a release without a service removes that service's container and keeps every named volume and the prediction log in it, that the first deploy takes over stack files that were copied by hand, that the stack image holds exactly the files that travel, that a deploy removes the release of two deploys back and keeps the rest, and that a rollback finishes when `deploy.sh`'s output is closed, as a cancelled run or a closed terminal would.
+`tests/test_deploy_script.py` covers what needs no Docker, with a stand-in for it: a tag without a stack image, a stack image that cannot be pulled, and one that holds a `.env`.
 The drill's tags are full commit SHAs, the only tags `deploy.sh` accepts.
-On a laptop on 2026-10-22, `deploy.sh deploy` of the broken tag returned 7 s after it started, with the previous tag serving again, and the four tests took 62 s; on the VM on 2026-10-30 the same drill by hand took 8.2 s ([measurements](#the-stack)).
+On a laptop on 2026-10-22, `deploy.sh deploy` of the broken tag returned 7 s after it started, with the previous tag serving again; on the VM on 2026-10-30 the same drill by hand took 8.2 s ([measurements](#the-stack)).
 CI's integration job runs beside the `Tests` job, which took 5 minutes on the pull request that added the drill, so the drill does not lengthen a CI run.
 
-**Fallback without GHCR.** From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`, the image is built locally, given the name the VM's `.env` expects and streamed to the VM:
+**Fallback without GHCR.** From the repository root, at the commit to deploy, after `uv run dvc pull models/lgbm-basic data/processed/comparables.parquet`, the release is built locally, given the names the VM's `.env` expects and streamed to the VM:
 
 ```bash
 TAG=$(git rev-parse HEAD)
 IMAGE=ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/api
+STACK=ghcr.io/mlops-2627q1-mds-upc/mlops_recommenditos/stack
 make image IMAGE_TAG=$TAG                    # recommenditos-api:<full commit SHA>
 docker tag recommenditos-api:$TAG $IMAGE:$TAG
-docker save $IMAGE:$TAG | gzip | ssh recommenditos@<vm> docker load
+docker build -f deploy/stack.Dockerfile -t $STACK:$TAG deploy
+docker save $IMAGE:$TAG $STACK:$TAG | gzip | ssh recommenditos@<vm> docker load
 ssh recommenditos@<vm> ./deploy.sh deploy $TAG
 make smoke SMOKE_URL=http://<vm-host>:<port>
 ```
 
-`deploy.sh` finds the image on the VM and does not pull it.
+`deploy.sh` finds both images on the VM and pulls neither.
 On Windows, run these in Git Bash or WSL: Windows PowerShell 5 corrupts binary data in a pipe.
 Without either, save to a file instead: `docker save -o api.tar $IMAGE:$TAG`, `scp api.tar recommenditos@<vm>:`, `ssh recommenditos@<vm> docker load -i api.tar`.
 
-A change to `compose.yaml`, `nginx.conf` or `deploy.sh` reaches the VM by running the [bootstrap](#first-time-bootstrap-a-fresh-vm) again, then starting the stack again:
+### The stack files on the VM
+
+A release carries its stack files, so a merge that changes only `compose.yaml`, `nginx.conf` or a configuration folder in `deploy/` deploys like any other, and a rollback brings back the files that ran with the previous tag ([EDN-94](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [#279](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/279)).
+In `/opt/recommenditos`:
+
+| Path | What it is |
+|------|------------|
+| `.env` | The stack's settings and secrets; never part of a release, and `deploy.sh` changes only `API_IMAGE_TAG` in it |
+| `deploy.sh`, `.env.template` | Installed by `bootstrap.sh`; never part of a release |
+| `stacks/<hash>/` | One set of stack files, copied out of a stack image and named by the hash of its contents |
+| `stack` | The link to the set that runs; `deploy.sh` runs Compose with the directory it names, `stacks/<hash>/compose.yaml`, and `--env-file .env` |
+| `.deploy-previous`, `.deploy-previous-stack` | The tag and the set that ran before the last deploy, for `rollback` |
+
+`deploy.sh` copies a stack image's files into a new directory under `stacks/` and points `stack` at it in one rename, after it has checked that `compose.yaml` is there and that Compose accepts it; it refuses a stack image that holds a `.env`, a link or anything else but files and directories.
+A release whose stack files equal the running ones keeps their directory, so its deploy leaves every container with a bind mount as it is.
+A change to any stack file gives the whole set a new directory, so Compose recreates every container that bind-mounts one of its files, the proxy today, while a container without one, such as the API, is recreated only when its own configuration or image changes.
+
+A merge that touches `deploy/` therefore changes the production host's Docker setup, its ports, mounts, privileges and volume names, with no person involved.
+`compose config` checks only that Compose accepts the file; what decides whether a release stays are the health check of `deploy.sh` and the public smoke check, after which a failure rolls the tag and the stack files back together.
+Review a change to `deploy/` as a change to the VM.
+After a successful deploy, `deploy.sh` keeps the running set and the previous one and removes the others.
+
+To start the stack again by hand, for example after a change to `.env`, run `./deploy.sh deploy <the tag that runs>`.
+A Compose command by hand has to name the directory behind the link, as `deploy.sh` does, `docker compose -f "$(readlink -f stack)/compose.yaml" --env-file .env up -d --wait` from `/opt/recommenditos`: with `-f stack/compose.yaml`, the bind mounts get paths through the link, which differ from `deploy.sh`'s, so Compose recreates the proxy, and the next deploy recreates it again (`docker compose config --hash '*'` shows the difference).
+
+`docker compose up` runs with `--remove-orphans`, so the stack always matches its release: a service that the new `compose.yaml` no longer has, after a rollback for example, loses its container.
+Its named volumes stay, as do all others, since Compose removes a volume only when asked to with `down -v`; the prediction log survives every deploy and rollback.
+
+Two cases keep the stack files that run now, and `deploy.sh` says so in its log:
+
+- a tag CD pushed before stack images existed (before #279) has none, and GHCR answers `manifest unknown` (Docker's classic image store, the VM's, prints it so; checked on 2026-11-04); any other failure to pull the stack image stops the deploy with nothing changed;
+- `rollback` to a previous tag that the older `deploy.sh` recorded, without its stack files.
+
+Before #279, the stack files were copied by hand beside `.env`; the first deploy of the new `deploy.sh` takes them over as `stacks/<hash>/`, as the previous release, and removes the copies once a release runs without them.
+
+`deploy.sh` itself never travels with a release, since it must not replace itself; a change to it reaches the VM through the [bootstrap](#first-time-bootstrap-a-fresh-vm), or by installing the one file as `alumne`, beside the old one and renamed over it, so that a running deploy is not disturbed:
 
 ```bash
-scp -P 22052 -r deploy <admin>@<vm>:
-ssh -t -p 22052 <admin>@<vm> sudo bash deploy/bootstrap.sh
-ssh -p 22052 recommenditos@<vm> docker compose up -d --wait
+scp -P 22052 deploy/deploy.sh <admin>@<vm>:
+ssh -t -p 22052 <admin>@<vm> 'sudo install -m 755 -o recommenditos -g recommenditos deploy.sh /opt/recommenditos/.deploy.sh.new && sudo mv -f /opt/recommenditos/.deploy.sh.new /opt/recommenditos/deploy.sh && rm deploy.sh'
+```
+
+The sudoers rule names the path `/opt/recommenditos/deploy.sh` and its three commands, which stay the same, so it needs no change.
+
+To check that the VM runs the stack files of `main`, compare them with the stack image of the commit it runs, or with the repository:
+
+```bash
+ssh -p 22052 recommenditos@<vm> ./deploy.sh status        # the tag, its health and the stack files
+ssh -p 22052 recommenditos@<vm> cat stack/compose.yaml | diff - deploy/compose.yaml
+ssh -p 22052 recommenditos@<vm> cat stack/nginx.conf | diff - deploy/nginx.conf
 ```
 
 ### Roll back, inspect, clean up
@@ -340,12 +397,14 @@ On the VM, as `recommenditos`:
 ./deploy.sh deploy <full commit SHA>         # start a tag whose image is on the VM; to pull one, see Every deploy
 cat deploy-history.log                       # every deploy and rollback, with its time and outcome
 cat deploy-last-run.log                      # the whole output of the last deploy or rollback
-docker compose ps                            # state and health of both containers
-docker compose logs -f --tail 100            # both logs, joined by request_id (api.md#following-one-request)
+docker compose -p recommenditos ps           # state and health of the containers
+docker compose -p recommenditos logs -f --tail 100   # the logs, joined by request_id (api.md#following-one-request)
+cat stack/compose.yaml                       # the stack files that run (The stack files on the VM)
 ```
 
-`rollback` goes back one step, to the tag that ran before the last deploy; to go further back, deploy an older tag.
-After a successful deploy, `deploy.sh` removes the images of the tags it deployed before, except the one that runs and the previous one, since each costs disk, of which there is 20 GB; any other tag can be pulled again.
+After a change to `.env`, `./deploy.sh deploy <the tag that runs>` starts the stack again with it, with the stack files that run.
+`rollback` goes back one step, to the tag and the stack files that ran before the last deploy; to go further back, deploy an older tag.
+After a successful deploy, `deploy.sh` removes the API and stack images of the tags it deployed before, except the one that runs and the previous one, since each costs disk, of which there is 20 GB; any other tag can be pulled again.
 
 ### Turn continuous deployment on
 

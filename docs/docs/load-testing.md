@@ -124,7 +124,7 @@ scp -P 22052 data/interim/loadtest/bodies.jsonl recommenditos@nattech.fib.upc.ed
 Two runs of 20 requests/s for 5 minutes, both against the image the VM serves; check with `./deploy.sh status` before and after each run that the tag did not change, since a deploy in between would mix two images:
 
 1. With the worker count the VM is meant to serve with (`WEB_CONCURRENCY` in `/opt/recommenditos/.env`, 1 by default): NFR-02, NFR-03's throughput and error rate, NFR-04 and NFR-10.
-2. With `WEB_CONCURRENCY=2` in `.env` and `docker compose up -d --wait`: NFR-03's exactly-once check, and whether a second worker changes latency and memory.
+2. With `WEB_CONCURRENCY=2` in `.env` and `./deploy.sh deploy <the tag that runs>`, which starts the stack again with the changed `.env`: NFR-03's exactly-once check, and whether a second worker changes latency and memory.
 
 Each from the checkout, with `uv run --no-sync` so that uv does not install the other groups.
 A run takes about 6.5 minutes with the idle baseline; started with `nohup`, it survives a dropped SSH connection or VPN:
@@ -137,9 +137,9 @@ ssh -p 22052 recommenditos@nattech.fib.upc.edu 'cd loadtest && nohup ~/.local/bi
 ```
 
 Before and after each run, also take the API container's `RestartCount` and start time (`docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' recommenditos-api-1`).
-`docker compose up -d` creates a new container when `.env` changes, so compare within one run.
+Compose creates a new container when `.env` changes, so compare within one run.
 
-Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with, run `docker compose up -d --wait` again and check `./deploy.sh status` says healthy.
+Afterwards, set `WEB_CONCURRENCY` back to the value the VM serves with, run `./deploy.sh deploy <the tag that runs>` again and check `./deploy.sh status` says healthy.
 
 **What to record.**
 Copy the three files of each run back into `reports/loadtest/` and commit them in a pull request, with `nproc`, `free -h` and the image tag in the note:

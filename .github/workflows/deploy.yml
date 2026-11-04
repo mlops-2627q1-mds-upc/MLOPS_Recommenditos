@@ -1,10 +1,13 @@
 name: Deploy
 
-# Deploys the API image that CD pushed for a merge to main to the FIB Virtech VM,
-# checks it from outside with the smoke suite, and puts the previous tag back
-# when the check fails (NFR-13, FR-15). On the VM, deploy/deploy.sh does the
-# deploying and the rolling back; docs/docs/deployment.md#every-deploy
-# describes both.
+# Deploys the release that CD pushed for a merge to main to the FIB Virtech VM,
+# the API image and the stack image of the commit (compose.yaml, nginx.conf and
+# their configuration folders), checks it from outside with the smoke suite,
+# and puts the previous release back when the check fails (NFR-13, FR-15). On
+# the VM, deploy/deploy.sh does the deploying and the rolling back, of the image
+# and the stack files together; docs/docs/deployment.md#every-deploy describes
+# both. Nothing here copies a file to the VM: the stack files come out of the
+# stack image that deploy.sh pulls.
 #
 # How it reaches the VM (EDN-94): the VM's SSH port answers only from the UPC
 # network (#134), so the jobs that act on the VM run on a self-hosted runner
@@ -188,9 +191,9 @@ jobs:
     permissions:
       # To compare the commit with the one that runs, through the API.
       contents: read
-      # To pull the image from the private GHCR package: the organisation
+      # To pull the images from the private GHCR packages: the organisation
       # allows no public packages, so deploy.sh logs in with this job's token
-      # for the one pull (EDN-94).
+      # for the pulls of this deploy (EDN-94).
       packages: read
     env:
       TAG: ${{ needs.prepare.outputs.tag }}
@@ -259,6 +262,13 @@ jobs:
           now=$(sed -n 's/^running: //p' "$RUNNER_TEMP/deploy.log" 2>/dev/null | tail -n 1)
           [[ $now =~ ^[0-9a-f]{40}$ ]] || now=
           said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/deploy.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' - || true)
+          # A release that kept the stack files that ran before, which the last
+          # two lines do not show: a tag from before stack images (#279).
+          grep -E '^deploy.sh: .*(has no stack image|no stack files are recorded)' "$RUNNER_TEMP/deploy.log" 2>/dev/null \
+            | sed 's/^deploy.sh: //' | while IFS= read -r line; do
+                echo "::warning::$line"
+                echo "Warning: $line" >> "$GITHUB_STEP_SUMMARY"
+              done || true
           echo "now=$now" >> "$GITHUB_OUTPUT"
           echo "said=$said" >> "$GITHUB_OUTPUT"
 
@@ -308,6 +318,13 @@ jobs:
           now=$(sed -n 's/^running: //p' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 1)
           [[ $now =~ ^[0-9a-f]{40}$ ]] || now=
           said=$(grep '^deploy.sh: ' "$RUNNER_TEMP/rollback.log" 2>/dev/null | tail -n 2 | sed 's/^deploy.sh: //' | paste -sd ';' - || true)
+          # A release that kept the stack files that ran before, which the last
+          # two lines do not show: a tag from before stack images (#279).
+          grep -E '^deploy.sh: .*(has no stack image|no stack files are recorded)' "$RUNNER_TEMP/rollback.log" 2>/dev/null \
+            | sed 's/^deploy.sh: //' | while IFS= read -r line; do
+                echo "::warning::$line"
+                echo "Warning: $line" >> "$GITHUB_STEP_SUMMARY"
+              done || true
           echo "now=$now" >> "$GITHUB_OUTPUT"
           echo "said=$said" >> "$GITHUB_OUTPUT"
 

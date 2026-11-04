@@ -4,7 +4,11 @@
 #   1. Docker Engine and the compose plugin, from Docker's own apt repository;
 #   2. the deploy user `recommenditos`, whose home /opt/recommenditos holds the stack;
 #   3. SSH access to that user for whoever runs this script with sudo;
-#   4. the stack's files and deploy.sh, and its `.env`, readable by the deploy user alone.
+#   4. deploy.sh and the stack's `.env`, readable by the deploy user alone.
+#
+# The stack files, compose.yaml, nginx.conf and their configuration folders,
+# are not copied: they come with every release, out of the stack image that
+# deploy.sh pulls (docs/docs/deployment.md#every-deploy).
 #
 # Copy deploy/ into the admin's home and run it as root from there, with the same
 # two commands on every run (`scp -r deploy <vm>:` replaces the files of ~/deploy,
@@ -14,8 +18,8 @@
 #     ssh -t <admin>@<vm> sudo bash deploy/bootstrap.sh
 #
 # It is idempotent: a second run changes nothing that is already in place, except
-# that it copies compose.yaml, nginx.conf and deploy.sh again, which is how a change to them
-# reaches the VM. It never overwrites an existing `.env`.
+# that it installs deploy.sh again, which is how a change to it reaches the VM. It
+# never overwrites an existing `.env`.
 
 set -euo pipefail
 
@@ -92,11 +96,13 @@ else
 fi
 
 echo "== 4. The stack in $STACK_DIR"
-install -m 644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" \
-    "$HERE/compose.yaml" "$HERE/nginx.conf" "$HERE/.env.template" "$STACK_DIR/"
+install -m 644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$HERE/.env.template" "$STACK_DIR/"
 # What the Deploy workflow runs on the VM, and how a deploy or rollback by hand
-# runs too (docs/docs/deployment.md#every-deploy).
-install -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$HERE/deploy.sh" "$STACK_DIR/"
+# runs too (docs/docs/deployment.md#every-deploy). Installed beside the old one
+# and renamed over it, so a deploy that runs meanwhile keeps reading the file
+# it started with: bash reads a script while it runs it.
+install -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$HERE/deploy.sh" "$STACK_DIR/.deploy.sh.new"
+mv -f "$STACK_DIR/.deploy.sh.new" "$STACK_DIR/deploy.sh"
 if [[ -f $STACK_DIR/.env ]]; then
     echo ".env exists, left as it is"
 else
@@ -104,4 +110,4 @@ else
     echo ".env created from .env.template: fill it in before the first deploy"
 fi
 
-echo "== Done. Next: deploy an image with deploy.sh, which pulls it from GHCR (docs/docs/deployment.md, Deploy)."
+echo "== Done. Next: deploy a release with deploy.sh, which pulls its images from GHCR (docs/docs/deployment.md, Deploy)."

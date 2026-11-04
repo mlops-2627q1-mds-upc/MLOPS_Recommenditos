@@ -1,21 +1,26 @@
 """The rollback drill of FR-15, with deploy/deploy.sh against a stack on this machine.
 
 deploy.sh is what the Deploy workflow runs on the VM (docs/docs/deployment.md#every-deploy).
-Here it runs on a copy of the VM's stack directory, `compose.yaml`, `nginx.conf`,
-`.env` and the script, as a second Compose project beside the stack under test,
-on a port of its own. The good image is the one the stack under test runs; the
-broken one is that image with a server that exits as soon as it starts, like an
-image whose bundle does not load. The images get a repository of their own, so
-deploy.sh's clean-up of old tags never reaches the stack's images.
+Here it runs on a copy of the VM's stack directory, `.env` and the script, as a
+second Compose project beside the stack under test, on a port of its own. A
+release is two images under one tag, as CD pushes them: the API image and the
+stack image built from this checkout's deploy/ with deploy/stack.Dockerfile,
+from which deploy.sh copies compose.yaml and nginx.conf. The good API image is
+the one the stack under test runs; the broken one is that image with a server
+that exits as soon as it starts, like an image whose bundle does not load. The
+images get a repository of their own, so deploy.sh's clean-up of old tags never
+reaches the stack's images.
 """
 
 from collections.abc import Iterator
 import hashlib
+import io
 import os
 from pathlib import Path
 import shutil
 import socket
 import subprocess
+import tarfile
 import time
 
 import httpx2
@@ -29,6 +34,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 #: Named after the stack under test, so the drills of two stacks never share a
 #: project or tear down each other's images.
 PROJECT = REPOSITORY = f"{COMPOSE_PROJECT}-drill"
+#: The two repositories of a release, named as CD names them (…/api and …/stack).
+API, STACK = f"{REPOSITORY}/api", f"{REPOSITORY}/stack"
 BROKEN_DOCKERFILE = """\
 FROM {base}
 CMD ["python", "-c", "raise SystemExit('broken on purpose by the rollback drill')"]
@@ -41,6 +48,29 @@ GOOD, NEWER, NEWEST, BROKEN = (
     hashlib.sha1(name.encode(), usedforsecurity=False).hexdigest()
     for name in ("good", "newer", "newest", "broken")
 )
+TAGS = (GOOD, NEWER, NEWEST, BROKEN)
+#: The files of deploy/ that never travel with a release (deploy/.dockerignore).
+NEVER_TRAVEL = {".dockerignore", "stack.Dockerfile", ".env.template"}
+#: A path a changed nginx.conf answers, which the API itself does not have.
+MARKER_PATH = "/drill-stack"
+#: A service a newer compose.yaml adds, with a named volume of its own.
+EXTRA_SERVICE = """\
+  extra:
+    image: ${API_IMAGE}:${API_IMAGE_TAG}
+    entrypoint: ["python", "-c", "import time; time.sleep(3600)"]
+    init: true
+    # Its own probe instead of the image's, which asks a server this service
+    # does not run. Not `disable: true`: `up --wait` of the Compose v2 on CI's
+    # runners fails on such a service ("has no healthcheck configured"), where
+    # Compose 5 waits for it to run.
+    healthcheck:
+      test: ["CMD", "python", "-c", "pass"]
+      interval: 5s
+      start_period: 30s
+      start_interval: 1s
+    volumes:
+      - extra-data:/data
+"""
 
 
 def free_port() -> int:
@@ -49,21 +79,74 @@ def free_port() -> int:
         return int(probe.getsockname()[1])
 
 
+def without_stack_environment() -> dict[str, str]:
+    """This process's environment without what CI sets for the stack under test.
+
+    Compose would prefer those variables over the copy's .env.
+    """
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(("API_IMAGE", "COMPOSE_", "RECOMMENDITOS_", "HTTP_PORT"))
+    }
+
+
 class Stack:
     """A copy of the VM's stack directory, driven with deploy.sh as the workflow does."""
 
-    def __init__(self, directory: Path, port: int) -> None:
+    def __init__(self, directory: Path, port: int, build_root: Path) -> None:
         self.directory = directory
         self.port = port
+        self.build_root = build_root
+
+    def build_stack(
+        self, tag: str, marker: str | None = None, extra_service: bool = False
+    ) -> None:
+        """Build the stack image of `tag` from this checkout's deploy/, changed as asked.
+
+        With `marker`, nginx.conf answers MARKER_PATH with it; with
+        `extra_service`, compose.yaml has the service `extra` and its volume.
+        """
+        context = self.build_root / tag
+        shutil.rmtree(context, ignore_errors=True)
+        shutil.copytree(PROJ_ROOT / "deploy", context)
+        if marker is not None:
+            nginx = context / "nginx.conf"
+            text = nginx.read_text(encoding="utf-8").rstrip()
+            assert text.endswith("}"), "nginx.conf no longer ends with its server block"
+            location = f'    location = {MARKER_PATH} {{ return 200 "{marker}"; }}\n}}\n'
+            nginx.write_text(text[:-1] + location, encoding="utf-8")
+        if extra_service:
+            compose = context / "compose.yaml"
+            text = compose.read_text(encoding="utf-8")
+            # Top-level keys start a line; the service and its volume go first
+            # under theirs, wherever they are and whatever else they hold.
+            assert "\nservices:\n" in text, "compose.yaml has no top-level services"
+            text = text.replace("\nservices:\n", "\nservices:\n" + EXTRA_SERVICE, 1)
+            if "\nvolumes:\n" in text:
+                text = text.replace("\nvolumes:\n", "\nvolumes:\n  extra-data:\n", 1)
+            else:
+                text += "\nvolumes:\n  extra-data:\n"
+            compose.write_text(text, encoding="utf-8")
+        subprocess.run(
+            [
+                "docker",
+                "build",
+                "--quiet",
+                "--file",
+                str(context / "stack.Dockerfile"),
+                "--tag",
+                f"{STACK}:{tag}",
+                str(context),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=True,
+        )
 
     def deploy_sh(self, *arguments: str) -> subprocess.CompletedProcess[str]:
-        # Without the variables CI's environment sets for the stack under test,
-        # which Compose would prefer over the copy's .env.
-        environment = {
-            name: value
-            for name, value in os.environ.items()
-            if not name.startswith(("API_IMAGE", "COMPOSE_", "RECOMMENDITOS_", "HTTP_PORT"))
-        }
+        environment = without_stack_environment()
         environment.update(STACK_DIR=str(self.directory), WAIT_TIMEOUT=str(WAIT_TIMEOUT_S))
         return subprocess.run(
             ["bash", str(self.directory / "deploy.sh"), *arguments],
@@ -79,11 +162,7 @@ class Stack:
 
         That is what a cancelled workflow run or a closed terminal does to it.
         """
-        environment = {
-            name: value
-            for name, value in os.environ.items()
-            if not name.startswith(("API_IMAGE", "COMPOSE_", "RECOMMENDITOS_", "HTTP_PORT"))
-        }
+        environment = without_stack_environment()
         environment.update(STACK_DIR=str(self.directory), WAIT_TIMEOUT=str(WAIT_TIMEOUT_S))
         process = subprocess.Popen(
             ["bash", str(self.directory / "deploy.sh"), *arguments],
@@ -103,62 +182,115 @@ class Stack:
         lines = (self.directory / ".env").read_text(encoding="utf-8").splitlines()
         return [line.split("=", 1)[1] for line in lines if line.startswith("API_IMAGE_TAG=")][-1]
 
-    def running_image(self) -> str:
-        ids = docker(
+    def stack_files(self) -> Path:
+        """The directory the link `stack` points at, which Compose runs with."""
+        return (self.directory / "stack").resolve()
+
+    def containers(self, service: str, everything: bool = False) -> list[str]:
+        return docker(
             "ps",
+            *(["--all"] if everything else []),
             "--quiet",
             "--filter",
             f"label=com.docker.compose.project={PROJECT}",
             "--filter",
-            "label=com.docker.compose.service=api",
+            f"label=com.docker.compose.service={service}",
         ).split()
+
+    def running_image(self) -> str:
+        ids = self.containers("api")
         assert len(ids) == 1, f"expected one api container of {PROJECT}, found {len(ids)}"
         return docker("inspect", "--format", "{{.Config.Image}}", ids[0])
+
+    def api(self) -> Container:
+        ids = self.containers("api")
+        assert len(ids) == 1, f"expected one api container of {PROJECT}, found {len(ids)}"
+        return Container(ids[0])
 
     def health(self) -> httpx2.Response:
         return httpx2.get(f"http://127.0.0.1:{self.port}/health", timeout=10)
 
+    def marker(self) -> httpx2.Response:
+        return httpx2.get(f"http://127.0.0.1:{self.port}{MARKER_PATH}", timeout=10)
+
+
+def travelling_files() -> set[str]:
+    """The tracked files of deploy/ that a release carries, relative to deploy/."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "deploy"],
+        cwd=PROJ_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout.split()
+    relative = [path.removeprefix("deploy/") for path in tracked]
+    # Configuration folders travel whole; at the top, the scripts and NEVER_TRAVEL stay.
+    return {
+        path
+        for path in relative
+        if "/" in path or not (path.endswith(".sh") or path in NEVER_TRAVEL)
+    }
+
+
+def project_volumes() -> set[str]:
+    return set(
+        docker(
+            "volume", "ls", "--quiet", "--filter", f"label=com.docker.compose.project={PROJECT}"
+        ).split()
+    )
+
 
 @pytest.fixture
 def drill(tmp_path: Path, api_container: Container) -> Iterator[Stack]:
-    """The VM's stack directory, three good tags of the image under test and a broken one."""
+    """The VM's stack directory, three good releases of the image under test and a broken one."""
     # The image ID, not its tag: another checkout's `make stack` may have moved the tag.
     good = api_container.inspect()["Image"]
     for tag in (GOOD, NEWER, NEWEST):
-        docker("tag", good, f"{REPOSITORY}:{tag}")
+        docker("tag", good, f"{API}:{tag}")
     subprocess.run(
-        ["docker", "build", "--quiet", "--tag", f"{REPOSITORY}:{BROKEN}", "-"],
-        input=BROKEN_DOCKERFILE.format(base=f"{REPOSITORY}:{GOOD}"),
+        ["docker", "build", "--quiet", "--tag", f"{API}:{BROKEN}", "-"],
+        input=BROKEN_DOCKERFILE.format(base=f"{API}:{GOOD}"),
         capture_output=True,
         text=True,
         timeout=120,
         check=True,
     )
+    # What bootstrap.sh installs: deploy.sh and .env; the stack files come with
+    # the first release.
     directory = tmp_path / "recommenditos"
     directory.mkdir()
-    for name in ("compose.yaml", "nginx.conf", "deploy.sh"):
-        shutil.copy(PROJ_ROOT / "deploy" / name, directory / name)
+    shutil.copy(PROJ_ROOT / "deploy" / "deploy.sh", directory / "deploy.sh")
     port = free_port()
     (directory / ".env").write_text(
-        f"COMPOSE_PROJECT_NAME={PROJECT}\nAPI_IMAGE={REPOSITORY}\nAPI_IMAGE_TAG=\nHTTP_PORT={port}\n",
+        f"COMPOSE_PROJECT_NAME={PROJECT}\nAPI_IMAGE={API}\nAPI_IMAGE_TAG=\nHTTP_PORT={port}\n",
         encoding="utf-8",
     )
+    stack = Stack(directory, port, tmp_path / "stack-images")
     try:
-        yield Stack(directory, port)
+        for tag in TAGS:
+            stack.build_stack(tag)
+        yield stack
     finally:
+        # Without a compose file: the project's containers carry its name.
         subprocess.run(
-            ["docker", "compose", "--project-directory", str(directory), "down", "--volumes"],
+            ["docker", "compose", "--project-name", PROJECT, "down", "--remove-orphans"],
             capture_output=True,
             timeout=120,
             check=False,
         )
-        for tag in (GOOD, NEWER, NEWEST, BROKEN):
+        for volume in project_volumes():
             subprocess.run(
-                ["docker", "image", "rm", f"{REPOSITORY}:{tag}"],
-                capture_output=True,
-                timeout=60,
-                check=False,
+                ["docker", "volume", "rm", volume], capture_output=True, timeout=60, check=False
             )
+        for repository in (API, STACK):
+            for tag in TAGS:
+                subprocess.run(
+                    ["docker", "image", "rm", f"{repository}:{tag}"],
+                    capture_output=True,
+                    timeout=60,
+                    check=False,
+                )
 
 
 def last_line(result: subprocess.CompletedProcess[str]) -> str:
@@ -177,35 +309,161 @@ def test_a_broken_tag_is_rolled_back_and_the_previous_one_serves_again(drill: St
     assert broken.returncode == 1, broken.stdout + broken.stderr
     assert last_line(broken) == f"running: {GOOD}"
     assert drill.env_tag() == GOOD
-    assert drill.running_image() == f"{REPOSITORY}:{GOOD}"
+    assert drill.running_image() == f"{API}:{GOOD}"
     assert drill.health().status_code == 200
     history = (drill.directory / "deploy-history.log").read_text(encoding="utf-8")
     assert f"rollback {BROKEN} -> {GOOD} ok" in history
 
 
 @pytest.mark.req("FR-15", "NFR-13")
-def test_rollback_after_a_failed_smoke_check_brings_the_previous_tag_back(drill: Stack) -> None:
+def test_rollback_after_a_failed_smoke_check_brings_the_previous_release_back(
+    drill: Stack,
+) -> None:
     assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good_files = drill.stack_files()
+    drill.build_stack(NEWER, marker="newer")
     newer = drill.deploy_sh("deploy", NEWER)
     assert newer.returncode == 0, newer.stdout + newer.stderr
-    assert drill.running_image() == f"{REPOSITORY}:{NEWER}"
+    assert drill.running_image() == f"{API}:{NEWER}"
+    assert drill.marker().text == "newer"
 
-    # What the workflow runs when `make smoke` fails against the new tag.
+    # What the workflow runs when `make smoke` fails against the new release.
     rollback = drill.deploy_sh("rollback")
 
     assert rollback.returncode == 0, rollback.stdout + rollback.stderr
     assert last_line(rollback) == f"running: {GOOD}"
-    assert drill.running_image() == f"{REPOSITORY}:{GOOD}"
+    assert drill.running_image() == f"{API}:{GOOD}"
+    assert drill.stack_files() == good_files
+    assert drill.marker().status_code == 404
     assert drill.health().status_code == 200
-    # One step back only: a second rollback would bring the failed tag back.
+    # One step back only: a second rollback would bring the failed release back.
     again = drill.deploy_sh("rollback")
     assert again.returncode == 1
     assert last_line(again) == f"running: {GOOD}"
 
 
-def has_image(tag: str) -> bool:
+@pytest.mark.req("NFR-13")
+def test_a_change_to_the_stack_files_reaches_the_vm_and_leaves_env_as_it_is(
+    drill: Stack,
+) -> None:
+    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    assert drill.marker().status_code == 404
+    env_before = (drill.directory / ".env").read_text(encoding="utf-8")
+    drill.build_stack(NEWER, marker="changed nginx.conf")
+
+    result = drill.deploy_sh("deploy", NEWER)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert drill.marker().text == "changed nginx.conf"
+    # Only the tag changed in .env, and no stack file came beside it.
+    env_after = (drill.directory / ".env").read_text(encoding="utf-8")
+    assert env_after == env_before.replace(f"API_IMAGE_TAG={GOOD}\n", f"API_IMAGE_TAG={NEWER}\n")
+    files = {
+        path.relative_to(drill.stack_files()).as_posix()
+        for path in drill.stack_files().rglob("*")
+        if path.is_file()
+    }
+    assert files == travelling_files()
+    assert not (drill.directory / "compose.yaml").exists()
+
+
+@pytest.mark.req("FR-15", "NFR-13")
+def test_a_failed_release_brings_back_the_previous_tag_and_stack_files_together(
+    drill: Stack,
+) -> None:
+    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good_files = drill.stack_files()
+    drill.build_stack(BROKEN, marker="broken")
+
+    broken = drill.deploy_sh("deploy", BROKEN)
+
+    assert broken.returncode == 1, broken.stdout + broken.stderr
+    assert drill.env_tag() == GOOD
+    assert drill.stack_files() == good_files
+    assert drill.running_image() == f"{API}:{GOOD}"
+    assert drill.marker().status_code == 404
+    assert drill.health().status_code == 200
+
+
+@pytest.mark.req("FR-15", "NFR-13")
+def test_rolling_back_to_a_release_without_a_service_removes_it_and_keeps_the_volumes(
+    drill: Stack,
+) -> None:
+    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    drill.api().exec("python", "-c", "open('/var/lib/recommenditos/drill-marker', 'w').close()")
+    drill.build_stack(NEWER, extra_service=True)
+    newer = drill.deploy_sh("deploy", NEWER)
+    assert newer.returncode == 0, newer.stdout + newer.stderr
+    assert len(drill.containers("extra")) == 1
+    volumes = project_volumes()
+    assert {f"{PROJECT}_prediction-log", f"{PROJECT}_extra-data"} <= volumes
+
+    rollback = drill.deploy_sh("rollback")
+
+    assert rollback.returncode == 0, rollback.stdout + rollback.stderr
+    # GOOD's compose.yaml has no `extra`, so its container is gone (--remove-orphans) ...
+    assert drill.containers("extra", everything=True) == []
+    # ... and no volume is: Compose removes one only when asked to.
+    assert project_volumes() == volumes
+    drill.api().exec("test", "-f", "/var/lib/recommenditos/drill-marker")
+    assert drill.health().status_code == 200
+
+
+@pytest.mark.req("NFR-13")
+def test_the_first_release_takes_over_the_stack_files_that_were_copied_by_hand(
+    drill: Stack,
+) -> None:
+    """The VM before stack images: the files beside .env, started by the old deploy.sh."""
+    for name in ("compose.yaml", "nginx.conf"):
+        shutil.copy(PROJ_ROOT / "deploy" / name, drill.directory / name)
+    nginx = drill.directory / "nginx.conf"
+    text = nginx.read_text(encoding="utf-8").rstrip()
+    nginx.write_text(
+        text[:-1] + f'    location = {MARKER_PATH} {{ return 200 "by hand"; }}\n}}\n',
+        encoding="utf-8",
+    )
+    env_file = drill.directory / ".env"
+    env_file.write_text(
+        env_file.read_text(encoding="utf-8").replace(
+            "API_IMAGE_TAG=\n", f"API_IMAGE_TAG={GOOD}\n"
+        ),
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--project-directory",
+            str(drill.directory),
+            "up",
+            "-d",
+            "--no-build",
+            "--wait",
+        ],
+        capture_output=True,
+        env=without_stack_environment(),
+        timeout=WAIT_TIMEOUT_S * 3,
+        check=True,
+    )
+    assert drill.marker().text == "by hand"
+
+    # The first deploy with the new deploy.sh, of the tag that runs.
+    result = drill.deploy_sh("deploy", GOOD)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert drill.marker().status_code == 404
+    assert not (drill.directory / "compose.yaml").exists()
+    assert not (drill.directory / "nginx.conf").exists()
+    # The files copied by hand are the previous release.
+    rollback = drill.deploy_sh("rollback")
+    assert rollback.returncode == 0, rollback.stdout + rollback.stderr
+    assert drill.marker().text == "by hand"
+    assert drill.env_tag() == GOOD
+
+
+def has_image(reference: str) -> bool:
     result = subprocess.run(
-        ["docker", "image", "inspect", f"{REPOSITORY}:{tag}"],
+        ["docker", "image", "inspect", reference],
         capture_output=True,
         timeout=60,
         check=False,
@@ -214,16 +472,21 @@ def has_image(tag: str) -> bool:
 
 
 @pytest.mark.req("NFR-04")
-def test_a_deploy_removes_the_image_two_deploys_back_and_keeps_the_rest(drill: Stack) -> None:
+def test_a_deploy_removes_the_release_two_deploys_back_and_keeps_the_rest(drill: Stack) -> None:
+    drill.build_stack(NEWER, marker="newer")
+    drill.build_stack(NEWEST, marker="newest")
     for tag in (GOOD, NEWER, NEWEST):
         result = drill.deploy_sh("deploy", tag)
         assert result.returncode == 0, result.stdout + result.stderr
 
-    assert not has_image(GOOD)
+    assert not has_image(f"{API}:{GOOD}")
+    assert not has_image(f"{STACK}:{GOOD}")
     # What runs, what `rollback` needs, and an image no deploy has run yet.
-    assert has_image(NEWEST)
-    assert has_image(NEWER)
-    assert has_image(BROKEN)
+    for tag in (NEWEST, NEWER, BROKEN):
+        assert has_image(f"{API}:{tag}")
+        assert has_image(f"{STACK}:{tag}")
+    # The stack files of NEWEST and NEWER, which `rollback` needs; GOOD's are gone.
+    assert len([path for path in (drill.directory / "stacks").iterdir()]) == 2
 
 
 @pytest.mark.req("FR-15", "NFR-13")
@@ -234,7 +497,7 @@ def test_the_rollback_finishes_when_the_client_goes_away(drill: Stack) -> None:
 
     assert returncode == 1
     assert drill.env_tag() == GOOD
-    assert drill.running_image() == f"{REPOSITORY}:{GOOD}"
+    assert drill.running_image() == f"{API}:{GOOD}"
     assert drill.health().status_code == 200
     # tee may still be writing the log when bash has exited.
     log = drill.directory / "deploy-last-run.log"
@@ -242,3 +505,24 @@ def test_the_rollback_finishes_when_the_client_goes_away(drill: Stack) -> None:
     while not log.read_text(encoding="utf-8").endswith(f"running: {GOOD}\n"):
         assert time.monotonic() < deadline, log.read_text(encoding="utf-8")
         time.sleep(0.1)
+
+
+@pytest.mark.req("NFR-13", "NFR-15")
+def test_the_stack_image_holds_the_stack_files_and_nothing_else(drill: Stack) -> None:
+    """No secret, template or script of the bootstrap layer travels with a release."""
+    expected = travelling_files()
+    container = docker("create", f"{STACK}:{GOOD}", "stack-files-only")
+    try:
+        listing = subprocess.run(
+            ["docker", "export", container], capture_output=True, timeout=60, check=True
+        ).stdout
+    finally:
+        docker("rm", container)
+    with tarfile.open(fileobj=io.BytesIO(listing)) as archive:
+        files = {
+            member.name.removeprefix("stack/")
+            for member in archive.getmembers()
+            if member.isfile() and member.name.startswith("stack/")
+        }
+    assert files == expected
+    assert "compose.yaml" in files and "nginx.conf" in files

@@ -5,10 +5,12 @@ name: CD
 # when this run started, not the commit it builds. Keep the 40-hex SHA in it.
 run-name: CD of ${{ github.event.workflow_run.head_sha || github.sha }}
 
-# The API image of every merge to main, built with the model and comparables
-# index that dvc.lock points to (FR-12, EDN-08), tested as a Compose stack with
-# the integration suite, and pushed to GHCR as :<commit SHA> and :latest (NFR-13,
-# EDN-91). docs/docs/deployment.md#continuous-delivery describes it.
+# The release of every merge to main: the API image, built with the model and
+# comparables index that dvc.lock points to (FR-12, EDN-08), tested as a Compose
+# stack with the integration suite, and the stack image, the stack files of the
+# same commit (deploy/stack.Dockerfile), both pushed to GHCR as :<commit SHA> and
+# :latest (NFR-13, EDN-91, EDN-94). docs/docs/deployment.md#continuous-delivery
+# describes it.
 #
 # Started by a finished CI run rather than by the push itself, so that a commit
 # whose CI failed never publishes an image. `workflow_run` always runs this file
@@ -103,6 +105,8 @@ jobs:
             echo "Commit \`$SHA\` changes only docs/, reports/ or top-level Markdown files, so no image is built (NFR-13)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # The name stays "the API image" although the job pushes the stack image
+  # too: deploy.yml looks the job up by it (PUSH_JOB).
   publish:
     name: Build, test and push the API image
     needs: changes
@@ -134,8 +138,12 @@ jobs:
         # time is the OCI label's.
         shell: bash
         run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/api" >> "$GITHUB_ENV"
-          echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          {
+            echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/api"
+            # deploy.sh derives this name from the API image's: .../api -> .../stack.
+            echo "STACK_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/stack"
+            echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           python-version: "3.12"
@@ -185,6 +193,24 @@ jobs:
           # (docs/docs/deployment.md#continuous-delivery).
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build the stack image
+        # The stack files of this commit, deploy/ without what never travels
+        # (deploy/.dockerignore), in an image without a base or a command: the
+        # VM copies its files out and runs nothing of it. Built from the same
+        # checkout as the API image and pushed with it, so a tag names both.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: deploy
+          file: deploy/stack.Dockerfile
+          load: true
+          push: false
+          tags: ${{ env.STACK_IMAGE }}:${{ env.SHA }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.SHA }}
+            org.opencontainers.image.version=${{ env.SHA }}
+            org.opencontainers.image.created=${{ env.CREATED }}
+            org.opencontainers.image.title=Recommenditos stack files
       - name: Check the image size (NFR-04, at most 1 GB)
         shell: bash
         run: |
@@ -239,17 +265,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push :<commit SHA> and move :latest forward
-        # :latest only moves forward: when the CI runs of two merges finish in
-        # the opposite order, the older commit's run must not take :latest back.
-        # It stays only where it names a newer commit that contains this one.
+        # The stack image first: a commit whose API image is on GHCR has its
+        # stack image there too. :latest only moves forward, for both images
+        # together: when the CI runs of two merges finish in the opposite order,
+        # the older commit's run must not take :latest back. It stays only where
+        # it names a newer commit that contains this one.
         shell: bash
         run: |
-          if ! docker push "$IMAGE:$SHA"; then
-            msg="Pushing $IMAGE:$SHA failed. If the log above says denied or forbidden: the organisation must let members create packages, and an existing package must give this repository the Write role under Manage Actions access."
-            echo "::error::$msg"
-            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+          for image in "$STACK_IMAGE" "$IMAGE"; do
+            if ! docker push "$image:$SHA"; then
+              msg="Pushing $image:$SHA failed. If the log above says denied or forbidden: the organisation must let members create packages, and an existing package must give this repository the Write role under Manage Actions access."
+              echo "::error::$msg"
+              echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done
           latest=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{json .Image}}' 2>/dev/null \
             | jq -r '[.. | objects | .Labels? // empty | .["org.opencontainers.image.revision"] // empty][0] // empty' \
             || true)
@@ -257,17 +287,21 @@ jobs:
             echo "::notice::Not moving :latest: it is $latest, a newer commit than $SHA."
             echo "LATEST=kept on \`$latest\`, a newer commit" >> "$GITHUB_ENV"
           else
-            docker tag "$IMAGE:$SHA" "$IMAGE:latest"
-            docker push "$IMAGE:latest"
+            for image in "$STACK_IMAGE" "$IMAGE"; do
+              docker tag "$image:$SHA" "$image:latest"
+              docker push "$image:latest"
+            done
             echo "LATEST=moved" >> "$GITHUB_ENV"
           fi
           digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$SHA")
           echo "DIGEST=${digest#*@}" >> "$GITHUB_ENV"
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$STACK_IMAGE:$SHA")
+          echo "STACK_DIGEST=${digest#*@}" >> "$GITHUB_ENV"
       - name: Write the job summary
         shell: bash
         run: |
           {
-            echo "### API image of \`$SHA\`"
+            echo "### Release of \`$SHA\`"
             echo
             echo "| | |"
             echo "|---|---|"
@@ -278,6 +312,7 @@ jobs:
               echo "| \`:latest\` | $LATEST |"
             fi
             echo "| Digest | \`$DIGEST\` |"
+            echo "| Stack image | \`$STACK_IMAGE:$SHA\`, \`$STACK_DIGEST\` |"
             echo "| Model (variant, version) | \`$MODEL_VERSION\` |"
             echo "| Comparables index version | \`$COMPARABLES_VERSION\` |"
             echo "| Size | $IMAGE_SIZE_MB MB (NFR-04: at most 1,000 MB) |"
