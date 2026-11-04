@@ -12,7 +12,7 @@
 # inside the Compose network (docs/docs/monitoring.md). Accepted until a
 # release with the fixes, which Dependabot proposes; the expiry has them
 # reviewed again before the presentation of 2026-12-15 (tracked in #286).
-# crypto/x509 intermediate certificates (Go stdlib): the exporters open no TLS connection.
+# crypto/x509 intermediate certificates (Go stdlib): the exporters open no TLS connection; in Grafana's bundled plugins, see below.
 CVE-2026-111943 exp:2026-12-04
 # encoding/asn1 recursion (Go stdlib): the exporters parse no ASN.1 from a client, as they serve no TLS.
 CVE-2026-33818 exp:2026-12-04
@@ -36,15 +36,33 @@ CVE-2026-56860 exp:2026-12-04
 CVE-2026-56862 exp:2026-12-04
 # klauspost/compress dictionaries in cAdvisor: it decompresses nothing a client sends.
 CVE-2026-63209 exp:2026-12-04
-# net/http Range headers (Go stdlib): only Prometheus and the healthcheck reach the exporters, from inside the Compose network.
+# net/http Range headers (Go stdlib): only Prometheus and the healthcheck reach the exporters, from inside the Compose network; in Grafana's bundled plugins, see below.
 CVE-2026-78667 exp:2026-12-04
-# net/http HTTP/2 SETTINGS frames (Go stdlib, x/net): the exporters serve no HTTP/2 and only inside the Compose network.
+# net/http HTTP/2 SETTINGS frames (Go stdlib, x/net): the exporters serve no HTTP/2 and only inside the Compose network; in Grafana's bundled plugins, see below.
 CVE-2026-78669 exp:2026-12-04
 # gRPC-Go DATA frames in cAdvisor: it serves no gRPC, and its containerd client has no socket mounted to reach.
 CVE-2026-84304 exp:2026-12-04
 # gRPC-Go malformed requests in cAdvisor: it serves no gRPC.
 CVE-2026-84445 exp:2026-12-04
-# crypto/tls ECH extensions (Go stdlib): the exporters serve and open no TLS connection.
+# crypto/tls ECH extensions (Go stdlib): the exporters serve and open no TLS connection; in Grafana's bundled plugins, see below.
 CVE-2026-97031 exp:2026-12-04
 # gRPC-Go xDS RBAC in cAdvisor: it uses no xDS and serves no gRPC.
 GHSA-hrxh-6v49-42gf exp:2026-12-04
+
+# Grafana 13.3.0 (deploy/compose.yaml), the newest release on 2026-11-04: every
+# HIGH finding is in a backend binary of a data source plugin it bundles, none
+# in Grafana's own binary or in its Prometheus plugin
+# (gpx_grafana-prometheus-datasource), the one plugin process that runs. The Go
+# stdlib findings CVE-2026-111943, CVE-2026-78667, CVE-2026-78669 and
+# CVE-2026-97031 above match nine of them as well: the Jaeger, Loki, MSSQL,
+# MySQL, CloudWatch, InfluxDB, PostgreSQL, OpenTSDB and Pyroscope plugins; the
+# two entries below match the Tempo plugin alone. compose.yaml turns every one
+# of those plugins off (GF_PLUGINS_DISABLE_PLUGINS), so their binaries never
+# run; the stack provisions Prometheus alone, and Grafana is reachable only
+# through the SSH tunnel (docs/docs/monitoring.md#grafana). Accepted until a
+# Grafana release with the fixes, reviewed again with the exporters' entries
+# (tracked in #286).
+# github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.8.4: the plugin is off.
+CVE-2026-21728 exp:2026-12-04
+# github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.10.3: the plugin is off.
+CVE-2026-28377 exp:2026-12-04

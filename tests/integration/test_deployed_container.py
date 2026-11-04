@@ -31,8 +31,12 @@ def compose_services() -> list[str]:
 
 SERVICES = compose_services()
 
-#: The one service that publishes a port, nginx's (FR-10, NFR-09).
+#: The one service that publishes a port to the network, nginx's (FR-10, NFR-09).
 PUBLISHING_SERVICES = {"proxy"}
+
+#: The services that publish a port on the host's loopback only, which no other
+#: machine reaches: Grafana, opened through an SSH tunnel (docs/docs/monitoring.md#grafana).
+LOOPBACK_SERVICES = {"grafana"}
 
 #: The services that run as root, each with the reason (deploy/compose.yaml):
 #: cAdvisor reads the Docker socket and /var/lib/docker, which only root can.
@@ -99,11 +103,19 @@ def test_the_image_holds_the_serving_runtime_and_no_dependency_group(api_contain
 
 @pytest.mark.req("FR-10", "NFR-09")
 @pytest.mark.parametrize("service", sorted(set(SERVICES) - PUBLISHING_SERVICES))
-def test_no_port_but_the_proxy_is_published_on_the_host(service, stack_container):
+def test_no_port_but_the_proxy_is_published_beyond_the_hosts_loopback(service, stack_container):
     """Only nginx is reachable from outside; the API and the monitoring only inside
-    the Compose network. The VM's ports 8080 to 8089 are public (docs/docs/deployment.md)."""
+    the Compose network, and Grafana besides on the host's 127.0.0.1. The VM's
+    ports 8080 to 8089 are public (docs/docs/deployment.md), and a port on
+    0.0.0.0 or the host's IPv6 address would be too."""
     ports = stack_container(service).inspect()["NetworkSettings"]["Ports"]
     published = {port: bindings for port, bindings in ports.items() if bindings}
+    if service in LOOPBACK_SERVICES:
+        published = {
+            port: beyond
+            for port, bindings in published.items()
+            if (beyond := [b for b in bindings if b["HostIp"] != "127.0.0.1"])
+        }
     assert not published, f"the {service} container publishes {published}"
 
 

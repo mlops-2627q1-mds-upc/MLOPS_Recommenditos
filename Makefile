@@ -128,7 +128,14 @@ api:
 
 # The serving stack of docs/docs/deployment.md (EDN-87): the API image with the
 # pulled model, behind nginx, on http://localhost:8080. Needs Docker and `dvc pull`.
-COMPOSE = docker compose -f deploy/compose.yaml
+# compose.yaml has no default for the Grafana admin password and the Discord
+# webhook, so a stack without them does not start (docs/docs/monitoring.md#alerts).
+# A local stack gets a random password per command, unless the shell sets one,
+# and a webhook that goes nowhere whatever the shell says: a laptop's alerts are
+# not the team's. LOCAL_DISCORD_WEBHOOK_URL=<url> sends them somewhere on purpose.
+LOCAL_DISCORD_WEBHOOK_URL ?= http://127.0.0.1:9/discarded
+COMPOSE = GRAFANA_ADMIN_PASSWORD="$${GRAFANA_ADMIN_PASSWORD:-$$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}" \
+	DISCORD_WEBHOOK_URL="$(LOCAL_DISCORD_WEBHOOK_URL)" docker compose -f deploy/compose.yaml
 # The tag a deployment ships: the commit the image is built from.
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 SMOKE_URL ?= http://localhost:8080
@@ -148,16 +155,22 @@ stack:
 stack-down:
 	$(COMPOSE) down
 
-# promtool from the Prometheus image the stack runs, so the check and the server
-# agree on the configuration's syntax. Checks deploy/prometheus/ as Compose
-# mounts it, the scrape configuration and, once there are any, its rule files.
+# promtool and amtool from the images the stack runs, so the checks and the
+# servers agree on the syntax. Checks deploy/prometheus/ and deploy/alertmanager/
+# as Compose mounts them: the scrape configuration with its rule files, the
+# rules against their unit tests in deploy/prometheus/tests/, and Alertmanager's
+# routes, receivers and templates.
 PROMETHEUS_IMAGE = $(shell $(COMPOSE) config --images prometheus)
+ALERTMANAGER_IMAGE = $(shell $(COMPOSE) config --images alertmanager)
 
-## Check the Prometheus configuration in deploy/prometheus/ with promtool
+## Check Prometheus' configuration and alerting rules, with the rules' unit tests, and Alertmanager's
 .PHONY: prometheus-check
 prometheus-check:
-	docker run --rm --entrypoint promtool -v "$(CURDIR)/deploy/prometheus:/etc/prometheus:ro" \
-		$(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm --entrypoint /bin/sh -v "$(CURDIR)/deploy/prometheus:/etc/prometheus:ro" \
+		$(PROMETHEUS_IMAGE) -c 'promtool check config /etc/prometheus/prometheus.yml && \
+		promtool test rules /etc/prometheus/tests/*.yml'
+	docker run --rm --entrypoint amtool -v "$(CURDIR)/deploy/alertmanager:/etc/alertmanager:ro" \
+		$(ALERTMANAGER_IMAGE) check-config /etc/alertmanager/alertmanager.yml
 
 # The integration suite of tests/integration/ against a running stack, through
 # its proxy. Without coverage, which measures this process and not the API's, and

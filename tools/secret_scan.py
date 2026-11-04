@@ -7,7 +7,8 @@
 in the CI job is every commit GitHub publishes for the repository (EDN-71).
 `canary` runs first and fails unless the same scan, with the same configuration,
 finds a fake DagsHub token planted in every place a real one has been or could
-plausibly be written. Both build their gitleaks command in `gitleaks_git`, so the
+plausibly be written, and a fake Discord webhook URL in the places the alerts'
+one could be. Both build their gitleaks command in `gitleaks_git`, so the
 canary cannot pass while the scan it vouches for is run differently.
 
 Why there is a canary at all. NFR-15's evidence is a scan that reports nothing,
@@ -32,7 +33,12 @@ would miss what only a history scan sees: paths relative to the repository, whic
 an allowlist anchored at `^\\.env$` matches, and commits, which a merge can carry
 without any of its parents doing so.
 
-Each place gets two tokens: an ordinary one, and one from the low-entropy tail
+The Discord webhook URL that Alertmanager posts the alerts with (EDN-99) is a
+secret too, and gitleaks' defaults have no rule for it; `.gitleaks.toml`'s
+`discord-webhook-url` rule adds one, and the canary plants a webhook URL in each
+of `WEBHOOK_PLACES` so that rule is held to the same proof.
+
+Each DagsHub place gets two tokens: an ordinary one, and one from the low-entropy tail
 that gitleaks' generic rule drops, because that tail is the case the custom rule
 exists for and an ordinary token would pass with the defaults alone. All of them
 are drawn from a seeded generator, so a failure reproduces exactly, and none is a
@@ -126,6 +132,20 @@ PLACES = {
     ),
 }
 
+#: Where the alerts' Discord webhook URL could be committed, in either of the
+#: two host names Discord hands out.
+WEBHOOK_PLACES = {
+    ".env, Alertmanager's webhook": (".env", "DISCORD_WEBHOOK_URL={url}\n"),
+    "Alertmanager configuration": (
+        "deploy/alertmanager/alertmanager.yml",
+        "receivers:\n  - name: discord\n    discord_configs:\n      - webhook_url: {url}\n",
+    ),
+    "a doc, old host name": (
+        "docs/docs/monitoring.md",
+        "The alerts post to {url}.\n",
+    ),
+}
+
 #: A repository of its own: no hook, signing key or template of the machine it
 #: runs on may change what gets committed.
 _GIT_ENV = {
@@ -191,6 +211,14 @@ def fake_token(rng: random.Random, *, low_entropy: bool = False) -> str:
             return token
 
 
+def fake_webhook_url(rng: random.Random, *, host: str = "discord.com") -> str:
+    """A webhook URL of Discord's shape: an 18-to-19-digit ID and a 68-character token."""
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
+    webhook_id = rng.randrange(10**17, 10**19)
+    token = "".join(rng.choice(alphabet) for _ in range(68))
+    return f"https://{host}/api/webhooks/{webhook_id}/{token}"
+
+
 class _Repository:
     """A throwaway repository the canary writes its history into."""
 
@@ -238,6 +266,11 @@ def plant(root: Path) -> dict[tuple[str, str, str], str]:
             token = fake_token(rng, low_entropy=kind == "low-entropy")
             commit = repository.commit_file(path, content.format(token=token), place)
             planted[(commit, path, token)] = f"{place} ({kind})"
+    for place, (path, content) in WEBHOOK_PLACES.items():
+        host = "discordapp.com" if "old host name" in place else "discord.com"
+        url = fake_webhook_url(rng, host=host)
+        commit = repository.commit_file(path, content.format(url=url), place)
+        planted[(commit, path, url)] = f"{place} (Discord webhook)"
 
     # A token that exists only in a conflict resolution: both sides change the
     # same line, neither carries a secret, and the merge commit writes one.
@@ -298,7 +331,7 @@ def canary(gitleaks: str) -> int:
         findings = json.loads(report.read_text(encoding="utf-8"))
 
     # Guards against a canary that plants nothing and so finds everything.
-    expected = 2 * len(PLACES) + 2
+    expected = 2 * len(PLACES) + len(WEBHOOK_PLACES) + 2
     if len(planted) != expected:
         print(f"the canary planted {len(planted)} tokens instead of {expected}")
         return 1
@@ -314,7 +347,7 @@ def canary(gitleaks: str) -> int:
     missed = [place for key, place in planted.items() if key not in found]
     if missed:
         print(
-            f"the secret scan misses a DagsHub token in {len(missed)} of {len(planted)} "
+            f"the secret scan misses a secret in {len(missed)} of {len(planted)} "
             "places it was planted:",
             *(f"  - {place}" for place in missed),
             "A scan of the history that finds nothing is no evidence while this fails.",
@@ -322,7 +355,8 @@ def canary(gitleaks: str) -> int:
         )
         return 1
     print(
-        f"the secret scan finds a DagsHub token in all {len(planted)} places it was planted, "
+        f"the secret scan finds a DagsHub token or a Discord webhook URL in all {len(planted)} "
+        "places it was planted, "
         "each for the commit and the file it was planted in."
     )
     return 0

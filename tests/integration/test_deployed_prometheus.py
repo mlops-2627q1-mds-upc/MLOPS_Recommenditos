@@ -17,7 +17,7 @@ from tests.integration.conftest import COMPOSE_PROJECT, Container
 pytestmark = [pytest.mark.integration, pytest.mark.docker_host]
 
 #: The scrape jobs of deploy/prometheus/prometheus.yml.
-JOBS = {"prometheus", "api", "cadvisor", "node"}
+JOBS = {"prometheus", "api", "cadvisor", "node", "alertmanager", "grafana"}
 
 #: The first scrape of a target comes up to one scrape interval (15 s) after
 #: Prometheus starts, and cAdvisor sees a new container at its next housekeeping

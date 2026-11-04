@@ -1,0 +1,19 @@
+# Grafana's one data source, the stack's Prometheus, by its Compose service name
+# (docs/docs/monitoring.md#grafana). Provisioned, so a fresh Grafana has it
+# without a click; `editable: false` keeps the UI from changing it. The uid is
+# the one every panel of ../../dashboards/ names, so it must not change.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # Prometheus' scrape interval (../../prometheus/prometheus.yml), so that a
+      # `rate()` over $__rate_interval always holds several samples.
+      timeInterval: 15s
+      httpMethod: POST
