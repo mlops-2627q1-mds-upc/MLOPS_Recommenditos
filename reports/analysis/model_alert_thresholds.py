@@ -20,7 +20,8 @@ Coverage: the exact one-sided binomial false-alarm rate at p = the nominal
 without the continuity correction 0.5 / n, and the 0.5th percentile of 20,000
 windows drawn from the test set's range outcomes.
 Then the family-wise rate of the three window alerts, and the rules applied to
-the windows of reports/monitoring/laptop-es-replay-2026-11-04.md.
+the windows of reports/monitoring/laptop-es-replay-2026-11-04.md, which the model
+before #303 answered, so their MdAPE is a multiple of that model's test MdAPE.
 
 Run from the repository root after `dvc pull train features`:
     python reports/analysis/model_alert_thresholds.py
@@ -42,6 +43,9 @@ ALPHA = 0.005
 DRAWS = 20_000
 SEED = 230
 C = 3.52  # the MdAPE ceiling's constant, as in the rules file
+#: The test MdAPE of the lgbm-basic model that answered the replay of 2026-11-04
+#: (afc3335e, before #303), the baseline its windows were compared with.
+REPLAY_TEST_MDAPE = 0.0673
 Z = float(stats.norm.ppf(1 - ALPHA))
 MDAPE_COUNTS = (200, 250, 300, 400, 500, 600, 700, 800, 1000)
 COVERAGE_COUNTS = (300, 400, 500, 600, 700, 800, 1000)
@@ -119,7 +123,7 @@ for name, mdape, answers, coverage, ranges in (
     ("2 control", 0.0528, 1000, 0.954, 500),
     ("3 ES", 0.0941, 1000, 0.858, 500),
 ):
-    multiple = mdape / 0.0673
+    multiple = mdape / REPLAY_TEST_MDAPE
     print(
         f"window {name:<9}  MdAPE {multiple:.2f} x vs {ceiling(answers):.4f} at {answers}: "
         f"{'fires' if multiple > ceiling(answers) else 'quiet'};  coverage {coverage:.3f} vs "

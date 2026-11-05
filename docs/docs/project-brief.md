@@ -83,7 +83,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   Adding those sellers moves no other seller between sets, so the models before and after differ only by the `ES` training rows ([The split](pipeline.md#the-split)).
   Their `ES` listings also enter FR-09's comparables index.
   **[decided]**, [EDN-102](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
-  Until that retrain is promoted, the committed `dvc.lock` and the deployed model are those of the whole-country holdout described above.
+  That retrain was promoted on 2026-11-05 ([#303](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/303)): the committed `dvc.lock` and the deployed `lgbm-basic` model `2a60912b` are trained with 60 % of the `ES` sellers in the pool.
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
 - **[decided]**, [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown, with a warning in the response ([requirements](requirements.md) FR-05).
   An API test covers this case.
@@ -93,7 +93,7 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   Spain differs above all in listing completeness (`nr_prev_owners` missing in 95.5 % of `ES` rows vs 40.0 % in training, `nr_seats` 10.9 % vs 3.0 %) and in the `body_type`, `transmission` and `fuel_category` mix.
   The same run found that **held-out dealers shift as much as a new country**: on `make`, `model`, `gears`, `mileage_km_raw` and `age_years` a seller-grouped holdout differs from the training distribution as much as `ES` does, or more.
   That is the strongest argument for the seller-grouped split (see 3.3), and it is a risk for SC-04: per-segment error may partly reflect which dealers landed in which split.
-  Measured on 2026-10-12, and again on 2026-10-13 for the candidate as EDN-82 trains it ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.2 % on average for cars older than 20 years against 16.80 % on the committed one.
+  Measured on 2026-10-12, and again on 2026-10-13 for the candidate as EDN-82 trains it ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/split_strategy.py`): it does not explain SC-04's miss, which holds on 20 of 20 other splits, at 18.2 % on average for cars older than 20 years against 16.80 % on the one then committed (17.64 % for the promoted model, whose spread is not yet measured).
   The split strategy is therefore decided: the seller-grouped hash split stays as it is, and its figures are reported with their spread over other splits.
 
 **DataMarket, Spanish second-hand cars (free sample)**, <https://github.com/Data-Market/vehiculos-de-segunda-mano>, is not part of the pipeline.
@@ -157,7 +157,8 @@ Steps 1-3 (maybe 4) are the target for the first report; the rest is **[open]**.
 **Steps 1 to 4 are implemented** as the four variants of `train.variants` in `params.yaml`, one `train@<variant>` stage each, and each is one MLflow run in one experiment.
 Measured on the real snapshot on 2026-10-13 (test-split MdAPE, fitted on the 11 supported makes and encoded in a vocabulary they alone decided, EDN-05, with early stopping deciding the tree count, EDN-73, and step 3 on blanked copies of its training rows, EDN-82): step 1 12.16 %, step 2 9.52 %, step 3 6.73 %, step 4 6.26 %.
 So the extended feature set is worth 0.48 pp on a fully described car, and as the two variants are trained step 4 is 3.44 pp *worse* than step 3 on a request carrying only the ten fields FR-01 requires (10.30 % against 6.86 %), which is why **step 3 is the candidate** and step 4 is not ([EDN-62](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
-The whole ladder fits in under a minute.
+The promoted retrain of 2026-11-05 (EDN-102) is at 12.19 %, 9.53 %, 6.80 %, and 6.33 %; step 4 now passes SC-06 at 1.48x, but is still 2.45 pp worse than step 3 on that request (9.36 % against 6.92 %) and has no price range for SC-05.
+The whole ladder fits in about two minutes on a GitHub Actions runner, 103 s of it step 3 with its price range.
 Numbers, hyperparameters and the caveats are in the [model card](model-card.md#the-experiment-ladder-as-measured): the tree count is decided by early stopping rather than by a binding budget and turned out to be worth 0.02 pp (EDN-73), and `learning_rate` and `num_leaves` were searched and kept, because a sweep around them for step 3 found no point the validation split can tell apart (EDN-73).
 Later tuning follows the protocol in the [pipeline documentation](pipeline.md#tuning-a-hyperparameter).
 Issue #88 extends it to both LightGBM variants and to `min_child_samples`, with every fit of the search measured by CodeCarbon and logged as its own MLflow run, and the search's energy reported apart from the final fit's, which is what NFR-10's 15-minute budget now covers (EDN-73).
@@ -170,7 +171,7 @@ Price ranges (UC2), **implemented** ([EDN-85](https://github.com/mlops-2627q1-md
 They are trained on the listings plus one copy of each with every field but `make` omitted (FR-02 requires `make` alone) and one with a random subset omitted, so a partial request gets a wider range.
 The calibration split gets the same copies, and the coverage guarantee is marginal (on average over all inputs), not per missing-field pattern.
 MAPIE runs in training only; the bundle stores the boosters and the two conformity offsets, and serving adds them up.
-Measured on the test split, the nominal 90 % range covers 90.2 % of full inputs and 91.0 % of P1 requests, so SC-05 passes, and its mean width is 0.46 times the median for a full input and 0.93 times for P1.
+Measured on the test split, the nominal 90 % range covers 90.6 % of full inputs and 91.8 % of P1 requests, so SC-05 passes, and its mean width is 0.47 times the median for a full input and 0.93 times for P1.
 The typical price of a request missing an FR-01 required field comes from the 50 % quantile model, because `lgbm-basic` has never seen a required field missing: on a make-only request its MdAPE is 98.5 % against 40.1 % for the 50 % model (FR-07, EDN-85) (calibration split, `reports/analysis/price_range_point_estimate_results.txt`).
 
 Whether the point model (UC1, steps 1-4 above) needs the same random masking as the interval models depends on how often each optional field is missing in training, measured on 2026-09-29 (**[decided]**, [EDN-15](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), script in `reports/analysis/`):
@@ -182,7 +183,7 @@ Whether the point model (UC1, steps 1-4 above) needs the same random masking as 
   Only 30.7 % of training rows have every one of the six optional fields present, and 469 rows (0.5 %) have none of them, so the extreme case is in the training data, but almost absent from it.
 
 Measured on 2026-10-13 on the validation split ([EDN-82](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), `reports/analysis/blanked_fields_results.txt`): native missing-value handling is not enough for a request with few optional fields.
-Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training split: 324 of its 60,378 served rows have all six optional fields of the basic set empty.
+Several optional fields are often empty on their own, but a request carrying only the required fields is almost absent from the training split: 324 of the 60,378 served rows of the split then had all six optional fields of the basic set empty.
 Trained on the listings plus two blanked copies of each, one with every optional field omitted and one with a random subset, `lgbm-basic` answers that request at 7.19 % MdAPE instead of 8.57 %, and a complete request is not measurably worse (7.02 % against 6.96 %).
 `lgbm-extended` with the same copies answers it at 7.14 % instead of 10.79 %, so most of what both models lost on that request came from how they were trained, not from the information they lack.
 These are validation figures from one split and one fit per configuration.
