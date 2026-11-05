@@ -1,0 +1,4 @@
+rows 2000 2000 observed prices identical in order: True
+pooled MdAPE before 9.1347% after 7.6806% delta -1.45 pp
+pooled coverage before 843/1000 = 84.3%, after 885/1000 = 88.5%
+per-request APE lower after: 1208 of 2000

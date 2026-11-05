@@ -1,0 +1,6 @@
+265 probes 16:32:39.983 - 16:37:04.007
+non-200 16:33:22.006 .. 16:33:26.006: 5 probes, 5.0 s until the next 200; codes ['503']
+version switch 16:33:27.005: 2a60912b -> afc3335e
+non-200 16:34:46.006 .. 16:34:50.006: 5 probes, 5.0 s until the next 200; codes ['503']
+version switch 16:34:51.006: afc3335e -> 2a60912b
+200 answers with a version other than old/new: 0 []

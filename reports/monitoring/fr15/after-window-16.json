@@ -1,0 +1,223 @@
+{
+  "window": {
+    "window_id": 16,
+    "status": "tested",
+    "first_seq": 32968,
+    "last_seq": 33967,
+    "requests": 1000,
+    "window_size": 1000,
+    "first_answered_at": "2026-11-05T16:03:15.977+00:00",
+    "last_answered_at": "2026-11-05T16:06:35.762+00:00",
+    "model_variant": "lgbm-basic",
+    "model_version": "2a60912bd232083e6950f26fe72fe6c4",
+    "es_share": 0.036,
+    "flagged": false,
+    "drifted_features": 0,
+    "threshold": 0.0002173913043478261,
+    "reference_rows": 10000,
+    "closed_at": "2026-11-05T16:12:44.037+00:00"
+  },
+  "alpha": 0.005,
+  "features": [
+    {
+      "feature": "age_years",
+      "test": "ks",
+      "p_value": 0.375046968460083,
+      "statistic": 0.03009999915957451,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "mileage_km_raw",
+      "test": "ks",
+      "p_value": 0.03612038865685463,
+      "statistic": 0.046799998730421066,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "power_kw",
+      "test": "ks",
+      "p_value": 0.5079757571220398,
+      "statistic": 0.02710000053048134,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "nr_prev_owners",
+      "test": "ks",
+      "p_value": 1.0,
+      "statistic": 0.010028533637523651,
+      "n_values": 612,
+      "drifted": false
+    },
+    {
+      "feature": "gears",
+      "test": "ks",
+      "p_value": 0.9999411702156067,
+      "statistic": 0.013216007500886917,
+      "n_values": 632,
+      "drifted": false
+    },
+    {
+      "feature": "cylinders_volume_cc",
+      "test": "ks",
+      "p_value": 0.3595547676086426,
+      "statistic": 0.031689152121543884,
+      "n_values": 925,
+      "drifted": false
+    },
+    {
+      "feature": "nr_seats",
+      "test": "ks",
+      "p_value": 1.0,
+      "statistic": 0.00342733901925385,
+      "n_values": 964,
+      "drifted": false
+    },
+    {
+      "feature": "nr_doors",
+      "test": "ks",
+      "p_value": 0.9975167512893677,
+      "statistic": 0.013049516826868057,
+      "n_values": 989,
+      "drifted": false
+    },
+    {
+      "feature": "make",
+      "test": "chi2",
+      "p_value": 0.6661190986633301,
+      "statistic": 7.617741584777832,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "body_type",
+      "test": "chi2",
+      "p_value": 0.5366911292076111,
+      "statistic": 6.999458312988281,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "fuel_category",
+      "test": "chi2",
+      "p_value": 0.612399160861969,
+      "statistic": 6.311356544494629,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "transmission",
+      "test": "chi2",
+      "p_value": 0.9965006113052368,
+      "statistic": 0.007011051289737225,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "drive_train",
+      "test": "chi2",
+      "p_value": 0.8902462124824524,
+      "statistic": 0.6269058585166931,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "seller_type",
+      "test": "chi2",
+      "p_value": 0.5553973913192749,
+      "statistic": 0.3477362096309662,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "country_code",
+      "test": "chi2",
+      "p_value": 0.7965087294578552,
+      "statistic": 3.8533191680908203,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "age_years__missing",
+      "test": "chi2",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "mileage_km_raw__missing",
+      "test": "chi2",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "power_kw__missing",
+      "test": "chi2",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "nr_prev_owners__missing",
+      "test": "chi2",
+      "p_value": 0.6371126770973206,
+      "statistic": 0.22253824770450592,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "gears__missing",
+      "test": "chi2",
+      "p_value": 0.7467334270477295,
+      "statistic": 0.10429640859365463,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "cylinders_volume_cc__missing",
+      "test": "chi2",
+      "p_value": 0.6277007460594177,
+      "statistic": 0.23519161343574524,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "nr_seats__missing",
+      "test": "chi2",
+      "p_value": 0.0981050506234169,
+      "statistic": 2.736081838607788,
+      "n_values": 1000,
+      "drifted": false
+    },
+    {
+      "feature": "nr_doors__missing",
+      "test": "chi2",
+      "p_value": 0.5983461737632751,
+      "statistic": 0.27749747037887573,
+      "n_values": 1000,
+      "drifted": false
+    }
+  ],
+  "performance": {
+    "window_id": 16,
+    "ranges": 500,
+    "labelled": 1000,
+    "labelled_ranges": 500,
+    "mdape_status": "ok",
+    "mdape": 0.05393702576403243,
+    "coverage_status": "ok",
+    "coverage": 0.96,
+    "nominal_level": 0.9,
+    "test_mdape": 0.06800423081434065,
+    "test_coverage": 0.9062592556027248,
+    "final": false,
+    "computed_at": "2026-11-05T16:27:51.262+00:00"
+  },
+  "finding": "No drift in window 16 (log seq 32968 to 33967, 1000 requests answered 2026-11-05T16:03:15.977+00:00 to 2026-11-05T16:06:35.762+00:00 by lgbm-basic 2a60912bd232083e6950f26fe72fe6c4, 4% ES): none of the 23 features is below p 0.000217 (0.005 / 23, NFR-11). MdAPE 5.39 % over 1000 labelled answers, 0.79 x the test MdAPE of 6.80 %; coverage 96.00 % of 500 labelled ranges at a nominal 90.00 %, against 90.63 % on the test set (labels still arriving)."
+}
