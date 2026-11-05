@@ -1561,6 +1561,7 @@ How to add an entry:
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI laid out the options with measured row counts and recommended 0.4; it built the rule and dry-ran the retrain.
   The dry run showed SC-05 at 91.8 %, 0.2 points under the band's top, against 91.0 % before.
+  An independent review reproduced the split and the dry run byte for byte, except the model's run metadata.
 - **AI interaction evidence:** Claude Code session of 2026-11-05.
   Question (translated from German): "FR-15 rehearsal: How does ES get into the retraining? We need ES in training, but also ES sellers the new model has never seen, otherwise the 'recovery' is flattered. Option A: a fixed share of the ES sellers stays held out (for the replay), the rest goes normally into train/val/test."
   Orchestrator briefing (core, paraphrased): "Plan the FR-15 rehearsal with options for getting ES into training."

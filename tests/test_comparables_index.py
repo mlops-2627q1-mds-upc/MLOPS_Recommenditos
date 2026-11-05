@@ -32,6 +32,7 @@ from recommenditos.data.build_comparables import (
     build_index,
 )
 from recommenditos.data.split_data import HOLDOUT_NAME
+from recommenditos.pipeline import write_frame
 from recommenditos.schema import PROCESSED_SCHEMA
 
 #: Columns the index must never carry besides NFR-08's: the listing identifiers
@@ -129,6 +130,25 @@ def test_build_index_refuses_a_holdout_country_listing_of_a_held_out_seller(proc
 
     with pytest.raises(ValueError, match="EDN-102"):
         build_index({"train": train}, params["reference_date"], holdout, holdout_country, key)
+
+
+@pytest.mark.req("FR-09")
+def test_the_stage_refuses_a_train_listing_of_a_held_out_seller_in_the_holdout_country(
+    processed, params, tmp_path
+):
+    # The stage, not only `build_index`: it has to hand the guard the holdout
+    # it read, or the guard checks against no seller at all.
+    holdout_country, key = params["split"]["holdout_country"], params["split"]["group_key"]
+    for name in (*SOURCES, HOLDOUT_NAME):
+        shutil.copy(processed / f"{name}.parquet", tmp_path / f"{name}.parquet")
+    holdout = frames(processed, HOLDOUT_NAME)
+    train = frames(processed, "train")
+    train.loc[train.index[0], ["country_code", key]] = [holdout_country, holdout[key].iloc[0]]
+    write_frame(train, tmp_path / "train.parquet", PROCESSED_SCHEMA)
+
+    with pytest.raises(ValueError, match="EDN-102"):
+        build_comparables.main(tmp_path, tmp_path / INDEX_FILE, PARAMS_FILE)
+    assert not (tmp_path / INDEX_FILE).exists()
 
 
 @pytest.mark.req("FR-09")

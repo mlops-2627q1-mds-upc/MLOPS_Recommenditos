@@ -176,15 +176,33 @@ def test_about_the_configured_share_of_the_holdout_countrys_sellers_is_held_out(
     interim: pd.DataFrame, params: dict
 ):
     key, country = params["split"]["group_key"], params["split"]["holdout_country"]
-    share = params["split"]["holdout_seller_share"]
     spanish = interim[interim["country_code"] == country]
     sellers = spanish[key].nunique()
-    kept = spanish.loc[holdout_mask(spanish, params), key].nunique()
 
     # Each seller is held out independently with probability `share`, so the
     # count is binomial; 4 standard deviations make a false alarm negligible.
-    tolerance = 4 * (sellers * share * (1 - share)) ** 0.5
-    assert abs(kept - sellers * share) <= tolerance, (kept, sellers, share)
+    # The shares far from one half are what tell the share from its complement:
+    # at 0.4 the fixture's sellers are too few to tell 40 % from 60 %.
+    for share in (0.1, params["split"]["holdout_seller_share"], 0.9):
+        kept = spanish.loc[holdout_mask(spanish, params, share), key].nunique()
+        tolerance = 4 * (sellers * share * (1 - share)) ** 0.5
+        assert abs(kept - sellers * share) <= tolerance, (kept, sellers, share)
+
+
+def test_the_held_out_sellers_are_spread_over_every_set_the_split_would_give_them(
+    interim: pd.DataFrame, params: dict
+):
+    # The holdout hash is salted with the country, so whether a seller is held
+    # out is independent of the set `assign_split` gives it. Unsalted, the two
+    # hashes would be the same number, every held-out seller would be one that
+    # `assign_split` puts in train (the first bucket, larger than the share),
+    # and the `ES` sellers that join the pool would fill the other sets alone.
+    key = params["split"]["group_key"]
+    held = pd.Series(sorted(set(interim.loc[holdout_mask(interim, params), key])))
+
+    buckets = assign_split(held, params["split"]["ratios"], params["seed"])
+
+    assert set(buckets) == set(SPLIT_NAMES), buckets.value_counts().to_dict()
 
 
 @pytest.mark.req("NFR-06")
