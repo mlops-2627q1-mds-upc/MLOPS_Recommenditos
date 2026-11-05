@@ -19,7 +19,7 @@ The learning task is a regression on $\log(\mathrm{price})$.
 We train on the AutoScout24 Car Listings Dataset (EDN-01), a snapshot of 118,382 listings with 75 columns from eight European countries, published on Zenodo \cite{celik2025autoscout24}.
 The scope is used passenger cars (EDN-04) of the 11 makes with at least 300 listings each, which together cover 98.6\,\% of the used listings (EDN-05).
 For a car outside this scope the component will return a refusal and no estimate (FR-04).
-We hold out all Spanish listings as a market the model has not seen, so that Milestone~6 can show drift detection and retraining on real data (EDN-03).
+We hold out the Spanish listings of about 40\,\% of the Spanish sellers as a market the model has not seen, so that Milestone~6 can show drift detection and retraining on real data (EDN-03, EDN-102).
 
 In operation the component will be a containerised API on the virtual machine the course provides, with 4\,GB of memory, 20\,GB of disk, and no GPU (EDN-17).
 CI will build the released model into the image (EDN-08), and a person will decide when to retrain and which model to promote (EDN-12).
@@ -44,37 +44,37 @@ We kept the bound at 15\,\% and recorded this segment as a known risk.
     \toprule
     & Criterion, measured on the test split & Bound & \texttt{lgbm-basic} & \\
     \midrule
-    SC-01 & MdAPE & $\le$ 9\,\% & 6.73\,\% & met \\
-    SC-02 & Predictions within $\pm$20\,\% of the asking price & $\ge$ 85\,\% & 90.0\,\% & met \\
-    SC-03 & MdAPE reduction against baseline B0 & $\ge$ 30\,\% & 44.6\,\% & met \\
-    SC-04 & MdAPE in every segment (value of make, country, seller type, fuel category, or age band) with at least 500 test rows & $\le$ 15\,\% & 16.80\,\% & missed \\
-    SC-05 & Coverage of the 90\,\% price intervals of UC2 & 88--92\,\% & -- & not measured \\
+    SC-01 & MdAPE & $\le$ 9\,\% & 6.80\,\% & met \\
+    SC-02 & Predictions within $\pm$20\,\% of the asking price & $\ge$ 85\,\% & 89.7\,\% & met \\
+    SC-03 & MdAPE reduction against baseline B0 & $\ge$ 30\,\% & 44.2\,\% & met \\
+    SC-04 & MdAPE in every segment (value of make, country, seller type, fuel category, or age band) with at least 500 test rows & $\le$ 15\,\% & 17.64\,\% & missed \\
+    SC-05 & Coverage of the 90\,\% price intervals of UC2, with every field and with make, model, registration date, and mileage only & 88--92\,\% & 91.8\,\% & met \\
     SC-06 & MdAPE with optional input fields missing, relative to the MdAPE with every field given & $\le$ 1.5 & 1.02 & met \\
     \bottomrule
   \end{tabularx}
-  \caption{The success criteria and the result of the candidate model \texttt{lgbm-basic} on the 19,665 test rows (\texttt{metrics.json}, \texttt{reports/metrics/lgbm-basic.json}). For SC-04 and SC-06 the table shows the worst case.}
+  \caption{The success criteria and the result of the served model \texttt{lgbm-basic} on the 20,258 test rows (\texttt{metrics.json}, \texttt{reports/metrics/lgbm-basic.json}). For SC-04 to SC-06 the table shows the worst case; for SC-05 that is the partial input, and the coverage with every field is 90.6\,\%.}
   \label{tab:success-criteria}
 \end{table}
 
 \paragraph{Result.}
-As of the first delivery, no model passes the gate yet, so none is released.
-The candidate \texttt{lgbm-basic}, a LightGBM model on the 16 basic features of a car, meets SC-01, SC-02, SC-03, and SC-06.
-It misses SC-04 in one of the 26 segments the criterion checks (\cref{fig:segments}): its MdAPE is 16.80\,\% on the 784 test cars older than 20 years, while the next-worst segment is at 10.4\,\%.
-SC-05 cannot be measured yet, because the price intervals of UC2 are not implemented: FR-07 is due in Milestone~4, and the calibration split of \cref{tab:split} is held for them.
-We accept the miss as a limitation of this model and keep the bound at 15\,\% (EDN-62).
+The table shows the model we serve, retrained in Milestone~6 with part of the Spanish sellers in the training pool (EDN-102).
+This model, \texttt{lgbm-basic}, a LightGBM model on the 16 basic features of a car, meets SC-01, SC-02, SC-03, SC-05, and SC-06.
+It misses SC-04 in one of the 27 segments the criterion checks (\cref{fig:segments}): its MdAPE is 17.64\,\% on the 817 test cars older than 20 years, while the next-worst segment is at 10.2\,\%.
+We accept the miss as a limitation of this model and keep the bound at 15\,\% (EDN-62), so the gate passes the model with SC-04 waived.
 
 % figures/error-by-segment.pdf is a copy of the `compare-segments` stage's output.
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth]{error-by-segment}
-  \caption{The test error of the candidate \texttt{lgbm-basic} in the 26 segments that SC-04 checks, one dot per segment. A segment is checked when it has at least 500 test rows. The only one above the bound is cars older than 20 years, which are 784 of the 19,665 test rows.}
+  \caption{The test error of the candidate \texttt{lgbm-basic} in the 27 segments that SC-04 checks, one dot per segment. A segment is checked when it has at least 500 test rows. The only one above the bound is cars older than 20 years, which are 817 of the 20,258 test rows.}
   \label{fig:segments}
 \end{figure}
 
 The verdicts on SC-01, SC-02, and SC-04 do not depend on the seed of the seller-grouped split.
-We refitted the candidate on 20 other split seeds: the test MdAPE was 6.72\,\% on average with a standard deviation of 0.26 percentage points, against 6.73\,\% on the committed split.
+We measured this for the model before the retrain, on its pool without Spanish sellers.
+Refitted on 20 other split seeds, its test MdAPE was 6.72\,\% on average with a standard deviation of 0.26 percentage points, against 6.73\,\% on its committed split.
 SC-01 and SC-02 held on all 20 splits, and SC-04 was missed on all 20.
-Cars older than 20 years averaged 18.2\,\%, so the committed 16.80\,\% is the lowest of the 21 values (EDN-32).
+Cars older than 20 years averaged 18.2\,\%, so its 16.80\,\% was the lowest of the 21 values (EDN-32).
 
 We kept the model simple and put the effort into the engineering practices described in \cref{sec:methodology}.
 The decisions behind them, and how AI was involved in each, are recorded in our Engineering Decision Notebook (Appendix~\ref{app:edn}), which this report cites by entry ID.

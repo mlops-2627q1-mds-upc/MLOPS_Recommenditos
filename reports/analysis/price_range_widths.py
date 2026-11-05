@@ -17,7 +17,7 @@ Per scenario: the mean and the median relative width, `(upper - lower) / typical
 coverage of the served (widened) range; and the share of rows whose bounds were widened.
 
 Run: `uv run python reports/analysis/price_range_widths.py` gives
-`price_range_widths_results.txt` (2026-10-20).
+`price_range_widths_results.txt` (2026-11-05, the model #303 promoted).
 """
 
 from loguru import logger

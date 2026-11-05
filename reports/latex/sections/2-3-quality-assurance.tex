@@ -21,11 +21,11 @@ Its result goes to the MLflow run of that fit and to \texttt{reports/\allowbreak
 The \texttt{compare-energy} stage of the pipeline builds \cref{fig:energy} from these files.
 
 The energy values are estimates.
-On our laptops a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
+On our laptops and on the GitHub Actions runner that trained the served model, a normal process cannot read the CPU's energy counter, so CodeCarbon estimates the power from the CPU load and a constant for the memory.
 We checked the estimate once against the real energy counter, before \texttt{lgbm-basic} got its copies (EDN-82).
 For \texttt{b1}, \texttt{lgbm-basic}, and \texttt{lgbm-extended} the estimate was about 70\,\% of the counter's reading.
 The fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
-The ratio between the two LightGBM variants was 2.97 for both the estimate and the counter; it is 1.7 in \cref{tab:energy}, because \texttt{lgbm-basic} is now fitted on three times the rows.
+The ratio between the two LightGBM variants was 2.97 for both the estimate and the counter; it was 1.7 on the laptop run of 2026-10-13, after \texttt{lgbm-basic} got its copies on three times the rows, and in \cref{tab:energy} \texttt{lgbm-basic} costs 5.5 times \texttt{lgbm-extended}, because its fit also includes the price range.
 We therefore use the energy values to compare variants and not as absolute values.
 The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
@@ -35,16 +35,17 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
     \toprule
     & Fit time & Energy & Emissions (CO$_2$eq) \\
     \midrule
-    \texttt{b0} & 0.09\,s & 0.0003\,Wh & 0.06\,mg \\
-    \texttt{b1} & 2.05\,s & 0.0086\,Wh & 1.49\,mg \\
-    \texttt{lgbm-basic} & 18.98\,s & 0.0683\,Wh & 11.88\,mg \\
-    \texttt{lgbm-extended} & 30.53\,s & 0.1137\,Wh & 19.80\,mg \\
+    \texttt{b0} & 0.06\,s & 0.0003\,Wh & 0.05\,mg \\
+    \texttt{b1} & 0.87\,s & 0.0034\,Wh & 0.59\,mg \\
+    \texttt{lgbm-basic} & 102.72\,s & 0.4051\,Wh & 70.50\,mg \\
+    \texttt{lgbm-extended} & 17.02\,s & 0.0742\,Wh & 12.92\,mg \\
     \midrule
-    Whole ladder & 51.6\,s & 0.191\,Wh & 33.2\,mg \\
+    Whole ladder & 120.7\,s & 0.483\,Wh & 84.1\,mg \\
+    Whole ladder on a laptop, before the price range & 51.6\,s & 0.191\,Wh & 33.2\,mg \\
     Hyperparameter search, 34 fits, on another laptop & 391\,s & 3.61\,Wh & 628\,mg \\
     \bottomrule
   \end{tabular}
-  \caption{Energy and emissions of training, as CodeCarbon estimates them. The ladder rows are from \texttt{reports/figures/energy-vs-error.csv}, the hyperparameter search from its 34 MLflow runs (EDN-73). The ladder is the run of 2026-10-13, one measurement per fit on a shared laptop, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82).}
+  \caption{Energy and emissions of training, as CodeCarbon estimates them. The four variants and the first total are the retrain of the served model on a GitHub Actions runner on 2026-11-05, from \texttt{reports/figures/energy-vs-error.csv}, which \cref{fig:energy} draws; CodeCarbon assumes the runner CPU's power there. The laptop total is the run of 2026-10-13 and the hyperparameter search is from its 34 MLflow runs (EDN-73). Each is one measurement per fit, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82), and its fit includes the price range.}
   \label{tab:energy}
 \end{table}
 
@@ -52,17 +53,17 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 \begin{figure}[ht]
   \centering
   \includegraphics[width=0.66\textwidth]{energy-vs-error}
-  \caption{Training energy against test error for the four variants. A filled point is the error on requests with every field, a ring the error on requests with only the fields FR-01 requires.}
+  \caption{Training energy against test error for the four variants of the retrain of 2026-11-05 on a GitHub Actions runner, as in \cref{tab:energy}. A filled point is the error on requests with every field, a ring the error on requests with only the fields FR-01 requires.}
   \label{fig:energy}
 \end{figure}
 
 \paragraph{Feature sets.}
-\cref{fig:energy} shows that \texttt{lgbm-extended} needs 1.7 times the energy of \texttt{lgbm-basic} for 0.48 percentage points of MdAPE when every field is given, and it is worse when only the required fields are given.
-The extended features therefore do not earn their energy, which together with SC-06 is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
+On the laptop, before the price range, \texttt{lgbm-extended} needed 1.7 times the energy of \texttt{lgbm-basic} for 0.48 percentage points of MdAPE when every field is given, and \cref{fig:energy} shows that it is worse when only the required fields are given.
+The extended features therefore do not earn their energy, which together with SC-06 when we chose and its missing price range now is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
-According to \cref{tab:energy}, the whole ladder takes 52 seconds of fitting and 0.191\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
-By CodeCarbon's estimate the most expensive fit uses about 0.11\,Wh, so the energy of training does not limit our choices.
+According to \cref{tab:energy}, the whole ladder takes 121 seconds of fitting and 0.483\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
+By CodeCarbon's estimate the most expensive fit, \texttt{lgbm-basic} with its price range, uses about 0.41\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-73).
@@ -153,7 +154,7 @@ In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,
 
 The gate tests check the logic of the gate, not the accuracy of the model.
 The accuracy is measured by the \texttt{evaluate} stage on the real test split.
-Every run also measures it in each of the 26 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
+Every run also measures it in each of the 27 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
 
 Behavioural tests check the trained models, with one test class for each of the three types (\cref{tab:behavioural-tests}).
 

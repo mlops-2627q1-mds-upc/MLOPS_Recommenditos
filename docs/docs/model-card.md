@@ -57,7 +57,7 @@ The same trained booster serves the point estimate, its explanation and, through
 - **Version:** none yet.
   From the first release on, the served version is the one `dvc.lock` on `main` points to, reported by `GET /health` and verified in CI ([specification](specification.md) FR-12, EDN-08).
 - **Status:** `lgbm-basic` is the candidate, not released.
-  All four variants of the ladder fit, and all six success criteria are measured for the candidate: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for the candidate and fails for `lgbm-extended`, and SC-05 passes for the candidate, the one variant that carries the UC2 price range, and is not measured for the others. NFR-01's gate, with SC-04 waived by EDN-62, therefore passes for the candidate alone. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
+  All four variants of the ladder fit, and all six success criteria are measured for the candidate: SC-01 to SC-03 pass for both LightGBM variants, SC-04 fails for all four on cars over 20 years and the miss is an accepted limitation (EDN-62, [Bias, Risks, and Limitations](#bias-risks-and-limitations)), SC-06 passes for both LightGBM variants (it failed for the earlier `lgbm-extended`), and SC-05 passes for the candidate, the one variant that carries the UC2 price range, and is not measured for the others. NFR-01's gate, with SC-04 waived by EDN-62, therefore passes for the candidate alone. Every number below comes from the pipeline run the committed `dvc.lock` records, on the real snapshot, with one MLflow run per variant ([Experiment tracking](#experiment-tracking) says how to find them).
 
 ### Model Sources
 
@@ -835,7 +835,7 @@ It ran on 2026-10-06 on another laptop, a 13th Gen Intel Core i7-1360P (16 logic
 | **Search, total** | **34** | **391.3 s** | **3.6071 Wh** | **627.81 mg CO2eq** |
 
 On its own machine the search for `lgbm-basic` cost about 20 times one fit of the configuration it searched, which had no blanked copies (0.0549 Wh), and the search for `lgbm-extended` about 16 times one of its own (0.1584 Wh).
-Set against the ladder's 0.191 Wh above, the whole search is about 19 times the final ladder, but that ratio crosses two machines, one of them busy with other work, so it is an order of magnitude and nothing finer: the same fit is charged differently on each, and the search's reference fit of `lgbm-extended` took 16.0 s against the ladder's 30.53 s.
+Set against the laptop ladder's 0.191 Wh above, the whole search is about 19 times the final ladder (7.5 times the runner's 0.483 Wh), but that ratio crosses machines, one of them busy with other work, so it is an order of magnitude and nothing finer: the same fit is charged differently on each, and the search's reference fit of `lgbm-extended` took 16.0 s against 30.53 s in the laptop ladder.
 Either way it is a one-off cost of choosing the values, paid once per tuning decision, while each retraining of the product pays only the final fit.
 
 The `reg_lambda` search of issue #117 ran on 2026-10-20 on the same i7-1360P, measured and recorded the same way.

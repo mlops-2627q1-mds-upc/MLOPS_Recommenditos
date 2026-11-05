@@ -97,7 +97,7 @@ The raw file contains seven columns with personal data of sellers. They never re
 Reading the remote needs a signed-in DagsHub account, which a public repository grants to any account; since 2026-11-04 DagsHub also sends anonymous visitors of its web pages to the login page.
 
 After the scope, date, price, and deduplication rules, 105,405 of the 118,382 listings remain.
-The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
+The Spanish listings of about 40\,\% of the Spanish sellers, 2,402 listings, form the holdout (EDN-102), and we split the other 103,003 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
 We reviewed this split strategy after training and kept it.
 \Cref{tab:split} shows the result.
 The validation set is used for early stopping and tuning, the calibration set is reserved for the price intervals of UC2, and the test set is what the release gate reads.
@@ -108,8 +108,8 @@ The validation set is used for early stopping and tuning, the calibration set is
     \toprule
     & Train & Validation & Calibration & Test & Spanish holdout \\
     \midrule
-    Rows & 61,180 & 8,992 & 9,169 & 19,985 & 6,079 \\
-    Rows of the 11 supported makes & 60,378 & 8,859 & 8,987 & 19,665 & 5,979 \\
+    Rows & 63,547 & 9,283 & 9,586 & 20,587 & 2,402 \\
+    Rows of the 11 supported makes & 62,708 & 9,147 & 9,400 & 20,258 & 2,355 \\
     \bottomrule
   \end{tabular}
   \caption{The split, from the dataset card. The models train and are evaluated on the rows of the supported makes.}
