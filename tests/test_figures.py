@@ -790,3 +790,24 @@ def test_the_last_name_on_the_right_stays_clear_of_its_neighbours_line():
 
     assert box.y1 > low_y and box.y0 < high_y, "the name is not beside the neighbour's line"
     assert box.x0 > line_x, "the name reaches the neighbour's line"
+
+
+def test_names_that_overflow_the_same_edge_are_fitted_by_the_one_that_needs_most():
+    # Eight long names at the right edge, the longest first: the edge has to
+    # move as far as the longest needs, not as far as the last one measured.
+    rows = [energy_row("b0", 0.0001, 0.30, None)] + [
+        energy_row("v" + "n" * (40 - 5 * i), 1.0 + 0.001 * i, 0.05 + 0.035 * i, None)
+        for i in range(8)
+    ]
+    figure = compare_energy.figure_of(rows)
+    inside = figure.axes[0].get_window_extent(figure.canvas.get_renderer())
+
+    for text, box in label_boxes(figure).items():
+        assert inside.x0 <= box.x0 and box.x1 <= inside.x1, f"{text!r} leaves the axes sideways"
+
+
+def test_a_name_wider_than_the_axes_is_refused_by_name():
+    rows = [energy_row("b0", 0.0001, 0.12, 0.12), energy_row("v" * 200, 0.4, 0.07, 0.09)]
+
+    with pytest.raises(ValueError, match="is larger than the axes"):
+        compare_energy.figure_of(rows)

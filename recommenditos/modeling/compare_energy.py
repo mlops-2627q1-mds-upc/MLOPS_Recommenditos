@@ -195,18 +195,27 @@ def _label_pairs(axis: Axes, pairs: list[tuple[str, float, float, float | None]]
     so the name is next tried ending at its mark and then starting at it. A
     place that leaves the axes is not free either: the pair furthest to one side
     would have its name cut off at the edge of the figure. When a name has no
-    free place inside the axes, it takes the first place clear of the marks, or
-    the centred one if there is none, and the axes are widened until it fits,
-    after which every name is placed again on the new scale.
+    free place inside the axes, it takes the place clear of the marks that needs
+    the least widening, or the centred one if there is none, and the axes are
+    widened until it fits, after which every name is placed again on the new scale.
     The layout has to be final when this runs, because it measures the text.
     """
+    labels = _place_labels(axis, pairs)
     for _ in range(_MAX_WIDENINGS):
-        labels = _place_labels(axis, pairs)
-        if not _widen_to_fit(axis, labels):
+        if not _leaving_the_axes(axis, labels):
             return
+        _widen_to_fit(axis, labels)
         for label in labels:
             label.remove()
-    raise RuntimeError(f"the names of the pairs did not fit after {_MAX_WIDENINGS} widenings")
+        labels = _place_labels(axis, pairs)
+    if _leaving_the_axes(axis, labels):
+        raise RuntimeError(f"the names of the pairs did not fit after {_MAX_WIDENINGS} widenings")
+
+
+def _leaving_the_axes(axis: Axes, labels: list[Annotation]) -> bool:
+    renderer = plots.renderer(axis)
+    inside = axis.get_window_extent(renderer)
+    return any(_overflow(label.get_window_extent(renderer), inside) > 0 for label in labels)
 
 
 def _place_labels(
@@ -263,17 +272,18 @@ def _overflow(box: Bbox, inside: Bbox) -> float:
     )
 
 
-def _widen_to_fit(axis: Axes, labels: list[Annotation]) -> bool:
-    """Widen the limits so that every label is inside the axes; whether any had to move.
+def _widen_to_fit(axis: Axes, labels: list[Annotation]) -> None:
+    """Widen the limits so that every label that leaves the axes would fit inside them.
 
     A label keeps its size and its offset from its mark in pixels, so the limits
     are solved in the axis's own scale (log for energy) for the mark to sit far
-    enough from the edge: the limit on the overflowing side moves, the other one
-    stays. A small slack keeps the label off the edge after rounding.
+    enough from the edge, each edge for the label that needs it moved furthest.
+    Each is solved with the other edge where it was, so when both edges move a
+    label can still be out by a little, which the next round of `_label_pairs`
+    corrects. A small slack keeps the label off the edge after rounding.
     """
     renderer = plots.renderer(axis)
     inside = axis.get_window_extent(renderer)
-    widened = False
     for i, ruler, get_limits, set_limits in (
         (0, axis.xaxis, axis.get_xlim, axis.set_xlim),
         (1, axis.yaxis, axis.get_ylim, axis.set_ylim),
@@ -282,7 +292,7 @@ def _widen_to_fit(axis: Axes, labels: list[Annotation]) -> bool:
         size = end - start
         scale = ruler.get_transform()
         lower, upper = scale.transform(get_limits())
-        moved = False
+        new_lower, new_upper = lower, upper
         for label in labels:
             box = label.get_window_extent(renderer)
             box_start, box_end = (box.intervalx, box.intervaly)[i]
@@ -295,15 +305,11 @@ def _widen_to_fit(axis: Axes, labels: list[Annotation]) -> bool:
                     f"{label.get_text()!r} is larger than the axes it names a pair in"
                 )
             if box_end > end:
-                upper = lower + (mark - lower) * size / (size - past_end)
-                moved = True
+                new_upper = max(new_upper, lower + (mark - lower) * size / (size - past_end))
             if box_start < start:
-                lower = upper - (upper - mark) * size / (size - before_start)
-                moved = True
-        if moved:
-            set_limits(*scale.inverted().transform([lower, upper]))
-            widened = True
-    return widened
+                new_lower = min(new_lower, upper - (upper - mark) * size / (size - before_start))
+        if (new_lower, new_upper) != (lower, upper):
+            set_limits(*scale.inverted().transform([new_lower, new_upper]))
 
 
 def figure_of(rows: list[dict]) -> Figure:
