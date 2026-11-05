@@ -175,7 +175,7 @@ CodeCarbon took a TDP of 4 W from its table for the VM's CPU ("Intel Core Proces
 
 **Results of 2026-11-05, with the full M6 stack.**
 One run of 20 requests/s for 5 minutes, one worker, with the eight services of the stack up (api, proxy, prometheus, cadvisor, node-exporter, alertmanager, grafana, monitor): [the report](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/loadtest/vm-2026-11-05-full-stack.md).
-It differs from the runs of 2026-10-31 in where Locust ran: on the laptop, against the public URL `http://nattech.fib.upc.edu:40520` with UPClink disconnected, over the internet with a round trip of about 30 ms (3 pings, 19 to 49 ms), through nginx.
+It differs from the runs of 2026-10-31 in where Locust ran: on the laptop, against the public URL `http://nattech.fib.upc.edu:40520` with UPClink disconnected, over the internet, through nginx; the round trip was not recorded in a result file, and the median of `/v1/comparables` below (31 ms against 5 ms on the VM) gives its order.
 So its latencies contain the network, which the runs on the VM did not, and are not directly comparable with them.
 The run used `--no-docker --no-energy --idle 0`: the laptop reaches neither the VM's Docker daemon nor `/metrics` (the proxy answers 403), so `run.py` measured neither memory, energy, nor the exactly-once check, and the server-side figures below were read afterwards from the stack's own Prometheus.
 The window was 2026-11-04 23:08:01 to 23:13:03 UTC, 00:08:01 to 00:13:03 CET on 2026-11-05, for reading the dashboards of that time.
@@ -194,32 +194,37 @@ Server side, from the API's histogram `http_request_duration_seconds` in the sta
 | `/v1/predict` answers within 250 ms | not read (94.7 % within 200 ms, the target then) | 97.1 % (93.8 % within 200 ms) | 95 % (NFR-02) |
 | `/v1/predict` p50 / p95 / p99 | - | 69 / 218 / 376 ms | p95 at most 250 ms (NFR-02) |
 | `/v1/price-range` within 300 ms, p50 / p95 / p99 | - | 98.6 %, 55 / 190 / 347 ms | p95 at most 300 ms (NFR-02) |
-| `/v1/comparables` within 300 ms, p50 / p95 / p99 | - | 100 %, 6 / 22 / 39 ms | p95 at most 300 ms (NFR-02) |
+| `/v1/comparables` within 300 ms, p50 / p95 / p99 | - | 100 % (all within 50 ms), 6 / 22 / 39 ms | p95 at most 300 ms (NFR-02) |
 | Answers counted by the API, status | - | 3,607, 1,184, and 1,222, all 200 | the requests Locust sent |
 | API container CPU, mean (cAdvisor) | 61 % of the one vCPU | 64 % | - |
 | The seven other containers' CPU, together | - | below 2 % | - |
-| VM CPU idle, steal (node-exporter) | - | 32 %, below 0.01 % | - |
+| VM CPU idle, steal, CPU pressure (node-exporter) | - | 32 %, below 0.01 %, 14.3 % | - |
 | API container memory, max | 295 MiB (`docker stats`) | 303 MiB (cAdvisor's working set) | below 1 GB (NFR-04) |
 
 NFR-03 holds: the rate was reached, and there were no errors.
-NFR-02 holds on the server with the full stack: 97.1 % of the 3,607 `/v1/predict` answers took at most 250 ms in the API, so its p95 is within 250 ms, and `/v1/price-range` and `/v1/comparables` are well within 300 ms.
-That is the latency NFR-02 means, the one on the target VM without the network, which the runs of 2026-10-31 took from Locust on the VM.
+NFR-02 was not re-run with the full stack by its decided method, a Locust load test on the VM ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), because this run's client was on the laptop.
+The API's own histogram supports it: 97.1 % of the 3,607 `/v1/predict` answers took at most 250 ms in the API (p95 218 ms), and `/v1/price-range` and `/v1/comparables` are well within 300 ms.
+The histogram leaves out the time before the API's timer starts and the network, so it is a lower bound of what a client on the VM sees; the run of 2026-10-31 on the VM, whose client-side p95 of 210 ms includes the server's time, bounds the server's time on the bare stack from above.
 The full stack costs `/v1/predict` about one point: 93.8 % of its answers within 200 ms against 94.7 % on the bare stack with one worker.
-The one vCPU was busy but not saturated: the API used 64 % of it, 32 % stayed idle, and the hypervisor took none.
+The one vCPU was busy but not saturated: the API used 64 % of it, 32 % stayed idle, the hypervisor took none, and some task waited for the CPU 14.3 % of the time (node-exporter's CPU pressure).
 The monitor ran no pass during the load: its passes ended at 23:06:57 and 23:21:58 UTC.
-The API container was 71 s old when the load began, recreated by the deploy of e9def2e at 23:06:50 UTC, and its tail shows no warm-up: the answers above 250 ms are spread over the five minutes, except for one burst in a single scrape interval, about 23:11:30 to 23:11:45 UTC, that holds all 14 `/v1/predict` answers above 750 ms, 4 of them above 1 s.
-The client-side p95 of 280 ms for `/v1/predict` is therefore the server's time plus the network, and not a miss of NFR-02.
+The API container was 71 s old when the load began, recreated by the deploy of e9def2e at 23:06:50 UTC, and its tail shows no warm-up: the answers above 250 ms are spread over the five minutes, except for one burst in a single scrape interval, about 23:11:30 to 23:11:45 UTC, that holds all 14 `/v1/predict` answers above 750 ms, 4 of them above 1 s, and the 3 `/v1/price-range` answers above 750 ms.
+The client-side p95 of 280 ms for `/v1/predict` is the server's time plus everything between the laptop and the API's timer, so it is no measurement of NFR-02 either way.
 
 **The client's p99 of about 1 s.**
-It does not come from the API.
-Locust saw 85 of its 6,013 answers take 950 to 1,600 ms (55 for `/v1/predict`, 17 for `/v1/price-range`, and 13 for `/v1/comparables`), while the API took more than 750 ms for only 17 answers of the whole run, and at most 100 ms for every `/v1/comparables` answer.
-So at least 68 of the 85 spent more than 200 ms outside the API's timer, and the 13 of `/v1/comparables` more than 850 ms.
+Most of it is not the API's measured time; where it comes from is an inference, not a measurement.
+Locust saw 85 of its 6,013 answers take 950 to 1,600 ms (55 for `/v1/predict`, 17 for `/v1/price-range`, and 13 for `/v1/comparables`), while the API took more than 750 ms for only 17 answers of the whole run, and at most 50 ms for every `/v1/comparables` answer.
+So at least 68 of the 85 spent more than 200 ms outside the API's timer, and the 13 of `/v1/comparables` more than 900 ms.
 Locust's distribution has a gap: few answers between 500 and 950 ms (29 in all), then a cluster from 950 ms to 1.6 s, each endpoint's usual time plus about one second.
 That is the shape of a fixed delay of about one second added to some requests, not of a slow server.
-None of the earlier runs had a single answer of 950 ms or more: neither the two on the VM of 2026-10-31, which went through the same proxy to the same API, with one worker at a similar CPU (61 %), nor the laptop's dry run of 2026-10-22.
-That leaves what those runs did not have: the internet and the university's NAT between the laptop and the VM, and Locust on the laptop (load average about 3 on 8 logical CPUs, the Locust process at 7 % of one core on average and 74 % at most).
-A delay of one second is what TCP adds when it has to resend the first packet of a new connection (its initial retransmission timeout), but nothing in this run proves it: the proxy's access log, which records each request's time in nginx (`$request_time`), and the API's logs of the window were lost when the deploy of e378e90 recreated their containers at 23:34 UTC, and no packets were captured.
-Settling it takes a run from outside with the proxy's log saved before the next deploy, whose `$request_time` of each slow request shows whether the second was spent before nginx or inside it, or a run with Locust on the VM and the full stack up.
+None of the earlier runs had a single answer of 950 ms or more: neither the two on the VM of 2026-10-31, which went through the same proxy to the API with one worker at a similar CPU (61 %), nor the laptop's dry run of 2026-10-22.
+What those runs did not have: the internet and the university's NAT between the laptop and the VM, Locust on the laptop (load average about 3 on 8 logical CPUs, the Locust process at 7 % of one core on average and 74 % at most), the seven other services of the full stack, and a newer API image.
+Two causes on the VM are not excluded either.
+The API's timer starts only when its ASGI app receives the request (`MetricsMiddleware` in `recommenditos/api/metrics.py`), so time spent in the socket backlog or waiting for uvicorn's single event loop is outside the histogram.
+And the API itself stalled once, at about 23:11:30 to 23:11:45 UTC, which holds all 17 answers above 750 ms.
+A delay of one second is what TCP adds when it has to resend the first packet of a new connection (its initial retransmission timeout), but that is a hypothesis nothing in this run proves: the proxy's access log, which records each request's time in nginx (`$request_time`), and the API's logs of the window were lost when the deploy of e378e90 recreated their containers at 23:34 UTC, and no packets were captured.
+Settling it takes per-request timestamps on both sides: Locust's full request history (its CSV history, not only the summary) and the proxy's access log with `$request_time`, saved before the next deploy recreates the proxy; matched by time, they show for each slow request whether the second was spent before nginx, in nginx and the API, or in the API's timer.
+A run with Locust on the VM and the full stack up, NFR-02's decided method, is still owed.
 
 **Reading the server side again.**
 Prometheus keeps 60 days (and at most 2 GB), so these figures can be read again until early January 2027, in Grafana's Explore or on the VM with `docker exec recommenditos-prometheus-1 wget -qO- 'http://127.0.0.1:9090/api/v1/query?time=<time>&query=<URL-encoded query>'`.
@@ -234,6 +239,12 @@ sum by (path, le) (http_request_duration_seconds_bucket{job="api", path=~"/v1/(p
 # The answers of the window, by endpoint and status.
 sum by (path, status) (http_requests_total{job="api", path=~"/v1/.+"})
   - sum by (path, status) (http_requests_total{job="api", path=~"/v1/.+"} offset 5m15s)
+```
+
+The answers above 750 ms per scrape, as a range query from `2026-11-04T23:06:30Z` to `2026-11-04T23:20:00Z` with a step of 15 s (the difference between two steps is the answers of that interval):
+
+```promql
+sum by (path) (http_request_duration_seconds_count{job="api"}) - sum by (path) (http_request_duration_seconds_bucket{job="api", le="0.75"})
 ```
 
 The CPU, as a mean over the five minutes, evaluated at `2026-11-04T23:13:00Z`:
