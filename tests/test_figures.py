@@ -700,7 +700,7 @@ def test_a_pair_whose_marks_hide_their_distance_is_labelled_with_it():
     # A dot inside its ring looks the same for "exactly equal" and for "almost
     # equal", and neither shows a line. The label tells the two apart.
     assert compare_energy.pair_label("b0", 12.16, 12.16) == "b0 (both)"
-    assert compare_energy.pair_label("lgbm-basic", 6.73, 6.86) == "lgbm-basic (0.13 points apart)"
+    assert compare_energy.pair_label("lgbm-basic", 6.73, 6.86) == "lgbm-basic\n(0.13 points apart)"
     assert compare_energy.pair_label("lgbm-extended", 6.26, 10.30) == "lgbm-extended"
     assert compare_energy.pair_label("no-optional-field", 9.0, None) == "no-optional-field"
 
@@ -721,7 +721,93 @@ def test_the_name_of_a_pair_does_not_run_into_its_neighbours_line():
     line_x, low_y = axis.transData.transform((0.114, 6.26))
     _, high_y = axis.transData.transform((0.114, 10.30))
 
-    box = names["lgbm-basic (0.13 points apart)"]
+    box = names["lgbm-basic\n(0.13 points apart)"]
 
     assert low_y < box.y0 < high_y, "the name is not beside the neighbour's line"
     assert box.x1 < line_x, "the name reaches the neighbour's line"
+
+
+#: The committed retrain of 2026-11-05 (#303): `lgbm-basic` costs five times
+#: `lgbm-extended`, so its pair is the last on the right, and its two points are
+#: close enough for its name to be the long one.
+PROMOTED_RUN = [
+    energy_row("b0", 0.000261, 0.1219, 0.1219),
+    energy_row("b1", 0.00341, 0.0953, 0.1065),
+    energy_row("lgbm-basic", 0.405, 0.0680, 0.0692),
+    energy_row("lgbm-extended", 0.0742, 0.0633, 0.0936),
+]
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        pytest.param(PROMOTED_RUN, id="promoted-run"),
+        # The long name at either end of the axis and at the top of it.
+        pytest.param(
+            [
+                energy_row("first-and-highest", 0.0001, 0.2000, 0.2001),
+                energy_row("middle", 0.01, 0.10, 0.15),
+                energy_row("last-and-lowest", 10.0, 0.0500, 0.0501),
+            ],
+            id="long-names-at-both-ends",
+        ),
+        # A neighbour's line close on the left leaves only the place to the
+        # right of the last pair, which needs the axis widened by a whole name.
+        pytest.param(
+            [
+                energy_row("cheap", 0.0001, 0.20, 0.20),
+                energy_row("neighbour", 0.12, 0.05, 0.12),
+                energy_row("a-variant-with-a-long-name", 0.40, 0.0700, 0.0702),
+            ],
+            id="only-free-place-is-past-the-edge",
+        ),
+    ],
+)
+def test_every_name_of_the_energy_figure_stays_inside_the_axes(rows):
+    # Since the promotion of #303 the last pair on the right had its name cut
+    # off at the edge of the figure.
+    figure = compare_energy.figure_of(rows)
+    axis = figure.axes[0]
+    inside = axis.get_window_extent(figure.canvas.get_renderer())
+
+    names = label_boxes(figure)
+
+    assert len(names) == len(rows)
+    for text, box in names.items():
+        assert inside.x0 <= box.x0 and box.x1 <= inside.x1, f"{text!r} leaves the axes sideways"
+        assert inside.y0 <= box.y0 and box.y1 <= inside.y1, f"{text!r} leaves the axes vertically"
+
+
+def test_the_last_name_on_the_right_stays_clear_of_its_neighbours_line():
+    # Inside the axes is not enough: centred, the name of `lgbm-basic` would be
+    # struck through by the line of `lgbm-extended`.
+    figure = compare_energy.figure_of(PROMOTED_RUN)
+    axis = figure.axes[0]
+    line_x, low_y = axis.transData.transform((0.0742, 6.33))
+    _, high_y = axis.transData.transform((0.0742, 9.36))
+
+    box = label_boxes(figure)["lgbm-basic\n(0.12 points apart)"]
+
+    assert box.y1 > low_y and box.y0 < high_y, "the name is not beside the neighbour's line"
+    assert box.x0 > line_x, "the name reaches the neighbour's line"
+
+
+def test_names_that_overflow_the_same_edge_are_fitted_by_the_one_that_needs_most():
+    # Eight long names at the right edge, the longest first: the edge has to
+    # move as far as the longest needs, not as far as the last one measured.
+    rows = [energy_row("b0", 0.0001, 0.30, None)] + [
+        energy_row("v" + "n" * (40 - 5 * i), 1.0 + 0.001 * i, 0.05 + 0.035 * i, None)
+        for i in range(8)
+    ]
+    figure = compare_energy.figure_of(rows)
+    inside = figure.axes[0].get_window_extent(figure.canvas.get_renderer())
+
+    for text, box in label_boxes(figure).items():
+        assert inside.x0 <= box.x0 and box.x1 <= inside.x1, f"{text!r} leaves the axes sideways"
+
+
+def test_a_name_wider_than_the_axes_is_refused_by_name():
+    rows = [energy_row("b0", 0.0001, 0.12, 0.12), energy_row("v" * 200, 0.4, 0.07, 0.09)]
+
+    with pytest.raises(ValueError, match="is larger than the axes"):
+        compare_energy.figure_of(rows)
