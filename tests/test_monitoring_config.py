@@ -8,7 +8,6 @@ from the rule that records it, and that the dashboard JSON is reviewable, with
 stable uids and no ids that Grafana assigns.
 """
 
-from itertools import pairwise
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -189,15 +188,24 @@ def test_the_dashboard_is_reviewable(path):
             assert target["expr"].strip(), panel["title"]
 
 
-def lightness(hex_colour: str) -> float:
-    """CIE L* of a `#rrggbb` colour: what remains of it on a greyscale print."""
+def luminance(hex_colour: str) -> float:
+    """WCAG relative luminance of a `#rrggbb` colour."""
     red, green, blue = (int(hex_colour[i : i + 2], 16) / 255 for i in (1, 3, 5))
 
     def linear(channel: float) -> float:
         return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
 
-    luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
-    return 116 * luminance ** (1 / 3) - 16 if luminance > 0.008856 else 903.3 * luminance
+    return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+
+
+def contrast(first: str, second: str) -> float:
+    """WCAG contrast ratio of two `#rrggbb` colours."""
+    lighter, darker = sorted((luminance(first), luminance(second)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+#: Grafana's panel backgrounds: the light theme, and the dark one production opens in.
+BACKGROUNDS = ("#FFFFFF", "#181B1F")
 
 
 def fixed_colours(panel: dict[str, Any]) -> dict[str, str]:
@@ -223,11 +231,12 @@ def container_panels() -> list[dict[str, Any]]:
     ]
 
 
-def test_each_service_has_one_fixed_colour_that_survives_greyscale():
+def test_each_service_has_its_own_fixed_colour_that_reads_on_both_themes():
     """The default palette gave api and proxy the same yellow; every service now has its own.
 
-    The colours differ in lightness, not only in hue, so that a greyscale
-    print or a colour-blind reader still tells the lines apart.
+    Production opens Grafana in its dark theme, where a dark navy line all but
+    disappears (1.3:1), so each colour keeps a contrast of at least 3:1, the
+    WCAG minimum for graphics, against the light and the dark background.
     """
     services = set(load_yaml(COMPOSE)["services"])
     found = container_panels()
@@ -236,9 +245,12 @@ def test_each_service_has_one_fixed_colour_that_survives_greyscale():
     for panel, by_name in zip(found, colours, strict=True):
         assert by_name.keys() == services, f"{panel['title']} lacks a colour for a service"
         assert by_name == colours[0], f"{panel['title']} colours a service differently"
-    levels = sorted(lightness(colour) for colour in colours[0].values())
-    gaps = [later - earlier for earlier, later in pairwise(levels)]
-    assert min(gaps) >= 6, f"two services are {min(gaps):.1f} L* apart in greyscale"
+    assert len(set(colours[0].values())) == len(services), "two services share a colour"
+    for service, colour in colours[0].items():
+        for background in BACKGROUNDS:
+            assert contrast(colour, background) >= 3, (
+                f"{service} {colour} has {contrast(colour, background):.2f}:1 on {background}"
+            )
 
 
 def test_threshold_lines_are_dashed():
@@ -293,6 +305,21 @@ def test_the_predicted_price_percentiles_need_a_minimum_of_requests():
         assert guard, f"{target['legendFormat']} has no minimum of requests: {target['expr']}"
         assert int(guard.group(1)) >= 30
     assert "at least 30 requests" in panel["description"]
+
+
+@pytest.mark.parametrize("path", DASHBOARDS, ids=lambda path: path.name)
+def test_no_panel_overlaps_another(path):
+    """Grafana pushes an overlapping panel down on load; the file should say where it sits."""
+    boxes = [
+        (panel["title"], g["x"], g["x"] + g["w"], g["y"], g["y"] + g["h"])
+        for panel in json.loads(path.read_text(encoding="utf-8"))["panels"]
+        for g in [panel["gridPos"]]
+    ]
+    for index, (title, left, right, top, bottom) in enumerate(boxes):
+        assert right <= 24, f"{title} leaves the 24 columns"
+        for other, left2, right2, top2, bottom2 in boxes[index + 1 :]:
+            apart = right <= left2 or right2 <= left or bottom <= top2 or bottom2 <= top
+            assert apart, f"{title} overlaps {other}"
 
 
 def test_alertmanager_reads_the_webhook_file_the_entrypoint_writes():

@@ -891,10 +891,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 0,
-        "y": 10
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 19
       },
       "targets": [
         {
@@ -1030,8 +1030,8 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 8,
-        "x": 8,
+        "w": 12,
+        "x": 0,
         "y": 10
       },
       "targets": [
@@ -1181,8 +1181,8 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 8,
-        "x": 16,
+        "w": 12,
+        "x": 12,
         "y": 10
       },
       "targets": [
@@ -1496,10 +1496,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 25,
+        "h": 13,
         "w": 12,
         "x": 12,
-        "y": 19
+        "y": 31
       },
       "targets": [
         {
@@ -1692,7 +1692,7 @@
       "id": 16,
       "type": "timeseries",
       "title": "Predicted prices of /v1/predict",
-      "description": "The median and the 10th and 90th percentiles of the prices /v1/predict answered in the 30 minutes before each point, interpolated within the histogram's buckets. A point is drawn only when /v1/predict answered at least 30 requests in those 30 minutes: a percentile of fewer is only the edge of a bucket, so after an API restart, which starts the counters at 0, or in quiet traffic the lines have a gap instead of a flat guess. Between two passes of the drift job, a shift of the inputs shows here first.",
+      "description": "The median and the 10th and 90th percentiles of the prices /v1/predict answered in the 30 minutes before each point, interpolated within the histogram's buckets. A point is drawn only when /v1/predict answered at least 30 requests in those 30 minutes: a percentile of fewer is only the edge of a histogram bucket, so in quiet traffic, as on the VM outside a replay, the lines have a gap instead of a flat guess. Between two passes of the drift job, a shift of the inputs shows here first.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
