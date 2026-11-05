@@ -324,7 +324,7 @@ Five terms carry it:
 - **Point:** one combination of values in a sweep, for example `learning_rate=0.025;num_leaves=255`.
   One point is one fit and one MLflow run.
 - **Bootstrap:** how a sweep decides whether a point is really better than the reference or only lucky on these particular validation rows.
-  Every point predicts every validation row, and the rows are then resampled 2,000 times: each draw picks the validation sellers at random with replacement (2,784 of them) and takes all their listings, because listings of one dealer are alike and the split is grouped by seller (EDN-14).
+  Every point predicts every validation row, and the rows are then resampled 2,000 times: each draw picks the validation sellers at random with replacement (2,926 of them) and takes all their listings, because listings of one dealer are alike and the split is grouped by seller (EDN-14).
   In every draw, each point and the reference are scored on the same resampled rows (*paired*), so shared luck cancels, and the difference in validation L1 is recorded.
   The 2,000 differences give a 95 % interval per point.
 - **Simultaneous interval:** with eleven points compared against one reference, one of them clears a single 95 % interval by chance in up to about one sweep in four (the winner's curse).

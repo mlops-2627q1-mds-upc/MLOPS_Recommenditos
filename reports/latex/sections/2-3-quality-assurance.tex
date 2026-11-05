@@ -59,7 +59,8 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 
 \paragraph{Feature sets.}
 On the laptop, before the price range, \texttt{lgbm-extended} needed 1.7 times the energy of \texttt{lgbm-basic} for 0.48 percentage points of MdAPE when every field is given, and \cref{fig:energy} shows that it is worse when only the required fields are given.
-The extended features therefore do not earn their energy, which together with SC-06 when we chose and its missing price range now is why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
+The extended features therefore do not earn their energy.
+This, SC-06 at the time of the choice, and the missing price range of \texttt{lgbm-extended} are why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
 According to \cref{tab:energy}, the whole ladder takes 121 seconds of fitting and 0.483\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
@@ -154,7 +155,7 @@ In CI it has 905 tests, of which 879 pass and 26 are skipped, and it covers 98\,
 
 The gate tests check the logic of the gate, not the accuracy of the model.
 The accuracy is measured by the \texttt{evaluate} stage on the real test split.
-Every run also measures it in each of the 27 segments of SC-04 and in the 7 missing-field scenarios of SC-06 (\cref{tab:success-criteria}).
+Every run also measures it in each of the 27 segments of SC-04 and in the missing-field scenarios of SC-06, 7 for \texttt{lgbm-basic} and 24 for \texttt{lgbm-extended} (\cref{tab:success-criteria}).
 
 Behavioural tests check the trained models, with one test class for each of the three types (\cref{tab:behavioural-tests}).
 
@@ -176,7 +177,7 @@ Behavioural tests check the trained models, with one test class for each of the 
 \end{table}
 
 The behavioural tests run 64 cases.
-42 of them run in CI on models trained from the synthetic data, and the other 22 need the real models and the 8,859 validation rows, so CI skips them.
+42 of them run in CI on models trained from the synthetic data, and the other 22 need the real models and the 9,147 validation rows, so CI skips them.
 
 \paragraph{Traceability.}
 A test names the requirement it verifies with the marker \texttt{@pytest.\allowbreak mark.\allowbreak req}, and a required CI job builds a requirement-to-test matrix from the markers (NFR-07).
