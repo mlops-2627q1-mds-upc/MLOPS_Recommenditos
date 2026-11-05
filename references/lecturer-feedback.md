@@ -18,7 +18,7 @@ The comments, verbatim, by the section they sit next to:
 | Section | Comment |
 |---------|---------|
 | 1 Introduction | "Section 1 should start on a new page." |
-| 2.1.1 Selection of problem and requirements | "The goal is clear and the requirements list is far more detailed than I expected, with priorities, acceptance criteria and the requirement-to-test matrix that runs in CI. I liked that you say which requirements still have no evidence." |
+| 2.1.1 Selection of problem and requirements engineering for ML | "The goal is clear and the requirements list is far more detailed than I expected, with priorities, acceptance criteria and the requirement-to-test matrix that runs in CI. I liked that you say which requirements still have no evidence." |
 | 2.1.2 Dataset card | "Excellent dataset card, with machine-readable metadata, limitations, and figures that match the pipeline outputs (118,382 rows, 75 columns, 105,405 after cleaning)." |
 | 2.1.3 Model card | "Very complete card with bias, risks and fairness sections." |
 | 2.1.4 Project coordination and communication | "Excellent use of GitHub Issues with milestones, labels and pull requests that close their issues." |
@@ -30,11 +30,11 @@ The comments, verbatim, by the section they sit next to:
 | 2.3.1 Energy efficiency awareness | "Good job with the measurement configuration. I missed a comparison with common activities that puts these grams in a wider context." |
 
 Sections 2.3.2 to 2.3.4 (static analysis, model testing, data testing), the teammates' evaluation, and the EDN appendix got no comment.
-Three comments name a gap, on coordination, project structure, and energy, and each is the only criticism of its practice.
+Besides the page break, three comments name a gap, on coordination, project structure, and energy, and each is the only criticism of its practice.
 
 ## What follows for the final report
 
-Each lesson is in the guidance box of the sections it applies to, so the writer of a section sees it there.
+The first three lessons are also in the guidance boxes of the sections they apply to, so the writer of a section sees them there.
 
 - **Show a tool in use, not only its name.**
   Discord was named in the report and the README but never shown in use.

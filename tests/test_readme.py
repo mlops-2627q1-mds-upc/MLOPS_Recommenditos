@@ -37,6 +37,8 @@ def tracked_top_level_dirs() -> list[str]:
         text=True,
         check=True,
     ).stdout.split()
+    # Without this, a checkout Git cannot read would skip the test instead of failing it.
+    assert dirs, "git ls-tree found no directories"
     return [d for d in dirs if not d.startswith(".")]
 
 

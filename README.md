@@ -80,7 +80,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── references         <- Course material, data dictionaries and other references
 ├── reports            <- Report and EDN (LaTeX), metrics, generated figures
 ├── tests              <- Pytest test suite
-├── tools              <- Repository tooling: the requirement matrix, the notebook lint and its environment, the secret scan, the EDN transfer
+├── tools              <- Repository tooling, such as the requirement matrix, the notebook lint, the secret scan, the promotion gate, and the EDN transfer
 └── recommenditos      <- Source code of the package
     ├── config.py      <- Paths
     ├── schema.py      <- The data contract every stage reads and writes against
@@ -105,6 +105,8 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
         ├── compare_segments.py <- `compare-segments`
         └── model.py            <- The estimators, and the load-and-predict seam
 ```
+
+The tree names every pipeline stage's module and the main shared ones, not every helper module.
 
 One module per pipeline stage rather than the flat `dataset.py` / `features.py`
 of the template, so a stage's DVC dependencies name exactly the code it runs
