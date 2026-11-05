@@ -1360,7 +1360,7 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 17,
+        "h": 25,
         "w": 12,
         "x": 0,
         "y": 19
@@ -1496,7 +1496,7 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 17,
+        "h": 25,
         "w": 12,
         "x": 12,
         "y": 19
@@ -1685,14 +1685,14 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 44
       }
     },
     {
       "id": 16,
       "type": "timeseries",
       "title": "Predicted prices of /v1/predict",
-      "description": "Median and the 10th and 90th percentiles of the prices /v1/predict answered over 30 minutes, interpolated within the histogram's buckets. Between two passes of the drift job, a shift of the inputs shows here first.",
+      "description": "The median and the 10th and 90th percentiles of the prices /v1/predict answered in the 30 minutes before each point, interpolated within the histogram's buckets. A point is drawn only when /v1/predict answered at least 30 requests in those 30 minutes: a percentile of fewer is only the edge of a bucket, so after an API restart, which starts the counters at 0, or in quiet traffic the lines have a gap instead of a flat guess. Between two passes of the drift job, a shift of the inputs shows here first.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1701,7 +1701,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 45
       },
       "targets": [
         {
@@ -1709,7 +1709,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.1, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m])))",
+          "expr": "histogram_quantile(0.1, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m]))) and on() (sum(increase(recommenditos_predicted_price_eur_count[30m])) >= 30)",
           "legendFormat": "p10",
           "refId": "A",
           "range": true
@@ -1719,7 +1719,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m]))) and on() (sum(increase(recommenditos_predicted_price_eur_count[30m])) >= 30)",
           "legendFormat": "median",
           "refId": "B",
           "range": true
@@ -1729,7 +1729,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.9, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m])))",
+          "expr": "histogram_quantile(0.9, sum by (le) (rate(recommenditos_predicted_price_eur_bucket[30m]))) and on() (sum(increase(recommenditos_predicted_price_eur_count[30m])) >= 30)",
           "legendFormat": "p90",
           "refId": "C",
           "range": true
@@ -1789,7 +1789,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 45
       },
       "targets": [
         {

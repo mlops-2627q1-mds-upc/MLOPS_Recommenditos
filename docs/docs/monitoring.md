@@ -143,7 +143,8 @@ Service health shows the figures of [Resource monitoring](#resource-monitoring) 
 | Disk free | NFR-04: 4 GB | [DiskFreeLow](#diskfreelow) |
 | Container restarts in the last 30 minutes | 3 | [ContainerRestarting](#containerrestarting) |
 
-Every target and limit is drawn in red, as a threshold line or, for the API's memory limit and the host's memory and disk floors, as a dashed series, so that none is mistaken for data.
+Every target and limit is drawn in red and dashed, as a threshold line or, for the API's memory limit and the host's memory and disk floors, as a dashed series, so that none is mistaken for data or for a gridline, in colour or in greyscale.
+Each service has one fixed colour on every panel that draws one line per container (memory, CPU, restarts), chosen to differ in lightness as well as in hue; `tests/test_monitoring_config.py` fails when a service lacks its colour or two are too close in greyscale, so a new service in `deploy/compose.yaml` gets a colour in the same pull request.
 The uptime panel is the share of Prometheus' scrapes of the API that succeeded in the dashboard's time range, seen from inside the stack.
 It cannot see the VM or its network being gone; the uptime NFR-05 reports is Better Stack's, from outside ([External uptime check](deployment.md#external-uptime-check), EDN-10).
 
@@ -208,7 +209,7 @@ The job writes its results into node-exporter's [textfile collector](#the-textfi
 | Drifted features and ES share, Real MdAPE against the test MdAPE, Range coverage against the nominal level | The same figures over time, with the alert thresholds as dashed red lines | as above |
 | p-value of each feature | The latest window's p-value per feature and test, sorted, red below 0.005 / 23 | [DriftDetected](#driftdetected) |
 | Labelled answers and ranges over time | The counts against the 200 and 300 a figure needs; they grow while labels arrive | - |
-| Predicted prices of `/v1/predict`, Prediction warnings by field | The live model outputs (FR-11, FR-05), moved here from Service health | - |
+| Predicted prices of `/v1/predict`, Prediction warnings by field | The live model outputs (FR-11, FR-05), moved here from Service health; the percentiles are drawn only where `/v1/predict` answered at least 30 requests in their 30 minutes | - |
 
 How to read it:
 
@@ -217,6 +218,7 @@ How to read it:
 - **No value is not a good value.** A figure with fewer labelled answers than it needs is left out, so its stat shows "no value" and its line has a gap; the labelled counts say why.
 - **The window figures are compared with the test set, not with the replay's control traffic.** The control listings are training listings, so their error is lower and their coverage higher than the test values ([The baseline](#the-baseline)).
 - **Between passes**, the predicted-price percentiles and the warnings per field move with every request, so a shift of the inputs shows there before the next window is tested.
+  After an API restart, or in quiet traffic, the percentiles have a gap until 30 requests lie in their 30 minutes: a percentile of fewer is the edge of one histogram bucket, which showed as all three lines at about 12,000 EUR.
 
 Prometheus holds the latest window only: a pass that tests several windows, as after a replay, shows only the last of them, and Prometheus forgets everything after its 60 days of [retention](#retention).
 A table of every window for the report comes from `report --all`, or `report --all --json` for every field, which read `monitor.db` ([How to read a finding](#how-to-read-a-finding)).

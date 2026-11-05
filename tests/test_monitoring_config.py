@@ -8,6 +8,7 @@ from the rule that records it, and that the dashboard JSON is reviewable, with
 stable uids and no ids that Grafana assigns.
 """
 
+from itertools import pairwise
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -25,6 +26,7 @@ RULE_TESTS = sorted((DEPLOY / "prometheus" / "tests").glob("*.yml"))
 DASHBOARDS = sorted((DEPLOY / "grafana" / "dashboards").glob("*.json"))
 DATASOURCES = DEPLOY / "grafana" / "provisioning" / "datasources" / "prometheus.yml"
 RUNBOOK = PROJ_ROOT / "docs" / "docs" / "monitoring.md"
+COMPOSE = DEPLOY / "compose.yaml"
 
 RUNBOOK_URL = (
     "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md"
@@ -185,6 +187,112 @@ def test_the_dashboard_is_reviewable(path):
         for target in panel.get("targets", []):
             assert target["datasource"]["uid"] in datasource_uids, (panel["title"], target)
             assert target["expr"].strip(), panel["title"]
+
+
+def lightness(hex_colour: str) -> float:
+    """CIE L* of a `#rrggbb` colour: what remains of it on a greyscale print."""
+    red, green, blue = (int(hex_colour[i : i + 2], 16) / 255 for i in (1, 3, 5))
+
+    def linear(channel: float) -> float:
+        return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+    luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    return 116 * luminance ** (1 / 3) - 16 if luminance > 0.008856 else 903.3 * luminance
+
+
+def fixed_colours(panel: dict[str, Any]) -> dict[str, str]:
+    """The colour each series of `panel` is given by name, from its overrides."""
+    return {
+        override["matcher"]["options"]: prop["value"]["fixedColor"]
+        for override in panel["fieldConfig"]["overrides"]
+        if override["matcher"]["id"] == "byName"
+        for prop in override["properties"]
+        if prop["id"] == "color" and prop["value"]["mode"] == "fixed"
+    }
+
+
+def container_panels() -> list[dict[str, Any]]:
+    """The panels that draw one series per compose service."""
+    return [
+        panel
+        for panel in panels(dashboards()["service-health"])
+        if any(
+            "compose_service}}" in target.get("legendFormat", "")
+            for target in panel.get("targets", [])
+        )
+    ]
+
+
+def test_each_service_has_one_fixed_colour_that_survives_greyscale():
+    """The default palette gave api and proxy the same yellow; every service now has its own.
+
+    The colours differ in lightness, not only in hue, so that a greyscale
+    print or a colour-blind reader still tells the lines apart.
+    """
+    services = set(load_yaml(COMPOSE)["services"])
+    found = container_panels()
+    assert len(found) >= 3, "the memory, CPU and restart panels name containers"
+    colours = [fixed_colours(panel) for panel in found]
+    for panel, by_name in zip(found, colours, strict=True):
+        assert by_name.keys() == services, f"{panel['title']} lacks a colour for a service"
+        assert by_name == colours[0], f"{panel['title']} colours a service differently"
+    levels = sorted(lightness(colour) for colour in colours[0].values())
+    gaps = [later - earlier for earlier, later in pairwise(levels)]
+    assert min(gaps) >= 6, f"two services are {min(gaps):.1f} L* apart in greyscale"
+
+
+def test_threshold_lines_are_dashed():
+    """A solid threshold line reads like a gridline, so it is dashed, like the memory floors."""
+    for dashboard in dashboards().values():
+        for panel in panels(dashboard):
+            style = panel.get("fieldConfig", {}).get("defaults", {}).get("custom", {})
+            mode = style.get("thresholdsStyle", {}).get("mode", "off")
+            assert mode in {"off", "dashed", "dashed+area"}, (
+                f"{panel['title']} draws its thresholds with {mode!r}"
+            )
+
+
+def test_the_p_value_table_has_room_for_every_feature():
+    """The table showed 16 of its 23 features and cut the last row of them.
+
+    Grafana's grid is 30 px per unit and 8 px between panels; a panel spends
+    about 40 px on its title, and the table 36 px on its header and on each
+    row. The number of features is the one in the title (`0.005 / 23`).
+    """
+    (table,) = (
+        panel
+        for panel in panels(dashboards()["model-performance"])
+        if panel["type"] == "table" and "p-value of each feature" in panel["title"]
+    )
+    found = re.search(r"/ (\d+)", table["title"])
+    assert found, table["title"]
+    features = int(found.group(1))
+    units = table["gridPos"]["h"]
+    inside = units * 30 + (units - 1) * 8 - 40 - 36
+    assert inside >= features * 36, f"{inside} px hold {inside // 36} of {features} rows"
+
+
+def test_the_predicted_price_percentiles_need_a_minimum_of_requests():
+    """After an API restart three requests put all three percentiles at one bucket's edge.
+
+    Each query is drawn only where `/v1/predict` answered at least this many
+    requests in the same 30 minutes, and the description says so.
+    """
+    (panel,) = (
+        panel
+        for panel in panels(dashboards()["model-performance"])
+        if panel["title"] == "Predicted prices of /v1/predict"
+    )
+    assert len(panel["targets"]) == 3
+    for target in panel["targets"]:
+        guard = re.search(
+            r"and on\(\) \(sum\(increase\(recommenditos_predicted_price_eur_count\[30m\]\)\)"
+            r" >= (\d+)\)",
+            target["expr"],
+        )
+        assert guard, f"{target['legendFormat']} has no minimum of requests: {target['expr']}"
+        assert int(guard.group(1)) >= 30
+    assert "at least 30 requests" in panel["description"]
 
 
 def test_alertmanager_reads_the_webhook_file_the_entrypoint_writes():
