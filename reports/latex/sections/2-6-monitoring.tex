@@ -156,7 +156,7 @@ A watcher that retrains and opens the promotion on its own was rejected in EDN-1
     \draw[flow] (monitor) -- node[trigger, above] {flagged} (alert);
     \draw[flow] (alert) -- node[trigger, above] {alert} (decide);
     \draw[flow] (decide) -- node[trigger, right] {dispatch} (retrain);
-    \draw[flow] (retrain) -- node[trigger, above] {PR link} (promote);
+    \draw[flow] (retrain) -- node[trigger, above] {link} (promote);
     \draw[flow] (promote) -- node[trigger, above] {merge} (release);
     \draw[flow] (release.north) -- ++(0,4mm) -| node[trigger, above, pos=0.25] {new model} (serve.south);
     \draw[flow] (rollback) -- node[trigger, below] {tag} (release);
@@ -203,7 +203,7 @@ Points 1 and 3 pool the two \texttt{ES} windows with the drift job's own formula
 
 \begin{table}[ht]
   \centering\small
-  \begin{tabularx}{\textwidth}{@{}Xrrl@{}}
+  \begin{tabularx}{\textwidth}{@{}Xlll@{}}
     \toprule
     Point & Before & After & Holds \\
     \midrule
