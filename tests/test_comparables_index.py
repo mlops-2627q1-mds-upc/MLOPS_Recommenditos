@@ -77,8 +77,6 @@ def test_the_index_holds_every_train_and_validation_listing_and_nothing_else(
     expected = frames(processed, *SOURCES)
 
     assert SOURCES == ("train", "validation")
-    # The `ES` listings of the sellers `split` trains on are in it (EDN-102).
-    assert (expected["country_code"] == "ES").any()
     assert listing_keys(index) == listing_keys(expected)
     for name in ("test", "calibration", HOLDOUT_NAME):
         held_back = pd.read_parquet(processed / f"{name}.parquet")

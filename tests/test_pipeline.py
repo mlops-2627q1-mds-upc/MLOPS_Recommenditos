@@ -29,6 +29,7 @@ from recommenditos import (
 )
 from recommenditos.config import PROJ_ROOT
 from recommenditos.data import (
+    build_comparables,
     build_features,
     download_raw_dataset,
     gx_context_configuration,
@@ -140,6 +141,7 @@ def pipeline(tmp_path_factory, _generated_frame, params) -> dict:
         "figures": figures,
         "validation": validation_path,
         "context": context_dir,
+        "params_path": params_path,
     }
 
 
@@ -225,6 +227,26 @@ def test_the_holdout_takes_spanish_listings_of_sellers_no_other_set_holds(pipeli
         subset = pd.read_parquet(pipeline["processed"] / f"{name}.parquet")
         spanish = subset[subset["country_code"] == holdout_country]
         assert not spanish[key].isin(held_out_sellers).any(), name
+
+
+@pytest.mark.req("FR-09")
+def test_the_comparables_index_holds_the_spanish_listings_of_the_training_sellers(
+    pipeline, params, tmp_path
+):
+    # EDN-102: the `ES` sellers outside the holdout are training sellers, so
+    # their listings are comparables like any other; the held-out ones are not.
+    country = params["split"]["holdout_country"]
+    processed = pipeline["processed"]
+    index_path = tmp_path / build_comparables.INDEX_FILE
+    build_comparables.main(processed, index_path, pipeline["params_path"])
+    sources = pd.concat(
+        [pd.read_parquet(processed / f"{name}.parquet") for name in build_comparables.SOURCES]
+    )
+    spanish = sources[sources["country_code"] == country]
+    index = pd.read_parquet(index_path)
+
+    assert len(spanish) > 0
+    assert (index["country_code"] == country).sum() == spanish["make"].notna().sum()
 
 
 # Seller disjointness and the lossless partition are asserted in
