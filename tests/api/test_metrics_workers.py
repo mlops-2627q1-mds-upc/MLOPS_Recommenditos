@@ -36,6 +36,19 @@ def _get(url: str) -> str:
         return response.read().decode()
 
 
+def _answers(url: str) -> bool:
+    """Whether `url` answers; a refused connection, nothing listening yet, means not yet."""
+    try:
+        _get(url)
+    except urllib.error.HTTPError:
+        raise
+    except urllib.error.URLError as error:
+        if not isinstance(error.reason, ConnectionRefusedError):
+            raise
+        return False
+    return True
+
+
 def _post(url: str, body: dict) -> int:
     request = urllib.request.Request(
         url,
@@ -72,12 +85,16 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
     )
     base = f"http://127.0.0.1:{port}"
     try:
+        # Ready once both workers have built the app and the port accepts. A
+        # worker writes its `gauge_max` file when it builds the app, before its
+        # lifespan runs; the supervisor binds the port, but only a worker that
+        # has finished its lifespan listens on it, so until then a connection
+        # is refused.
         deadline = time.monotonic() + STARTUP_SECONDS
-        while len(_pids(directory, "gauge_max")) < WORKERS:
+        while len(_pids(directory, "gauge_max")) < WORKERS or not _answers(f"{base}/health"):
             assert process.poll() is None, "the service exited during startup"
             assert time.monotonic() < deadline, "the workers did not start in time"
-            time.sleep(0.5)
-        _get(f"{base}/health")
+            time.sleep(0.1)
         yield base, directory
     finally:
         stop_service(process)
