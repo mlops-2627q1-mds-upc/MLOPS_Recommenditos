@@ -206,7 +206,7 @@
       "id": 3,
       "type": "stat",
       "title": "Real MdAPE",
-      "description": "The latest tested window's median absolute percentage error over its answers with an observed price (FR-14), the alert's ceiling of 1.25 times the test MdAPE, and the test MdAPE (metrics.json). No value: fewer than 200 labelled answers. Alert: ModelErrorHigh.",
+      "description": "The latest tested window's median absolute percentage error over its answers with an observed price (FR-14), the alert's ceiling, a multiple of the test MdAPE that falls as the labelled answers grow (recorded by the alert rules), and the test MdAPE (metrics.json). No value: fewer than 200 labelled answers. Alert: ModelErrorHigh.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -234,7 +234,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1.25 * recommenditos_performance_test_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
+          "expr": "recommenditos_performance:mdape_ceiling_multiple * recommenditos_performance_test_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
           "legendFormat": "alert above",
           "refId": "B",
           "instant": true,
@@ -328,7 +328,7 @@
       "id": 4,
       "type": "stat",
       "title": "Range coverage",
-      "description": "The share of the latest tested window's labelled price ranges that hold the observed price (FR-14), the alert's floor (the nominal level less 2.576 binomial standard errors of the window's labelled ranges), and the nominal level the ranges promise. No value: fewer than 300 labelled ranges. Alert: ModelCoverageLow.",
+      "description": "The share of the latest tested window's labelled price ranges that hold the observed price (FR-14), the alert's floor (the nominal level less a margin that falls as the labelled ranges grow, recorded by the alert rules), and the nominal level the ranges promise. No value: fewer than 300 labelled ranges. Alert: ModelCoverageLow.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -356,7 +356,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(recommenditos_performance_nominal_level - 2.576 * sqrt(recommenditos_performance_nominal_level * (1 - recommenditos_performance_nominal_level) / recommenditos_performance_labelled_ranges)) and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"coverage\"} == 1",
+          "expr": "recommenditos_performance:coverage_floor and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"coverage\"} == 1",
           "legendFormat": "alert below",
           "refId": "B",
           "instant": true,
@@ -1023,7 +1023,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Real MdAPE against the test MdAPE",
-      "description": "The latest tested window's MdAPE over its labelled answers, the test MdAPE, and the alert's ceiling of 1.25 times it (ModelErrorHigh). A gap: fewer than 200 labelled answers.",
+      "description": "The latest tested window's MdAPE over its labelled answers, the test MdAPE, and the alert's ceiling, a multiple of it that falls as the labelled answers grow (ModelErrorHigh). A gap: fewer than 200 labelled answers.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1060,8 +1060,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1.25 * recommenditos_performance_test_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
-          "legendFormat": "alert above 1.25 x test",
+          "expr": "recommenditos_performance:mdape_ceiling_multiple * recommenditos_performance_test_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
+          "legendFormat": "alert above",
           "refId": "C",
           "range": true
         }
@@ -1134,7 +1134,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "alert above 1.25 x test"
+              "options": "alert above"
             },
             "properties": [
               {
@@ -1174,7 +1174,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "Range coverage against the nominal level",
-      "description": "The share of the latest tested window's labelled ranges that hold the observed price, the nominal level, the test coverage with every input given, and the alert's floor, the nominal level less 2.576 binomial standard errors of the window's labelled ranges (ModelCoverageLow). A gap: fewer than 300 labelled ranges.",
+      "description": "The share of the latest tested window's labelled ranges that hold the observed price, the nominal level, the test coverage with every input given, and the alert's floor, the nominal level less a margin that falls as the labelled ranges grow (ModelCoverageLow). A gap: fewer than 300 labelled ranges.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1221,7 +1221,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(recommenditos_performance_nominal_level - 2.576 * sqrt(recommenditos_performance_nominal_level * (1 - recommenditos_performance_nominal_level) / recommenditos_performance_labelled_ranges)) and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"coverage\"} == 1",
+          "expr": "recommenditos_performance:coverage_floor and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"coverage\"} == 1",
           "legendFormat": "alert below",
           "refId": "D",
           "range": true

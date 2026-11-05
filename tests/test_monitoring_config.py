@@ -3,7 +3,8 @@
 `promtool test rules` checks what each alert does (make prometheus-check);
 these tests check what promtool cannot see: that every alert tells a person
 what to do and links a runbook section and a dashboard panel that exist, that
-every alert has a unit test, and that the dashboard JSON is reviewable, with
+every alert has a unit test, that the dashboards draw an alert's threshold
+from the rule that records it, and that the dashboard JSON is reviewable, with
 stable uids and no ids that Grafana assigns.
 """
 
@@ -51,6 +52,13 @@ def alerting_rules() -> list[dict[str, Any]]:
 
 
 ALERTS = {rule["alert"]: rule for rule in alerting_rules()}
+RECORDED = {
+    rule["record"]: rule["expr"]
+    for path in RULES
+    for group in load_yaml(path)["groups"]
+    for rule in group["rules"]
+    if "record" in rule
+}
 
 
 def dashboards() -> dict[str, dict[str, Any]]:
@@ -118,6 +126,27 @@ def test_each_alert_has_a_unit_test_where_it_fires():
         if case.get("exp_alerts")
     }
     assert sorted(ALERTS.keys() - fired) == [], "alerts without a test in deploy/prometheus/tests/"
+
+
+def test_the_dashboards_draw_each_recorded_threshold_from_its_rule():
+    """A threshold recorded for an alert is drawn by name, so it has one source.
+
+    A panel that copied a constant of the rule (a z of 2.576, say) would keep
+    drawing the old line after the rule changed.
+    """
+    queries = " ".join(
+        target["expr"]
+        for dashboard in dashboards().values()
+        for panel in panels(dashboard)
+        for target in panel.get("targets", [])
+    )
+    assert RECORDED, "no recording rules in deploy/prometheus/rules/"
+    for name, expr in RECORDED.items():
+        assert name in queries, f"no panel draws {name}"
+        for constant in re.findall(r"\d+\.\d{2,}", expr):
+            assert not re.search(rf"(?<![\w.]){re.escape(constant)}(?![\w])", queries), (
+                f"a panel copies {constant} from {name}; draw {name} instead"
+            )
 
 
 def volatile_paths(node: Any, path: str = "") -> list[str]:
