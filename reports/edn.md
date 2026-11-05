@@ -846,23 +846,25 @@ How to add an entry:
 
 > **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since EDN-82 `lgbm-basic`'s ratio is 1.02, not 1.21.
 
+> **Revised on 2026-11-05**: `lgbm-extended` passes SC-06 since the retrain of #303; the candidate is unchanged.
+
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
 - **Participants:** @lukas2510
 - **Decision:** `lgbm-basic` is the candidate the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
-  `lgbm-extended` fails SC-06.
-  SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
+  `lgbm-extended` has no price range, so SC-05 blocks it (EDN-58).
+  SC-04 is missed by every variant on cars over 20 years; the threshold and the scope stay, and the segment stays in the breakdown.
   The gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
 - **Alternatives considered:**
-  - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
+  - `lgbm-extended`: no price range; it failed SC-06 until the retrain.
   - Routing complete and partial requests to different models: two models and a rule; left open for deployment.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
   - Keeping the gate closed until a variant meets SC-04: blocks every promotion.
-- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.65 times its full-input MdAPE and `lgbm-basic` to 1.02; the bound is 1.5.
+- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.48 times its full-input MdAPE (1.65 before the retrain) and `lgbm-basic` to 1.02; the bound is 1.5.
   Then the ranking reverses.
   The extended features worsen the over-20 segment and do not fix SC-04.
-  The waiver makes NFR-01, this entry and the M4 deployment consistent, and is versioned and reviewed like any change; every other criterion still gates.
+  The waiver is versioned and reviewed like any change; every other criterion still gates.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that masking every optional field leaves a required-fields-only request.
