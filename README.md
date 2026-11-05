@@ -21,7 +21,10 @@ All Spanish listings are held out as a "new market", so we can show that our mon
 
 The course grades how well we apply MLOps practices, not model accuracy.
 So we focus on clean, reproducible and well-justified engineering: data and model versioning, experiment tracking, testing, a containerised API, CI/CD and monitoring.
-The planned model is gradient boosting (LightGBM, with CatBoost as challenger), because it is strong on tabular data, trains in minutes on a CPU and gives exact SHAP explanations.
+The model is LightGBM on 16 basic properties of a car (`lgbm-basic`): it is strong on tabular data, trains in under a minute on a CPU, and its own SHAP export explains each valuation.
+It passes the release gate of our six success criteria, with one miss the team accepted as a limitation, the error on cars older than 20 years ([EDN-62](reports/edn.md)), and it is the model the API serves.
+
+The API runs on the course's VM at <http://nattech.fib.upc.edu:40520>: a browser gets a web page for it, and [`/docs`](http://nattech.fib.upc.edu:40520/docs) documents its endpoints.
 
 For the details, see:
 
@@ -72,6 +75,7 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
 ├── dvc.yaml           <- The pipeline; see docs/docs/pipeline.md
 ├── params.yaml        <- Everything the pipeline is configured by
 ├── metrics.json       <- The SC-01 to SC-06 gate result, written by `evaluate`
+├── monitoring         <- M6's replay and drift jobs, in a locked environment of their own
 ├── pyproject.toml     <- Serving dependencies, the dependency groups and tool configuration
 ├── references         <- Course material, data dictionaries and other references
 ├── reports            <- Report and EDN (LaTeX), metrics, generated figures
@@ -82,18 +86,24 @@ It covers our Git workflow, data versioning with DVC and the checks a PR has to 
     ├── schema.py      <- The data contract every stage reads and writes against
     ├── pipeline.py    <- Shared stage plumbing: params in, checked frames out
     ├── tracking.py    <- MLflow against DagsHub, and the setup check that proves it works
+    ├── api            <- The FastAPI service: routes, schemas, and the web page; see docs/docs/api.md
     ├── data           <- One module per data stage of the pipeline
-    │   ├── download_raw_dataset.py    <- `download`
-    │   ├── preprocess.py              <- `preprocess`
+    │   ├── download_raw_dataset.py     <- `download`
+    │   ├── profile_data.py             <- `profile-data`
+    │   ├── preprocess.py               <- `preprocess`
     │   ├── gx_context_configuration.py <- `configure_gx`
-    │   ├── validate_data.py           <- `validate-data`
-    │   ├── split_data.py              <- `split`
-    │   ├── build_features.py          <- `features`
-    │   └── synthetic.py               <- The generated test fixture
-    └── modeling
-        ├── train.py   <- `train`
-        ├── evaluate.py <- `evaluate`
-        └── model.py   <- The estimators, and the load-and-predict seam
+    │   ├── validate_data.py            <- `validate-data`
+    │   ├── split_data.py               <- `split`
+    │   ├── build_comparables.py        <- `comparables`
+    │   ├── monitoring_samples.py       <- `monitoring_samples`
+    │   ├── build_features.py           <- `features`
+    │   └── synthetic.py                <- The generated test fixture
+    └── modeling       <- One module per model stage, and the model itself
+        ├── train.py            <- `train`
+        ├── evaluate.py         <- `evaluate`
+        ├── compare_energy.py   <- `compare-energy`
+        ├── compare_segments.py <- `compare-segments`
+        └── model.py            <- The estimators, and the load-and-predict seam
 ```
 
 One module per pipeline stage rather than the flat `dataset.py` / `features.py`
