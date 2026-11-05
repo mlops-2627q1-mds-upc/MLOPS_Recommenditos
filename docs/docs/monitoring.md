@@ -275,10 +275,11 @@ Each says what to do: look at the drifted features, check that the data and the 
 | Alert | Fires when | For | Severity |
 |-------|------------|-----|----------|
 | [DriftDetected](#driftdetected) | a feature of the latest tested window is below p 0.005 / 23 (NFR-11) | at once | warning |
-| [ModelErrorHigh](#modelerrorhigh) | the window's MdAPE is above 1.25 times the test MdAPE, with at least 200 labelled answers | at once | critical |
-| [ModelCoverageLow](#modelcoveragelow) | the window's coverage is below the nominal level by more than 2.576 binomial standard errors of its labelled ranges, with at least 300 of them | at once | critical |
+| [ModelErrorHigh](#modelerrorhigh) | the window's MdAPE is above 1 + 3.52 / sqrt(n) times the test MdAPE, n its labelled answers, at least 200 | at once | critical |
+| [ModelCoverageLow](#modelcoveragelow) | the window's coverage is below the nominal level by more than 2.576 binomial standard errors and 0.5 / n, n its labelled ranges, at least 300 | at once | critical |
 | [MonitorStale](#monitorstale) | no pass of the job has succeeded for 45 minutes, or none has written its figures | 5 minutes, within the 45 | warning |
 
+The rules file records the ceiling and the floor at the window's count, `recommenditos_performance:mdape_ceiling_multiple` and `recommenditos_performance:coverage_floor`, and the alerts and the panels of [Model performance](#model-performance) read those series, so a threshold has one source; `tests/test_monitoring_config.py` fails when a panel copies a constant of the rules instead.
 The figures change only when a pass tests a newer window, so the first three need no `for`: a finding fires at the scrape after the pass that made it and resolves when a newer window no longer shows it.
 MonitorStale is held back while node-exporter, which serves the job's figures, cannot be scraped (TargetDown), since that alone empties the series.
 None of the other three makes another redundant: the drift alert names the features, the error and coverage alerts say that users get worse prices and ranges, and a drift without them is a change the model copes with.
@@ -289,14 +290,21 @@ A window is a sample of about 1,000 requests, so even a window of exactly the te
 The error and coverage thresholds are therefore one-sided tests at 0.005 per window, the false-alarm level NFR-11 sets for drift ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), measured in `reports/analysis/model_alert_thresholds.py`:
 
 - **Coverage.** If a window's ranges hold the nominal level p (0.9), the share of its n labelled ranges that hold the price has the binomial standard error sqrt(p (1 - p) / n): 1.73 points at 300 ranges, 1.34 at 500 and 0.95 at 1,000.
-  The alert fires below p less 2.576 of them, so below 85.5 % at 300 ranges, 86.5 % at 500 and 87.6 % at 1,000; drawing windows from the test set's range outcomes gives the same floors to within 0.15 points.
-  The rule takes n from the window itself, so the false-alarm level is 0.005 at any count; a fixed margin taken at the minimum of 300 would hold that level only at 300 and miss a loss of 4 points at 500.
-  It compares with the nominal level, the promise the ranges make to users, not with the test coverage of 90.2 %, which is 0.2 points above it.
-- **MdAPE.** The spread of a median has no closed form, so it comes from drawing 20,000 windows from the test set's 19,665 errors of `lgbm-basic`: the 99.5th percentile of a window's MdAPE is 1.25 times the test MdAPE at 200 labelled answers, the fewest the job reports an MdAPE for, 1.20 times at 300, 1.16 at 500 and 1.10 at 1,000.
-  The alert takes the multiple at the minimum, 1.25, so its false-alarm level is at most 0.005 at every count and lower above 200; it compares with `test_mdape`, which a retrained model brings with it, and the multiple is checked again with the script when the model's errors change shape.
+  The alert fires below p less 2.576 of them and less the continuity correction 0.5 / n, so below 85.4 % at 300 ranges, 86.4 % at 500 and 87.5 % at 1,000.
+  Its false-alarm rate is about 0.005 per window (exact binomial at p = 0.9: 0.0043 to 0.0069 for 300 to 1,000 ranges, mean 0.0054, which a share of whole ranges cannot make exact; 0.0053 to 0.0089 without the correction).
+  Drawing windows from the test set's range outcomes puts their 0.5th percentile 0.1 to 0.4 points above these floors, because the test coverage of 90.2 % is 0.2 points above the nominal level.
+  The rule takes n from the window itself, so the level holds at any count; a fixed margin taken at the minimum of 300 would hold it only at 300 and miss a loss of 4 points at 500.
+  It compares with the nominal level, the promise the ranges make to users, not with the test coverage.
+- **MdAPE.** The spread of a median has no closed form, so it comes from drawing 20,000 windows of n labelled answers from the test set's 19,665 errors of `lgbm-basic`, for n from 200, the fewest the job reports an MdAPE for, to 1,000.
+  Their 99.5th percentile falls with n like 1 + c / sqrt(n); the alert takes c = 3.52, the smallest constant at or above the percentile at every n measured, so its ceiling is 1.25 times the test MdAPE at 200 labelled answers, 1.20 at 300, 1.16 at 500 and 1.11 at 1,000.
+  The ceiling is 0.0001 above the percentile at 200 and at most 0.011 above it elsewhere, so the false-alarm rate is 0.0031 to 0.0050 per window; the least-squares constant, 3.41, would reach 0.006.
+  It compares with `test_mdape`, which a retrained model brings with it, and the constant is checked again with the script when the model's errors change shape.
 - **Labels.** Both alerts require `labels_sufficient`, so a window with too few labels cannot fire.
   Labels can arrive for 7 days after a window closed and every pass recomputes the figures, so a window is tested several times while its count grows; each look has the level 0.005, the window as a whole somewhat more.
 - **Drift** is NFR-11's own test, the Bonferroni threshold over 23 features; its level flags at most 1 in 200 windows of the training distribution, so one flagged window between quiet ones is a false alarm until the next window or the error and coverage alerts confirm it.
+- **All three together.** Under an unchanged distribution a window raises at least one of DriftDetected, ModelErrorHigh and ModelCoverageLow with a probability of at most 1.7 % (0.005 + 0.005 + 0.0069).
+  A pass tests at most one new window, every 15 minutes, so the job makes at most 96 checks a day, and a window that stays the latest is not tested again unless labels arrive; outside a replay, the VM fills windows far more slowly than that, so false alerts are expected rarely, near zero.
+  A finding stays firing until a newer window is tested ([Silencing a known finding](#silencing-a-known-finding)).
 - **Staleness:** the job runs every 15 minutes, so 45 minutes without a pass that succeeded are three missed passes; 40 minutes held for 5 make those 45, and the 5 minutes keep a fresh stack quiet until its first pass has written the series.
 
 On the windows the laptop replay measured on 2026-11-04 ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)), all three findings fire for the `ES` window and none for the control windows:
@@ -305,9 +313,10 @@ On the windows the laptop replay measured on 2026-11-04 ([the evidence](https://
 |--------|-------|-------|----------|---------------|----------------|------------------|
 | 1, control | none | 5.38 %, 0.80 x test | 96.8 % of 500 | quiet | quiet | quiet |
 | 2, control | none | 5.28 %, 0.78 x test | 95.4 % of 500 | quiet | quiet | quiet |
-| 3, `ES` | 14 features | 9.41 %, 1.40 x test | 85.8 % of 500, floor 86.5 % | fires | fires | fires |
+| 3, `ES` | 14 features | 9.41 % of 1,000, 1.40 x test, ceiling 1.11 x | 85.8 % of 500, floor 86.4 % | fires | fires | fires |
 
-The coverage of the `ES` window is 0.7 points below its floor, so an `ES` window with fewer labelled ranges may not fire it (at 300 ranges the floor is 85.5 %); the drift alert covers that case.
+`reports/analysis/model_alert_thresholds.py` applies the thresholds to these windows, and the rule tests use their values.
+The coverage of the `ES` window is 0.6 points below its floor, so an `ES` window with fewer labelled ranges may not fire it (at 300 ranges the floor is 85.4 %); the drift alert covers that case.
 The rules' tests replay these values, `deploy/prometheus/tests/model-performance.test.yml`, together with the edges of each threshold.
 
 ### The Discord webhook
@@ -415,7 +424,7 @@ A feature of the latest tested window is below p 0.005 / 23: its requests are un
 
 #### ModelErrorHigh
 
-The real MdAPE of the latest tested window, over at least 200 answers with an observed price, is above 1.25 times the test MdAPE ([Why these model thresholds](#why-these-model-thresholds)).
+The real MdAPE of the latest tested window, over at least 200 answers with an observed price, is above its ceiling, 1 + 3.52 / sqrt(n) times the test MdAPE for n labelled answers ([Why these model thresholds](#why-these-model-thresholds)).
 
 1. The drift panels: which inputs changed in the same window?
 2. Check the observed prices: feedback with a wrong price, or prices from another source, raises the MdAPE too (`report --window N --json` lists the window's figures).
@@ -436,6 +445,27 @@ No pass of the drift, error and coverage job has succeeded for 45 minutes, so th
 1. `docker ps -a`: is `recommenditos-monitor-1` running? It restarts on its own and has no healthcheck, so a deploy does not notice it failing.
 2. `docker logs --since 1h recommenditos-monitor-1`: a pass that fails prints `the drift pass failed: ...`; a run by hand, `docker compose -f stack/compose.yaml --env-file .env exec monitor python -m recommenditos_monitoring run-once`, shows the error ([Run it by hand](#run-it-by-hand)).
 3. A full disk or memory at the container's limit shows on Service health; a pass that fails since a deploy is rolled back with `./deploy.sh rollback`.
+
+#### Silencing a known finding
+
+DriftDetected, ModelErrorHigh and ModelCoverageLow describe the latest tested window and stay firing until a newer window is tested, so Alertmanager posts them again every 4 hours.
+When the finding is known, such as the `ES` window of a replay, which drifts on purpose, and nobody starts a retraining for it, silence it rather than read it every 4 hours.
+On the VM only a replay fills the next window soon: the job needs 1,000 newer eligible requests, and the load test's requests (`client` `loadtest`) do not count.
+
+Alertmanager publishes no port, so `amtool` runs in its container:
+
+```bash
+docker exec recommenditos-alertmanager-1 amtool --alertmanager.url=http://127.0.0.1:9093 \
+  silence add 'alertname=~"DriftDetected|ModelErrorHigh|ModelCoverageLow"' \
+  --duration=7d --author=<your name> --comment="<the window and why it is known, e.g. the ES window of the replay of <date>>"
+```
+
+It prints the silence's ID.
+`silence query` lists the active silences, `alert query --silenced` the alerts they hold back, and `silence expire <ID>` ends one early; each takes the same `docker exec ... amtool --alertmanager.url=http://127.0.0.1:9093` before it.
+A silence lasts its `--duration` (or until `--end`), and survives a restart and a deploy, since Alertmanager keeps its silences in the `alertmanager-data` volume.
+Silence only the window alerts: MonitorStale and the service alerts say something new when they fire.
+
+The other way to clear a finding is to give the job a newer window: a short control replay ([Run it on the VM](#run-it-on-the-vm)) of 1,000 requests, then a pass, tests a window of the training distribution, and the three alerts resolve once it is the latest.
 
 ## Replay
 
@@ -579,7 +609,7 @@ From them, per window:
 
 A figure needs enough labels to mean something: an MdAPE at least 200 labelled answers and a coverage at least 300 labelled ranges.
 With fewer, its status is `insufficient_labels` and it has no value, in `monitor.db`, in the report and in Prometheus, so a quiet window, or one whose prices have not come in yet, is not read as a good one.
-At a coverage of 0.9 the standard error over 300 ranges is 1.7 percentage points, and the coverage alert allows 2.576 of them below the nominal level ([Why these model thresholds](#why-these-model-thresholds)).
+At a coverage of 0.9 the standard error over 300 ranges is 1.7 percentage points, and the coverage alert allows 2.576 of them and 0.5 / n below the nominal level ([Why these model thresholds](#why-these-model-thresholds)).
 A window of the replay, which alternates the endpoints, has about 500 of each, so both figures exist once its prices are in.
 
 Prices can come in after their window closed, so every pass recomputes the figures of every window that is not final, and a late price counts in the window of its request.
