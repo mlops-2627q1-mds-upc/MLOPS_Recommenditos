@@ -654,7 +654,7 @@ On 2026-11-03 it had no finding, where `1.30-alpine` had two fixable ones in lib
 
 **The Dockerfile lint.**
 [hadolint](https://github.com/hadolint/hadolint) checks the `Dockerfile` in the pre-commit hook and in CI's required `Lint & format` job.
-Its one exception, DL3008 for the unpinned `libgomp1` and the unpinned upgrade of `apt`, carries its reason in the `Dockerfile` and in `monitoring/Dockerfile`: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
+Its one kind of exception, DL3008 for a Debian package installed or upgraded without a pinned version (`libgomp1` and the upgrade of `apt` in the `Dockerfile` and `monitoring/Dockerfile`, the TeX Live image's tools in `reports/latex/Dockerfile`), carries its reason beside each: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
 
 **Dependabot.**
 `.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile`, of `deploy/compose.yaml` and of the report's TeX Live image (`reports/latex/Dockerfile`), and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.

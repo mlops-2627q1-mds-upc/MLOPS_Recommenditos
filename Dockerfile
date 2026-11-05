@@ -81,11 +81,14 @@ ARG MODEL_VARIANT=lgbm-basic
 # 3.0.3, which has CVE-2026-109518, fixed in 3.0.4 (DSA-6607-1), and no published
 # python image ships the fix yet. Once Dependabot moves the base to one that
 # does, the upgrade does nothing and the line can go.
+# The upgrade itself still downloads with the vulnerable apt, and
+# CVE-2026-109518 needs a non-zero Acquire::Retries (3 by default since Debian
+# 12, per Debian's security tracker), so that one download runs without retries.
 # Not pinned to a version: Debian replaces a package version in its archive with
 # every security update, so a pin would break the build instead of patching it.
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
