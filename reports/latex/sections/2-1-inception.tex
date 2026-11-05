@@ -94,7 +94,7 @@ The dataset card states each limitation together with what it rules out.
 The target is an asking price, not a sale price.
 The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-32).
 The raw file contains seven columns with personal data of sellers. They never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20).
-Reading the remote needs a signed-in DagsHub account, which a public repository grants to any account; since 2026-11-04 DagsHub also sends anonymous visitors of its web pages to the login page.
+Reading the remote needs a signed-in DagsHub account, which a public repository grants to any account; when checked on 2026-11-04, DagsHub also sent anonymous visitors of its web pages to the login page.
 
 After the scope, date, price, and deduplication rules, 105,405 of the 118,382 listings remain.
 The Spanish listings of about 40\,\% of the Spanish sellers, 2,402 listings, form the holdout (EDN-102), and we split the other 103,003 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).

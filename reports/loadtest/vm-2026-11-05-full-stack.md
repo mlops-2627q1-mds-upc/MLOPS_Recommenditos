@@ -22,4 +22,4 @@ Full M6 stack on the VM (1 vCPU, 3.8Gi RAM): api, proxy, prometheus, cadvisor, n
 
 ## Prediction log (NFR-03)
 
-- Not checked: the API has no prediction log.
+- Not checked: the run had no container probe (`--no-docker`), which reads the log.
