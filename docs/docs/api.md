@@ -145,10 +145,10 @@ A field the client left out has an effect too, the effect of the model not knowi
 Nothing in the explanation is rounded, so that the product reproduces the unrounded estimate to float precision, and `price_eur`, which is rounded to the cent, to the cent; a client rounds for display.
 
 When the model's estimate lies outside the price range of its training data, `price_eur` is that range's bound and `warnings` says so with the pointer `#`; the explanation then gives the estimate before the bound.
-It is rare: with `lgbm-basic`, 1 of the 103,868 listings of the feature matrices reaches it, a 25-year-old Volvo V70 with 442,000 km in the test split, estimated at 482.02 EUR against the lower bound of 500 EUR.
+It is rare: with the earlier `lgbm-basic` (the models of 2026-10-13), 1 of the 103,868 listings of the feature matrices reaches it, a 25-year-old Volvo V70 with 442,000 km in the test split, estimated at 482.02 EUR against the lower bound of 500 EUR.
 
-The explanation is the costliest step of a request, because TreeSHAP visits every leaf of each of the 1,394 trees of `lgbm-basic`, where a prediction follows one path per tree.
-Measured in-process with `TestClient` on a shared 4-core development laptop, over 394 requests built from test listings, it took p50 34 ms and p95 49 ms of a request that took p50 63 ms and p95 93 ms; a second run under heavier load from other processes gave 44 and 71 ms of 81 and 140 ms.
+The explanation is the costliest step of a request, because TreeSHAP visits every leaf of each of the 1,010 trees of `lgbm-basic`, where a prediction follows one path per tree.
+Measured on the earlier model of 1,394 trees, in-process with `TestClient` on a shared 4-core development laptop, over 394 requests built from test listings, it took p50 34 ms and p95 49 ms of a request that took p50 63 ms and p95 93 ms; a second run under heavier load from other processes gave 44 and 71 ms of 81 and 140 ms.
 Both are inside NFR-02's 250 ms for `/predict`, which the load test on the target VM checked.
 `lgbm-extended`, with 162 columns in 33 fields, is close to that limit or over it: under a load average of 2.7 to 5.7 one run gave a whole request of p50 181 ms and p95 195 ms (explanation 78 and 83 ms) and another p50 250 ms and p95 357 ms (explanation 106 and 148 ms), where `lgbm-basic` took p50 65 ms and p95 78 ms in the first run.
 
