@@ -64,6 +64,7 @@ Re-measure them on the delivery commit:
 - [ ] The pipeline figure, if `dvc.yaml` changed: `reports/latex/figures/pipeline.sh`.
 - [ ] The three figures the pipeline draws, if a stage redrew one: `cp reports/figures/*.pdf reports/latex/figures/`. `tests/test_committed_outputs.py` fails while a copy is stale.
 - [ ] The energy table of 2.3.1, if the ladder was re-run: the rows, the total and the ratios in the text from `reports/figures/energy-vs-error.csv`.
+- [ ] The uptime figure of 2.6.1, up to the delivery day: `uv run python -m tools.uptime_monitor export --from 2026-11-04 --to <delivery day>` with the Better Stack token loaded, which rewrites `reports/uptime/availability.json`.
 - [ ] The captions of the segment figure in 1.1 and of the composition figure in 2.1.2, if the candidate or the data changed: the numbers they state are in `reports/metrics/segments.csv` and `reports/figures/data-composition.csv`.
 
 The commit itself, after `dvc pull`:

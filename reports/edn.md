@@ -487,8 +487,9 @@ How to add an entry:
 - **Activity / Topic:** Data Versioning, Privacy
 - **Participants:** @lukas2510; confirmed by the full team at the laboratory session of 2026-10-13
 - **Decision:** The DagsHub repository that serves as DVC remote and MLflow server stays public.
+  Any signed-in DagsHub account can read the DVC remote, an anonymous request cannot; checked on 2026-11-04, DagsHub's web view sent anonymous visitors to login.
   The raw Parquet of the `download` stage keeps the seven personal-data columns of the published file and is pushed like any stage output; preprocessing removes them.
-  `seller_group_id` is an unsalted hash that groups the split and anonymises nothing, as the dataset card says.
+  `seller_group_id` is an unsalted hash that groups the split and anonymises nothing.
 - **Alternatives considered:**
   - A private repository: every grader and supervisor needs a collaborator entry, and the identical file stays public on Zenodo.
   - `push: false` on the raw Parquet: each machine regenerates the pipeline's first artefact, which puts byte-identical reproduction at risk.
@@ -554,7 +555,7 @@ How to add an entry:
 - **Assessment of the AI contribution:** AI recommended `dvc import-url`, to keep the raw personal data off our remote.
   @W11W11W11 rejected that for `dvc add`, because the course demo teaches it.
   Four days later @lukas2510 retired the pointer, so that the pipeline owns its input.
-  That adopts the recommendation only in part: the file comes from Zenodo again, but `dvc import-url` stays rejected and its aim is not met, because the raw Parquet with the same seven personal-data columns is pushed to our public remote (EDN-20).
+  That adopts the recommendation only in part: the file comes from Zenodo again, but `dvc import-url` stays rejected and its aim is not met, because the raw Parquet with the same seven personal-data columns is pushed to our public remote, readable by any signed-in DagsHub account (EDN-20).
   AI's claim that DVC cannot keep such a file in the graph was wrong; an AI review found the option.
 - **AI interaction evidence:** Claude Code sessions of 2026-09-26 (issue #3) and 2026-09-30 (issue #33, review of PR #54).
 - **Other evidence:** [Data versioning](../docs/docs/data-versioning.md), [PR #27](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/27), [PR #54](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/54).
@@ -844,23 +845,25 @@ How to add an entry:
 
 > **Revised on 2026-10-20**: adds the gate's SC-04 waiver; since EDN-82 `lgbm-basic`'s ratio is 1.02, not 1.21.
 
+> **Revised on 2026-11-05**: `lgbm-extended` passes SC-06 since the retrain of #303; the candidate is unchanged.
+
 - **Date:** 2026-09-30
 - **Milestone:** M3: Quality Assurance
 - **Activity / Topic:** Modelling Approach, Model Evaluation
 - **Participants:** @lukas2510
 - **Decision:** `lgbm-basic` is the candidate the model card and the report put forward, although `lgbm-extended` has the lower pooled MdAPE.
-  `lgbm-extended` fails SC-06.
-  SC-04 is missed by every variant on cars over 20 years and is recorded as missed: the threshold stays, the scope gets no age bound, and the segment stays in the breakdown.
+  `lgbm-extended` has no price range, so SC-05 blocks it (EDN-58).
+  SC-04 is missed by every variant on cars over 20 years; the threshold and the scope stay, and the segment stays in the breakdown.
   The gate waives it through `params.yaml`, citing this entry; `metrics.json` still reports it.
 - **Alternatives considered:**
-  - `lgbm-extended` as the candidate, with SC-06 as a known limitation: overrides the criterion the first time it fires.
+  - `lgbm-extended`: no price range; it failed SC-06 until the retrain.
   - Routing complete and partial requests to different models: two models and a rule; left open for deployment.
   - An upper age bound in the scope, or a higher SC-04 threshold: the criterion would pass by removing the rows it fails on.
   - Keeping the gate closed until a variant meets SC-04: blocks every promotion.
-- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.65 times its full-input MdAPE and `lgbm-basic` to 1.02; the bound is 1.5.
+- **Rationale:** With only the fields FR-01 requires, `lgbm-extended` rises to 1.48 times its full-input MdAPE (1.65 before the retrain) and `lgbm-basic` to 1.02; the bound is 1.5.
   Then the ranking reverses.
   The extended features worsen the over-20 segment and do not fix SC-04.
-  The waiver makes NFR-01, this entry and the M4 deployment consistent, and is versioned and reviewed like any change; every other criterion still gates.
+  The waiver is versioned and reviewed like any change; every other criterion still gates.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** Two AI sessions measured SC-06 independently and agreed; one saw that masking every optional field leaves a required-fields-only request.
@@ -1443,6 +1446,7 @@ How to add an entry:
   AI built it; tests check a default sent explicitly, the in-place migration, and the previous image's insert on the migrated file.
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "#191 log: stores only the fields the client really sent, plus a marker column. Old rows stay (rewriting would be lossy), the drift job reads only new rows."
+  Orchestrator briefing to the architect (core, paraphrased): "Design the M6 monitoring architecture with options and a recommendation: where the results are stored, how the drift job is scheduled, how Grafana is reached, and how #191 is approached."
   Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
 - **Other evidence:** [Issue #191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191), [PR #282](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/282), [Reading the log](../docs/docs/api.md#reading-the-log), [`prediction_log.py`](../recommenditos/api/prediction_log.py), EDN-86.
 - **In LaTeX:** yes
@@ -1474,6 +1478,7 @@ How to add an entry:
   AI found SSH from eduroam timing out (2026-11-04): the tunnel needs UPClink on campus too.
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "Exporters: cAdvisor (container RAM against limits, restarts) + node-exporter (host RAM, disk). No ports to the outside. Prometheus keeps at most 2 GB or 60 days."
+  Orchestrator briefing to the architect (core, paraphrased): "Design the M6 monitoring architecture with options and a recommendation: where the results are stored, how the drift job is scheduled, how Grafana is reached, and how #191 is approached."
   Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
   Question (translated from German): "How should Grafana on the VM be reachable? (Important: the public URL does not work on the university network at all, SSH does. The VM's ports 8080-8089 are public.)"
   Lukas answered: "Only through an SSH tunnel. Grafana listens only on 127.0.0.1 of the VM, opened with `ssh -L 3000:127.0.0.1:3000 ...`, from home with UPClink, on the university network directly. Nothing new becomes public (NFR-09), and it also works in the presentation room." (translated from German)
@@ -1505,6 +1510,7 @@ How to add an entry:
   A local run logged 600 of 600 listings with their prices.
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "Adopt the remaining architecture recommendations as a package and record them in the EDN?", where the package listed "Replay: a Compose service with a profile, started with docker compose --profile replay run (locally; on the VM over SSH). Data from a new DVC stage: 10,000 reference, 20,000 control (train without the reference), 6,079 ES. Shifts the registration date by the months since 2025-11-08, otherwise every car looks a year older."
+  Orchestrator briefing to the architect (core, paraphrased): "Design the M6 monitoring architecture with options and a recommendation: where the results are stored, how the drift job is scheduled, how Grafana is reached, and how #191 is approached."
   Lukas answered: "Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job)." (translated from German)
 - **Other evidence:** [Issue #227](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227), [PR #285](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/285), [PR #283](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/283), [Replay](../docs/docs/monitoring.md#replay), EDN-14.
 - **In LaTeX:** yes
@@ -1528,13 +1534,14 @@ How to add an entry:
   - DagsHub credentials for pull requests: reverses EDN-91, exposes a write-capable token, and an outage fails every PR.
   - Committing the samples: data outside DVC (NFR-06).
 - **Rationale:** Python runs only during a pass, and with no healthcheck a failing pass cannot fail a deploy.
-  The CD gate keeps EDN-91 at the cost of checking after the merge.
+  The CD gate keeps EDN-91 but checks only after the merge.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** AI proposed and built it.
   The review of PR #283 added the age as-of rule; a measured pass peaked at 197 MiB.
 - **AI interaction evidence:** Claude Code session of 2026-11-04.
   Question (translated from German): "How is the drift job (Alibi Detect, needs up to about 400 MiB per run) started regularly on the VM?"
+  Orchestrator briefing to the architect (core, paraphrased): "Design the M6 monitoring architecture with options and a recommendation: where the results are stored, how the drift job is scheduled, how Grafana is reached, and how #191 is approached."
   Lukas answered: "Loop container. A tiny shell loop starts a Python run every 15 minutes, which then ends (about 2 MiB between runs). It comes and goes with every release (#279) and survives restarts. Cost: #228's criterion 'not kept running' becomes 'no permanently running Python process'." (translated)
   Package question: "Adopt the remaining architecture recommendations as a package?", listing "Alibi Detect: own uv project", "Results: own SQLite file monitor.db; to Grafana through the node-exporter textfile", "Windows: 1,000 consecutive requests; a model change closes the window" (translated); Lukas answered: "Adopt all" (translated).
   Question (translated): "EDN decision (#228): the NFR-11 test needs the real DVC data, but per EDN-91 the DagsHub credentials exist only for main, not for PR branches. Where does the test run?"
@@ -1566,7 +1573,7 @@ How to add an entry:
   Question (translated from German): "FR-15 rehearsal: How does ES get into the retraining? We need ES in training, but also ES sellers the new model has never seen, otherwise the 'recovery' is flattered. Option A: a fixed share of the ES sellers stays held out (for the replay), the rest goes normally into train/val/test."
   Orchestrator briefing (core, paraphrased): "Plan the FR-15 rehearsal with options for getting ES into training."
   Lukas answered: "A, share 0.4 (recommended): 40 % of the ES sellers held out: about 2,460 replay rows, ES = 3.5 % of training." (translated from German)
-- **Other evidence:** [Issue #231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231), [The split](../docs/docs/pipeline.md#the-split), EDN-03, EDN-12.
+- **Other evidence:** [Issue #231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231), [The split](../docs/docs/pipeline.md#the-split), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-03, EDN-12.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs

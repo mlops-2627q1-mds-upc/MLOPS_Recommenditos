@@ -1,0 +1,18 @@
+{
+  "monitor_id": "5183930",
+  "monitor": "Recommenditos API health",
+  "url": "http://nattech.fib.upc.edu:40520/health",
+  "check_frequency_s": 180,
+  "regions": [
+    "eu",
+    "us"
+  ],
+  "from": "2026-11-04",
+  "to": "2026-11-05",
+  "exported_at": "2026-11-05T17:01:45+00:00",
+  "availability_percent": 100.0,
+  "total_downtime_s": 0,
+  "number_of_incidents": 0,
+  "longest_incident_s": 0,
+  "average_incident_s": 0
+}
