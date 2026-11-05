@@ -109,9 +109,19 @@ def containers_report() -> str:
     deploy.sh answers a failed start with "check `docker compose ps` and `... logs`",
     and the fixture removes the containers as soon as the test ends, so a failure
     message has to carry both. `up --wait` names a container "unhealthy" both when
-    its probes failed and when its process exited and Docker restarts it: the exit
-    code, the restart count, the probes, and the log tell the two apart.
+    its probes failed and when its process exited and Docker restarts it: the
+    restart count, the end of the last run, the probes, and the log tell the two
+    apart. The report is built inside a failing assertion's message, so it never
+    raises: whatever goes wrong in it becomes its text, and the assertion's own
+    message stays.
     """
+    try:
+        return _containers_report()
+    except Exception as error:  # noqa: BLE001 - a message must not replace the failure it explains
+        return f"no report of the containers of {PROJECT}: {type(error).__name__}: {error}"
+
+
+def _containers_report() -> str:
     listed = subprocess.run(
         [
             "docker",
@@ -126,6 +136,8 @@ def containers_report() -> str:
         timeout=60,
         check=False,
     )
+    if listed.returncode != 0:
+        return f"docker ps failed: {listed.stderr.strip()}"
     ids = listed.stdout.split()
     if not ids:
         return f"no container of {PROJECT} exists"
@@ -141,13 +153,17 @@ def containers_report() -> str:
         service = container["Config"]["Labels"].get(
             "com.docker.compose.service", container["Name"]
         )
+        # Docker sets the exit code back to 0 when it restarts a container; the
+        # end of the last run and its error stay.
         lines.append(
             f"{service}: {state['Status']}, health {health.get('Status', 'none')}, "
-            f"exit code {state['ExitCode']}, OOM-killed {state['OOMKilled']}, "
-            f"restarts {container['RestartCount']}, started {state['StartedAt']}"
+            f"exit code {state['ExitCode']}, error {state['Error'] or 'none'}, "
+            f"OOM-killed {state['OOMKilled']}, restarts {container['RestartCount']}, "
+            f"started {state['StartedAt']}, last run ended {state['FinishedAt']}"
         )
         well = health.get("Status", "healthy") == "healthy" and state["Status"] == "running"
-        if well and container["RestartCount"] == 0:
+        done = state["Status"] == "exited" and state["ExitCode"] == 0
+        if (well or done) and container["RestartCount"] == 0:
             continue
         for probe in health.get("Log", [])[-3:]:
             output = " ".join(probe["Output"].split())[:300]
