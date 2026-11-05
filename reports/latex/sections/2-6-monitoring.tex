@@ -49,7 +49,7 @@ The rate was reached and none of the 6,013 requests failed, so NFR-03's rate and
 The API used 64\,\% of the vCPU on average and the seven other containers together less than 2\,\%; the API's memory peaked at 303\,MiB of its 768\,MiB limit, and the disk had 12.1\,GB free.
 NFR-02 was not re-run with the full stack by the method EDN-88 decided, a Locust test on the VM: this run's client was on a laptop, and its p95 of 280\,ms for \texttt{/v1/predict} includes the internet and nginx, so it does not measure NFR-02.
 The API's own histogram supports the target: 97.1\,\% of the 3,607 \texttt{/v1/predict} answers took at most 250\,ms inside the API, a p95 of 218\,ms, which is a lower bound of what a client on the VM sees.
-The drift job, outside this window, takes 5 to 7 seconds per pass, and its highest 15-second memory sample during the replay was 225\,MiB of its 512\,MiB limit of \cref{sec:m6-model-performance}.
+The drift job, outside this window, takes 5 to 7 seconds per pass, and its highest 15-second memory sample during the replay of \cref{sec:m6-model-performance} was 225\,MiB of its 512\,MiB limit.
 
 The same run shows what the dashboard cannot see.
 Locust measured a p99 of about 1\,s, while the API took more than 750\,ms for only 17 answers: its histogram starts when the API receives a request, so time in the network, nginx, or the socket backlog is outside it.
@@ -60,7 +60,7 @@ The latency alerts need 20 answers a minute, so a slow API without traffic stays
   \centering
   \includegraphics[width=0.4987\textwidth]{grafana-service-health-panel7.png}\hfill
   \includegraphics[width=0.4987\textwidth]{grafana-service-health-panel16.png}
-  \caption{Two panels of the Service health dashboard on the VM, 23:05 to 23:15 UTC on 2026-11-04, with the load test running from 23:08 to 23:13: the p95 latency of \texttt{/v1/predict} against NFR-02's 250\,ms (red), and the CPU of each container, averaged over 5 minutes, so that it ramps up during the test; the line that rises is the API. The gap before 23:08 is a deploy that recreated the API. Not shown: the status tiles, the request rate, the error shares, the other endpoints' latency, memory, disk, restarts, and scrape health.}
+  \caption{Two panels of the Service health dashboard on the VM, 23:05 to 23:15 UTC on 2026-11-04, with the load test running from 23:08 to 23:13: the p95 latency of \texttt{/v1/predict} against the line at NFR-02's 250\,ms, and the CPU of each container, averaged over 5 minutes, so that it ramps up during the test; the line that rises is the API. The gap before 23:08 is a deploy that recreated the API. Not shown: the status tiles, the request rate, the error shares, the other endpoints' latency, memory, disk, restarts, and scrape health.}
   \label{fig:m6-service-health}
 \end{figure}
 
@@ -71,7 +71,7 @@ The latency alerts need 20 answers a minute, so a slow API without traffic stays
   \textbf{Rubric (5 pts):} To what extent does our monitoring provide timely, actionable signals about data changes, model performance degradation, and user impact?
 }
 
-The system has no real users (EDN-100), so its traffic is a replay of held-out listings that a person starts on the VM (EDN-100, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227}{\#227}).
+The system has no real users, so its traffic is a replay of held-out listings that a person starts on the VM (EDN-100, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227}{\#227}).
 It sends listings to the API as a client would and posts each listing's real price to the feedback endpoint (FR-10), so the prediction log holds both the requests and their labels.
 
 \paragraph{Data changes.}
