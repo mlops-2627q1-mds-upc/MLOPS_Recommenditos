@@ -136,10 +136,10 @@ A watcher that retrains and opens the promotion on its own was rejected in EDN-1
   \centering
   \begin{tikzpicture}[
       font=\sffamily\scriptsize,
-      node distance=11mm and 9mm,
+      node distance=11mm and 11.5mm,
       stage/.style={draw=figmuted, line width=0.5pt, rounded corners=2pt, align=left,
-        text width=30.5mm, minimum height=15mm, inner sep=3pt, text=figink,
-        execute at begin node={\hyphenpenalty=10000}},
+        text width=29mm, minimum height=15mm, inner sep=3pt, text=figink,
+        execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
       person/.style={stage, draw=figaccent, line width=1.6pt},
       flow/.style={-{Stealth[length=2mm]}, line width=0.6pt, draw=figinksecondary},
       trigger/.style={font=\sffamily\scriptsize\itshape, text=figinksecondary, align=center, inner sep=1pt},
@@ -150,7 +150,7 @@ A watcher that retrains and opens the promotion on its own was rejected in EDN-1
     \node[person, right=of alert] (decide) {\textbf{Decide to retrain}\\start the Retrain workflow, with the finding as its reason};
     \node[stage, below=of decide] (retrain) {\textbf{Retrain}\\\texttt{dvc repro} on a GitHub runner: models, gate verdict, branch};
     \node[person, below=of alert] (promote) {\textbf{Promote}\\open the pull request, review, merge; a failed gate cannot merge};
-    \node[stage, below=of monitor] (release) {\textbf{Release}\\CI, then CD with the NFR-11 test, then Deploy with the smoke check};
+    \node[stage, below=of monitor] (release) {\textbf{Release}\\CI, CD with the NFR-11 test, Deploy with the smoke check};
     \node[person, below=of serve] (rollback) {\textbf{Roll back}\\redeploy the previous release tag};
     \draw[flow] (serve) -- node[trigger, above] {log} (monitor);
     \draw[flow] (monitor) -- node[trigger, above] {flagged} (alert);
@@ -161,18 +161,18 @@ A watcher that retrains and opens the promotion on its own was rejected in EDN-1
     \draw[flow] (release.north) -- ++(0,4mm) -| node[trigger, above, pos=0.25] {new model} (serve.south);
     \draw[flow] (rollback) -- node[trigger, below] {tag} (release);
   \end{tikzpicture}
-  \caption{The feedback loop, from a served price to a new model, and what starts each step. A heavy orange border marks a step a person decides (EDN-12); the others run by themselves. Retrain runs the DVC pipeline of \cref{fig:pipeline}, whose \texttt{monitoring\_samples} stage also draws the new drift reference, so a release brings the new model, its reference, and its test values to the monitor together.}
+  \caption{The feedback loop, from a served price to a new model, and what starts each step. A heavy (orange) border marks a step a person decides (EDN-12). Retrain runs the DVC pipeline of \cref{fig:pipeline}, whose \texttt{monitoring\_samples} stage also draws the new drift reference, so a release brings the new model, its reference, and its test values to the monitor together.}
   \label{fig:m6-loop}
 \end{figure}
 
 \paragraph{The stages.}
-The API and the monitoring of \cref{sec:m6-resources,sec:m6-model-performance} end in an alert whose runbook step names the Retrain workflow.
-The workflow runs only from \texttt{main} and only when started, with the finding as its \texttt{reason} (EDN-92).
+The observed prices reach only the monitor: no pipeline stage reads the prediction log, so a retrain learns from the versioned dataset, and in the rehearsal what changed was the split of \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/300}{\#300}, prepared before the finding.
+The Retrain workflow runs only from \texttt{main} and only when a person starts it (EDN-92).
 On a GitHub-hosted runner it runs \texttt{dvc repro}, logs the runs to MLflow on DagsHub, pushes the artefacts to the DVC remote and the new \texttt{dvc.lock} to a branch, and its summary gives the gate verdict and a link that opens the prefilled promotion pull request.
-Opening that pull request is the approval step.
-A required check blocks the merge unless the committed \texttt{metrics.json} says the gate passed for the model \texttt{params.yaml} promotes, so a reviewer cannot merge a rejected model by mistake; the merge is the promotion.
+A person opens that pull request and, after a review, merges it, which promotes the model; a required check blocks the merge unless the committed \texttt{metrics.json} says the gate passed for the model \texttt{params.yaml} promotes, so a rejected model cannot be merged by mistake.
 The merge to \texttt{main} starts CI, then CD, which bakes the model into the image (EDN-08) and runs NFR-11's test on the new monitoring samples before it pushes, then Deploy, whose smoke check holds \texttt{/health} to the model version that \texttt{dvc.lock} records and puts the previous release back when it fails.
 A rollback is the same Deploy workflow started with the previous release tag.
+Automating the whole loop would need only a trigger, such as a relay that starts Retrain on an alert, because the gate and the required check already stop a rejected model; EDN-12 keeps a person at that point instead.
 
 \paragraph{The rehearsal.}
 On 2026-11-05 the chain ran once end to end on the VM (\cref{tab:m6-rehearsal}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231}{\#231}; record in \texttt{reports/monitoring/fr15-rehearsal.md}).
@@ -181,7 +181,7 @@ The retrain took 8.5 minutes, and the release 24 minutes from the merge to the f
 
 \begin{table}[ht]
   \centering\small
-  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{1.9cm}X@{}}
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{2.5cm}X@{}}
     \toprule
     Step & UTC & Result \\
     \midrule
@@ -199,7 +199,7 @@ The retrain took 8.5 minutes, and the release 24 minutes from the merge to the f
 
 \paragraph{The recovery criterion.}
 We posted the criterion on \#231 before any run and report against it unchanged (\cref{tab:m6-recovery}).
-Points 1 and 3 pool the two \texttt{ES} windows with the drift job's own formulas; point 2 is the paired comparison of both models on all 2,266 held-out \texttt{ES} requests, from the dry run of \#300, which applies to the promoted model because its booster and interval files are the same files.
+Points 1 and 3 pool the two \texttt{ES} windows with the drift job's own formulas; point 2 is the paired comparison of both models on all 2,266 held-out \texttt{ES} listings, from the dry run of \#300, which applies to the promoted model because its booster and interval files are the same files.
 
 \begin{table}[ht]
   \centering\small
