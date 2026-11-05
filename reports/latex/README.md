@@ -15,7 +15,7 @@ Atenea takes one PDF, so `build.sh` builds the EDN first and the report appends 
 | `config.tex` | Team name, members, links and contact. The only place to edit cover page facts. |
 | `sections/` | One file per report section; `2-N-*.tex` is Milestone N. |
 | `edn/` | One EDN entry per file and their list, `entries.tex`, all generated from [reports/edn.md](../edn.md) by `make edn`. |
-| `figures/` | Figures for the report (`../figures/` is searched too, but the Docker and CI builds mount only this folder, so a figure the report uses must lie here). `data-composition.pdf`, `energy-vs-error.pdf` and `error-by-segment.pdf` are copies of what the `profile-data`, `compare-energy` and `compare-segments` stages write to `reports/figures/`; the test suite fails when a copy differs from the stage's output. `pipeline.pdf` is drawn from `dvc.yaml` by `figures/pipeline.sh`, which needs the project environment, Graphviz and the DejaVu Sans font; the PDF is committed with the font embedded, so a build needs none of them. |
+| `figures/` | Figures for the report (`../figures/` is searched too, but the Docker and CI builds mount only this folder, so a figure the report uses must lie here). `data-composition.pdf`, `energy-vs-error.pdf` and `error-by-segment.pdf` are copies of what the `profile-data`, `compare-energy` and `compare-segments` stages write to `reports/figures/`; the test suite fails when a copy differs from the stage's output. `es-replay-windows.pdf` is a copy of what `reports/analysis/es_replay_figure.py` draws from the record of the replay on the VM, which is not a pipeline output. The `grafana-*.png` files are screenshots of the VM's dashboards, which the report crops with `trim`. `pipeline.pdf` is drawn from `dvc.yaml` by `figures/pipeline.sh`, which needs the project environment, Graphviz and the DejaVu Sans font; the PDF is committed with the font embedded, so a build needs none of them. |
 | `references.bib` | Bibliography (biblatex + biber, IEEE style). |
 | `preamble.tex` | Shared packages, build flags and the `\guidance` / `\tbd` helpers. |
 
@@ -28,6 +28,7 @@ Atenea takes one PDF, so `build.sh` builds the EDN first and the report appends 
 - Refer to EDN entries by ID in the report, e.g. "(EDN-03)".
 - Use the Oxford comma in every list of three or more items, with "and" as with "or": "make, model, and age band". The course's report template writes it that way, and the whole report and the EDN follow it; for the EDN, write it in `reports/edn.md`.
 - A figure that shows data is drawn by a pipeline stage, not by hand: the stage writes a PDF to `reports/figures/`, and its copy in `figures/` is what the report includes.
+  A figure of data that the pipeline does not produce, such as a record of a run on the VM, is drawn by a committed script in `reports/analysis/` from a committed data file instead.
   `recommenditos/plots.py` holds the style every such figure shares, and its docstring says how colour and size are used; `recommenditos/modeling/compare_segments.py` is the stage to copy from.
   Draw a figure at the size it is printed at, and check it on the built page and in a greyscale print before it goes in.
 - EDN entries are written in [reports/edn.md](../edn.md), and only there, and transferred here with `make edn` (`tools/edn_latex.py`).

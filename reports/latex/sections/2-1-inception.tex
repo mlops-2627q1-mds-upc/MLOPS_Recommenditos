@@ -37,7 +37,7 @@ Each non-functional requirement names its quality characteristic in ISO/IEC 2501
     \addlinespace[2pt]
     Model quality & NFR-01 & Only a model that meets SC-01 to SC-06 is released. \\
     \addlinespace[2pt]
-    Performance & NFR-02 to NFR-05 & 95\,\% of valuations within 200\,ms; 20 requests per second for five minutes; everything fits the 4\,GB machine; recovery within 30 seconds of a crash. \\
+    Performance & NFR-02 to NFR-05 & 95\,\% of valuations within 250\,ms (EDN-88); 20 requests per second for five minutes; everything fits the 4\,GB machine; recovery within 30 seconds of a crash. \\
     \addlinespace[2pt]
     Engineering & NFR-06, 07, 12 to 14 & Same splits and metrics from a clean clone; 80\,\% test coverage and clean linting; the system starts with one command; automatic deployment with rollback; every run records its code, data, and parameters. \\
     \addlinespace[2pt]
@@ -94,6 +94,7 @@ The dataset card states each limitation together with what it rules out.
 The target is an asking price, not a sale price.
 The data is one snapshot without listing dates, so we cannot split or validate by time (EDN-32).
 The raw file contains seven columns with personal data of sellers. They never reach the processed data (NFR-08), but the raw Parquet file lies on our public DVC remote, because the same data is already public on Zenodo (EDN-20).
+Since 2026-11-04, DagsHub sends every anonymous visitor of a repository to its login page, ours and other public ones alike; its API still reports ours as public.
 
 After the scope, date, price, and deduplication rules, 105,405 of the 118,382 listings remain.
 The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
