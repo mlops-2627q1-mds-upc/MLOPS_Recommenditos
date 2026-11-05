@@ -85,6 +85,25 @@ def test_scan_exits_1_and_lists_the_fixable_findings(monkeypatch, capsys):
 
 
 @pytest.mark.req("NFR-09")
+def test_an_image_named_twice_is_scanned_and_listed_once_in_the_order_given(monkeypatch, capsys):
+    # `docker compose config --images` names an image once per service using it.
+    scanned = []
+
+    def scan(trivy, image):
+        scanned.append(image)
+        return ImageResult(image)
+
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setattr(image_scan, "scan_image", scan)
+    monkeypatch.setattr(image_scan, "trivy_version", lambda trivy: "trivy 0.0.0")
+
+    images = ["api:local", "monitor:local", "proxy", "monitor:local"]
+    assert image_scan.main(["--trivy", "trivy", "scan", *images]) == 0
+    assert scanned == ["api:local", "monitor:local", "proxy"]
+    assert capsys.readouterr().out.count("| `monitor:local` |") == 1
+
+
+@pytest.mark.req("NFR-09")
 def test_trivy_scans_for_high_and_critical_with_the_ignore_file(tmp_path):
     output = tmp_path / "report.json"
     command = image_scan.trivy_command("trivy", "api:local", output)
