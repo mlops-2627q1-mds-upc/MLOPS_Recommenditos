@@ -224,7 +224,7 @@ def test_an_unknown_base_ref_fails_instead_of_passing(repo):
 
 @pytest.mark.req("FR-15", "NFR-01")
 def test_main_exits_with_the_verdict(repo, monkeypatch, capsys):
-    monkeypatch.setattr(promotion_gate, "check", lambda base: check(base, repo))
+    monkeypatch.setattr(promotion_gate, "PROJ_ROOT", repo)
     write_promotion(repo, FAILING)
     commit(repo)
     assert main(["--base", "main"]) == 1
@@ -233,6 +233,22 @@ def test_main_exits_with_the_verdict(repo, monkeypatch, capsys):
     git(repo, "checkout", "-q", "-b", "docs")
     assert main(["--base", "main"]) == 0
     assert main(["--base", "no-such-ref"]) == 2
+
+
+@pytest.mark.req("FR-15", "NFR-01")
+def test_main_says_which_way_it_passed(repo, monkeypatch, capsys):
+    monkeypatch.setattr(promotion_gate, "PROJ_ROOT", repo)
+    write_promotion(repo, PASSING)
+    commit(repo)
+    assert main(["--base", "main"]) == 0
+    promoted = capsys.readouterr().out
+    assert "dvc.lock changed against main" in promoted
+    assert f"promoted variant {CANDIDATE}" in promoted
+
+    git(repo, "checkout", "-q", "main")
+    git(repo, "checkout", "-q", "-b", "docs")
+    assert main(["--base", "main"]) == 0
+    assert "dvc.lock is unchanged against main, so this is no promotion" in capsys.readouterr().out
 
 
 def test_problems_lists_every_reason_at_once():

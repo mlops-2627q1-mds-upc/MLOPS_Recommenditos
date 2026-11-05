@@ -496,9 +496,13 @@ def _resources(result: dict[str, Any]) -> list[str]:
 
 
 def _log(result: dict[str, Any]) -> list[str]:
-    log = result.get("prediction_log")
+    if "prediction_log" not in result:
+        reason = "the run had no container probe (`--no-docker`), which reads the log"
+        return ["## Prediction log (NFR-03)", "", f"- Not checked: {reason}."]
+    log = result["prediction_log"]
     if not log:
-        return ["## Prediction log (NFR-03)", "", "- Not checked: the API has no prediction log."]
+        reason = f"the API container has no prediction log (`{PREDICTION_LOG_ENV_VAR}` is empty)"
+        return ["## Prediction log (NFR-03)", "", f"- Not checked: {reason}."]
     if not (log["answered"] or log["logged"]):
         reason = "the run got no successful answer, and the log gained no record"
         return ["## Prediction log (NFR-03)", "", f"- Not checked: {reason}."]

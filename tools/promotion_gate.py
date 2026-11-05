@@ -131,17 +131,22 @@ def not_the_candidate(metrics: dict, variant: str) -> str:
     return f"{head}, and the candidate itself fails the gate"
 
 
-def check(base: str, root: Path = PROJ_ROOT) -> list[str]:
-    """The problems with promoting at HEAD, relative to `base`; empty when it may merge."""
-    if not lock_changed(base, root):
-        return []
+def check_promotion(root: Path = PROJ_ROOT) -> tuple[str | None, list[str]]:
+    """The promoted variant (None when it cannot be read) and the problems with promoting it."""
     try:
         variant = promoted_variant(yaml.safe_load((root / "params.yaml").read_text("utf-8")))
         lock = yaml.safe_load((root / LOCK).read_text("utf-8"))
         metrics_bytes = (root / METRICS).read_bytes()
     except (OSError, ValueError, yaml.YAMLError) as error:
-        return [str(error)]
-    return problems(metrics_bytes, lock, variant)
+        return None, [str(error)]
+    return variant, problems(metrics_bytes, lock, variant)
+
+
+def check(base: str, root: Path = PROJ_ROOT) -> list[str]:
+    """The problems with promoting at HEAD, relative to `base`; empty when it may merge."""
+    if not lock_changed(base, root):
+        return []
+    return check_promotion(root)[1]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -151,7 +156,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        found = check(args.base)
+        changed = lock_changed(args.base, PROJ_ROOT)
+        variant, found = check_promotion(PROJ_ROOT) if changed else (None, [])
     except RuntimeError as error:
         print(f"::error::{error}")
         return 2
@@ -160,7 +166,13 @@ def main(argv: list[str] | None = None) -> int:
         for each in found:
             print(f"::error::{each}")
         return 1
-    print(f"{LOCK} is unchanged, or the committed verdict passes the gate for the promoted model.")
+    if changed:
+        print(
+            f"{LOCK} changed against {args.base}, and the committed verdict passes the gate "
+            f"for the promoted variant {variant}."
+        )
+    else:
+        print(f"{LOCK} is unchanged against {args.base}, so this is no promotion.")
     return 0
 
 
