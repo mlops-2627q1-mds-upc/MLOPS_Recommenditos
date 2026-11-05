@@ -81,10 +81,13 @@ def test_every_figure_the_report_copies_from_a_stage_is_that_stages_output():
     # The report cannot read `reports/figures/`, so a figure a stage draws is
     # committed a second time where the build finds it. Nothing but this test
     # notices when a stage was rerun and the copy was not refreshed: the report
-    # would go on printing the figure of the previous model.
+    # would go on printing the figure of the previous model. The same holds for
+    # a figure a script in reports/analysis/ draws and for the dashboard
+    # screenshots (PNG), which the docs link from reports/figures/.
     copies = [
         path
-        for path in sorted(REPORT_FIGURES.glob("*.pdf"))
+        for pattern in ("*.pdf", "*.png")
+        for path in sorted(REPORT_FIGURES.glob(pattern))
         if (STAGE_FIGURES / path.name).exists()
     ]
     assert copies, f"no figure in {REPORT_FIGURES} is the copy of a stage's output"

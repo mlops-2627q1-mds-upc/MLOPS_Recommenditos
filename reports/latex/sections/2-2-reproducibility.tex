@@ -89,7 +89,7 @@ In the 48 hours before a presentation we merge only fixes, because every merge t
 
 We version the data and the models with DVC.
 The remote is the DagsHub repository of an organisation the team owns, so access follows team membership and does not depend on one member's account (EDN-19).
-Each member's credentials are in \texttt{.dvc/config.local}, which Git ignores.
+Reading it needs the token of a DagsHub account, any account since the repository is public; each member's is in \texttt{.dvc/config.local}, which Git ignores.
 
 The pipeline is defined in \texttt{dvc.yaml} (\cref{fig:pipeline}), and the committed \texttt{dvc.lock} records the hash of every input and output file and the value of every parameter.
 A Git commit therefore identifies the code, the data, and the parameters together, and \texttt{dvc pull} restores the artefacts that belong to it.
