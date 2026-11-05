@@ -1,0 +1,70 @@
+{
+  "label": "vm-2026-11-05-full-stack",
+  "note": "Full M6 stack on the VM (1 vCPU, 3.8Gi RAM): api, proxy, prometheus, cadvisor, node-exporter, alertmanager, grafana, monitor. Locust on the laptop (8 logical CPUs) against the public URL http://nattech.fib.upc.edu:40520 over the internet (about 30 ms round trip), so the latency includes the network and nginx, unlike the 2026-10-31 runs with Locust on the VM; one API worker; model lgbm-basic afc3335e; no docker, metrics or prediction-log measurements because the VM cannot be reached from here; X-Client: loadtest on every request.",
+  "started_at": "2026-11-04T23:08:01+00:00",
+  "host": "http://nattech.fib.upc.edu:40520",
+  "rate_per_s": 20.0,
+  "duration_s": 300,
+  "users": 80,
+  "machine": {
+    "hostname": "lukas-NBLB-WAX9N",
+    "cpus": 8,
+    "load_average_before": [
+      2.94,
+      1.45,
+      1.42
+    ],
+    "load_average_after": [
+      3.15,
+      2.49,
+      1.88
+    ]
+  },
+  "locust_process": {
+    "cpu_mean_percent": 6.711920529801325,
+    "cpu_max_percent": 73.5
+  },
+  "locust": {
+    "/v1/predict": {
+      "requests": 3607,
+      "failures": 0,
+      "p50_ms": 97.0,
+      "p95_ms": 280.0,
+      "p99_ms": 1100.0,
+      "rate_per_s": 12.023333333333333,
+      "error_rate": 0.0
+    },
+    "/v1/price-range": {
+      "requests": 1184,
+      "failures": 0,
+      "p50_ms": 82.0,
+      "p95_ms": 270.0,
+      "p99_ms": 1200.0,
+      "rate_per_s": 3.9466666666666668,
+      "error_rate": 0.0
+    },
+    "/v1/comparables": {
+      "requests": 1222,
+      "failures": 0,
+      "p50_ms": 31.0,
+      "p95_ms": 120.0,
+      "p99_ms": 950.0,
+      "rate_per_s": 4.073333333333333,
+      "error_rate": 0.0
+    },
+    "Aggregated": {
+      "requests": 6013,
+      "failures": 0,
+      "p50_ms": 85.0,
+      "p95_ms": 260.0,
+      "p99_ms": 1100.0,
+      "rate_per_s": 20.043333333333333,
+      "error_rate": 0.0
+    }
+  },
+  "throughput": {
+    "achieved_per_s": 20.043333333333333,
+    "target_per_s": 20.0,
+    "reached": true
+  }
+}
