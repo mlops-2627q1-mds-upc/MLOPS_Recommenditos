@@ -201,7 +201,8 @@ Server side, from the API's histogram `http_request_duration_seconds` in the sta
 | VM CPU idle, steal, CPU pressure (node-exporter) | - | 32 %, below 0.01 %, 14.3 % | - |
 | API container memory, max | 295 MiB (`docker stats`) | 303 MiB (cAdvisor's working set) | below 1 GB (NFR-04) |
 
-NFR-03 holds: the rate was reached, and there were no errors.
+NFR-03's rate and error targets hold with the full stack: the rate was reached, and there were no errors.
+Its latency part is NFR-02's check, which is still owed, and its exactly-once part was not re-checked.
 NFR-02 was not re-run with the full stack by its decided method, a Locust load test on the VM ([EDN-88](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), because this run's client was on the laptop.
 The API's own histogram supports it: 97.1 % of the 3,607 `/v1/predict` answers took at most 250 ms in the API (p95 218 ms), and `/v1/price-range` and `/v1/comparables` are well within 300 ms.
 The histogram leaves out the time before the API's timer starts and the network, so it is a lower bound of what a client on the VM sees; the run of 2026-10-31 on the VM, whose client-side p95 of 210 ms includes the server's time, bounds the server's time on the bare stack from above.
