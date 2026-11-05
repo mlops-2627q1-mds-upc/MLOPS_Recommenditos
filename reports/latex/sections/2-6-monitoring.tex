@@ -87,14 +87,15 @@ The job stores every window with each feature's p-value in SQLite, so a finding 
 \begin{figure}[ht]
   \centering
   \includegraphics{es-replay-windows}
-  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds at each window's 1,000 answers and 500 ranges. The coverage of windows 9 and 10, 86.6\,\%, lies just above the floor. The control figures are in-sample; the test coverage, 90.2\,\%, is close to the nominal level.}
+  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds at each window's 1,000 answers and 500 ranges. The coverage of windows 9 and 10, 86.6\,\%, lies just above the floor. The control figures are in-sample; the test coverage of the model the replay ran against, before the retrain of \cref{sec:m6-feedback}, is 90.2\,\%, close to the nominal level.}
   \label{fig:m6-replay}
 \end{figure}
 
 \paragraph{Performance degradation and user impact.}
 To see whether users get worse prices, the job also computes the real MdAPE and the share of price ranges that hold the price, from the observed prices of a window's own requests (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229}{\#229}).
 It reports the MdAPE only with at least 200 labelled answers and the coverage only with at least 300 labelled ranges, so that a window whose prices have not arrived shows no value instead of a good one.
-The MdAPE is compared with the test MdAPE, 6.73\,\%, and the coverage with the nominal 90\,\% the ranges promise (90.2\,\% on the test set); each alerts at a one-sided level of about 0.005 per window, the false-alarm level of NFR-11 (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230}{\#230}): \texttt{ModelErrorHigh} above $1 + 3.52/\sqrt{n}$ times the test MdAPE, \texttt{ModelCoverageLow} more than 2.576 standard errors and a continuity correction below the nominal 90\,\%, with $n$ the window's labels.
+The MdAPE is compared with the test MdAPE, and the coverage with the nominal 90\,\% the ranges promise; for the model the replay below ran against, before the retrain of \cref{sec:m6-feedback}, these were 6.73\,\% and 90.2\,\% on the test set.
+Each alerts at a one-sided level of about 0.005 per window, the false-alarm level of NFR-11 (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230}{\#230}): \texttt{ModelErrorHigh} above $1 + 3.52/\sqrt{n}$ times the test MdAPE, \texttt{ModelCoverageLow} more than 2.576 standard errors and a continuity correction below the nominal 90\,\%, with $n$ the window's labels.
 At 1,000 answers and 500 ranges these are 7.48\,\% and 86.44\,\%.
 \texttt{DriftDetected} names the drifted features.
 Each alert's runbook step ends in the Retrain workflow of FR-15, with the job's finding as its reason; a person starts it (EDN-12).
