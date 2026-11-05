@@ -22,7 +22,7 @@ Grafana shows the figures on a provisioned dashboard, each against the limit a r
 \Cref{tab:m6-risks} lists the failures we expect on one VM with one vCPU, 4\,GB of memory, and no swap, and what reports each.
 Fourteen Prometheus alerting rules post through Alertmanager to the team's Discord channel.
 Every message carries what to do, from the runbook in the monitoring documentation, and a link to its dashboard panel, and every rule has unit tests (\texttt{promtool test rules}) for the series that must fire it and those that must not.
-A latency or error alert fires only when the share over the last minute stays above the target for 5 minutes, with at least 20 answers a minute: a share over 5 minutes would fire after a 30-second spike, such as the one-vCPU load of a drift pass, and post a firing and a resolved message for nothing.
+A latency or error alert fires only when the share over the last minute stays above the target for 5 minutes, with at least 20 answers a minute: a share over 5 minutes would fire after a 30-second spike, such as the CPU spike of a drift pass on the one vCPU, and post a firing and a resolved message for nothing.
 
 \begin{table}[ht]
   \centering\small
@@ -30,7 +30,7 @@ A latency or error alert fires only when the share over the last minute stays ab
     \toprule
     Failure & What reports it \\
     \midrule
-    VM or network gone & Better Stack emails after 3 failing minutes; an outage reaches the inbox 3 to 6 minutes after the API stops answering (alert path rehearsed on 2026-11-04). \\
+    VM or network gone & Better Stack, from outside: an email 3 to 6 minutes after the API stops answering (alert path rehearsed on 2026-11-04). \\
     API crashed or hung & Its healthcheck ends a hung process and Docker restarts it (NFR-05, EDN-93); \texttt{ApiDown} after 1 minute, \texttt{ContainerRestarting} at 3 restarts in 30 minutes. \\
     Slow answers & \texttt{PredictLatencyHigh} when more than 5\,\% of \texttt{/v1/predict} answers take over 250\,ms (NFR-02), read from the histogram bucket at the target; the same at 300\,ms for the other two endpoints. \\
     Server errors & \texttt{ErrorRateHigh} above 1\,\% of answers (NFR-03); \texttt{ServerErrors} at 5 in 15 minutes at any traffic, since outside a test the API is almost idle. \\
@@ -97,7 +97,7 @@ On 2026-11-04 from 22:26 to 23:03 UTC, the replay sent 5,000 control listings an
 No control window was flagged, and every \texttt{ES} window was, in 13 to 15 of the 23 features.
 Their MdAPE of 9.0 to 9.4\,\%, 1.33 to 1.40 times the test MdAPE, is above the ceiling in every window, and their coverage of 85.4 to 87.6\,\% falls below the floor in two of the five.
 The control windows' MdAPE of 4.9 to 5.4\,\% and coverage of 95 to 97\,\% are not a baseline, because the control listings are training listings and their figures are in-sample.
-The first \texttt{ES} window was flagged by the pass that ended 3.5 minutes after the window filled, 7 minutes after the first \texttt{ES} request.
+The first \texttt{ES} window was flagged by the pass that ended 3.5 minutes after the window filled, 7 minutes after the first \texttt{ES} request; with a pass every 15 minutes, a filled window waits at most 15 minutes for its test.
 
 The model alerts were deployed after the replay, so only its last window reached Alertmanager: \texttt{DriftDetected} and \texttt{ModelErrorHigh} fire, and \texttt{ModelCoverageLow} stays quiet at 86.6\,\% against the floor of 86.44\,\% (\cref{fig:m6-model-performance}).
 The coverage alert is the weakest of the three signals at 500 ranges, and drift and error both cover the windows it misses.
@@ -106,17 +106,17 @@ These known findings are silenced until the retraining rehearsal of \cref{sec:m6
 \paragraph{The control clause of NFR-11.}
 \texttt{monitoring/tests/test\_nfr11.py} runs the job's own pass over 20 control windows and the first \texttt{ES} window of the versioned samples, and requires at most one flagged control window and the \texttt{ES} window flagged in at least three features besides \texttt{country\_code}.
 It needs the DagsHub credentials, which only \texttt{main} has (EDN-91), so CD runs it before any image is pushed, and it passed on the last release, of 2026-11-05.
-On the samples of 2026-11-04 no control window was flagged, and the lowest p-value of any control feature was 0.0035, 16 times the threshold.
+When the test was written, on the samples of 2026-11-04, no control window was flagged, and the lowest p-value of any control feature was 0.0035, 16 times the threshold.
 
 \paragraph{What the dashboard cannot show.}
-Prometheus holds only the latest tested window, so \cref{fig:m6-replay} is drawn from the job's own store.
+\Cref{fig:m6-replay} is drawn from the job's own store, because Prometheus holds only the latest window a pass tested.
 Real users would send prices late or never; the job recounts a window for 7 days, and the dashboard's label counts show why a figure is missing.
 
 % figures/es-replay-windows.pdf: drawn by reports/analysis/es_replay_figure.py from reports/monitoring/vm-es-replay-2026-11-04.json.
 \begin{figure}[ht]
   \centering
   \includegraphics{es-replay-windows}
-  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds at each window's 1,000 answers and 500 ranges. The control figures are in-sample, because the control listings are training listings; the test coverage, 90.2\,\%, is close to the nominal level.}
+  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds at each window's 1,000 answers and 500 ranges. The control figures are in-sample; the test coverage, 90.2\,\%, is close to the nominal level.}
   \label{fig:m6-replay}
 \end{figure}
 
@@ -124,7 +124,7 @@ Real users would send prices late or never; the job recounts a window for 7 days
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth, trim=25 1550 10 95, clip]{grafana-model-performance-vm.png}
-  \caption{The top row of the Model performance dashboard on the VM, showing window 10 of \cref{fig:m6-replay} against the alert thresholds. Prometheus gets only the latest window a pass tested, so the dashboard has no history per window.}
+  \caption{The top row of the Model performance dashboard on the VM, showing window 10 of \cref{fig:m6-replay} against the alert thresholds. The dashboard has no history per window.}
   \label{fig:m6-model-performance}
 \end{figure}
 
