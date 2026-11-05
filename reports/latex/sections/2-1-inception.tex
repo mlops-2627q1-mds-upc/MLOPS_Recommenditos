@@ -86,7 +86,7 @@ We profiled the file ourselves. Our findings shaped the project as follows:
 \begin{figure}[ht]
   \centering
   \includegraphics[width=\textwidth]{data-composition}
-  \caption{The share of the 118,382 raw listings per make and per country. The Spanish listings are held out as a market the model has not seen (EDN-03); 6,079 of them remain after cleaning.}
+  \caption{The share of the 118,382 raw listings per make and per country. Of the 6,079 Spanish listings that remain after cleaning, those of about 40\,\% of the Spanish sellers, 2,402, are held out as a market the model has not seen (EDN-03, EDN-102).}
   \label{fig:composition}
 \end{figure}
 
@@ -97,7 +97,7 @@ The raw file contains seven columns with personal data of sellers. They never re
 Reading the remote needs a signed-in DagsHub account, which a public repository grants to any account; since 2026-11-04 DagsHub also sends anonymous visitors of its web pages to the login page.
 
 After the scope, date, price, and deduplication rules, 105,405 of the 118,382 listings remain.
-The 6,079 Spanish ones form the holdout, and we split the other 99,326 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
+The Spanish listings of about 40\,\% of the Spanish sellers, 2,402 listings, form the holdout (EDN-102), and we split the other 103,003 by seller in the ratio 60/10/10/20 with a pinned seed, so that no seller appears in two sets (EDN-32).
 We reviewed this split strategy after training and kept it.
 \Cref{tab:split} shows the result.
 The validation set is used for early stopping and tuning, the calibration set is reserved for the price intervals of UC2, and the test set is what the release gate reads.
@@ -108,8 +108,8 @@ The validation set is used for early stopping and tuning, the calibration set is
     \toprule
     & Train & Validation & Calibration & Test & Spanish holdout \\
     \midrule
-    Rows & 61,180 & 8,992 & 9,169 & 19,985 & 6,079 \\
-    Rows of the 11 supported makes & 60,378 & 8,859 & 8,987 & 19,665 & 5,979 \\
+    Rows & 63,547 & 9,283 & 9,586 & 20,587 & 2,402 \\
+    Rows of the 11 supported makes & 62,708 & 9,147 & 9,400 & 20,258 & 2,355 \\
     \bottomrule
   \end{tabular}
   \caption{The split, from the dataset card. The models train and are evaluated on the rows of the supported makes.}
@@ -130,7 +130,7 @@ Its main points:
 
 \begin{itemize}
   \item \textbf{Model.} LightGBM on $\log(\mathrm{price})$ (EDN-02). It is compared with two baselines: B1, a Ridge regression, and B0, which predicts the median training price of cars with the same make, model, and two-year age band.
-  \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). It is trained on its rows plus two copies of each in which optional input fields are blanked (EDN-82). Early stopping chose 1,394 trees under a ceiling of 5,000, and the model file has 8.7\,MB.
+  \item \textbf{Candidate.} \texttt{lgbm-basic} uses \texttt{learning\_rate} 0.05 and \texttt{num\_leaves} 63. A grid search around these values found no better point, so we kept them (EDN-73). It is trained on its rows plus two copies of each in which optional input fields are blanked (EDN-82). Early stopping chose 1,010 trees under a ceiling of 5,000, and the model file has 6.4\,MB.
   \item \textbf{Results.} The card reports every success criterion (\cref{tab:success-criteria}), the error per segment (\cref{fig:segments}), and the energy of each training run (\cref{sec:m3-energy}).
   \item \textbf{Who is affected by a wrong answer.} A seller acts on one number, and an estimate that is 10\,\% too low costs them money without their noticing. This is why a valuation comes with an explanation (FR-08). A buyer uses the price interval to check an offer, which is what SC-05 bounds.
   \item \textbf{Limitations.} The error on cars older than 20 years is above SC-04's bound, which we accept as a limitation of this model (EDN-62). Honda, Hyundai, Aston Martin, and Volkswagen are served but have fewer than 500 test rows each, so SC-04 does not check them.
