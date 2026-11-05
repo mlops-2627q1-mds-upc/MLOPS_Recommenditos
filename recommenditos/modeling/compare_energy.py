@@ -40,6 +40,7 @@ from loguru import logger
 from matplotlib.axes import Axes
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
+from matplotlib.text import Annotation
 from matplotlib.ticker import FuncFormatter
 from matplotlib.transforms import Bbox
 import typer
@@ -91,6 +92,10 @@ _HIDDEN_BELOW_PP = 0.3
 #: How far a mark reaches from its centre, in points, for a label to stay clear of.
 _MARK_REACH_PT = 3.6
 _POINTS_PER_INCH = 72.0
+#: How often the axes may be widened for the names of the pairs to fit, and how
+#: far, in pixels, a widened edge stays from the name that needed it.
+_MAX_WIDENINGS = 5
+_EDGE_SLACK_PX = 2.0
 
 app = typer.Typer()
 
@@ -176,20 +181,49 @@ def pair_label(variant: str, low: float, high: float | None) -> str:
     if high == low:
         return f"{variant} (both)"
     if abs(high - low) < _HIDDEN_BELOW_PP:
-        return f"{variant} ({abs(high - low):.2f} points apart)"
+        # On two lines, so that the name is not much wider than a neighbour's
+        # line is far away, nor than the pair is from the edge of the axes.
+        return f"{variant}\n({abs(high - low):.2f} points apart)"
     return variant
 
 
 def _label_pairs(axis: Axes, pairs: list[tuple[str, float, float, float | None]]) -> None:
-    """Name each pair over its upper mark, where the name crosses no mark and no line.
+    """Name each pair over its upper mark, inside the axes and clear of every mark and line.
 
     Centred over the mark first. Two variants of similar training cost stand
     side by side, and a centred name would then run into the neighbour's line,
-    so the name is next tried ending at its mark and then starting at it. With
-    no free place it is centred, as a name on a line is still better than none.
+    so the name is next tried ending at its mark and then starting at it. A
+    place that leaves the axes is not free either: the pair furthest to one side
+    would have its name cut off at the edge of the figure. When a name has no
+    free place inside the axes, it takes the place clear of the marks that needs
+    the least widening, or the centred one if there is none, and the axes are
+    widened until it fits, after which every name is placed again on the new scale.
     The layout has to be final when this runs, because it measures the text.
     """
+    labels = _place_labels(axis, pairs)
+    for _ in range(_MAX_WIDENINGS):
+        if not _leaving_the_axes(axis, labels):
+            return
+        _widen_to_fit(axis, labels)
+        for label in labels:
+            label.remove()
+        labels = _place_labels(axis, pairs)
+    if _leaving_the_axes(axis, labels):
+        raise RuntimeError(f"the names of the pairs did not fit after {_MAX_WIDENINGS} widenings")
+
+
+def _leaving_the_axes(axis: Axes, labels: list[Annotation]) -> bool:
     renderer = plots.renderer(axis)
+    inside = axis.get_window_extent(renderer)
+    return any(_overflow(label.get_window_extent(renderer), inside) > 0 for label in labels)
+
+
+def _place_labels(
+    axis: Axes, pairs: list[tuple[str, float, float, float | None]]
+) -> list[Annotation]:
+    """One name per pair, each in the first free place on the current scale (`_label_pairs`)."""
+    renderer = plots.renderer(axis)
+    inside = axis.get_window_extent(renderer)
     reach = _MARK_REACH_PT * axis.figure.dpi / _POINTS_PER_INCH
     taken = []
     for _, x, low, high in pairs:
@@ -199,9 +233,10 @@ def _label_pairs(axis: Axes, pairs: list[tuple[str, float, float, float | None]]
         ]
         if len(ends) > 1:
             taken.append(Bbox.from_extents(ends[0][0] - 1, ends[0][1], ends[0][0] + 1, ends[1][1]))
+    labels = []
     for text, x, low, high in pairs:
-        places = (("center", 0), ("right", 4), ("left", -4), ("center", 0))
-        for attempt, (alignment, shift_pt) in enumerate(places):
+        candidates = []
+        for alignment, shift_pt in (("center", 0), ("right", 4), ("left", -4)):
             label = axis.annotate(
                 text,
                 (x, max(low, high or low)),
@@ -212,11 +247,69 @@ def _label_pairs(axis: Axes, pairs: list[tuple[str, float, float, float | None]]
                 color=plots.INK,
             )
             box = label.get_window_extent(renderer)
-            last = attempt == len(places) - 1
-            if last or not any(box.overlaps(other) for other in taken):
-                taken.append(box)
-                break
-            label.remove()
+            clear = not any(box.overlaps(other) for other in taken)
+            candidates.append((label, box, clear))
+        # The first place clear of the marks and inside the axes, else the clear
+        # one that needs the least widening (`min` keeps the first of equals),
+        # else the centred one.
+        free = [c for c in candidates if c[2]]
+        chosen = min(free, key=lambda c: _overflow(c[1], inside)) if free else candidates[0]
+        for label, *_ in candidates:
+            if label is not chosen[0]:
+                label.remove()
+        taken.append(chosen[1])
+        labels.append(chosen[0])
+    return labels
+
+
+def _overflow(box: Bbox, inside: Bbox) -> float:
+    """How far, in pixels, `box` reaches out of `inside`, summed over the four sides."""
+    return (
+        max(inside.x0 - box.x0, 0.0)
+        + max(box.x1 - inside.x1, 0.0)
+        + max(inside.y0 - box.y0, 0.0)
+        + max(box.y1 - inside.y1, 0.0)
+    )
+
+
+def _widen_to_fit(axis: Axes, labels: list[Annotation]) -> None:
+    """Widen the limits so that every label that leaves the axes would fit inside them.
+
+    A label keeps its size and its offset from its mark in pixels, so the limits
+    are solved in the axis's own scale (log for energy) for the mark to sit far
+    enough from the edge, each edge for the label that needs it moved furthest.
+    Each is solved with the other edge where it was, so when both edges move a
+    label can still be out by a little, which the next round of `_label_pairs`
+    corrects. A small slack keeps the label off the edge after rounding.
+    """
+    renderer = plots.renderer(axis)
+    inside = axis.get_window_extent(renderer)
+    for i, ruler, get_limits, set_limits in (
+        (0, axis.xaxis, axis.get_xlim, axis.set_xlim),
+        (1, axis.yaxis, axis.get_ylim, axis.set_ylim),
+    ):
+        start, end = (inside.intervalx, inside.intervaly)[i]
+        size = end - start
+        scale = ruler.get_transform()
+        lower, upper = scale.transform(get_limits())
+        new_lower, new_upper = lower, upper
+        for label in labels:
+            box = label.get_window_extent(renderer)
+            box_start, box_end = (box.intervalx, box.intervaly)[i]
+            mark_px = axis.transData.transform(label.xy)[i]
+            mark = scale.transform([label.xy[i]])[0]
+            past_end = box_end - mark_px + _EDGE_SLACK_PX
+            before_start = mark_px - box_start + _EDGE_SLACK_PX
+            if max(past_end, before_start) >= size:
+                raise ValueError(
+                    f"{label.get_text()!r} is larger than the axes it names a pair in"
+                )
+            if box_end > end:
+                new_upper = max(new_upper, lower + (mark - lower) * size / (size - past_end))
+            if box_start < start:
+                new_lower = min(new_lower, upper - (upper - mark) * size / (size - before_start))
+        if (new_lower, new_upper) != (lower, upper):
+            set_limits(*scale.inverted().transform([new_lower, new_upper]))
 
 
 def figure_of(rows: list[dict]) -> Figure:
