@@ -27,7 +27,7 @@ Lukas took the package unchanged.
 AI built it; tests check a default sent explicitly, the in-place migration, and the previous image's insert on the migrated file.},
   aievidence = {Claude Code session of 2026-11-04.
 Question (translated from German): ``Adopt the remaining architecture recommendations as a package and record them in the EDN?'', where the package listed ``\#191 log: stores only the fields the client really sent, plus a marker column. Old rows stay (rewriting would be lossy), the drift job reads only new rows.''
-Orchestrator briefing (core, paraphrased): ``Implement \#191: the prediction log keeps only the fields a client sent, marked per row.''
+Orchestrator briefing to the architect (core, paraphrased): ``Design the M6 monitoring architecture with options and a recommendation: where the results are stored, how the drift job is scheduled, how Grafana is reached, and how \#191 is approached.''
 Lukas answered: ``Adopt all; the agents record them in four EDN entries (log, resource monitoring, replay, drift job).'' (translated from German)},
   evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191}{Issue \#191}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/282}{PR \#282}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/api.md\#reading-the-log}{Reading the log}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/recommenditos/api/prediction_log.py}{\texttt{prediction\_\allowbreak{}log.\allowbreak{}py}}, EDN-86.},
 }

@@ -17,7 +17,7 @@
 We watch the running system from two places (EDN-99, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224}{\#224}).
 Inside the Compose stack on the VM, Prometheus scrapes the API's own metrics, cAdvisor for each container's memory, CPU, and restarts, and node-exporter for the host's memory and disk, every 15 seconds; it keeps at most 2\,GB or 60 days, so that its storage cannot fill the disk (NFR-04).
 From outside, Better Stack requests the public \texttt{/health} every 3 minutes, because a monitor on the VM cannot report the VM itself being gone (EDN-10, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226}{\#226}).
-From 2026-11-04 to 2026-11-05 it recorded 100\,\% availability and no incident (\texttt{reports/\allowbreak uptime/\allowbreak availability.json}); checks 3 minutes apart do not see the 5 seconds of 503 that a deploy causes (\cref{sec:m6-feedback}).
+From 2026-11-04 to 2026-11-05 it recorded 100\,\% availability and no incident (\texttt{reports/\allowbreak uptime/\allowbreak availability.json}); the 5 seconds of 503 a deploy causes open no incident, since Better Stack opens one only when a failure lasts through its 3-minute confirmation period (\cref{sec:m6-feedback}).
 Grafana shows the figures on a provisioned dashboard, each against the limit a requirement sets, and is reachable only through an SSH tunnel, so that nothing new is public (EDN-99, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225}{\#225}).
 
 \Cref{tab:m6-risks} lists the failures we expect on one VM with one vCPU, 4\,GB of memory, and no swap, and what reports each.
@@ -109,7 +109,7 @@ The first \texttt{ES} window was flagged by the pass that ended 3.5 minutes afte
 
 The model alerts were deployed after the replay, so only its last window reached Alertmanager: \texttt{DriftDetected} and \texttt{ModelErrorHigh} fire, and \texttt{ModelCoverageLow} stays quiet at 86.6\,\% against the floor of 86.44\,\%.
 The coverage alert is the weakest of the three signals at 500 ranges, and drift and error both cover the windows it misses.
-These known findings are silenced until the retraining rehearsal of \cref{sec:m6-feedback}.
+These known findings were silenced until the retraining rehearsal of \cref{sec:m6-feedback}.
 
 \paragraph{The control clause of NFR-11.}
 \texttt{monitoring/tests/test\_nfr11.py} runs the job's own pass over 20 control windows and the first \texttt{ES} window of the versioned samples, and requires at most one flagged control window and the \texttt{ES} window flagged in at least three features besides \texttt{country\_code}.
@@ -129,7 +129,7 @@ Real users would send prices late or never; the job recounts a window for 7 days
 
 \Cref{fig:m6-loop} shows the stages from a served price back to a new model on the VM, and what starts each one.
 Serving, monitoring, retraining, the checks, and the release run by themselves.
-A person decides three things: whether a finding calls for retraining, whether the retrained model is promoted, and whether a release is rolled back (FR-15, EDN-12).
+A person decides whether a finding calls for retraining, whether the retrained model is promoted, and whether a release that passed its checks is rolled back (FR-15, EDN-12).
 A watcher that retrains and opens the promotion on its own was rejected in EDN-12, as new infrastructure to debug just before the final presentation; a person reacting to the alert closes the loop too.
 
 % A diagram of the loop, drawn here in TikZ with the colours of recommenditos/plots.py.
@@ -137,9 +137,9 @@ A watcher that retrains and opens the promotion on its own was rejected in EDN-1
   \centering
   \begin{tikzpicture}[
       font=\sffamily\scriptsize,
-      node distance=11mm and 11.5mm,
+      node distance=11mm and 11.3mm,
       stage/.style={draw=figmuted, line width=0.5pt, rounded corners=2pt, align=left,
-        text width=29mm, minimum height=15mm, inner sep=3pt, text=figink,
+        text width=29mm, minimum height=17mm, inner sep=3pt, text=figink,
         execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
       person/.style={stage, draw=figaccent, line width=1.6pt},
       flow/.style={-{Stealth[length=2mm]}, line width=0.6pt, draw=figinksecondary},
@@ -173,7 +173,8 @@ On a GitHub-hosted runner it runs \texttt{dvc repro}, logs the runs to MLflow on
 A person opens that pull request and, after a review, merges it, which promotes the model; a required check blocks the merge unless the committed \texttt{metrics.json} says the gate passed for the model \texttt{params.yaml} promotes, so a rejected model cannot be merged by mistake.
 The merge to \texttt{main} starts CI, then CD, which bakes the model into the image (EDN-08) and runs NFR-11's test on the new monitoring samples before it pushes, then Deploy, whose smoke check holds \texttt{/health} to the model version that \texttt{dvc.lock} records and puts the previous release back when it fails.
 A rollback is the same Deploy workflow started with the previous release tag.
-Automating the whole loop would need only a trigger, such as a relay that starts Retrain on an alert, because the gate and the required check already stop a rejected model; EDN-12 keeps a person at that point instead.
+Automating the whole loop would need a trigger that starts Retrain on an alert and a step that opens and merges the promotion pull request when the gate passes; the gate and the required check already stop a rejected model.
+EDN-12 keeps a person at both points instead.
 
 \paragraph{The rehearsal.}
 On 2026-11-05 the chain ran once end to end on the VM (\cref{tab:m6-rehearsal}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231}{\#231}; record in \texttt{reports/monitoring/fr15-rehearsal.md}).
@@ -191,7 +192,7 @@ The retrain took 8.5 minutes, and the release 24 minutes from the merge to the f
     Promotion & 14:29 to 15:33 & Pull request \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/303}{\#303}, opened and merged by a person after an independent agent review; the gate check passed. \\
     Release & 15:33 to 15:58 & CI, CD, and Deploy passed, with NFR-11's test on the new samples and the smoke check; \texttt{/health} named model \texttt{2a60912b} from 15:57. \\
     Replay & 16:00 to 16:13 & The same 2,000 \texttt{ES} listings: MdAPE 7.49 and 7.82\,\% in windows 17 and 18, both still flagged for drift. \\
-    Rollback drill & 16:33 to 16:36 & Deploy to the previous release and back to the promoted one: 5.0\,s of 503 from nginx each time, at one request a second, and the smoke check verified the served model version. \\
+    Rollback drill & 16:33 to 16:36 & Deploy to the previous release and back to the promoted one: about 5\,s of 503 from nginx each time (five 503 answers in a row at one probe a second), and the smoke check verified the served model version. \\
     \bottomrule
   \end{tabularx}
   \caption{The FR-15 rehearsal on the VM on 2026-11-05, with its raw evidence in \texttt{reports/\allowbreak monitoring/\allowbreak fr15/}.}
@@ -201,6 +202,7 @@ The retrain took 8.5 minutes, and the release 24 minutes from the merge to the f
 \paragraph{The recovery criterion.}
 We posted the criterion on \#231 before any run and report against it unchanged (\cref{tab:m6-recovery}).
 Points 1 and 3 pool the two \texttt{ES} windows with the drift job's own formulas; point 2 is the paired comparison of both models on all 2,266 held-out \texttt{ES} listings, from the dry run of \#300, which applies to the promoted model because its booster and interval files are the same files.
+Point 3a is not paired: the replay alternates price and range requests, and the \texttt{ES} phase started at an odd position before and an even one after, so 84.3\,\% and 88.5\,\% come from the two halves of the same 2,000 listings.
 
 \begin{table}[ht]
   \centering\small
@@ -222,5 +224,5 @@ The recovery criterion is not met in full: points 1 and 2 hold, and point 3 hold
 Window 18's MdAPE of 7.82\,\% is 1.149 times the test MdAPE, above the ceiling of 1.111 at 1,000 labels, and its coverage of 86.40\,\% is below the floor of 86.44\,\%; window 17, at 7.49\,\% and 90.6\,\%, fires neither.
 The cause is the baseline: the ceiling is relative to the overall test MdAPE of 6.80\,\%, while \texttt{ES} on the test set itself is at 7.61\,\%, 1.12 times that, so an \texttt{ES} window at the model's own \texttt{ES} error sits at the ceiling.
 \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306}{\#306} follows this up by judging a window against its market's baseline.
-\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307}{\#307} fixes a second weakness the rehearsal showed: a window that is not final is scored again on every pass against the test values of the running release, so after the promotion the windows of the old model read against 6.80\,\% instead of the 6.73\,\% they were judged on.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307}{\#307} tracks a second weakness the rehearsal showed: a window that is not final is scored again on every pass against the test values of the running release, so after the promotion the windows of the old model read against 6.80\,\% instead of the 6.73\,\% they were judged on.
 Drift stays flagged after the promotion, as the criterion expected: the \texttt{ES} inputs still differ from a reference that is 3.8\,\% \texttt{ES}, and the job tests inputs, not error.
