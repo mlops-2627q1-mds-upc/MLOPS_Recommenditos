@@ -644,6 +644,8 @@ GRAFANA_ADMIN_PASSWORD=x DISCORD_WEBHOOK_URL=x python3 tools/image_scan.py scan 
 ```
 
 When the scan fails, update the base image or the package; Dependabot's pull request may already do so.
+When no base image ships the fix yet but `trixie-security` does, the runtime stage upgrades that package by name with `apt-get install --only-upgrade`, not with a blanket `apt-get upgrade`: CD's build restores its layers from the Actions cache, which would keep a blanket upgrade at the versions of its first build, while a new package name in the line changes the layer and so rebuilds it.
+The runtime stages of both images take `apt` and `libapt-pkg7.0` 3.0.4 that way since 2026-11-05: the pinned base image and the newest `python:3.12-slim-trixie` (built 2026-10-28) ship 3.0.3, which has CVE-2026-109518 (HIGH, [DSA-6607-1](https://security-tracker.debian.org/tracker/CVE-2026-109518)); the line goes once Dependabot moves the base to an image that ships the fix.
 If neither is possible yet, accept the finding in `.trivyignore`: the vulnerability ID with an expiry date (`CVE-2026-12345 exp:2026-12-31`), after which trivy reports it again, and a comment line above it that says why the risk is accepted.
 The scan refuses an entry without either.
 On 2026-10-30 the API image had no fixable HIGH or CRITICAL finding and 44 without a fix, all in Debian packages.
@@ -652,7 +654,7 @@ On 2026-11-03 it had no finding, where `1.30-alpine` had two fixable ones in lib
 
 **The Dockerfile lint.**
 [hadolint](https://github.com/hadolint/hadolint) checks the `Dockerfile` in the pre-commit hook and in CI's required `Lint & format` job.
-Its one exception, DL3008 for the unpinned `libgomp1`, carries its reason in the `Dockerfile`: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
+Its one exception, DL3008 for the unpinned `libgomp1` and the unpinned upgrade of `apt`, carries its reason in the `Dockerfile` and in `monitoring/Dockerfile`: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
 
 **Dependabot.**
 `.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile`, of `deploy/compose.yaml` and of the report's TeX Live image (`reports/latex/Dockerfile`), and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.

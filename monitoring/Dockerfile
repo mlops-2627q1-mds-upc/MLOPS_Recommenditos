@@ -37,6 +37,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
 FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
+# apt and libapt-pkg7.0 from trixie-security, as in the API's Dockerfile, which
+# says why (CVE-2026-109518) and when the line can go.
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 10002 monitor \
     && useradd --system --uid 10002 --gid monitor --no-create-home --shell /usr/sbin/nologin monitor
 # The mount point of the drift job's volume `monitor-results`, owned by the user

@@ -77,10 +77,15 @@ FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb51050
 ARG MODEL_VARIANT=lgbm-basic
 
 # LightGBM's native library links against GNU OpenMP, which the slim image lacks.
+# apt and libapt-pkg7.0 come from trixie-security: the pinned base image ships
+# 3.0.3, which has CVE-2026-109518, fixed in 3.0.4 (DSA-6607-1), and no published
+# python image ships the fix yet. Once Dependabot moves the base to one that
+# does, the upgrade does nothing and the line can go.
 # Not pinned to a version: Debian replaces a package version in its archive with
 # every security update, so a pin would break the build instead of patching it.
 # hadolint ignore=DL3008
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
