@@ -111,14 +111,14 @@ def main() -> None:
         axis.axvline(last_control + 0.5, color=MUTED, linewidth=0.8, zorder=1)
         control_x = [i for i, e in zip(ids, es, strict=True) if not e]
         es_x = [i for i, e in zip(ids, es, strict=True) if e]
-        axis.scatter(control_x, [v for v, e in zip(values, es, strict=True) if not e], s=22, marker="o", color=MARK, zorder=3)
-        axis.scatter(es_x, [v for v, e in zip(values, es, strict=True) if e], s=24, marker="s", color=ACCENT, zorder=3)
+        axis.scatter(control_x, [v for v, e in zip(values, es, strict=True) if not e], s=24, marker="o", color=MARK, edgecolors="white", linewidths=0.6, zorder=3)
+        axis.scatter(es_x, [v for v, e in zip(values, es, strict=True) if e], s=26, marker="s", color=ACCENT, edgecolors="white", linewidths=0.6, zorder=3)
         top = limits[1]
         axis.text(3, top, "control", ha="center", va="top", fontsize=LABEL_PT, color=INK_SECONDARY)
         axis.text(8, top, "ES", ha="center", va="top", fontsize=LABEL_PT, color=INK_SECONDARY)
 
     axes[0].set_yticks([0, 5, 10, 15, 20])
-    reference(axes[1], ceiling, f"alert above {ceiling:.2f}", dashed=True)
+    reference(axes[1], ceiling, f"alert above\n{ceiling:.2f}", dashed=True)
     reference(axes[1], test_mdape, f"test {test_mdape:.2f}", dashed=False, above=False)
     reference(axes[2], 100 * nominal, f"nominal {100 * nominal:.0f}", dashed=False)
     reference(axes[2], floor, f"alert below\n{floor:.2f}", dashed=True, above=False)
