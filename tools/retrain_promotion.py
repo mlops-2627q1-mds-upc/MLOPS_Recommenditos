@@ -17,7 +17,9 @@ what the person decides on:
 - `summary` writes the job summary: a link that opens the pull request with its
   title and a short body filled in, then the evidence: the model version, the
   gate verdict of NFR-01 as the Promotion gate check will see it, the metrics of
-  every variant beside the committed ones, and NFR-06's comparison with them.
+  every variant beside the committed ones, what blocks or is waived for each at
+  the gate, the runner's CPU with its AVX-512 flags (#259), and NFR-06's
+  comparison with the committed metrics.
 
 The model version is the MD5 `dvc.lock` records for `models/<candidate>`, which
 is what `/health` reports (`recommenditos.api.serving.bundle_version`).
@@ -62,6 +64,9 @@ MAX_LINK = 2000
 
 #: How many leaves outside the tolerance the summary lists before it only counts them.
 MAX_LISTED = 15
+
+#: Where Linux names the CPU and its flags.
+CPUINFO = Path("/proc/cpuinfo")
 
 
 def committed(base: str, path: str, root: Path = PROJ_ROOT) -> str | None:
@@ -161,6 +166,54 @@ def link(runs: dict, variant: str) -> str:
     return f"`{entry['run_id']}`" if entry.get("run_id") else "-"
 
 
+def runner_cpu(cpuinfo: Path | None = None) -> tuple[str, list[str]]:
+    """The CPU's model name and its AVX-512 flags, read from `CPUINFO`."""
+    cpuinfo = cpuinfo or CPUINFO
+    if not cpuinfo.exists():
+        return "unknown CPU", []
+    model, flags = "unknown CPU", set()
+    for line in cpuinfo.read_text("utf-8", errors="replace").splitlines():
+        name, _, value = line.partition(":")
+        if name.strip() == "model name" and model == "unknown CPU":
+            model = value.strip()
+        elif name.strip() == "flags":
+            flags |= {flag for flag in value.split() if flag.startswith("avx512")}
+    return model, sorted(flags)
+
+
+def runner_lines() -> list[str]:
+    """Which CPU retrained, and whether that run checks #259's AVX-512 fix."""
+    model, flags = runner_cpu()
+    if flags:
+        check = (
+            "it has AVX-512, so this run checks that the pipeline turns numpy's AVX-512 "
+            "kernels off (#259)"
+        )
+    else:
+        check = (
+            "it has no AVX-512, so this run does not check that the pipeline turns numpy's "
+            "AVX-512 kernels off (#259 stays unproven)"
+        )
+    return [
+        "## Runner",
+        "",
+        f"- CPU: {model}",
+        f"- AVX-512 flags: {' '.join(flags) or 'none'}",
+        f"- So {check}.",
+    ]
+
+
+def gate_lines(metrics: dict) -> list[str]:
+    """What stops each variant at the gate of NFR-01, and what is waived for it."""
+    lines = ["", "| Variant | Gate | Blocked by | Waived |", "|---|---|---|---|"]
+    for variant, record in (metrics.get("variants") or {}).items():
+        lines.append(
+            f"| `{variant}` | {verdict(record.get('gate_passed'))} "
+            f"| {record.get('gate_blocked_by') or '-'} | {record.get('gate_waived') or '-'} |"
+        )
+    return lines
+
+
 def render(
     *,
     base: str,
@@ -216,6 +269,8 @@ def render(
     if metrics.get("waived_criteria"):
         lines.append(f"Waived: {metrics['waived_criteria']}.")
     lines += [f"- {problem}" for problem in problems]
+    lines += gate_lines(metrics)
+    lines += ["", *runner_lines()]
     lines += [
         "",
         "## Metrics",
@@ -345,13 +400,7 @@ def reproduction(base: str, variants: list[str], root: Path) -> list[str]:
 
 def machine() -> str:
     """The runner, as specific as the job can name it without a secret."""
-    cpu = "unknown CPU"
-    cpuinfo = Path("/proc/cpuinfo")
-    if cpuinfo.exists():
-        for line in cpuinfo.read_text("utf-8", errors="replace").splitlines():
-            if line.startswith("model name"):
-                cpu = line.split(":", 1)[1].strip()
-                break
+    cpu, _ = runner_cpu()
     # SIM112: `ImageOS` is the spelling the runner sets (`ubuntu24`).
     image = os.environ.get("ImageOS", platform.system())  # noqa: SIM112
     return f"GitHub-hosted runner {image}, {cpu}, {os.cpu_count()} vCPU"

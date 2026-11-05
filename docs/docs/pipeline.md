@@ -125,7 +125,8 @@ The fit's CPU time is more than its wall time although `train.num_threads` is 1,
 
 `comparables` writes the index of real listings that `POST /v1/comparables` returns for UC2 (FR-09), and the API image carries it beside the bundle (FR-12).
 It is not written under `models/`, because `evaluate` and `compare-energy` depend on that whole directory and a file there would mark both as changed.
-It reads the `train` and `validation` frames and no other, so no `ES` (EDN-03), test or calibration listing can reach it, and it refuses a row of the holdout country should a changed `split` ever let one through.
+It indexes the `train` and `validation` frames and no other, so no listing of the `ES` holdout (EDN-03), test or calibration can reach it; the `ES` listings of the sellers `split` puts into train and validation are in it like any other (EDN-102).
+It also reads the holdout, only for its sellers, and refuses an `ES` row of a held-out seller should a changed `split` ever let one through, because a replayed `ES` listing would then find its own dealer's listings among its comparables.
 Its contract, `COMPARABLES_SCHEMA` in the stage's module, selects the key features and the price, so no PII column (NFR-08) and not the `seller_group_id` pseudonym reaches the index; it is kept out of `recommenditos/schema.py` because every stage depends on that module, and a contract added there would rerun the whole pipeline.
 `age_years` is each listing's age on the snapshot date, from the function the `features` stage uses, and the rows are sorted by make, model, age, mileage and price, so a rerun writes the same bytes and the API breaks a tie the same way every time.
 Measured on the real snapshot (2026-10-20): 70,172 listings of 25 makes and 596 make-model pairs, 1.87 MiB on disk; how much memory the API spends on it is in the [API docs](api.md#comparables).
@@ -223,6 +224,27 @@ The split
 That keeps two properties a stratified assignment gives up.
 A clean clone reproduces the split from the seed and the key alone (NFR-06), and adding sellers leaves every seller already there in its set, which is what makes FR-15's retrain with `ES` comparable to the model before it.
 Measured on the real snapshot, a stratified-group split on `make` moves 52.6 % of the existing rows when the `ES` listings join the pool, and the hash split moves none.
+
+### The `ES` holdout
+
+`split` holds out the `ES` listings of a share `split.holdout_seller_share` of the `ES` sellers, 0.4, and splits the other `ES` sellers like any other seller ([EDN-102](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+A seller is held out when the SHA-256 of `seed`, `ES` and its key falls below the share (`held_out` in `split_data.py`), so the choice depends on the seed and the key alone, a seller's listings land on one side, and a seller held out at one share is held out at every larger one.
+FR-15's retrain learns the market from the sellers in the pool and is measured, in the replay, on `ES` dealers it never saw.
+A share of 1 holds out the whole country, which is how the committed `dvc.lock` was built: until that retrain is promoted, the files on `main` and every number on this page describe the whole-country holdout of 6,079 listings.
+The `ES` sellers that join the pool move no other listing between sets (`tests/test_split.py`), so the models before and after differ by the `ES` training rows alone.
+A held-out seller's listings outside `ES` stay in the pool, as before (EDN-03); on the real snapshot no seller lists in both.
+
+A `dvc repro` with share 0.4 on the laptop (2026-11-05) gave:
+
+| What | Whole country (committed) | Share 0.4 |
+|---|---|---|
+| `ES` listings held out, of 6,079 | 6,079 of 1,933 sellers | 2,402 of 804 sellers |
+| Of them valid requests, the replay's `es` sample | 5,779 | 2,266 |
+| `ES` listings in train, validation, calibration, and test | 0 | 2,367, 291, 417, and 602 |
+| `ES` share of train | 0 % | 3.7 % |
+| Largest seller's share of the pool | 3.41 % | 3.28 % |
+| Supported makes | 11 | the same 11 |
+
 
 The price is that the sets are only as comparable as the draw makes them, so that is measured rather than assumed.
 `reports/analysis/split_strategy.py` reports the committed split set by set, puts it beside 1,000 other seeds of the same assignment, and refits the candidate on 20 other splits; the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split) holds the tables and what they say.
@@ -592,7 +614,7 @@ Known gaps
   A value already set wins, and on Windows it stays unset, because numpy's Windows wheel has no AVX-512 kernels to disable.
   Windows does not compute Linux's values even so: without AVX-512 numpy's float64 `log` comes from the C library, and Windows's rounds the 285,343 listing the other way (CI, 2026-11-04), so a `dvc repro` on Windows does not reproduce a Linux lock, and NFR-06's byte-for-byte reproduction is promised on Linux x86-64 only.
   A process that loaded numpy first, such as a notebook or a `reports/analysis/` script that imports pandas before `recommenditos`, still runs the AVX-512 kernels on a CPU that has them, so `preprocess`'s `add_the_target` refuses to compute `log_price` while any of the three targets is on (`check_numpy_kernels`); `RECOMMENDITOS_ANY_NUMPY_KERNEL=1` computes anyway, with a warning, and the test suite sets it for its own process.
-  `recommenditos/__init__.py` is not yet a declared dependency of the stages; declaring it for every stage, which makes every stage stale, lands right before [#231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231)'s forced retrain.
+  `recommenditos/__init__.py` is a declared dependency of every stage, since the pull request that prepared [#231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231)'s forced retrain, so an edit to it makes every stage stale; `tests/test_pipeline.py::test_every_stage_depends_on_the_package_init` keeps it so.
   `tests/test_pipeline.py` starts `preprocess` the way `dvc repro` does and checks that the variable is set at numpy's first import, that it names exactly numpy's AVX-512 targets and the bits of the 2 values, and that the guard refuses a process with the targets on; on a CPU without AVX-512 the bits pass with or without the variable and the refusal of a real stage process is skipped, and CI exercises them only when GitHub's runner lands on an AVX-512 CPU such as the EPYC 9V74 or 9V45, which a job cannot request.
   The committed `dvc.lock` still holds the 9V74's two values, which no CPU computes with the variable: a forced `preprocess` on the laptop writes `data/interim/listings.parquet` with md5 `e2808f7f...` instead of the lock's `17049e39...`, and the 2 `log_price` values are the only difference.
   It stays so until the pipeline is re-run from `preprocess`, which also moves `b1`: `preprocess` is stale since its guard was added, and #231 re-runs every stage (the Retrain workflow with `force: true`), which should write md5 `e2808f7f...`; a retrain on an AVX-512 runner that reproduces the laptop's file and `b1` closes [#259](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/259).

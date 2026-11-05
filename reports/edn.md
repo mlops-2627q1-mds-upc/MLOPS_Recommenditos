@@ -98,11 +98,13 @@ How to add an entry:
 
 > **Absorbs EDN-40** (2026-09-30): the holdout is selected per listing.
 
+> **Revised on 2026-11-05**: from FR-15's retrain on, only the `ES` listings of 40 % of the `ES` sellers are held out (EDN-102).
+
 - **Date:** 2026-09-22
 - **Milestone:** M1: Project Inception
 - **Activity / Topic:** Dataset Selection, Monitoring
 - **Participants:** @lukas2510, after supervisor feedback (S. del Rey)
-- **Decision:** All AutoScout24 `ES` listings are held out of training, validation, and calibration and replayed in M6 as a new market.
+- **Decision:** AutoScout24 `ES` listings are held out of training, validation, and calibration and replayed in M6 as a new market: all of them until FR-15's retrain, then those of 40 % of the `ES` sellers (EDN-102).
   The DataMarket sample of Spanish cars is dropped.
   The holdout is selected per listing, and the `split` stage reports any seller that also lists outside `ES`.
 - **Alternatives considered:**
@@ -287,6 +289,8 @@ How to add an entry:
 
 > **Revised on 2026-10-20**: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.
 
+> **Revised on 2026-11-05**: 40 % of `ES` sellers stay held out (EDN-102).
+
 - **Date:** 2026-09-22
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** ML System Design, Model Performance
@@ -294,10 +298,10 @@ How to add an entry:
 - **Decision:** When the drift job flags the `ES` replay, a team member retrains with `ES` included and opens the promotion pull request by hand.
   The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
   A required CI check fails a pull request that changes `dvc.lock` unless the committed `metrics.json` has `gate_passed: true` and names the promoted model as `deployable_variant`.
-  A criterion waived in `params.yaml` does not count; EDN-62 records the SC-04 waiver.
-  FR-15 states this; the reviewer's approval stays on top.
+  A criterion waived in `params.yaml` does not count (EDN-62).
+  FR-15 states this; a reviewer still approves.
 - **Alternatives considered:**
-  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
+  - A watcher that runs `dvc repro` and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation.
   - The gate as a manual check only: one mistaken merge deploys a rejected model.
   - A check in CD: it fails only after the merge.
 - **Rationale:** The `ES` holdout exists to show this loop closing (EDN-03).
@@ -1536,6 +1540,33 @@ How to add an entry:
   Question (translated): "EDN decision (#228): the NFR-11 test needs the real DVC data, but per EDN-91 the DagsHub credentials exist only for main, not for PR branches. Where does the test run?"
   Lukas answered: "A: as a gate in CD. The test runs in CD after the data pull and before the push. If it fails or data is missing, nothing is shipped. In PR CI it is skipped with a reason, the PR shows the local run. EDN-91 stays, but the check comes only after the merge." (translated)
 - **Other evidence:** [Issue #228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228), [Drift job](../docs/docs/monitoring.md#drift-job), EDN-14.
+- **In LaTeX:** yes
+
+### EDN-102: FR-15's retrain trains on 60 % of the `ES` sellers and holds out the rest
+
+- **Date:** 2026-11-05
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Data Management, Model Evaluation, Monitoring
+- **Participants:** Lukas Häußler (decided), AI agents (options, implementation)
+- **Decision:** `split.holdout_seller_share: 0.4`: an `ES` seller whose hash of seed, `ES`, and seller key falls below 0.4 keeps its `ES` listings in the holdout, which the replay sends; the other `ES` sellers join the pool and the split rule is unchanged.
+  Their `ES` listings also enter FR-09's comparables index.
+- **Alternatives considered:**
+  - All `ES` into training, replaying the old holdout: the replayed rows are in-sample, so any recovery is flattered.
+  - A random row split of `ES`: the same dealer lands on both sides (EDN-14).
+  - All `ES` in the pool, replaying `ES` in the test set: about 1,070 accepted requests, an empty holdout breaks `features`.
+  - A share of 0.3: too few held-out requests for two drift windows of 1,000.
+- **Rationale:** The hash split moves no non-`ES` seller when the `ES` sellers join, so the models before and after differ only by the `ES` training rows.
+  A dry run kept 2,402 listings of 804 sellers out (2,266 accepted requests), put `ES` at 3.7 % of train, and passed the gate.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI laid out the options with measured row counts and recommended 0.4; it built the rule and dry-ran the retrain.
+  The dry run showed SC-05 at 91.8 %, 0.2 points under the band's top, against 91.0 % before.
+  An independent agent review reproduced the split and the dry run; only files that record run metadata, such as timestamps, differed.
+- **AI interaction evidence:** Claude Code session of 2026-11-05.
+  Question (translated from German): "FR-15 rehearsal: How does ES get into the retraining? We need ES in training, but also ES sellers the new model has never seen, otherwise the 'recovery' is flattered. Option A: a fixed share of the ES sellers stays held out (for the replay), the rest goes normally into train/val/test."
+  Orchestrator briefing (core, paraphrased): "Plan the FR-15 rehearsal with options for getting ES into training."
+  Lukas answered: "A, share 0.4 (recommended): 40 % of the ES sellers held out: about 2,460 replay rows, ES = 3.5 % of training." (translated from German)
+- **Other evidence:** [Issue #231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231), [The split](../docs/docs/pipeline.md#the-split), EDN-03, EDN-12.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs

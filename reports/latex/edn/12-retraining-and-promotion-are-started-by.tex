@@ -3,7 +3,8 @@
 \ednentry{
   id = {EDN-12},
   title = {Retraining and promotion are started by a person, and a failing gate blocks the merge},
-  note = {\textbf{Revised on 2026-10-20}: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.},
+  note = {\textbf{Revised on 2026-10-20}: a required CI check now enforces the verdict, which skips criteria an EDN entry waived; before, only the reviewer read it.
+\textbf{Revised on 2026-11-05}: 40\,\% of \texttt{ES} sellers stay held out (EDN-102).},
   date = {2026-09-22},
   milestone = {M6: Monitoring},
   topic = {ML System Design, Model Performance},
@@ -11,11 +12,11 @@
   decision = {When the drift job flags the \texttt{ES} replay, a team member retrains with \texttt{ES} included and opens the promotion pull request by hand.
 The merge is the promotion, and redeploying the previous image tag is the rollback (EDN-08).
 A required CI check fails a pull request that changes \texttt{dvc.\allowbreak{}lock} unless the committed \texttt{metrics.\allowbreak{}json} has \texttt{gate\_\allowbreak{}passed: true} and names the promoted model as \texttt{deployable\_\allowbreak{}variant}.
-A criterion waived in \texttt{params.\allowbreak{}yaml} does not count; EDN-62 records the SC-04 waiver.
-FR-15 states this; the reviewer's approval stays on top.},
+A criterion waived in \texttt{params.\allowbreak{}yaml} does not count (EDN-62).
+FR-15 states this; a reviewer still approves.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
-\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation, with little slack if it breaks.
+\item A watcher that runs \texttt{dvc repro} and opens the pull request on confirmed drift: new infrastructure to debug just before the final presentation.
 \item The gate as a manual check only: one mistaken merge deploys a rejected model.
 \item A check in CD: it fails only after the merge.
 \end{itemize}

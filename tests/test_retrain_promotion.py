@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import mlflow
 import pytest
+from tools import retrain_promotion
 from tools.retrain_promotion import (
     ENERGY_TAG,
     MACHINE_TAG,
@@ -21,6 +22,7 @@ from tools.retrain_promotion import (
     model_version,
     outside_tolerance,
     render,
+    runner_cpu,
     tag_runs,
 )
 
@@ -47,6 +49,8 @@ def write_run(root: Path, *, mdape: float, gate_passed: bool, model_md5: str) ->
             "within_20pct": 0.90,
             "sc05_coverage": 0.91,
             "gate_passed": gate_passed,
+            "gate_blocked_by": "" if gate_passed else "sc01",
+            "gate_waived": "sc04 (EDN-62)",
         },
     }
     metrics = {
@@ -163,6 +167,57 @@ def test_a_rejected_model_is_announced_as_failing_the_gate(repo):
 
     assert "The Promotion gate check **fails**" in body
     assert "gate_passed is false" in body
+
+
+@pytest.mark.req("FR-15", "NFR-01")
+def test_the_summary_names_what_blocks_each_variant_and_what_is_waived(repo):
+    # A failed gate stops the rehearsal of #231, so the summary says which
+    # criterion did it, and which one passed only by a waiver.
+    retrain(repo, mdape=0.1500, gate_passed=False, model_md5="c" * 32)
+
+    _, body = render(base="main", reason="", run_url="https://run", runs={}, root=repo)
+
+    assert f"| `{CANDIDATE}` | fails | sc01 | sc04 (EDN-62) |" in body
+    assert "| `b0` | fails | - | - |" in body
+
+
+CPUINFO_AVX512 = (
+    "processor\t: 0\nmodel name\t: AMD EPYC 9V74 80-Core Processor\n"
+    "flags\t\t: fpu sse2 avx2 fma avx512f avx512dq avx512bw avx512_bf16\n\n"
+    "processor\t: 1\nmodel name\t: AMD EPYC 9V74 80-Core Processor\n"
+    "flags\t\t: fpu sse2 avx2 fma avx512f avx512dq avx512bw avx512_bf16\n"
+)
+CPUINFO_AVX2 = "processor\t: 0\nmodel name\t: AMD EPYC 7763\nflags\t\t: fpu sse2 avx2 fma\n"
+
+
+@pytest.mark.req("FR-15")
+@pytest.mark.parametrize(
+    ("cpuinfo", "expected"),
+    [
+        (CPUINFO_AVX512, ("avx512_bf16 avx512bw avx512dq avx512f", "this run checks")),
+        (CPUINFO_AVX2, ("none", "#259 stays unproven")),
+    ],
+)
+def test_the_summary_says_whether_the_runner_checks_the_avx512_fix(
+    repo, tmp_path_factory, monkeypatch, cpuinfo, expected
+):
+    # #259 is proven only by a run on an AVX-512 CPU, which a job cannot ask
+    # for, so the promotion pull request says which kind of runner it got.
+    retrain(repo, mdape=0.0690, gate_passed=True, model_md5="b" * 32)
+    path = tmp_path_factory.mktemp("cpu") / "cpuinfo"
+    path.write_text(cpuinfo, encoding="utf-8")
+    monkeypatch.setattr(retrain_promotion, "CPUINFO", path)
+
+    _, body = render(base="main", reason="", run_url="https://run", runs={}, root=repo)
+
+    assert "- CPU: AMD EPYC " in body
+    flags, verdict = expected
+    assert f"- AVX-512 flags: {flags}" in body
+    assert verdict in body
+
+
+def test_a_machine_without_cpuinfo_is_named_as_unknown(tmp_path):
+    assert runner_cpu(tmp_path / "missing") == ("unknown CPU", [])
 
 
 @pytest.mark.req("FR-15")

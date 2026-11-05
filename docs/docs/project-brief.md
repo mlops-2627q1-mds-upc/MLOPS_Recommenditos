@@ -79,6 +79,11 @@ Schema, scrape date and source portal stay the same, so any drift the monitoring
   The replay is the Compose service `replay` behind a profile, in the monitoring image, started by hand locally or on the VM; it shifts each `registration_date` by the whole months since 2025-11-08, so ages match training ([Replay](monitoring.md#replay)), **[decided]**, [EDN-100](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
   The same prices are the delayed labels posted to `/feedback` (see 5), **[decided]**, [EDN-13](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
 - After the drift is confirmed, we retrain with `ES` included, which closes the monitoring feedback loop.
+  `ES` is included by seller: the `ES` listings of 40 % of the `ES` sellers, chosen by a hash of the seller key (`split.holdout_seller_share`), stay in the holdout, and the other sellers' `ES` listings are split like any other, so the retrained model learns the market and is measured on `ES` dealers it never saw.
+  Adding those sellers moves no other seller between sets, so the models before and after differ only by the `ES` training rows ([The split](pipeline.md#the-split)).
+  Their `ES` listings also enter FR-09's comparables index.
+  **[decided]**, [EDN-102](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md).
+  Until that retrain is promoted, the committed `dvc.lock` and the deployed model are those of the whole-country holdout described above.
   **[decided]**, [EDN-12](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): retraining and promotion are human-triggered, not automated; see [requirements](requirements.md) FR-15.
 - **[decided]**, [EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md): `country` stays a feature, and the API accepts a country that is missing from training by treating it as unknown, with a warning in the response ([requirements](requirements.md) FR-05).
   An API test covers this case.

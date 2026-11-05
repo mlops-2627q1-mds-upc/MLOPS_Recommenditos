@@ -32,6 +32,7 @@ from recommenditos.data.build_comparables import (
     build_index,
 )
 from recommenditos.data.split_data import HOLDOUT_NAME
+from recommenditos.pipeline import write_frame
 from recommenditos.schema import PROCESSED_SCHEMA
 
 #: Columns the index must never carry besides NFR-08's: the listing identifiers
@@ -85,9 +86,10 @@ def test_the_index_holds_every_train_and_validation_listing_and_nothing_else(
 
 
 @pytest.mark.req("FR-09")
-def test_the_stage_reads_no_frame_but_train_and_validation(processed, tmp_path):
-    # Only the two source frames exist, so a read of any other would fail.
-    for name in SOURCES:
+def test_the_stage_reads_no_frame_but_train_validation_and_the_holdout(processed, tmp_path):
+    # Only these three frames exist, so a read of any other would fail; the
+    # holdout is read for its sellers and indexed not at all.
+    for name in (*SOURCES, HOLDOUT_NAME):
         shutil.copy(processed / f"{name}.parquet", tmp_path / f"{name}.parquet")
 
     build_comparables.main(tmp_path, tmp_path / INDEX_FILE, PARAMS_FILE)
@@ -96,13 +98,13 @@ def test_the_stage_reads_no_frame_but_train_and_validation(processed, tmp_path):
 
 
 @pytest.mark.req("FR-09")
-def test_dvc_yaml_gives_the_stage_train_and_validation_as_its_only_data():
+def test_dvc_yaml_gives_the_stage_train_validation_and_the_holdout_as_its_only_data():
     stage = yaml.safe_load((PROJ_ROOT / "dvc.yaml").read_text(encoding="utf-8"))["stages"][
         "comparables"
     ]
     data = [dep for dep in stage["deps"] if dep.startswith("data/")]
 
-    assert data == [f"data/processed/{name}.parquet" for name in SOURCES]
+    assert data == [f"data/processed/{name}.parquet" for name in (*SOURCES, HOLDOUT_NAME)]
     assert stage["outs"] == [f"data/processed/{INDEX_FILE}"]
 
 
@@ -110,17 +112,57 @@ def test_dvc_yaml_gives_the_stage_train_and_validation_as_its_only_data():
 @pytest.mark.parametrize("name", ["test", "calibration", HOLDOUT_NAME])
 def test_build_index_refuses_a_frame_outside_train_and_validation(processed, name):
     with pytest.raises(ValueError, match="FR-09"):
-        build_index({"train": frames(processed, "train"), name: frames(processed, name)}, "", "")
+        build_index(
+            {"train": frames(processed, "train"), name: frames(processed, name)},
+            "",
+            frames(processed, HOLDOUT_NAME),
+            "",
+            "seller_group_id",
+        )
 
 
 @pytest.mark.req("FR-09")
-def test_build_index_refuses_a_listing_of_the_holdout_country(processed, params):
-    holdout_country = params["split"]["holdout_country"]
+def test_build_index_refuses_a_holdout_country_listing_of_a_held_out_seller(processed, params):
+    holdout_country, key = params["split"]["holdout_country"], params["split"]["group_key"]
+    holdout = frames(processed, HOLDOUT_NAME)
     train = frames(processed, "train")
-    train.loc[train.index[0], "country_code"] = holdout_country
+    train.loc[train.index[0], ["country_code", key]] = [holdout_country, holdout[key].iloc[0]]
 
-    with pytest.raises(ValueError, match="EDN-03"):
-        build_index({"train": train}, params["reference_date"], holdout_country)
+    with pytest.raises(ValueError, match="EDN-102"):
+        build_index({"train": train}, params["reference_date"], holdout, holdout_country, key)
+
+
+@pytest.mark.req("FR-09")
+def test_the_stage_refuses_a_train_listing_of_a_held_out_seller_in_the_holdout_country(
+    processed, params, tmp_path
+):
+    # The stage, not only `build_index`: it has to hand the guard the holdout
+    # it read, or the guard checks against no seller at all.
+    holdout_country, key = params["split"]["holdout_country"], params["split"]["group_key"]
+    for name in (*SOURCES, HOLDOUT_NAME):
+        shutil.copy(processed / f"{name}.parquet", tmp_path / f"{name}.parquet")
+    holdout = frames(processed, HOLDOUT_NAME)
+    train = frames(processed, "train")
+    train.loc[train.index[0], ["country_code", key]] = [holdout_country, holdout[key].iloc[0]]
+    write_frame(train, tmp_path / "train.parquet", PROCESSED_SCHEMA)
+
+    with pytest.raises(ValueError, match="EDN-102"):
+        build_comparables.main(tmp_path, tmp_path / INDEX_FILE, PARAMS_FILE)
+    assert not (tmp_path / INDEX_FILE).exists()
+
+
+@pytest.mark.req("FR-09")
+def test_build_index_keeps_a_held_out_sellers_listing_in_another_country(processed, params):
+    # The holdout is `ES` listings (EDN-03): the same dealer's listing in `DE`
+    # is a training listing like any other.
+    holdout_country, key = params["split"]["holdout_country"], params["split"]["group_key"]
+    holdout = frames(processed, HOLDOUT_NAME)
+    train = frames(processed, "train")
+    train.loc[train.index[0], ["country_code", key]] = ["DE", holdout[key].iloc[0]]
+
+    index = build_index({"train": train}, params["reference_date"], holdout, holdout_country, key)
+
+    assert len(index) == int(train["make"].notna().sum())
 
 
 @pytest.mark.req("NFR-08")
@@ -170,7 +212,9 @@ def index_of(tmp_path: Path, rows: list[dict]) -> ComparablesIndex:
     defaults |= {"country_code": "DE", "price": 10_000.0, "log_price": 9.2}
     frame = PROCESSED_SCHEMA.conform(pd.DataFrame([defaults | row for row in rows]))
     path = tmp_path / INDEX_FILE
-    build_index({"train": frame}, SNAPSHOT, "ES").to_parquet(path, index=False)
+    build_index({"train": frame}, SNAPSHOT, frame.iloc[:0], "ES", "seller_group_id").to_parquet(
+        path, index=False
+    )
     return ComparablesIndex.load(path)
 
 

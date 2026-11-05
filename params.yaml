@@ -74,9 +74,18 @@ preprocess:
     - seller_company_name
 
 split:
-  # Held out whole as the new-market drift scenario for M6 (EDN-03). No row of
-  # this country may reach training, validation, calibration or test.
+  # The new-market drift scenario for M6 (EDN-03): the listings of this country
+  # that `split` holds out, none of which may reach training, validation,
+  # calibration or test.
   holdout_country: ES
+  # The share of that country's sellers whose listings are held out, chosen by a
+  # hash of `seed`, the country and the seller key (EDN-102). The other sellers
+  # of the country are split like any other, so FR-15's retrain learns the
+  # market and is measured on its dealers it never saw. 1 holds out the whole
+  # country, the rule until FR-15. At 0.4 on the real snapshot 2,402 of the
+  # 6,079 `ES` listings stay out (2,266 accepted requests, enough for two drift
+  # windows of 1,000), and `ES` is 3.7 % of train.
+  holdout_seller_share: 0.4
   # A make enters the supported list at this many listings, counted after the
   # holdout is removed and before the split (EDN-05). The list is computed and
   # written as an artefact, never hard-coded: the API reads it from the model

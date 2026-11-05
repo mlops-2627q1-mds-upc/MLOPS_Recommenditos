@@ -285,8 +285,17 @@ VARIANTS = tuple(train_variants())
 
 @pytest.fixture(scope="session")
 def matrices(tmp_path_factory, _generated_frame: pd.DataFrame) -> dict:
-    """The feature matrices and the make list, built from the synthetic fixture."""
-    return build_matrices(tmp_path_factory.mktemp("model"), _generated_frame)
+    """The feature matrices and the make list, built from the synthetic fixture.
+
+    Built with the whole of `ES` held out (`split.holdout_seller_share: 1`), so
+    the models trained on them have a market they never saw, which FR-05's
+    tests of the API need: a model of the project's share trains on every one
+    of the 8 countries (EDN-102). `tests/test_pipeline.py` runs the share
+    params.yaml sets.
+    """
+    root = tmp_path_factory.mktemp("model")
+    whole_country = params_override(root, project_params(), split={"holdout_seller_share": 1.0})
+    return build_matrices(root, _generated_frame, whole_country)
 
 
 @pytest.fixture(scope="session")

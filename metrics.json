@@ -2,53 +2,53 @@
   "gate_passed": true,
   "n_variants": 4,
   "n_variants_passing": 1,
-  "n_variants_passing_measurable": 1,
+  "n_variants_passing_measurable": 2,
   "criteria_not_measured": "sc05",
   "waived_criteria": "sc04 (EDN-62)",
   "data_source": "zenodo",
   "deployable_variant": "lgbm-basic",
   "best_variant": "lgbm-extended",
-  "best_mdape": 0.06255536280848185,
+  "best_mdape": 0.06326559875061935,
   "variants": {
     "b0": {
       "estimator": "median_baseline",
-      "mdape": 0.12162162162162182,
-      "within_20pct": 0.705161454360539,
+      "mdape": 0.12193063473632494,
+      "within_20pct": 0.7035245335176227,
       "sc05_coverage": null,
       "sc05_passed": null,
       "gate_passed": false,
       "gate_blocked_by": "sc01,sc02,sc03 failed; sc05 unmeasured",
-      "gate_waived": "sc04 failed at 0.3075 (EDN-62)"
+      "gate_waived": "sc04 failed at 0.3199 (EDN-62)"
     },
     "b1": {
       "estimator": "ridge",
-      "mdape": 0.09535269376223011,
-      "within_20pct": 0.8028985507246377,
+      "mdape": 0.09532653074582875,
+      "within_20pct": 0.8021522361536183,
       "sc05_coverage": null,
       "sc05_passed": null,
       "gate_passed": false,
       "gate_blocked_by": "sc01,sc02,sc03 failed; sc05 unmeasured",
-      "gate_waived": "sc04 failed at 0.2952 (EDN-62)"
+      "gate_waived": "sc04 failed at 0.2901 (EDN-62)"
     },
     "lgbm-basic": {
       "estimator": "lightgbm",
-      "mdape": 0.06733805931326535,
-      "within_20pct": 0.8999237223493516,
-      "sc05_coverage": 0.9101449275362319,
+      "mdape": 0.06800423081434065,
+      "within_20pct": 0.897423240201402,
+      "sc05_coverage": 0.9179583374469346,
       "sc05_passed": true,
       "gate_passed": true,
       "gate_blocked_by": "",
-      "gate_waived": "sc04 failed at 0.1680 (EDN-62)"
+      "gate_waived": "sc04 failed at 0.1764 (EDN-62)"
     },
     "lgbm-extended": {
       "estimator": "lightgbm",
-      "mdape": 0.06255536280848185,
-      "within_20pct": 0.9040427154843631,
+      "mdape": 0.06326559875061935,
+      "within_20pct": 0.9044328166650212,
       "sc05_coverage": null,
       "sc05_passed": null,
       "gate_passed": false,
-      "gate_blocked_by": "sc06 failed; sc05 unmeasured",
-      "gate_waived": "sc04 failed at 0.1845 (EDN-62)"
+      "gate_blocked_by": "sc05 unmeasured",
+      "gate_waived": "sc04 failed at 0.1709 (EDN-62)"
     }
   }
 }
