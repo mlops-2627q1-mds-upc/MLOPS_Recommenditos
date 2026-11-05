@@ -17,6 +17,7 @@
 We watch the running system from two places (EDN-99, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224}{\#224}).
 Inside the Compose stack on the VM, Prometheus scrapes the API's own metrics, cAdvisor for each container's memory, CPU, and restarts, and node-exporter for the host's memory and disk, every 15 seconds; it keeps at most 2\,GB or 60 days, so that its storage cannot fill the disk (NFR-04).
 From outside, Better Stack requests the public \texttt{/health} every 3 minutes, because a monitor on the VM cannot report the VM itself being gone (EDN-10, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226}{\#226}).
+From 2026-11-04 to 2026-11-05 it recorded 100\,\% availability and no incident (\texttt{reports/\allowbreak uptime/\allowbreak availability.json}); checks 3 minutes apart do not see the 5 seconds of 503 that a deploy causes (\cref{sec:m6-feedback}).
 Grafana shows the figures on a provisioned dashboard, each against the limit a requirement sets, and is reachable only through an SSH tunnel, so that nothing new is public (EDN-99, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225}{\#225}).
 
 \Cref{tab:m6-risks} lists the failures we expect on one VM with one vCPU, 4\,GB of memory, and no swap, and what reports each.
@@ -125,4 +126,100 @@ Real users would send prices late or never; the job recounts a window for 7 days
   Explain how the pipeline can be used to automate the retraining process.
 }
 
-\tbd{end-to-end pipeline and automated retraining}
+\Cref{fig:m6-loop} shows the stages from a served price back to a new model on the VM, and what starts each one.
+Serving, monitoring, retraining, the checks, and the release run by themselves.
+A person decides three things: whether a finding calls for retraining, whether the retrained model is promoted, and whether a release is rolled back (FR-15, EDN-12).
+A watcher that retrains and opens the promotion on its own was rejected in EDN-12, as new infrastructure to debug just before the final presentation; a person reacting to the alert closes the loop too.
+
+% A diagram of the loop, drawn here in TikZ with the colours of recommenditos/plots.py.
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}[
+      font=\sffamily\scriptsize,
+      node distance=11mm and 9mm,
+      stage/.style={draw=figmuted, line width=0.5pt, rounded corners=2pt, align=left,
+        text width=30.5mm, minimum height=15mm, inner sep=3pt, text=figink,
+        execute at begin node={\hyphenpenalty=10000}},
+      person/.style={stage, draw=figaccent, line width=1.6pt},
+      flow/.style={-{Stealth[length=2mm]}, line width=0.6pt, draw=figinksecondary},
+      trigger/.style={font=\sffamily\scriptsize\itshape, text=figinksecondary, align=center, inner sep=1pt},
+    ]
+    \node[stage] (serve) {\textbf{Serve}\\the API logs each request and its observed price (FR-10, FR-13)};
+    \node[stage, right=of serve] (monitor) {\textbf{Monitor}\\every 15 minutes: drift, MdAPE, and coverage per 1,000 requests};
+    \node[stage, right=of monitor] (alert) {\textbf{Alert}\\Alertmanager posts the finding and its runbook step to Discord};
+    \node[person, right=of alert] (decide) {\textbf{Decide to retrain}\\start the Retrain workflow, with the finding as its reason};
+    \node[stage, below=of decide] (retrain) {\textbf{Retrain}\\\texttt{dvc repro} on a GitHub runner: models, gate verdict, branch};
+    \node[person, below=of alert] (promote) {\textbf{Promote}\\open the pull request, review, merge; a failed gate cannot merge};
+    \node[stage, below=of monitor] (release) {\textbf{Release}\\CI, then CD with the NFR-11 test, then Deploy with the smoke check};
+    \node[person, below=of serve] (rollback) {\textbf{Roll back}\\redeploy the previous release tag};
+    \draw[flow] (serve) -- node[trigger, above] {log} (monitor);
+    \draw[flow] (monitor) -- node[trigger, above] {flagged} (alert);
+    \draw[flow] (alert) -- node[trigger, above] {alert} (decide);
+    \draw[flow] (decide) -- node[trigger, right] {dispatch} (retrain);
+    \draw[flow] (retrain) -- node[trigger, above] {PR link} (promote);
+    \draw[flow] (promote) -- node[trigger, above] {merge} (release);
+    \draw[flow] (release.north) -- ++(0,4mm) -| node[trigger, above, pos=0.25] {new model} (serve.south);
+    \draw[flow] (rollback) -- node[trigger, below] {tag} (release);
+  \end{tikzpicture}
+  \caption{The feedback loop, from a served price to a new model, and what starts each step. A heavy orange border marks a step a person decides (EDN-12); the others run by themselves. Retrain runs the DVC pipeline of \cref{fig:pipeline}, whose \texttt{monitoring\_samples} stage also draws the new drift reference, so a release brings the new model, its reference, and its test values to the monitor together.}
+  \label{fig:m6-loop}
+\end{figure}
+
+\paragraph{The stages.}
+The API and the monitoring of \cref{sec:m6-resources,sec:m6-model-performance} end in an alert whose runbook step names the Retrain workflow.
+The workflow runs only from \texttt{main} and only when started, with the finding as its \texttt{reason} (EDN-92).
+On a GitHub-hosted runner it runs \texttt{dvc repro}, logs the runs to MLflow on DagsHub, pushes the artefacts to the DVC remote and the new \texttt{dvc.lock} to a branch, and its summary gives the gate verdict and a link that opens the prefilled promotion pull request.
+Opening that pull request is the approval step.
+A required check blocks the merge unless the committed \texttt{metrics.json} says the gate passed for the model \texttt{params.yaml} promotes, so a reviewer cannot merge a rejected model by mistake; the merge is the promotion.
+The merge to \texttt{main} starts CI, then CD, which bakes the model into the image (EDN-08) and runs NFR-11's test on the new monitoring samples before it pushes, then Deploy, whose smoke check holds \texttt{/health} to the model version that \texttt{dvc.lock} records and puts the previous release back when it fails.
+A rollback is the same Deploy workflow started with the previous release tag.
+
+\paragraph{The rehearsal.}
+On 2026-11-05 the chain ran once end to end on the VM (\cref{tab:m6-rehearsal}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231}{\#231}; record in \texttt{reports/monitoring/fr15-rehearsal.md}).
+Before and after the promotion, the replay sent the same 2,000 \texttt{ES} listings, from the 40\,\% of \texttt{ES} sellers that the new split keeps out of training, so neither model had seen them (EDN-102); the silence of \cref{sec:m6-model-performance} was lifted before the first run.
+The retrain took 8.5 minutes, and the release 24 minutes from the merge to the first answer of the new model; the rest of the 3 hours 47 minutes from the finding to the new model went to the two decisions and the review of the promotion.
+
+\begin{table}[ht]
+  \centering\small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{1.9cm}X@{}}
+    \toprule
+    Step & UTC & Result \\
+    \midrule
+    Finding & 12:10 & \texttt{ES} windows 13 and 14 flagged in 14 and 15 of the 23 features, MdAPE 9.09 and 9.16\,\%; \texttt{DriftDetected}, \texttt{ModelErrorHigh}, and \texttt{ModelCoverageLow} posted to Discord. \\
+    Retrain & 12:34 to 12:42 & Started by a person, every stage forced (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42028216667}{run 42028216667}), on the split that trains on 60\,\% of the \texttt{ES} sellers (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/300}{\#300}). The gate passed for \texttt{lgbm-basic}: MdAPE 6.80\,\%, SC-05 coverage 91.8\,\%, in its band of 88 to 92\,\%. The booster equals the one of a dry run on a laptop with another CPU. \\
+    Promotion & 14:29 to 15:33 & Pull request \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/303}{\#303}, opened and merged by a person after an independent agent review; the gate check passed. \\
+    Release & 15:33 to 15:58 & CI, CD, and Deploy passed, with NFR-11's test on the new samples and the smoke check; \texttt{/health} named model \texttt{2a60912b} from 15:57. \\
+    Replay & 16:00 to 16:13 & The same 2,000 \texttt{ES} listings: MdAPE 7.49 and 7.82\,\% in windows 17 and 18, both still flagged for drift. \\
+    Rollback drill & 16:33 to 16:36 & Deploy to the previous release and back to the promoted one: 5.0\,s of 503 from nginx each time, at one request a second, and the smoke check verified the served model version. \\
+    \bottomrule
+  \end{tabularx}
+  \caption{The FR-15 rehearsal on the VM on 2026-11-05, with its raw evidence in \texttt{reports/\allowbreak monitoring/\allowbreak fr15/}.}
+  \label{tab:m6-rehearsal}
+\end{table}
+
+\paragraph{The recovery criterion.}
+We posted the criterion on \#231 before any run and report against it unchanged (\cref{tab:m6-recovery}).
+Points 1 and 3 pool the two \texttt{ES} windows with the drift job's own formulas; point 2 is the paired comparison of both models on all 2,266 held-out \texttt{ES} requests, from the dry run of \#300, which applies to the promoted model because its booster and interval files are the same files.
+
+\begin{table}[ht]
+  \centering\small
+  \begin{tabularx}{\textwidth}{@{}Xrrl@{}}
+    \toprule
+    Point & Before & After & Holds \\
+    \midrule
+    1. The MdAPE over the two \texttt{ES} windows is lower & 9.13\,\% & 7.68\,\% & yes \\
+    2. Offline, the 95\,\% seller-bootstrap interval of the MdAPE difference excludes 0 & 9.16\,\% & 7.70\,\%, $-1.46$ [$-1.92$, $-1.03$]\,pp & yes \\
+    3a. Coverage of the 90\,\% range moves toward 90\,\% & 84.3\,\% & 88.5\,\% & yes \\
+    3b. \texttt{ModelErrorHigh} and \texttt{ModelCoverageLow} do not fire & fired & both on window 18 & no \\
+    \bottomrule
+  \end{tabularx}
+  \caption{The pre-registered recovery criterion of the rehearsal; recovery holds when all three points hold. Points 1 and 3 from \texttt{reports/monitoring/fr15/pooled-es-windows.json}, point 2 from \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/300}{\#300}.}
+  \label{tab:m6-recovery}
+\end{table}
+
+The recovery criterion is not met in full: points 1 and 2 hold, and point 3 holds for coverage, but \texttt{ModelErrorHigh} and \texttt{ModelCoverageLow} still fire on one of the two \texttt{ES} windows.
+Window 18's MdAPE of 7.82\,\% is 1.149 times the test MdAPE, above the ceiling of 1.111 at 1,000 labels, and its coverage of 86.40\,\% is below the floor of 86.44\,\%; window 17, at 7.49\,\% and 90.6\,\%, fires neither.
+The cause is the baseline: the ceiling is relative to the overall test MdAPE of 6.80\,\%, while \texttt{ES} on the test set itself is at 7.61\,\%, 1.12 times that, so an \texttt{ES} window at the model's own \texttt{ES} error sits at the ceiling.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306}{\#306} follows this up by judging a window against its market's baseline.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307}{\#307} fixes a second weakness the rehearsal showed: a window that is not final is scored again on every pass against the test values of the running release, so after the promotion the windows of the old model read against 6.80\,\% instead of the 6.73\,\% they were judged on.
+Drift stays flagged after the promotion, as the criterion expected: the \texttt{ES} inputs still differ from a reference that is 3.8\,\% \texttt{ES}, and the job tests inputs, not error.

@@ -30,6 +30,7 @@ The CD gate keeps EDN-91 at the cost of checking after the merge.},
 The review of PR \#283 added the age as-of rule; a measured pass peaked at 197 MiB.},
   aievidence = {Claude Code session of 2026-11-04.
 Question (translated from German): ``How is the drift job (Alibi Detect, needs up to about 400 MiB per run) started regularly on the VM?''
+Orchestrator briefing (core, paraphrased): ``Implement \#228: the Alibi Detect drift job in its own scheduled container, verifying NFR-11.''
 Lukas answered: ``Loop container. A tiny shell loop starts a Python run every 15 minutes, which then ends (about 2 MiB between runs). It comes and goes with every release (\#279) and survives restarts. Cost: \#228's criterion `not kept running' becomes `no permanently running Python process'.'' (translated)
 Package question: ``Adopt the remaining architecture recommendations as a package?'', listing ``Alibi Detect: own uv project'', ``Results: own SQLite file monitor.db; to Grafana through the node-exporter textfile'', ``Windows: 1,000 consecutive requests; a model change closes the window'' (translated); Lukas answered: ``Adopt all'' (translated).
 Question (translated): ``EDN decision (\#228): the NFR-11 test needs the real DVC data, but per EDN-91 the DagsHub credentials exist only for main, not for PR branches. Where does the test run?''

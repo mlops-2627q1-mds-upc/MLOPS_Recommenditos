@@ -9,8 +9,9 @@
   topic = {Data Versioning, Privacy},
   participants = {@lukas2510; confirmed by the full team at the laboratory session of 2026-10-13},
   decision = {The DagsHub repository that serves as DVC remote and MLflow server stays public.
+Any signed-in DagsHub account can read the DVC remote, an anonymous request cannot, and since 2026-11-04 DagsHub sends anonymous web visitors to its login page.
 The raw Parquet of the \texttt{download} stage keeps the seven personal-data columns of the published file and is pushed like any stage output; preprocessing removes them.
-\texttt{seller\_\allowbreak{}group\_\allowbreak{}id} is an unsalted hash that groups the split and anonymises nothing, as the dataset card says.},
+\texttt{seller\_\allowbreak{}group\_\allowbreak{}id} is an unsalted hash that groups the split and anonymises nothing.},
   rationale = {\emph{Alternatives considered:}
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item A private repository: every grader and supervisor needs a collaborator entry, and the identical file stays public on Zenodo.
