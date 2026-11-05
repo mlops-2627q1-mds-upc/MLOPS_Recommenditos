@@ -7,6 +7,7 @@ Prometheus, inside the stack, keeps the figures of the API and of the machine it
 The [drift job](#drift-job) compares what the API is asked with what the model was trained on.
 With no real users, its traffic is the [replay](#replay) of held-out listings.
 [Grafana](#grafana) shows Prometheus' figures against the limits the requirements set, and [alerts](#alerts) post to the team's Discord before a limit is reached, each with what to do ([#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)).
+Its second dashboard, [Model performance](#model-performance), shows the drift job's findings over time, and the [model alerts](#model-alerts) post them, each a reason to start the retraining of FR-15 ([#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230)).
 
 ## Resource monitoring
 
@@ -123,7 +124,8 @@ Each also restarts on its own after a crash and after a reboot (`restart: unless
 
 ## Grafana
 
-Grafana runs in the stack and shows one provisioned dashboard, **Service health**, which is also its home page: the figures of [Resource monitoring](#resource-monitoring) against the limits the requirements set ([EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)).
+Grafana runs in the stack and shows two provisioned dashboards, linked to each other at the top right: **Service health**, which is also its home page, and [Model performance](#model-performance).
+Service health shows the figures of [Resource monitoring](#resource-monitoring) against the limits the requirements set ([EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225)).
 
 | Panel | Against | Alert |
 |-------|---------|-------|
@@ -140,15 +142,14 @@ Grafana runs in the stack and shows one provisioned dashboard, **Service health*
 | Host memory available | 512 MiB | [HostMemoryLow](#hostmemorylow) |
 | Disk free | NFR-04: 4 GB | [DiskFreeLow](#diskfreelow) |
 | Container restarts in the last 30 minutes | 3 | [ContainerRestarting](#containerrestarting) |
-| Predicted prices, prediction warnings by field | FR-11, FR-05 | drift and error follow in [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230) |
 
 Every target and limit is drawn in red, as a threshold line or, for the API's memory limit and the host's memory and disk floors, as a dashed series, so that none is mistaken for data.
 The uptime panel is the share of Prometheus' scrapes of the API that succeeded in the dashboard's time range, seen from inside the stack.
 It cannot see the VM or its network being gone; the uptime NFR-05 reports is Better Stack's, from outside ([External uptime check](deployment.md#external-uptime-check), EDN-10).
 
-![The Service health dashboard on a laptop's stack under a light load](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-service-health-local.png)
+![The Service health dashboard on a laptop's stack under the replay](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-service-health-local.png)
 
-The screenshot is a local stand-in, taken on a laptop's stack under 5 requests per second for two and a half minutes; the one for the report is taken on the VM under NFR-03's load test.
+The screenshot is a local stand-in, taken on a laptop's stack during the replay of [A local stand-in](#a-local-stand-in), whose three model alerts the Firing alerts stat counts; the one for the report is taken on the VM under NFR-03's load test.
 
 ### Provisioned, not clicked
 
@@ -158,13 +159,14 @@ Everything Grafana shows comes from `deploy/grafana/`, which travels with every 
 |------|--------------------|
 | `provisioning/datasources/prometheus.yml` | The data source `Prometheus`, uid `prometheus`, at `http://prometheus:9090`, not editable |
 | `provisioning/dashboards/dashboards.yml` | The dashboards in `dashboards/`, which the UI can neither save over (`allowUiUpdates: false`) nor delete |
-| `dashboards/service-health.json` | The dashboard, uid `service-health` |
+| `dashboards/service-health.json` | The dashboard Service health, uid `service-health` |
+| `dashboards/model-performance.json` | The dashboard [Model performance](#model-performance), uid `model-performance` |
 
 A change to a panel is a change to the JSON file, reviewed in a pull request: change it in a local Grafana, copy the JSON (**Export**, **Export as JSON**), and remove the ids Grafana adds, the dashboard's `id`, `version` and `iteration`.
 `tests/test_monitoring_config.py` fails on such ids, on repeated panel ids and on a panel that queries another data source, and checks that every alert links a panel that exists.
 Panel ids stay what they are, since the alerts link panels by id.
 Grafana reads the folder again every minute, so a new release's dashboard shows without a restart.
-The integration suite checks that a fresh stack has the data source, reaches Prometheus through it, and shows the dashboard to an anonymous visitor (`tests/integration/test_deployed_grafana.py`).
+The integration suite checks that a fresh stack has the data source, reaches Prometheus through it, shows every dashboard with all its panels to an anonymous visitor, and that Prometheus accepts the query of every panel (`tests/integration/test_deployed_grafana.py`).
 
 ### Open it
 
@@ -186,6 +188,44 @@ The rejected alternatives, Grafana read-only behind nginx's public port and scre
 Grafana runs with the shared hardening (read-only root, no capability, `no-new-privileges`, its own user 472), with its database in the volume and a tmpfs on `/tmp`.
 It sends nothing out: usage reports, update checks, the news feed, avatars and plugin downloads at start-up are off, and so is its own alerting, since the alerts are Prometheus' ([Alerts](#alerts)).
 The data sources the image bundles besides Prometheus are turned off: each would run as a process of its own, and together they exhausted the container's 128 processes.
+
+## Model performance
+
+The dashboard **Model performance** (uid `model-performance`) shows what the [drift job](#drift-job) found in the latest window of 1,000 requests it tested: whether the inputs drifted, how large the real error is, and whether the price ranges hold their confidence level (FR-14, NFR-11, [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230)).
+The job writes its results into node-exporter's [textfile collector](#the-textfile-collector) after every pass, every 15 minutes, and Prometheus keeps them over time ([EDN-101](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+
+| Panel | What it shows | Alert |
+|-------|---------------|-------|
+| Input drift, Drifted features | Whether any of the 23 features is below p 0.005 / 23, and how many are | [DriftDetected](#driftdetected) |
+| Real MdAPE | The window's MdAPE over its labelled answers, the alert's ceiling and the test MdAPE | [ModelErrorHigh](#modelerrorhigh) |
+| Range coverage | The share of the window's labelled ranges that hold the observed price, the alert's floor and the nominal level | [ModelCoverageLow](#modelcoveragelow) |
+| ES share | The window's share of `ES` listings, the market the model was not trained on | - |
+| Labelled answers and ranges | The window's answers and ranges with an observed price, red below the 200 and 300 a figure needs | - |
+| Window | Its number in `monitor.db` and when its last request was answered | - |
+| Last successful pass | How long ago a pass of the job last succeeded, red after 45 minutes | [MonitorStale](#monitorstale) |
+| Window being filled | The requests of the open window, of 1,000 | - |
+| Drifted features and ES share, Real MdAPE against the test MdAPE, Range coverage against the nominal level | The same figures over time, with the alert thresholds as dashed red lines | as above |
+| p-value of each feature | The latest window's p-value per feature and test, sorted, red below 0.005 / 23 | [DriftDetected](#driftdetected) |
+| Labelled answers and ranges over time | The counts against the 200 and 300 a figure needs; they grow while labels arrive | - |
+| Predicted prices of `/v1/predict`, Prediction warnings by field | The live model outputs (FR-11, FR-05), moved here from Service health | - |
+
+How to read it:
+
+- **A step is a newly tested window.** The series hold the latest tested window's values until the next pass tests a newer one, so they change in steps, at most every 15 minutes.
+  When the traffic changes from normal listings to `ES`, the pass that tests the first `ES` window moves all three at once: the drifted features from 0 to 14, the MdAPE from about 5.3 % to 9.4 %, and the coverage from about 95 % to 86 % ([the screenshot](#a-local-stand-in) below).
+- **No value is not a good value.** A figure with fewer labelled answers than it needs is left out, so its stat shows "no value" and its line has a gap; the labelled counts say why.
+- **The window figures are compared with the test set, not with the replay's control traffic.** The control listings are training listings, so their error is lower and their coverage higher than the test values ([The baseline](#the-baseline)).
+- **Between passes**, the predicted-price percentiles and the warnings per field move with every request, so a shift of the inputs shows there before the next window is tested.
+
+Prometheus holds the latest window only: a pass that tests several windows, as after a replay, shows only the last of them, and Prometheus forgets everything after its 60 days of [retention](#retention).
+A table of every window for the report comes from `report --all`, or `report --all --json` for every field, which read `monitor.db` ([How to read a finding](#how-to-read-a-finding)).
+
+### A local stand-in
+
+![The Model performance dashboard on a laptop's stack: control traffic, then the ES holdout](https://raw.githubusercontent.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/main/reports/figures/grafana-model-performance-local.png)
+
+The screenshot is a local stand-in, taken on a laptop's stack on 2026-11-04 with the replay: 2,000 control listings and a pass, five minutes later 1,500 `ES` listings and a pass, at 15 to 19 listings a second.
+DriftDetected, ModelErrorHigh, and ModelCoverageLow were firing and had reached Alertmanager when the screenshot was taken, four minutes after the pass; the screenshot for the report is taken on the VM.
 
 ## Alerts
 
@@ -227,6 +267,58 @@ The rules have unit tests, `deploy/prometheus/tests/service-health.test.yml`: fo
 `make prometheus-check` runs them with `promtool test rules`, after `promtool check config`, and checks Alertmanager's configuration with `amtool check-config`; CI's integration job runs it before it starts the stack.
 The integration suite checks that Prometheus has loaded every rule and found Alertmanager, and that Alertmanager runs the Discord receiver.
 
+### Model alerts
+
+`deploy/prometheus/rules/model-performance.yml` alerts on the [drift job](#drift-job)'s findings, which it writes after every pass for the latest tested window ([Model performance](#model-performance)).
+Each says what to do: look at the drifted features, check that the data and the observed prices are real, and start the Retrain workflow of FR-15, which a person starts ([Retraining on GitHub Actions](pipeline.md#retraining-on-github-actions)), with the finding of `report` as its reason.
+
+| Alert | Fires when | For | Severity |
+|-------|------------|-----|----------|
+| [DriftDetected](#driftdetected) | a feature of the latest tested window is below p 0.005 / 23 (NFR-11) | at once | warning |
+| [ModelErrorHigh](#modelerrorhigh) | the window's MdAPE is above 1 + 3.52 / sqrt(n) times the test MdAPE, n its labelled answers, at least 200 | at once | critical |
+| [ModelCoverageLow](#modelcoveragelow) | the window's coverage is below the nominal level by more than 2.576 binomial standard errors and 0.5 / n, n its labelled ranges, at least 300 | at once | critical |
+| [MonitorStale](#monitorstale) | no pass of the job has succeeded for 45 minutes, or none has written its figures | 5 minutes, within the 45 | warning |
+
+The rules file records the ceiling and the floor at the window's count, `recommenditos_performance:mdape_ceiling_multiple` and `recommenditos_performance:coverage_floor`, and the alerts and the panels of [Model performance](#model-performance) read those series, so a threshold has one source; `tests/test_monitoring_config.py` fails when a panel copies a constant of the rules instead.
+The figures change only when a pass tests a newer window, so the first three need no `for`: a finding fires at the scrape after the pass that made it and resolves when a newer window no longer shows it.
+MonitorStale is held back while node-exporter, which serves the job's figures, cannot be scraped (TargetDown), since that alone empties the series.
+None of the other three makes another redundant: the drift alert names the features, the error and coverage alerts say that users get worse prices and ranges, and a drift without them is a change the model copes with.
+
+#### Why these model thresholds
+
+A window is a sample of about 1,000 requests, so even a window of exactly the test distribution has an MdAPE above the test value half of the time.
+The error and coverage thresholds are therefore one-sided tests at 0.005 per window, the false-alarm level NFR-11 sets for drift ([EDN-14](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)), measured in `reports/analysis/model_alert_thresholds.py`:
+
+- **Coverage.** If a window's ranges hold the nominal level p (0.9), the share of its n labelled ranges that hold the price has the binomial standard error sqrt(p (1 - p) / n): 1.73 points at 300 ranges, 1.34 at 500 and 0.95 at 1,000.
+  The alert fires below p less 2.576 of them and less the continuity correction 0.5 / n, so below 85.4 % at 300 ranges, 86.4 % at 500 and 87.5 % at 1,000.
+  Its false-alarm rate is about 0.005 per window (exact binomial at p = 0.9: 0.0043 to 0.0069 for 300 to 1,000 ranges, mean 0.0054, which a share of whole ranges cannot make exact; 0.0053 to 0.0089 without the correction).
+  Drawing windows from the test set's range outcomes puts their 0.5th percentile 0.1 to 0.4 points above these floors, because the test coverage of 90.2 % is 0.2 points above the nominal level.
+  The rule takes n from the window itself, so the level holds at any count; a fixed margin taken at the minimum of 300 would hold it only at 300 and miss a loss of 4 points at 500.
+  It compares with the nominal level, the promise the ranges make to users, not with the test coverage.
+- **MdAPE.** The spread of a median has no closed form, so it comes from drawing 20,000 windows of n labelled answers from the test set's 19,665 errors of `lgbm-basic`, for n from 200, the fewest the job reports an MdAPE for, to 1,000.
+  Their 99.5th percentile falls with n like 1 + c / sqrt(n); the alert takes c = 3.52, the smallest constant at or above the percentile at every n measured, so its ceiling is 1.25 times the test MdAPE at 200 labelled answers, 1.20 at 300, 1.16 at 500 and 1.11 at 1,000.
+  The ceiling is 0.0001 above the percentile at 200 and at most 0.011 above it elsewhere, so the false-alarm rate is 0.0031 to 0.0050 per window; the least-squares constant, 3.41, would reach 0.006.
+  It compares with `test_mdape`, which a retrained model brings with it, and the constant is checked again with the script when the model's errors change shape.
+- **Labels.** Both alerts require `labels_sufficient`, so a window with too few labels cannot fire.
+  Labels can arrive for 7 days after a window closed and every pass recomputes the figures, so a window is tested several times while its count grows; each look has the level 0.005, the window as a whole somewhat more.
+- **Drift** is NFR-11's own test, the Bonferroni threshold over 23 features; its level flags at most 1 in 200 windows of the training distribution, so one flagged window between quiet ones is a false alarm until the next window or the error and coverage alerts confirm it.
+- **All three together.** Under an unchanged distribution a window raises at least one of DriftDetected, ModelErrorHigh and ModelCoverageLow with a probability of at most 1.7 % (0.005 + 0.005 + 0.0069).
+  A pass tests at most one new window, every 15 minutes, so the job makes at most 96 checks a day, and a window that stays the latest is not tested again unless labels arrive; outside a replay, the VM fills windows far more slowly than that, so false alerts are expected rarely, near zero.
+  A finding stays firing until a newer window is tested ([Silencing a known finding](#silencing-a-known-finding)).
+- **Staleness:** the job runs every 15 minutes, so 45 minutes without a pass that succeeded are three missed passes; 40 minutes held for 5 make those 45, and the 5 minutes keep a fresh stack quiet until its first pass has written the series.
+
+On the windows the laptop replay measured on 2026-11-04 ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)), all three findings fire for the `ES` window and none for the control windows:
+
+| Window | Drift | MdAPE | Coverage | DriftDetected | ModelErrorHigh | ModelCoverageLow |
+|--------|-------|-------|----------|---------------|----------------|------------------|
+| 1, control | none | 5.38 %, 0.80 x test | 96.8 % of 500 | quiet | quiet | quiet |
+| 2, control | none | 5.28 %, 0.78 x test | 95.4 % of 500 | quiet | quiet | quiet |
+| 3, `ES` | 14 features | 9.41 % of 1,000, 1.40 x test, ceiling 1.11 x | 85.8 % of 500, floor 86.4 % | fires | fires | fires |
+
+`reports/analysis/model_alert_thresholds.py` applies the thresholds to these windows, and the rule tests use their values.
+The coverage of the `ES` window is 0.6 points below its floor, so an `ES` window with fewer labelled ranges may not fire it (at 300 ranges the floor is 85.4 %); the drift alert covers that case.
+The rules' tests replay these values, `deploy/prometheus/tests/model-performance.test.yml`, together with the edges of each threshold.
+
 ### The Discord webhook
 
 The webhook URL is a secret, since whoever has it can post to the channel: it is `DISCORD_WEBHOOK_URL` in the stack's `.env` ([`.env.template`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/deploy/.env.template)), and compose.yaml has no default for it, so a stack without it does not start rather than drop every alert.
@@ -242,7 +334,7 @@ The receiver was tested on 2026-11-04: a local Alertmanager posted the test aler
 - **The VM or its network down.** The same: Better Stack's check from outside sends its own email.
 - **Slowness on a quiet API.** The latency alerts need 20 answers a minute, so outside the replay and the load tests a slow API stays unnoticed; ServerErrors covers only its errors.
 - **Fewer than five server errors in 15 minutes**, and errors that nginx answers itself (a 502 or 503 when the API does not answer in time): the API's metrics count only the answers it gives, and ApiDown and Better Stack cover an API that gives none.
-- **Drift, error and coverage** of the model follow in [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230), as more rule files in `deploy/prometheus/rules/` and more panels.
+- **The model's drift, error and coverage** have their own alerts and limits ([Model alerts](#model-alerts)).
 
 ### Runbook
 
@@ -319,6 +411,61 @@ Prometheus could not scrape a monitoring target for five minutes, so its panels 
 
 1. `docker ps -a` and `docker logs --tail 100 recommenditos-<service>-1` for the target's service (cAdvisor, node-exporter, Alertmanager, Grafana, Prometheus itself).
 2. Each restarts on its own after a crash, so one that stays down needs its log read; a configuration it refuses fails `make prometheus-check` in CI first.
+
+#### DriftDetected
+
+A feature of the latest tested window is below p 0.005 / 23: its requests are unlikely to come from the training distribution (NFR-11).
+
+1. The p-value table of [Model performance](#model-performance) names the drifted features; `report` in the monitor container prints the finding ([How to read a finding](#how-to-read-a-finding)).
+2. `country_code` alone is a new market mix; several features besides it are a population the model has not seen.
+3. Check that the data are real: a client's bug, a replay or a load test sends unusual inputs too (the `client` column of the log says who sent them).
+4. A single flag between quiet windows can be a false alarm (the test's level allows 1 in 200 windows of the training distribution); wait for the next window unless the error or coverage alert fires as well.
+5. If the drift lasts, or the error or the coverage suffers, start the Retrain workflow ([Retraining on GitHub Actions](pipeline.md#retraining-on-github-actions)) with the finding as its `reason` (FR-15).
+
+#### ModelErrorHigh
+
+The real MdAPE of the latest tested window, over at least 200 answers with an observed price, is above its ceiling, 1 + 3.52 / sqrt(n) times the test MdAPE for n labelled answers ([Why these model thresholds](#why-these-model-thresholds)).
+
+1. The drift panels: which inputs changed in the same window?
+2. Check the observed prices: feedback with a wrong price, or prices from another source, raises the MdAPE too (`report --window N --json` lists the window's figures).
+3. If the inputs drifted and the prices are real, the model prices this population worse than its test set: start the Retrain workflow with the finding as its `reason` (FR-15).
+
+#### ModelCoverageLow
+
+Fewer of the latest tested window's labelled ranges hold the observed price than their nominal level allows by chance ([Why these model thresholds](#why-these-model-thresholds)).
+
+1. The drift panels and the MdAPE: a coverage loss with drift and a higher error is a population the model has not seen; one without them can be a range model that no longer fits.
+2. Check the observed prices, as for [ModelErrorHigh](#modelerrorhigh).
+3. Start the Retrain workflow with the finding as its `reason` (FR-15); a retrain also recalibrates the ranges.
+
+#### MonitorStale
+
+No pass of the drift, error and coverage job has succeeded for 45 minutes, so the model panels and alerts show an old window, or none.
+
+1. `docker ps -a`: is `recommenditos-monitor-1` running? It restarts on its own and has no healthcheck, so a deploy does not notice it failing.
+2. `docker logs --since 1h recommenditos-monitor-1`: a pass that fails prints `the drift pass failed: ...`; a run by hand, `docker compose -f stack/compose.yaml --env-file .env exec monitor python -m recommenditos_monitoring run-once`, shows the error ([Run it by hand](#run-it-by-hand)).
+3. A full disk or memory at the container's limit shows on Service health; a pass that fails since a deploy is rolled back with `./deploy.sh rollback`.
+
+#### Silencing a known finding
+
+DriftDetected, ModelErrorHigh and ModelCoverageLow describe the latest tested window and stay firing until a newer window is tested, so Alertmanager posts them again every 4 hours.
+When the finding is known, such as the `ES` window of a replay, which drifts on purpose, and nobody starts a retraining for it, silence it rather than read it every 4 hours.
+On the VM only a replay fills the next window soon: the job needs 1,000 newer eligible requests, and the load test's requests (`client` `loadtest`) do not count.
+
+Alertmanager publishes no port, so `amtool` runs in its container:
+
+```bash
+docker exec recommenditos-alertmanager-1 amtool --alertmanager.url=http://127.0.0.1:9093 \
+  silence add 'alertname=~"DriftDetected|ModelErrorHigh|ModelCoverageLow"' \
+  --duration=7d --author=<your name> --comment="<the window and why it is known, e.g. the ES window of the replay of <date>>"
+```
+
+It prints the silence's ID.
+`silence query` lists the active silences, `alert query --silenced` the alerts they hold back, and `silence expire <ID>` ends one early; each takes the same `docker exec ... amtool --alertmanager.url=http://127.0.0.1:9093` before it.
+A silence lasts its `--duration` (or until `--end`), and survives a restart and a deploy, since Alertmanager keeps its silences in the `alertmanager-data` volume.
+Silence only the window alerts: MonitorStale and the service alerts say something new when they fire.
+
+The other way to clear a finding is to give the job a newer window: a short control replay ([Run it on the VM](#run-it-on-the-vm)) of 1,000 requests, then a pass, tests a window of the training distribution, and the three alerts resolve once it is the latest.
 
 ## Replay
 
@@ -462,7 +609,7 @@ From them, per window:
 
 A figure needs enough labels to mean something: an MdAPE at least 200 labelled answers and a coverage at least 300 labelled ranges.
 With fewer, its status is `insufficient_labels` and it has no value, in `monitor.db`, in the report and in Prometheus, so a quiet window, or one whose prices have not come in yet, is not read as a good one.
-At a coverage of 0.9 the standard error over 300 ranges is 1.7 percentage points, small against the 5 points below the nominal level at which #230 is to alert.
+At a coverage of 0.9 the standard error over 300 ranges is 1.7 percentage points, and the coverage alert allows 2.576 of them and 0.5 / n below the nominal level ([Why these model thresholds](#why-these-model-thresholds)).
 A window of the replay, which alternates the endpoints, has about 500 of each, so both figures exist once its prices are in.
 
 Prices can come in after their window closed, so every pass recomputes the figures of every window that is not final, and a late price counts in the window of its request.
@@ -482,7 +629,7 @@ It is not `sc05_coverage`, 91.0 %, which is the coverage SC-05 judges for the pa
 Both files are committed with the stage's outputs, and the monitoring image copies them for the model of its release; a variant the table has no row for, one without a range model, gets no test coverage.
 They are not compared with the replay's control listings: those are training listings, so their error and coverage are in-sample and optimistic, and they show only that the labels flow ([What it sends](#what-it-sends)).
 A window of the training distribution therefore has a lower MdAPE than the test value and a coverage above it; a window the model prices worse than its test set has a higher MdAPE and a lower coverage.
-`report` prints the ratio to the test MdAPE and the test coverage beside each figure; when to alert on them is #230's.
+`report` prints the ratio to the test MdAPE and the test coverage beside each figure, and the [model alerts](#model-alerts) fire on them.
 
 On a laptop stack on 2026-11-04, after 2,000 control listings and 1,500 `ES` listings of the replay, the two control windows had an MdAPE of 5.38 % and 5.28 % and a coverage of 96.8 % and 95.4 %, and the `ES` window, flagged in 14 features, an MdAPE of 9.41 %, 1.40 times the test value, and a coverage of 85.8 % of its 500 labelled ranges ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)).
 
