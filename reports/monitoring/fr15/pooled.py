@@ -1,60 +1,26 @@
-"""Pooled MdAPE and coverage over several drift windows, as the drift job computes them.
-
-Uses the job's own label join and error formula, so each window's figures equal
-`report --window N`. Run in the monitor container on the VM:
-
-    docker exec -i recommenditos-monitor-1 python - 13 14 < pooled.py > pooled.json
-"""
-
-import json
-import os
+# ruff: noqa
+# fmt: off
+# Kept as it ran on the VM on 2026-11-05 (these five header lines are the only addition): its
+# output is pooled-es-windows.json via pair_runs.py, so lint and format fixes would make the
+# committed script differ from the one that produced the evidence.
+# Pooled MdAPE and coverage over several windows, with the drift job's own label join and formulas.
+# Run inside recommenditos-monitor-1: python - <ids...> < pooled.py ; prints JSON with per-request rows.
+import json, os, statistics, sys
 from pathlib import Path
-import statistics
-import sys
-
-from recommenditos_monitoring.log import Label, connect_read_only, labels
-from recommenditos_monitoring.performance import absolute_percentage_error
 from recommenditos_monitoring.store import Store
-
-
-def in_range(label: Label) -> bool | None:
-    if label.lower_eur is None or label.upper_eur is None:
-        return None
-    return label.lower_eur <= label.observed_price_eur <= label.upper_eur
-
-
-def figures(found: list[Label]) -> dict[str, float | int]:
-    ranged = [hit for hit in map(in_range, found) if hit is not None]
-    return {
-        "labelled": len(found),
-        "mdape": statistics.median(absolute_percentage_error(label) for label in found),
-        "ranges": len(ranged),
-        "coverage": sum(ranged) / len(ranged),
-    }
-
-
-def main(window_ids: list[int]) -> None:
-    store = Store.open(Path(os.environ["RECOMMENDITOS_MONITOR_DB"]))
-    log = connect_read_only(Path(os.environ["RECOMMENDITOS_PREDICTION_LOG"]))
-    windows = {window.window_id: window for window in store.windows()}
-    per_window, pooled, rows = {}, [], []
-    for window_id in window_ids:
-        window = windows[window_id]
-        held = store.requests(window_id)
-        found = list(labels(log, [r.request_id for r in held], window.first_seq, window.last_seq))
-        per_window[window_id] = figures(found) | {"model": window.model_version}
-        pooled += found
-        rows += [
-            {
-                "window": window_id,
-                "observed": label.observed_price_eur,
-                "ape": absolute_percentage_error(label),
-                "in_range": in_range(label),
-            }
-            for label in found
-        ]
-    print(json.dumps({"windows": per_window, "pooled": figures(pooled), "rows": rows}))
-
-
-if __name__ == "__main__":
-    main([int(argument) for argument in sys.argv[1:]])
+from recommenditos_monitoring.log import connect_read_only, labels
+from recommenditos_monitoring.performance import absolute_percentage_error
+ids = [int(a) for a in sys.argv[1:]]
+store = Store.open(Path(os.environ["RECOMMENDITOS_MONITOR_DB"]))
+log = connect_read_only(Path(os.environ["RECOMMENDITOS_PREDICTION_LOG"]))
+windows = {w.window_id: w for w in store.windows()}
+rows, per = [], {}
+for i in ids:
+    w = windows[i]; held = store.requests(i)
+    found = labels(log, [r.request_id for r in held], w.first_seq, w.last_seq)
+    ape = [absolute_percentage_error(l) for l in found]
+    rng = [l.lower_eur <= l.observed_price_eur <= l.upper_eur for l in found if l.lower_eur is not None and l.upper_eur is not None]
+    per[i] = {"requests": len(held), "labelled": len(found), "mdape": statistics.median(ape), "ranges": len(rng), "coverage": sum(rng) / len(rng), "model": w.model_version}
+    rows += [{"window": i, "observed": l.observed_price_eur, "price": l.price_eur, "lower": l.lower_eur, "upper": l.upper_eur, "ape": a} for l, a in zip(found, ape)]
+ape = [r["ape"] for r in rows]; rng = [r["lower"] <= r["observed"] <= r["upper"] for r in rows if r["lower"] is not None]
+print(json.dumps({"windows": per, "pooled": {"labelled": len(ape), "mdape": statistics.median(ape), "ranges": len(rng), "coverage": sum(rng) / len(rng)}, "rows": rows}))
