@@ -35,6 +35,8 @@ A later `report --all` shows these windows against a test MdAPE of 6.80 %, the p
 The silence that had held the model alerts since the previous replay was expired before the run.
 At 12:12 DriftDetected, ModelErrorHigh and ModelCoverageLow were firing for window 14, the latest, and Alertmanager's Discord counter, which counts from Alertmanager's start, stood at 3, none failed ([before-alertmanager-discord.txt](fr15/before-alertmanager-discord.txt)).
 After the replay of the promoted model it still stood at 3, since a silence held the alerts ([after-alertmanager-discord.txt](fr15/after-alertmanager-discord.txt)).
+The three posts in the team's Discord channel ([discord-finding.png](fr15/discord-finding.png)) show a detail of Alertmanager's grouping: DriftDetected and ModelErrorHigh, firing since window 10 of the previous replay, were posted when the silence expired with their first annotations, which still name window 10, because Alertmanager does not post again when only an annotation changes.
+ModelCoverageLow first fired on window 14 and was posted at 13:11 CET naming it: 83.6 % of 500 ranges against a floor of 86.44 %.
 The finding of windows 13 and 14 became the Retrain run's `reason`.
 
 ## Retraining and promotion
