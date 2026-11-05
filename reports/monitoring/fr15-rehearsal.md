@@ -121,7 +121,7 @@ A probe on a laptop asked `GET /health` once a second through an SSH tunnel to t
 | Deploy run | [42065603905](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42065603905) | [42065848838](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42065848838) |
 | Run created (GitHub) | 16:33:07 | 16:34:33 |
 | 503 from nginx (probe) | 16:33:22.006 to 16:33:26.006 | 16:34:46.006 to 16:34:50.006 |
-| Without a 200 | 5 answers of 503 in a row (1 s probe), about 5 s | 5 answers of 503 in a row (1 s probe), about 5 s |
+| 503 answers in a row | 5 answers of 503 in a row (1 s probe), about 5 s | 5 answers of 503 in a row (1 s probe), about 5 s |
 | First answer of the other model | 16:33:27.005, `afc3335e` | 16:34:51.006, `2a60912b` |
 | Smoke check (NFR-12, FR-12) | passed | passed |
 | Run completed (GitHub) | 16:34:05 | 16:35:36 |
