@@ -8,6 +8,11 @@
 # Hand-edited on purpose: `dvc stage add` rewrites the whole file, re-indents
 # every list and line-wraps long commands, which would destroy these comments.
 #
+# Every stage depends on `recommenditos/__init__.py`: each one starts as
+# `python3 -m recommenditos.<module>`, so that file runs before the stage and
+# sets which numpy kernels compute its outputs (#259), a change DVC would
+# otherwise not see.
+#
 # `params.yaml` is a deliberate deviation from the course demo, which keeps the
 # same settings in `config.py` (EDN-30). Because they are parameters, a change
 # to one reruns the stages that read it and `dvc exp` can sweep them.
@@ -34,6 +39,7 @@ stages:
     deps:
       - recommenditos/data/download_raw_dataset.py
       - recommenditos/data/synthetic.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -70,6 +76,7 @@ stages:
     deps:
       - recommenditos/data/profile_data.py
       - recommenditos/plots.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -89,6 +96,7 @@ stages:
     cmd: python3 -m recommenditos.data.preprocess
     deps:
       - recommenditos/data/preprocess.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -120,6 +128,7 @@ stages:
     cmd: python3 -m recommenditos.data.gx_context_configuration
     deps:
       - recommenditos/data/gx_context_configuration.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -149,6 +158,7 @@ stages:
     deps:
       - recommenditos/data/validate_data.py
       - recommenditos/data/gx_context_configuration.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -170,12 +180,14 @@ stages:
           cache: false
 
   # ----------------------------------------------------------------------
-  # split: hold Spain out (EDN-03), then split grouped by seller (EDN-14).
+  # split: hold Spanish sellers out (EDN-03, EDN-102), then split grouped by
+  # seller (EDN-14).
   # ----------------------------------------------------------------------
   split:
     cmd: python3 -m recommenditos.data.split_data
     deps:
       - recommenditos/data/split_data.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -195,9 +207,11 @@ stages:
   # ----------------------------------------------------------------------
   # comparables: the index of listings `POST /v1/comparables` returns (FR-09).
   #
-  # Built from the train and validation frames and from no other, so no `ES`
-  # (EDN-03), test or calibration listing reaches it; those two files are its
-  # only data dependencies, which is what makes that checkable here. It ships
+  # Built from the train and validation frames and from no other, so no held-out
+  # `ES` (EDN-03, EDN-102), test or calibration listing reaches it; those two
+  # files are the only frames it indexes, which is what makes that checkable
+  # here. It reads the holdout only to refuse a row of a held-out seller, and
+  # `split_data.py` for the holdout's file name. It ships
   # in the API image beside the bundle (FR-12), and `/health` reports the md5
   # this file's lock records for it. It is not under models/: `evaluate` and
   # `compare-energy` depend on that whole directory, so a file there would
@@ -210,14 +224,18 @@ stages:
     deps:
       - recommenditos/data/build_comparables.py
       - recommenditos/data/build_features.py
+      - recommenditos/data/split_data.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
       - data/processed/train.parquet
       - data/processed/validation.parquet
+      - data/processed/holdout_es.parquet
     params:
       - reference_date
       - split.holdout_country
+      - split.group_key
     outs:
       - data/processed/comparables.parquet
 
@@ -245,6 +263,7 @@ stages:
       - recommenditos/api/schemas/common.py
       - recommenditos/api/schemas/predict.py
       - recommenditos/api/schemas/partial_listing.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -287,6 +306,7 @@ stages:
       deps:
         - recommenditos/data/build_features.py
         - recommenditos/data/split_data.py
+        - recommenditos/__init__.py
         - recommenditos/config.py
         - recommenditos/schema.py
         - recommenditos/pipeline.py
@@ -351,6 +371,7 @@ stages:
         - recommenditos/tracking.py
         - recommenditos/provenance.py
         - recommenditos/data/build_features.py
+        - recommenditos/__init__.py
         - recommenditos/config.py
         - recommenditos/schema.py
         - recommenditos/pipeline.py
@@ -391,6 +412,7 @@ stages:
       - recommenditos/tracking.py
       - recommenditos/provenance.py
       - recommenditos/data/build_features.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -444,6 +466,7 @@ stages:
       - recommenditos/tracking.py
       - recommenditos/provenance.py
       - recommenditos/data/build_features.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py
@@ -477,6 +500,7 @@ stages:
     deps:
       - recommenditos/modeling/compare_segments.py
       - recommenditos/plots.py
+      - recommenditos/__init__.py
       - recommenditos/config.py
       - recommenditos/schema.py
       - recommenditos/pipeline.py

@@ -248,6 +248,7 @@ The pipeline is built in Milestone 2; these steps are fixed by decisions already
 3. **Deduplicate**, before anything is split off, on a composite key rather than on `vin`, which is only 34 % filled ([dataset card](dataset-card.md#known-data-issues)).
 4. **Hold out `ES`** as the new-market drift set (EDN-03).
    It never reaches training, validation or calibration.
+   From FR-15's retrain on, only the `ES` listings of 40 % of the `ES` sellers are held out and the other sellers' are split like any other (EDN-102); the model this card describes was trained before it, on no `ES` row.
 5. **Restrict to supported makes** (EDN-05), computed by `split` from the cleaned data and applied by `features` to every frame, the `ES` holdout included, before any level or column is decided.
 6. **Drop PII, identifiers, leaking and redundant columns** as listed in the [problem specification](problem-spec.md#4-features).
    `seller_company_name` survives only as a hash, as the split's grouping key.

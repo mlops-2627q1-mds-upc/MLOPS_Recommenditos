@@ -695,12 +695,13 @@ def unobserved_columns(matrix: pd.DataFrame) -> set[str]:
 def _warn_about_unobserved_columns(split: str, columns: "list[str]") -> None:
     """Name the columns a written split fills in no row at all.
 
-    One column does this on the real snapshot and it is intended: the `ES`
-    holdout's `country_code` is empty, because `ES` is held out by construction
-    (EDN-03), so it is not a training level, and a value outside the training
-    levels becomes missing rather than a level of its own - which is exactly the
-    treatment EDN-18 requires of an unseen value. The holdout is the new-market
-    scenario, and a model that had seen that market would not be one.
+    One column did this on the real snapshot until FR-15's retrain, and it was
+    intended: with the whole of `ES` held out (EDN-03), `ES` was not a training
+    level, so the holdout's `country_code` was empty, because a value outside
+    the training levels becomes missing rather than a level of its own - which
+    is exactly the treatment EDN-18 requires of an unseen value. Since the
+    retrain trains on the `ES` listings of the sellers outside the holdout
+    share (EDN-102), `ES` is a level and the column is filled.
 
     The warning exists because nothing else says so. A fully empty column in a
     matrix reads as a defect in this stage, a pull-request description does not
@@ -710,8 +711,8 @@ def _warn_about_unobserved_columns(split: str, columns: "list[str]") -> None:
         logger.warning(
             f"{split}: no value at all in {', '.join(columns)}, although the "
             f"{VOCABULARY_SPLIT} rows fill it. Expected where the split is defined by that "
-            f"column - the `ES` holdout has no country_code, because `ES` is not a "
-            f"{VOCABULARY_SPLIT} level (EDN-03, EDN-18) - and a defect anywhere else."
+            f"column - the `ES` holdout has no country_code when `ES` is not a "
+            f"{VOCABULARY_SPLIT} level (EDN-03, EDN-18, EDN-102) - and a defect anywhere else."
         )
 
 

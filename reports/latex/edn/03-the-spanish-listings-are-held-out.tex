@@ -3,12 +3,13 @@
 \ednentry{
   id = {EDN-03},
   title = {The Spanish listings are held out as the new-market scenario},
-  note = {\textbf{Absorbs EDN-40} (2026-09-30): the holdout is selected per listing.},
+  note = {\textbf{Absorbs EDN-40} (2026-09-30): the holdout is selected per listing.
+\textbf{Revised on 2026-11-05}: from FR-15's retrain on, only the \texttt{ES} listings of 40\,\% of the \texttt{ES} sellers are held out (EDN-102).},
   date = {2026-09-22},
   milestone = {M1: Project Inception},
   topic = {Dataset Selection, Monitoring},
   participants = {@lukas2510, after supervisor feedback (S. del Rey)},
-  decision = {All AutoScout24 \texttt{ES} listings are held out of training, validation, and calibration and replayed in M6 as a new market.
+  decision = {AutoScout24 \texttt{ES} listings are held out of training, validation, and calibration and replayed in M6 as a new market: all of them until FR-15's retrain, then those of 40\,\% of the \texttt{ES} sellers (EDN-102).
 The DataMarket sample of Spanish cars is dropped.
 The holdout is selected per listing, and the \texttt{split} stage reports any seller that also lists outside \texttt{ES}.},
   rationale = {\emph{Alternatives considered:}

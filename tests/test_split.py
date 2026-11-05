@@ -11,6 +11,7 @@ fixture in a temporary directory, so they need neither the 548 MB snapshot nor
 any credential.
 """
 
+import itertools
 import json
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from recommenditos.data.split_data import (
     check_ratios,
     cross_holdout_sellers,
     dispersion_bounds,
+    held_out,
     supported_makes,
 )
 from recommenditos.schema import PROCESSED_SCHEMA
@@ -86,10 +88,22 @@ def sets(processed: Path) -> dict[str, pd.DataFrame]:
     }
 
 
+def holdout_mask(frame: pd.DataFrame, params: dict, share: float | None = None) -> pd.Series:
+    """The rows the stage holds out, at the project's share or at `share`."""
+    split = params["split"]
+    return held_out(
+        frame["country_code"],
+        frame[split["group_key"]],
+        split["holdout_country"],
+        split["holdout_seller_share"] if share is None else share,
+        params["seed"],
+    )
+
+
 @pytest.fixture(scope="module")
 def pool(interim: pd.DataFrame, params: dict) -> pd.DataFrame:
     """The rows the split divides: everything the holdout did not take."""
-    return interim[interim["country_code"] != params["split"]["holdout_country"]]
+    return interim[~holdout_mask(interim, params)]
 
 
 # --------------------------------------------------------------------------
@@ -108,26 +122,155 @@ def test_the_stage_writes_five_sets_and_the_make_list(processed: Path):
 # --------------------------------------------------------------------------
 
 
-def test_the_holdout_takes_every_holdout_country_row_and_nothing_else(
+def test_the_holdout_takes_the_holdout_country_rows_of_its_sellers_and_nothing_else(
     sets: dict[str, pd.DataFrame], interim: pd.DataFrame, params: dict
 ):
     country = params["split"]["holdout_country"]
     holdout = sets[HOLDOUT_NAME]
+    expected = interim[holdout_mask(interim, params)]
 
     assert len(holdout) > 0, "the fixture has no holdout-country row to hold out"
     assert (holdout["country_code"] == country).all()
-    assert len(holdout) == int((interim["country_code"] == country).sum())
+    assert holdout.reset_index(drop=True).equals(expected.reset_index(drop=True))
 
 
-def test_no_holdout_country_row_reaches_a_training_set(
+def test_no_row_of_a_held_out_seller_in_the_holdout_country_reaches_a_split_set(
     sets: dict[str, pd.DataFrame], params: dict
 ):
-    # The whole of M6 rests on this: an `ES` row in train, validation,
-    # calibration or test makes the new-market replay a replay of data the
-    # model has already seen, and the drift it is meant to show disappears.
-    country = params["split"]["holdout_country"]
+    # The whole of M6 rests on this: a held-out `ES` seller's listing in train,
+    # validation, calibration or test makes the new-market replay a replay of
+    # data the model has already seen, and the drift and the error it is meant
+    # to show shrink (EDN-03, EDN-14, EDN-102).
+    key, country = params["split"]["group_key"], params["split"]["holdout_country"]
+    held_out_sellers = set(sets[HOLDOUT_NAME][key])
     for name in SPLIT_NAMES:
-        assert not (sets[name]["country_code"] == country).any(), name
+        spanish = sets[name][sets[name]["country_code"] == country]
+        assert not spanish[key].isin(held_out_sellers).any(), name
+
+
+def test_the_other_holdout_country_sellers_are_split_like_any_other(
+    sets: dict[str, pd.DataFrame], interim: pd.DataFrame, params: dict
+):
+    # FR-15's retrain has to learn the market: the `ES` sellers the holdout
+    # does not keep are in the split, whole, in the set their key hashes to.
+    key, country = params["split"]["group_key"], params["split"]["holdout_country"]
+    spanish = interim[(interim["country_code"] == country) & ~holdout_mask(interim, params)]
+    assert len(spanish) > 0, "the share holds out every holdout-country seller of the fixture"
+
+    expected = dict(
+        zip(
+            spanish[key],
+            assign_split(spanish[key], params["split"]["ratios"], params["seed"]),
+            strict=True,
+        )
+    )
+    found = {
+        seller: name
+        for name in SPLIT_NAMES
+        for seller in sets[name].loc[sets[name]["country_code"] == country, key]
+    }
+    assert found == expected
+
+
+def test_about_the_configured_share_of_the_holdout_countrys_sellers_is_held_out(
+    interim: pd.DataFrame, params: dict
+):
+    key, country = params["split"]["group_key"], params["split"]["holdout_country"]
+    spanish = interim[interim["country_code"] == country]
+    sellers = spanish[key].nunique()
+
+    # Each seller is held out independently with probability `share`, so the
+    # count is binomial; 4 standard deviations make a false alarm negligible.
+    # The shares far from one half are what tell the share from its complement:
+    # at 0.4 the fixture's sellers are too few to tell 40 % from 60 %.
+    for share in (0.1, params["split"]["holdout_seller_share"], 0.9):
+        kept = spanish.loc[holdout_mask(spanish, params, share), key].nunique()
+        tolerance = 4 * (sellers * share * (1 - share)) ** 0.5
+        assert abs(kept - sellers * share) <= tolerance, (kept, sellers, share)
+
+
+def test_the_held_out_sellers_are_spread_over_every_set_the_split_would_give_them(
+    interim: pd.DataFrame, params: dict
+):
+    # The holdout hash is salted with the country, so whether a seller is held
+    # out is independent of the set `assign_split` gives it. Unsalted, the two
+    # hashes would be the same number, every held-out seller would be one that
+    # `assign_split` puts in train (the first bucket, larger than the share),
+    # and the `ES` sellers that join the pool would fill the other sets alone.
+    key = params["split"]["group_key"]
+    held = pd.Series(sorted(set(interim.loc[holdout_mask(interim, params), key])))
+
+    buckets = assign_split(held, params["split"]["ratios"], params["seed"])
+
+    assert set(buckets) == set(SPLIT_NAMES), buckets.value_counts().to_dict()
+
+
+@pytest.mark.req("NFR-06")
+def test_the_held_out_sellers_do_not_depend_on_the_row_order(interim: pd.DataFrame, params: dict):
+    key = params["split"]["group_key"]
+    shuffled = interim.sample(frac=1.0, random_state=0)
+
+    straight = set(interim.loc[holdout_mask(interim, params), key])
+    reordered = set(shuffled.loc[holdout_mask(shuffled, params), key])
+
+    assert straight == reordered
+
+
+def test_a_seller_held_out_at_one_share_is_held_out_at_every_larger_one(
+    interim: pd.DataFrame, params: dict
+):
+    shares = (0.1, 0.3, 0.4, 0.7, 1.0)
+    masks = [holdout_mask(interim, params, share) for share in shares]
+    for smaller, larger in itertools.pairwise(masks):
+        assert not (smaller & ~larger).any()
+        assert smaller.sum() < larger.sum()
+
+
+def test_a_share_of_one_holds_out_every_holdout_country_row(interim: pd.DataFrame, params: dict):
+    country = params["split"]["holdout_country"]
+    assert holdout_mask(interim, params, 1.0).equals(interim["country_code"] == country)
+
+
+def test_the_held_out_sellers_join_the_pool_without_moving_any_other_seller(
+    tmp_path, interim_path: Path, sets: dict[str, pd.DataFrame], params: dict
+):
+    # What makes FR-15's retrain comparable with the model before it: the rule
+    # before it, every `ES` row held out, is a share of 1, and against it the
+    # `ES` sellers that join the pool move no other listing between sets.
+    country = params["split"]["holdout_country"]
+    whole = tmp_path / "whole-country"
+    split_data.main(
+        interim_path,
+        whole,
+        params_override(tmp_path, params, split={"holdout_seller_share": 1.0}),
+    )
+    for name in SPLIT_NAMES:
+        before = pd.read_parquet(whole / f"{name}.parquet")
+        after = sets[name][sets[name]["country_code"] != country]
+        assert before.reset_index(drop=True).equals(after.reset_index(drop=True)), name
+
+
+@pytest.mark.parametrize("share", [0, -0.1, 1.5])
+def test_a_holdout_seller_share_outside_zero_to_one_is_refused(
+    interim: pd.DataFrame, params: dict, share: float
+):
+    with pytest.raises(ValueError, match="holdout seller share is above 0 and at most 1"):
+        holdout_mask(interim, params, share)
+
+
+def test_a_share_that_holds_out_no_seller_fails_the_stage(
+    tmp_path, interim_path: Path, interim: pd.DataFrame, params: dict
+):
+    # `features` cannot build the holdout's matrix from no rows, and the replay
+    # would have nothing to send, so `split` says why before either runs.
+    share = 1e-6
+    assert not holdout_mask(interim, params, share).any()
+    with pytest.raises(ValueError, match="is held out"):
+        split_data.main(
+            interim_path,
+            tmp_path / "out",
+            params_override(tmp_path, params, split={"holdout_seller_share": share}),
+        )
 
 
 def test_rows_with_no_country_at_all_are_split_rather_than_held_out(
@@ -160,9 +303,9 @@ def test_the_holdout_is_included_in_the_disjointness_check(
 ):
     # Iterating SPLIT_NAMES alone leaves the holdout out of every disjointness
     # assertion, which is how a seller in the holdout *and* in train went
-    # unnoticed: 81 of them in this fixture. The overlap is allowed here, but it
-    # has to be exactly the set the stage reports, not whatever happens to be
-    # there.
+    # unnoticed: 81 of them in this fixture when the whole country was held
+    # out. The overlap is allowed here, but it has to be exactly the set the
+    # stage reports, not whatever happens to be there.
     key = params["split"]["group_key"]
     split_groups = pd.concat([sets[name][key] for name in SPLIT_NAMES])
     reported = cross_holdout_sellers(sets[HOLDOUT_NAME][key], split_groups)
@@ -175,9 +318,9 @@ def test_the_holdout_is_included_in_the_disjointness_check(
 def test_the_fixtures_cross_border_sellers_are_counted_rather_than_hidden(
     sets: dict[str, pd.DataFrame], params: dict
 ):
-    # EDN-03 holds out every row of the holdout country, and the holdout is
-    # selected per row, so a dealer listing in `ES` and elsewhere is in the
-    # holdout and in a split set. On the real snapshot this happens 0 times,
+    # The holdout keeps every `ES` row of a held-out seller (EDN-03, EDN-102),
+    # and it is selected per row, so a held-out dealer listing in `ES` and
+    # elsewhere is in the holdout and in a split set. On the real snapshot this happens 0 times,
     # because `hash_seller_group` keys a dealer by its company name and no name
     # appears both inside and outside `ES` there. The fixture draws names
     # independently of the country, so it does happen here - and a replay of a
@@ -189,7 +332,7 @@ def test_the_fixtures_cross_border_sellers_are_counted_rather_than_hidden(
 
     crossing = cross_holdout_sellers(sets[HOLDOUT_NAME][key], split_groups)
 
-    assert len(crossing) == 91, (
+    assert len(crossing) == 42, (
         f"the fixture's cross-border seller count moved to {len(crossing)}; if the "
         f"generator or hash_seller_group changed, re-measure it, and if it reached 0 the "
         f"fixture no longer exercises this case at all"
@@ -200,8 +343,8 @@ def test_a_seller_only_inside_the_holdout_country_never_reaches_a_split_set(
     sets: dict[str, pd.DataFrame], params: dict
 ):
     # The half of the conflict that must hold unconditionally: whatever the
-    # cross-border dealers do, a seller whose every listing is `ES` is entirely
-    # in the holdout, or the drift replay would be missing its own rows.
+    # cross-border dealers do, a held-out seller whose every listing is `ES` is
+    # entirely in the holdout, or the drift replay would be missing its own rows.
     key, country = params["split"]["group_key"], params["split"]["holdout_country"]
     holdout = sets[HOLDOUT_NAME]
     split_groups = set(pd.concat([sets[name][key] for name in SPLIT_NAMES]).unique())
@@ -412,15 +555,16 @@ def test_a_frame_that_is_all_holdout_country_says_so_rather_than_blaming_the_mak
 ):
     # The old message was "no make reaches 300 listings in 0 rows", which sends
     # the reader to the support threshold for a frame that held nothing but
-    # `ES`.
+    # `ES`. Only a share of 1 holds out every row of such a frame.
     country = params["split"]["holdout_country"]
     all_holdout = interim.copy()
     all_holdout["country_code"] = country
     path = tmp_path / "all-holdout.parquet"
     all_holdout.to_parquet(path, index=False)
+    whole_country = params_override(tmp_path, params, split={"holdout_seller_share": 1.0})
 
     with pytest.raises(ValueError, match="nothing left to split"):
-        split_data.main(path, tmp_path / "processed", PARAMS_FILE)
+        split_data.main(path, tmp_path / "processed", whole_country)
 
 
 def test_the_dispersion_bound_tightens_as_the_pool_gains_sellers(params: dict):
