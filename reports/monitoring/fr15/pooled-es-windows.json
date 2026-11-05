@@ -1,0 +1,54 @@
+{
+  "before": {
+    "windows": {
+      "13": {
+        "requests": 1000,
+        "labelled": 1000,
+        "mdape": 0.09085933632625669,
+        "ranges": 500,
+        "coverage": 0.85,
+        "model": "afc3335eefa80dafe3d9ae6ab85c1ae3"
+      },
+      "14": {
+        "requests": 1000,
+        "labelled": 1000,
+        "mdape": 0.09156684117750538,
+        "ranges": 500,
+        "coverage": 0.836,
+        "model": "afc3335eefa80dafe3d9ae6ab85c1ae3"
+      }
+    },
+    "pooled": {
+      "labelled": 2000,
+      "mdape": 0.09134719619219431,
+      "ranges": 1000,
+      "coverage": 0.843
+    }
+  },
+  "after": {
+    "windows": {
+      "17": {
+        "requests": 1000,
+        "labelled": 1000,
+        "mdape": 0.07491763936019308,
+        "ranges": 500,
+        "coverage": 0.906,
+        "model": "2a60912bd232083e6950f26fe72fe6c4"
+      },
+      "18": {
+        "requests": 1000,
+        "labelled": 1000,
+        "mdape": 0.07815385438007529,
+        "ranges": 500,
+        "coverage": 0.864,
+        "model": "2a60912bd232083e6950f26fe72fe6c4"
+      }
+    },
+    "pooled": {
+      "labelled": 2000,
+      "mdape": 0.07680572324663905,
+      "ranges": 1000,
+      "coverage": 0.885
+    }
+  }
+}

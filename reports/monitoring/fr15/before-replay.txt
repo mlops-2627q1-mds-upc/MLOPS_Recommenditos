@@ -1,0 +1,12 @@
+control: 500 listings sent
+control: 1000 listings sent
+es: 500 listings sent
+es: 1000 listings sent
+es: 1500 listings sent
+es: 2000 listings sent
+phase    sent  answered   feedback
+control  1221  200: 1221  201: 1221
+es       2000  200: 2000  201: 2000
+total    3221  200: 3221  201: 3221
+duration 644.1 s, 5.00 listings/s (target 5)
+result: ok
