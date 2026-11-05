@@ -213,14 +213,18 @@ def test_no_pii_column_reaches_a_feature_matrix(pipeline, params):
         assert set(PII_COLUMNS).isdisjoint(matrix.columns)
 
 
-def test_the_holdout_takes_every_spanish_listing_and_no_other(pipeline, params):
+def test_the_holdout_takes_spanish_listings_of_sellers_no_other_set_holds(pipeline, params):
     holdout_country = params["split"]["holdout_country"]
+    key = params["split"]["group_key"]
     holdout = pd.read_parquet(pipeline["processed"] / "holdout_es.parquet")
+    assert len(holdout) > 0
     assert (holdout["country_code"] == holdout_country).all()
 
+    held_out_sellers = set(holdout[key])
     for name in SPLIT_NAMES:
         subset = pd.read_parquet(pipeline["processed"] / f"{name}.parquet")
-        assert not (subset["country_code"] == holdout_country).any()
+        spanish = subset[subset["country_code"] == holdout_country]
+        assert not spanish[key].isin(held_out_sellers).any(), name
 
 
 # Seller disjointness and the lossless partition are asserted in
@@ -780,6 +784,22 @@ def test_every_stage_declares_its_own_module_as_a_dependency(dvc_stages):
         body = definition.get("do", definition)
         path = module.replace(".", "/") + ".py"
         assert path in body["deps"], f"{stage} does not depend on {path}"
+
+
+def test_every_stage_depends_on_the_package_init(dvc_stages):
+    """`recommenditos/__init__.py` is a dependency of every stage.
+
+    Every stage starts as `python3 -m recommenditos.<module>`, so that file runs
+    first in each of them, and it decides which numpy kernels compute the
+    stage's outputs (NPY_DISABLE_CPU_FEATURES, #259). An edit to it can change
+    every output without touching a file DVC watches, so without the
+    dependency `dvc status` would call a stale lock current.
+    """
+    for stage, definition in dvc_stages.items():
+        body = definition.get("do", definition)
+        assert "recommenditos/__init__.py" in body["deps"], (
+            f"{stage} does not depend on recommenditos/__init__.py"
+        )
 
 
 def test_every_declared_parameter_exists(dvc_stages, params):

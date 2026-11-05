@@ -1,10 +1,14 @@
-"""`split` stage: hold Spain out, count the supported makes, split by seller.
+"""`split` stage: hold Spanish sellers out, count the supported makes, split by seller.
 
 Three steps, in this order, because each one changes what the next one sees.
 
 1. The `ES` holdout leaves first, as its own artefact (EDN-03). M6 replays it
-   against the running API as a new market, so no `ES` row may reach train,
-   validation, calibration or test.
+   against the running API as a new market, so none of its rows may reach
+   train, validation, calibration or test. It holds the `ES` listings of a
+   fixed share of the `ES` sellers, `split.holdout_seller_share`, chosen by a
+   hash of the seller key (`held_out`); the other `ES` sellers are split like
+   any other seller, so FR-15's retrain learns the market and is still measured
+   on `ES` dealers it never saw (EDN-102).
 2. The supported makes are counted on what is left, before the split (EDN-05),
    and written as an artefact. The API reads the list from the model metadata
    and rejects a make outside it (FR-04); a hard-coded list would be a second
@@ -26,8 +30,9 @@ it and which tests hold each guarantee is written down in
 `docs/docs/pipeline.md` under "The supported makes", not only in a pull
 request, because a squash-merge commit message is not somewhere anyone looks.
 
-The holdout is selected per row, so "every `ES` row is held out" wins over "no
-seller appears in two sets" for a dealer that lists in `ES` and elsewhere. That
+The holdout is selected per row, so "every `ES` row of a held-out seller is
+held out" wins over "no seller appears in two sets" for a dealer that lists in
+`ES` and elsewhere. That
 conflict is real and is resolved deliberately rather than silently: see
 `cross_holdout_sellers`.
 
@@ -36,7 +41,10 @@ ratios. It is order-independent, so a clean clone reproduces the same split from
 `seed` and the group key alone (NFR-06). And it is stable along one axis only:
 *adding rows or sellers* leaves the sellers already there where they were, which
 is what lets the retrain-with-`ES` run of FR-15 be compared against the current
-model instead of being confounded by sellers that moved between train and test.
+model instead of being confounded by sellers that moved between train and test:
+the `ES` sellers that join the pool move no other seller. The holdout's own hash
+is salted with the country, so which `ES` sellers stay out is independent of
+the bucket the split would give them.
 It is not stable against a change to `seed`, to the ratios, or to the order of
 `SPLIT_NAMES`: each of those reshuffles most sellers (measured: reordering the
 tuple moves 80.0 % of them on the real snapshot). So an FR-15 comparison holds
@@ -150,6 +158,42 @@ _BUCKETS = 10_000
 app = typer.Typer()
 
 
+def _hash_position(text: str) -> float:
+    """Where `text` falls in [0, 1), from its SHA-256, to `_BUCKETS` resolution."""
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    return int(digest[:8], 16) % _BUCKETS / _BUCKETS
+
+
+def held_out(
+    countries: pd.Series, groups: pd.Series, country: str, share: float, seed: int
+) -> pd.Series:
+    """Mark the rows the country holdout keeps: `country` rows of its held-out sellers.
+
+    A seller of `country` is held out when the hash of `seed`, `country` and its
+    key falls below `share`, so about that share of the country's sellers stay
+    out of the split and the rest join the pool like any other seller (EDN-102).
+    Whole sellers at a time, for the reason the split itself is grouped: a
+    dealer on both sides would let the model see the listings the replay
+    measures it on (EDN-14). The decision depends on the seed and the key alone,
+    so it does not depend on the row order, a seller's listings all land on the
+    same side, a seller held out at one share is held out at every larger one,
+    and the rows of every other country are untouched: `assign_split` buckets
+    them by their own key exactly as before. A share of 1 holds out every row
+    of `country`, which was the rule before FR-15's retrain (EDN-03).
+    """
+    if not 0 < share <= 1:
+        raise ValueError(
+            f"the holdout seller share is above 0 and at most 1, not {share}: at 0 nothing "
+            f"of {country} is held out, and M6's replay and the features stage need the holdout"
+        )
+    of_country = countries == country
+    if share == 1:
+        return of_country
+    sellers = groups[of_country].unique()
+    kept = {key for key in sellers if _hash_position(f"{seed}|{country}|{key}") < share}
+    return of_country & groups.isin(kept)
+
+
 def assign_split(groups: pd.Series, ratios: dict[str, float], seed: int) -> pd.Series:
     """Map each group key to one of `SPLIT_NAMES`, deterministically.
 
@@ -187,8 +231,7 @@ def assign_split(groups: pd.Series, ratios: dict[str, float], seed: int) -> pd.S
         edges.append((name, cumulative))
 
     def bucket(key: str) -> str:
-        digest = hashlib.sha256(f"{seed}|{key}".encode()).hexdigest()
-        position = int(digest[:8], 16) % _BUCKETS / _BUCKETS
+        position = _hash_position(f"{seed}|{key}")
         for name, edge in edges:
             if position < edge:
                 return name
@@ -404,16 +447,15 @@ def cross_holdout_sellers(holdout_groups: pd.Series, pool_groups: pd.Series) -> 
     """The sellers that are in the country holdout *and* in the split, if any.
 
     Two invariants of this stage cannot both hold for a dealer that lists in
-    the holdout country and elsewhere: "every `ES` row is held out" (EDN-03)
-    and "no seller appears in two sets" (EDN-14). The holdout is selected per
-    row, so the first one wins, and this function is how the cost of that
-    choice is reported instead of being discovered later.
+    the holdout country and elsewhere: "every `ES` row of a held-out seller is
+    held out" (EDN-03, EDN-102) and "no seller appears in two sets" (EDN-14).
+    The holdout is selected per row, so the first one wins, and this function
+    is how the cost of that choice is reported instead of being discovered later.
 
-    `ES` wins because EDN-03 defines the holdout as the `ES` listings and
-    prices its cost as exactly those rows: holding out whole sellers would put
-    non-`ES` rows into an artefact that M6 replays as Spanish traffic, which
-    changes what the drift measurement measures, and it would make the holdout
-    a different size than the 6,079 rows the dataset card and EDN-03 state. On
+    `ES` wins because EDN-03 defines the holdout as `ES` listings: holding out
+    a seller's non-`ES` rows too would put them into an artefact that M6
+    replays as Spanish traffic, which changes what the drift measurement
+    measures. On
     the real snapshot the conflict never arises - `hash_seller_group` keys a
     dealer by its company name, and no dealer name in the snapshot appears both
     in `ES` and outside it - so holding out whole sellers would buy nothing
@@ -441,22 +483,40 @@ def main(
     frame = read_frame(input_path, INTERIM_SCHEMA)
     group_key = split_params["group_key"]
 
-    # 1. The holdout leaves first, so nothing below can see an `ES` row (EDN-03).
-    is_holdout = frame["country_code"] == split_params["holdout_country"]
+    # 1. The holdout leaves first, so nothing below can see a row of a held-out
+    #    `ES` seller (EDN-03, EDN-102). The other `ES` sellers stay in the frame
+    #    and are split like any other seller.
+    country = split_params["holdout_country"]
+    is_holdout = held_out(
+        frame["country_code"],
+        frame[group_key],
+        country,
+        split_params["holdout_seller_share"],
+        params["seed"],
+    )
     holdout, remaining = frame[is_holdout], frame[~is_holdout]
+    if holdout.empty:
+        # `features` builds a matrix of the holdout and fails on an empty one,
+        # and M6's replay has nothing to send, so say why here instead.
+        raise ValueError(
+            f"no row of {country} is held out: the interim frame has "
+            f"{int((frame['country_code'] == country).sum()):,} {country} row(s), and "
+            f"split.holdout_seller_share {split_params['holdout_seller_share']} keeps none "
+            f"of their sellers"
+        )
     if remaining.empty:
         # Without this the stage dies inside the make count, whose message
         # blames the support threshold for a frame that holds nothing but `ES`.
         raise ValueError(
             f"every one of the {len(frame):,} interim rows carries "
-            f"{split_params['holdout_country']}, so the holdout takes the whole frame and "
+            f"{country}, so the holdout takes the whole frame and "
             f"there is nothing left to split"
         )
 
     # 2. The supported makes are an artefact, never a hard-coded list: the API
     #    reads them from the model metadata (FR-04). Counted here, after the
-    #    holdout and before the split, so neither an `ES` listing nor the luck
-    #    of which set a seller landed in can decide whether a make is in scope.
+    #    holdout and before the split, so neither a held-out `ES` listing nor the
+    #    luck of which set a seller landed in can decide whether a make is in scope.
     makes = supported_makes(remaining["make"], split_params["min_listings_per_make"])
     covered = sum(int(entry["listings"]) for entry in makes)
 
@@ -483,10 +543,12 @@ def main(
     for name, subset in subsets.items():
         write_frame(subset, output_dir / f"{name}.parquet", PROCESSED_SCHEMA)
 
+    in_pool = int((remaining["country_code"] == country).sum())
     logger.info(
-        f"{split_params['holdout_country']} holdout: {len(holdout):,} rows, "
-        f"{len(holdout) / max(len(frame), 1):.1%} of the interim frame; "
-        f"{len(remaining):,} rows left to split."
+        f"{country} holdout: {len(holdout):,} rows of {holdout[group_key].nunique():,} "
+        f"sellers, {len(holdout) / max(len(frame), 1):.1%} of the interim frame; "
+        f"{len(remaining):,} rows left to split, {in_pool:,} of them {country} "
+        f"(split.holdout_seller_share {split_params['holdout_seller_share']})."
     )
     logger.info(
         f"{len(makes)} make(s) reach {split_params['min_listings_per_make']} listings, "
@@ -507,15 +569,16 @@ def main(
         in_split = int(groups.isin(crossing).sum())
         logger.warning(
             f"{len(crossing):,} seller(s) list both in "
-            f"{split_params['holdout_country']} and outside it, so they appear in the "
+            f"{country} and outside it, so they appear in the "
             f"holdout ({in_holdout:,} rows) and in a split set ({in_split:,} rows). "
-            f"Every holdout-country row is held out, which is the rule EDN-03 fixes, so "
+            f"A held-out seller's every {country} row is held out, which is the rule "
+            f"EDN-03 and EDN-102 fix, so "
             f"the holdout is not seller-disjoint from the split. A replay of it therefore "
             f"contains dealers the model trained on, which understates drift (EDN-14)."
         )
     else:
         logger.info(
-            f"No seller lists both in {split_params['holdout_country']} and outside it, so "
+            f"No held-out seller lists both in {country} and outside it, so "
             f"the holdout is seller-disjoint from the split as well."
         )
 

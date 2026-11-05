@@ -9,9 +9,10 @@ database.
 The index holds the `train` and `validation` listings and nothing else
 (`SOURCES`). The `ES` holdout is M6's new market (EDN-03), and the `test` and
 `calibration` rows are where SC-01 to SC-05 are measured, so a listing from any
-of them must stay unseen by everything the API serves. The stage reads no other
-file, and it refuses a row from the holdout country in case a changed `split`
-ever let one through.
+of them must stay unseen by everything the API serves. The `ES` listings of the
+sellers `split` puts into train and validation are in the index like any other
+(EDN-102). Besides those two frames the stage reads only the holdout, to refuse
+an `ES` row of a held-out seller in case a changed `split` ever let one through.
 
 The rows are cut to `COMPARABLES_SCHEMA`: the key features and the price, and
 no PII column (NFR-08), because the contract selects its columns. A row without
@@ -39,6 +40,7 @@ import typer
 
 from recommenditos.config import PARAMS_FILE, PROCESSED_DATA_DIR
 from recommenditos.data.build_features import age_years
+from recommenditos.data.split_data import HOLDOUT_NAME
 from recommenditos.pipeline import load_params, read_frame, write_frame
 from recommenditos.schema import DERIVED_COLUMNS, PROCESSED_SCHEMA
 
@@ -85,13 +87,21 @@ _SORT_KEYS: tuple[str, ...] = ("make", "model", "age_years", "mileage_km_raw", "
 
 
 def build_index(
-    frames: Mapping[str, pd.DataFrame], reference_date: str, holdout_country: str
+    frames: Mapping[str, pd.DataFrame],
+    reference_date: str,
+    holdout: pd.DataFrame,
+    holdout_country: str,
+    group_key: str,
 ) -> pd.DataFrame:
     """The comparables index of `frames`, which are the `split` frames of `SOURCES`.
 
-    Raises `ValueError` for a frame outside `SOURCES` and for a row of the
-    holdout country, because either would put a listing in the index that
-    FR-09 keeps out of it.
+    `holdout` is the `split` stage's country holdout. Raises `ValueError` for a
+    frame outside `SOURCES` and for a holdout-country row of a seller the
+    holdout keeps, because either would put a listing in the index that FR-09
+    keeps out of it: a replayed `ES` listing must not find its own dealer's
+    listings among its comparables (EDN-102). The holdout-country listings of
+    the sellers `split` put into train and validation belong in the index like
+    any other.
     """
     unexpected = sorted(set(frames) - set(SOURCES))
     if unexpected:
@@ -100,11 +110,13 @@ def build_index(
             f"not from {', '.join(unexpected)}"
         )
     frame = pd.concat([frames[name] for name in SOURCES if name in frames], ignore_index=True)
-    held_out = int((frame["country_code"] == holdout_country).sum())
-    if held_out:
+    held_out_sellers = set(holdout[group_key].unique())
+    leaked = (frame["country_code"] == holdout_country) & frame[group_key].isin(held_out_sellers)
+    if leaked.any():
         raise ValueError(
-            f"{held_out:,} row(s) of {', '.join(SOURCES)} carry the holdout country "
-            f"{holdout_country}, which no artefact but the holdout may hold (EDN-03)"
+            f"{int(leaked.sum()):,} {holdout_country} row(s) of {', '.join(SOURCES)} belong "
+            f"to sellers the holdout keeps, whose {holdout_country} listings no artefact but "
+            f"the holdout may hold (EDN-03, EDN-102)"
         )
     frame = frame[frame["make"].notna()].copy()
     frame["age_years"] = age_years(frame["registration_date"], reference_date)
@@ -123,7 +135,14 @@ def main(
     frames = {
         name: read_frame(input_dir / f"{name}.parquet", PROCESSED_SCHEMA) for name in SOURCES
     }
-    index = build_index(frames, params["reference_date"], params["split"]["holdout_country"])
+    holdout = read_frame(input_dir / f"{HOLDOUT_NAME}.parquet", PROCESSED_SCHEMA)
+    index = build_index(
+        frames,
+        params["reference_date"],
+        holdout,
+        params["split"]["holdout_country"],
+        params["split"]["group_key"],
+    )
     write_frame(index, output_path, COMPARABLES_SCHEMA)
     pairs = index[["make", "model"]].drop_duplicates()
     logger.info(
