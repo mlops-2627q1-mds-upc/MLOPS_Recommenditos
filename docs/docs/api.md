@@ -170,14 +170,14 @@ That is the answer for a 2019 Volkswagen Golf with 45,000 km, scenario P1 of SC-
 The bounds are widened where the typical price falls outside them, so `lower_eur <= price_eur <= upper_eur` holds in every answer; on the test split that moves a bound for at most 1 % of the requests.
 
 The range narrows as the request says more.
-On the 19,665 listings of the test split, with the fields left out as a client would leave them out (`reports/analysis/price_range_widths.py`), the mean width `(upper_eur - lower_eur) / price_eur` is:
+On the 20,258 listings of the test split, with the fields left out as a client would leave them out (`reports/analysis/price_range_widths.py`), the mean width `(upper_eur - lower_eur) / price_eur` is:
 
 | Request | Typical price | Mean width | Median width | Coverage |
 |---------|---------------|------------|--------------|----------|
-| make only | median | 2.30 | 2.47 | 90.7 % |
-| P1: make, model, registration date, mileage | median | 0.93 | 0.81 | 91.0 % |
-| the ten fields `/v1/predict` requires | point model | 0.51 | 0.42 | 90.9 % |
-| full | point model | 0.47 | 0.38 | 90.3 % |
+| make only | median | 2.32 | 2.50 | 90.5 % |
+| P1: make, model, registration date, mileage | median | 0.93 | 0.81 | 91.8 % |
+| the ten fields `/v1/predict` requires | point model | 0.52 | 0.42 | 91.1 % |
+| full | point model | 0.47 | 0.39 | 90.7 % |
 
 Measured in-process with `TestClient` on the shared 4-core development laptop under a load average of 4 to 6, over 900 requests built from test listings, 300 each make-only, P1 and full, a request took p50 38 ms and p95 47 ms, with no shape above p95 49 ms (`reports/analysis/price_range_latency.py`).
 That is inside NFR-02's 300 ms, which the load test on the target VM checks.

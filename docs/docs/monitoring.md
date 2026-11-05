@@ -294,12 +294,12 @@ The error and coverage thresholds are therefore one-sided tests at 0.005 per win
 - **Coverage.** If a window's ranges hold the nominal level p (0.9), the share of its n labelled ranges that hold the price has the binomial standard error sqrt(p (1 - p) / n): 1.73 points at 300 ranges, 1.34 at 500 and 0.95 at 1,000.
   The alert fires below p less 2.576 of them and less the continuity correction 0.5 / n, so below 85.4 % at 300 ranges, 86.4 % at 500 and 87.5 % at 1,000.
   Its false-alarm rate is about 0.005 per window (exact binomial at p = 0.9: 0.0043 to 0.0069 for 300 to 1,000 ranges, mean 0.0054, which a share of whole ranges cannot make exact; 0.0053 to 0.0089 without the correction).
-  Drawing windows from the test set's range outcomes puts their 0.5th percentile 0.1 to 0.4 points above these floors, because the test coverage of 90.2 % is 0.2 points above the nominal level.
+  Drawing windows from the test set's range outcomes puts their 0.5th percentile 0.6 to 0.8 points above these floors, because the test coverage of 90.6 % is 0.6 points above the nominal level.
   The rule takes n from the window itself, so the level holds at any count; a fixed margin taken at the minimum of 300 would hold it only at 300 and miss a loss of 4 points at 500.
   It compares with the nominal level, the promise the ranges make to users, not with the test coverage.
-- **MdAPE.** The spread of a median has no closed form, so it comes from drawing 20,000 windows of n labelled answers from the test set's 19,665 errors of `lgbm-basic`, for n from 200, the fewest the job reports an MdAPE for, to 1,000.
-  Their 99.5th percentile falls with n like 1 + c / sqrt(n); the alert takes c = 3.52, the smallest constant at or above the percentile at every n measured, so its ceiling is 1.25 times the test MdAPE at 200 labelled answers, 1.20 at 300, 1.16 at 500 and 1.11 at 1,000.
-  The ceiling is 0.0001 above the percentile at 200 and at most 0.011 above it elsewhere, so the false-alarm rate is 0.0031 to 0.0050 per window; the least-squares constant, 3.41, would reach 0.006.
+- **MdAPE.** The spread of a median has no closed form, so it comes from drawing 20,000 windows of n labelled answers from the test set's 20,258 errors of `lgbm-basic`, for n from 200, the fewest the job reports an MdAPE for, to 1,000.
+  Their 99.5th percentile falls with n like 1 + c / sqrt(n); the alert takes c = 3.52, the smallest constant at or above the percentile at every n measured for the model before #303 (3.45 for the promoted one), so its ceiling is 1.25 times the test MdAPE at 200 labelled answers, 1.20 at 300, 1.16 at 500 and 1.11 at 1,000.
+  For the promoted model the ceiling is 0.004 to 0.010 above the percentile, so the false-alarm rate is 0.0027 to 0.0040 per window; the least-squares constant, 3.39, would reach 0.0057.
   It compares with `test_mdape`, which a retrained model brings with it, and the constant is checked again with the script when the model's errors change shape.
 - **Labels.** Both alerts require `labels_sufficient`, so a window with too few labels cannot fire.
   Labels can arrive for 7 days after a window closed and every pass recomputes the figures, so a window is tested several times while its count grows; each look has the level 0.005, the window as a whole somewhat more.
@@ -485,7 +485,7 @@ The listings come from the samples of the `monitoring_samples` stage, which CD b
 | Sample | Listings | What it is |
 |--------|----------|------------|
 | `control` | 20,000 | Listings of `train` outside the drift reference, drawn at random from the same rows, so a control window is i.i.d. with the reference and the drift job must not flag it |
-| `es` | 5,779 | Every listing of the `ES` holdout the API accepts (EDN-03), the market the model never saw, which the drift job must flag |
+| `es` | 2,266 | Every listing of the `ES` holdout the API accepts (EDN-03), the market the model never saw, which the drift job must flag |
 
 `--control N` sends the first N control listings, and `--then es` sends the ES listings after them, so a dashboard shows a clean before and after; `--then-count N` stops after N of them.
 The listings are in a random order, so any run of consecutive ones is a random sample of its set.
@@ -507,7 +507,7 @@ After a read timeout the API may have logged the answer, so it is counted and no
 That is why `--timeout` is at most 50 s: after 60 s without the API's answer nginx answers 503 itself (its default `proxy_read_timeout`, mapped to 503 in `deploy/nginx.conf`), the API may still log that listing, and a 503 is sent again, so the replay's own read timeout has to come first.
 A 401 from `/v1/feedback` stops the run, since no price could be stored with that key.
 
-The listings go one at a time at `--rate` per second (5 by default), so 5,000 control listings take about 17 minutes and all 25,779 about 86 minutes; when the API answers more slowly, the rate drops, and the summary says so.
+The listings go one at a time at `--rate` per second (5 by default), so 5,000 control listings take about 17 minutes and all 22,266 about 74 minutes; when the API answers more slowly, the rate drops, and the summary says so.
 
 ### Run it locally
 
@@ -625,9 +625,9 @@ Every answer is one row of the log's one SQLite file whichever worker wrote it, 
 #### The baseline
 
 The figures are compared with the model's values on the test set with every input given, since a window holds only requests with all ten required fields.
-The MdAPE is the `evaluate` stage's test MdAPE in `metrics.json`, `variants.<model_variant>.mdape`, 6.73 % for `lgbm-basic`, which the stage measures on full inputs.
-The coverage is that of the `full` scenario, pooled over makes, in the stage's `reports/metrics/interval-coverage-by-make.csv`, 90.2 % for `lgbm-basic`.
-It is not `sc05_coverage`, 91.0 %, which is the coverage SC-05 judges for the partial-input scenario P1 (make, model, registration date, and mileage only), requests a window never holds.
+The MdAPE is the `evaluate` stage's test MdAPE in `metrics.json`, `variants.<model_variant>.mdape`, 6.80 % for `lgbm-basic`, which the stage measures on full inputs.
+The coverage is that of the `full` scenario, pooled over makes, in the stage's `reports/metrics/interval-coverage-by-make.csv`, 90.6 % for `lgbm-basic`.
+It is not `sc05_coverage`, 91.8 %, which is the coverage SC-05 judges for the partial-input scenario P1 (make, model, registration date, and mileage only), requests a window never holds.
 Both files are committed with the stage's outputs, and the monitoring image copies them for the model of its release; a variant the table has no row for, one without a range model, gets no test coverage.
 They are not compared with the replay's control listings: those are training listings, so their error and coverage are in-sample and optimistic, and they show only that the labels flow ([What it sends](#what-it-sends)).
 A window of the training distribution therefore has a lower MdAPE than the test value and a coverage above it; a window the model prices worse than its test set has a higher MdAPE and a lower coverage.
@@ -702,7 +702,7 @@ A flag on `country_code` alone is a new market mix; several features besides it,
 A control window of the training distribution is flagged in at most 1 of 20 windows (NFR-11), so a single flag between unflagged windows is a false alarm until the next window confirms it.
 A `partial` window was cut short by a new model and is not tested; an open window shows only its progress.
 
-The finding ends with the window's error and coverage against the test values, for example:
+The finding ends with the window's error and coverage against the test values, for example from the replay of 2026-11-04, against the model before #303:
 
 ```text
 ... MdAPE 9.41 % over 1000 labelled answers, 1.40 x the test MdAPE of 6.73 %; coverage 85.80 % of 500 labelled ranges at a nominal 90.00 %, against 90.23 % on the test set (labels still arriving).

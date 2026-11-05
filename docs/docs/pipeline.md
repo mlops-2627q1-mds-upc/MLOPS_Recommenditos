@@ -208,11 +208,11 @@ This arrangement owes four guarantees, and each has an owner and a test:
    The two tests above, plus `tests/test_model.py::test_the_model_is_fitted_on_the_supported_makes_only` and `tests/test_pipeline.py::test_the_reported_population_is_the_served_population`.
    Every one of them first asserts that its input holds an unsupported make, and the last two count against the frames `split` wrote rather than against the matrices, so none can pass by the filter being unnecessary.
 
-Measured on the real snapshot (2026-10-05), the filter removes 1,437 of the 99,326 split rows and moves every realised split share by at most 0.08 pp, so it does not disturb the split proportions.
-Per frame: train keeps 60,378 of 61,180 rows, validation 8,859 of 8,992, calibration 8,987 of 9,169 and test 19,665 of 19,985.
-Of the 6,079 `ES` holdout rows the holdout matrix keeps 5,979, which is the count of the `ES` rows the API accepts under FR-04; the 100 it drops are requests the API refuses before the model sees them.
+Measured on the committed split (2026-11-05), the filter removes 1,490 of the 103,003 split rows and moves every realised split share by at most 0.08 pp, so it does not disturb the split proportions.
+Per frame: train keeps 62,708 of 63,547 rows, validation 9,147 of 9,283, calibration 9,400 of 9,586 and test 20,258 of 20,587.
+Of the 2,402 `ES` holdout rows the holdout matrix keeps 2,355, which is the count of the `ES` rows the API accepts under FR-04; the 47 it drops are requests the API refuses before the model sees them.
 The matrix is the holdout as the model receives it, and it is not what M6 replays: a request cannot be rebuilt from it, because its `country_code` is empty throughout (see below) and `registration_date` has become `age_years`, both fields FR-01 requires.
-The replay reads `data/processed/holdout_es.parquet`, which keeps all 6,079 rows, and has to filter to the supported makes itself or count the 100 refused requests as FR-04's 422s.
+The replay reads `data/processed/holdout_es.parquet`, which keeps all 2,402 rows, and has to filter to the supported makes itself or count the 47 refused requests as FR-04's 422s.
 The holdout's `country_code` stays empty in every one of those rows, because `ES` is still not a training level ([EDN-18](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)); the filter removes rows and leaves that encoding as it was.
 The 1,437 out-of-scope rows would **not** inflate the reported metrics - rare makes are harder, so a pooled figure computed over them is if anything pessimistic.
 The problem they pose is a different one: the reported population would not be the served population.
@@ -230,13 +230,13 @@ Measured on the real snapshot, a stratified-group split on `make` moves 52.6 % o
 `split` holds out the `ES` listings of a share `split.holdout_seller_share` of the `ES` sellers, 0.4, and splits the other `ES` sellers like any other seller ([EDN-102](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 A seller is held out when the SHA-256 of `seed`, `ES` and its key falls below the share (`held_out` in `split_data.py`), so the choice depends on the seed and the key alone, a seller's listings land on one side, and a seller held out at one share is held out at every larger one.
 FR-15's retrain learns the market from the sellers in the pool and is measured, in the replay, on `ES` dealers it never saw.
-A share of 1 holds out the whole country, which is how the committed `dvc.lock` was built: until that retrain is promoted, the files on `main` and every number on this page describe the whole-country holdout of 6,079 listings.
+A share of 1 holds out the whole country, which is how the models before 2026-11-05 were built; the retrain at 0.4 was promoted by [#303](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/303), so the committed `dvc.lock` and the numbers on this page describe that split.
 The `ES` sellers that join the pool move no other listing between sets (`tests/test_split.py`), so the models before and after differ by the `ES` training rows alone.
 A held-out seller's listings outside `ES` stay in the pool, as before (EDN-03); on the real snapshot no seller lists in both.
 
-A `dvc repro` with share 0.4 on the laptop (2026-11-05) gave:
+A `dvc repro` with share 0.4 on the laptop (2026-11-05) gave the split that the runner's retrain reproduced and #303 committed:
 
-| What | Whole country (committed) | Share 0.4 |
+| What | Whole country (before #303) | Share 0.4 (committed) |
 |---|---|---|
 | `ES` listings held out, of 6,079 | 6,079 of 1,933 sellers | 2,402 of 804 sellers |
 | Of them valid requests, the replay's `es` sample | 5,779 | 2,266 |
@@ -254,7 +254,8 @@ Three rules follow from it:
   Changing it reshuffles the sellers, so it is a new split, and every figure and any FR-15 comparison starts over.
   No seed is chosen for a better mix or a better number.
 - **A figure of the committed split is reported with its spread.**
-  The candidate's test MdAPE of 6.73 % comes with a standard deviation of 0.26 pp over the 20 other splits, and the 16.80 % of cars older than 20 years with their mean of 18.2 %.
+  On the whole-country split the candidate's test MdAPE of 6.73 % came with a standard deviation of 0.26 pp over the 20 other splits, and the 16.80 % of cars older than 20 years with their mean of 18.2 %.
+  EDN-102 changed the pool, so by the next rule the spread of the promoted model (6.80 % and 17.64 %) is due to be measured again.
 - **The script is re-run when what it measured changes**: the snapshot, the scope, the split ratios, or the candidate and its hyperparameters, because the spread is that model's on that pool.
 
 Data validation
@@ -505,10 +506,10 @@ The runs' `git_commit` is the commit of `main` the workflow started from, so the
 When `main` has moved on or `dvc.lock` conflicts by the time the pull request is opened, run the workflow again rather than merging `main` into the branch.
 
 A forced run takes about 6 minutes on the runner, with at most 3.3 GB of its 16 GB of RAM and 2.4 GB of disk.
-Its energy figures are estimates for the runner: CodeCarbon has no energy counter there either and assumes the TDP of the runner's server CPU, 16 W in the last three retrains (AMD EPYC 9V74 and 9V45), which puts the `lgbm-basic` fit at 0.28 to 0.42 Wh (0.42 Wh in 105 s in [#258](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/258)) against 0.59 Wh on the laptop ([model card](model-card.md#environmental-impact)).
+Its energy figures are estimates for the runner: CodeCarbon has no energy counter there either and assumes the TDP of the runner's server CPU, 16 W in the last three retrains (AMD EPYC 9V74 and 9V45), which puts the `lgbm-basic` fit at 0.28 to 0.42 Wh (0.41 Wh in 103 s in [#303](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/303), the promoted model) against 0.59 Wh on the laptop ([model card](model-card.md#environmental-impact)).
 The MLflow runs carry `trained_on` and `energy_estimate` tags that say so.
 Merging a promotion from the workflow replaces the committed emissions files, `energy-vs-error` and the report's copy of that figure with these estimates, mixed with laptop rows when only some variants were retrained; the run's summary says so at the top.
-So the laptop stays NFR-10's reference only as long as no promotion trained on the runner is merged, and the report's NFR-10 caption has to be updated with such a merge.
+Since [#258](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/258) and #303 merged such promotions, the committed energy files and the NFR-10 tables of the model card and the report are the runner's estimates, with the laptop's quoted beside them as the earlier measurement, and the report's NFR-10 caption has to be updated with every such merge.
 
 The monitoring samples
 ----------------------
@@ -521,14 +522,14 @@ Both read what the `monitoring_samples` stage writes to `data/monitoring/`, so t
 |---|---|---|---|
 | `reference` | `train` | `monitoring.reference_size`, 10,000 | The drift reference of NFR-11. |
 | `control` | `train`, none of the reference's | `monitoring.control_size`, 20,000 | Normal traffic: 20 control windows of 1,000. |
-| `es` | the `ES` holdout | every one the API accepts, 5,779 of 6,079 | The drift scenario ([EDN-03](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). |
+| `es` | the `ES` holdout | every one the API accepts, 2,266 of 2,402 | The drift scenario ([EDN-03](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)). |
 
 Reference and control are one random permutation of the same rows cut in two, with the top-level `seed`, so a control window is i.i.d. with the reference: EDN-14 measured that a seller-grouped control, which is what `test` is, gets flagged as drift.
 The price is that the model was fitted on the control listings, so the error and the coverage the replay measures on them are in-sample and optimistic; they show that the monitoring works, and the model is judged against `metrics.json` instead.
 Only listings the API accepts are drawn: a supported make (FR-04) and a body that both `ValuationRequest` and `PartialListing` validate, which needs every field FR-01 requires.
 Nothing else reaches the prediction log, so a reference holding other rows would compare every window with listings that can never appear in it, such as the 1 % of supported training listings without `power_kw`.
-`manifest.json` counts what was left out of each source and why: of `train`'s 61,180 listings, 802 have an unsupported make and 1,514 are no valid request, and of the holdout's 6,079, 100 and 200.
-On the samples of the committed `dvc.lock`, the scipy emulation of `reports/analysis/nfr11_check.py` at Bonferroni `0.005 / 23` flags none of the 20 control windows and all 5 `ES` windows, each with at least 12 drifted features besides `country_code`, both on the files as written and on the requests as the replay sends and the log records them, read back with the age rule below.
+`manifest.json` counts what was left out of each source and why: of `train`'s 63,547 listings, 839 have an unsupported make and 1,585 are no valid request, and of the holdout's 2,402, 47 and 89.
+On the samples of the whole-country split, before #303, the scipy emulation of `reports/analysis/nfr11_check.py` at Bonferroni `0.005 / 23` flags none of the 20 control windows and all 5 `ES` windows, each with at least 12 drifted features besides `country_code`, both on the files as written and on the requests as the replay sends and the log records them, read back with the age rule below.
 
 Every sample is in a random order, so any run of consecutive rows is a random sample of its set and a replay can stop after any window.
 Each is written twice, with the same listings in the same order:
