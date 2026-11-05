@@ -30,6 +30,7 @@ from tests.api.conftest import API_KEY
 from tests.api.helpers import (
     SKIP_UVICORN_WORKERS_ON_WINDOWS,
     answer_record,
+    answers,
     assert_problem,
     write_records,
 )
@@ -361,9 +362,12 @@ def test_nfr03_two_uvicorn_workers_record_every_request_exactly_once(
             stderr=stderr,
         )
     try:
-        # Each worker loads the model and opens the log on its own.
+        # Each worker loads the model and opens the log on its own, then
+        # listens on the port (`answers`).
         deadline = time.monotonic() + 180
-        while server_log.read_text(encoding="utf-8").count("Application startup complete") < 2:
+        while server_log.read_text(encoding="utf-8").count(
+            "Application startup complete"
+        ) < 2 or not answers(f"http://127.0.0.1:{port}/health"):
             assert server.poll() is None, server_log.read_text(encoding="utf-8")
             assert time.monotonic() < deadline, server_log.read_text(encoding="utf-8")
             time.sleep(0.25)

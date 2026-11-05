@@ -14,12 +14,16 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
 
 from prometheus_client.parser import text_string_to_metric_families
 import pytest
-from tests.api.helpers import SKIP_UVICORN_WORKERS_ON_WINDOWS, free_port, stop_service
+from tests.api.helpers import (
+    SKIP_UVICORN_WORKERS_ON_WINDOWS,
+    answers,
+    free_port,
+    stop_service,
+)
 
 from recommenditos.api.metrics import MULTIPROC_DIR_ENV_VAR
 from recommenditos.api.settings import MODEL_DIR_ENV_VAR
@@ -34,19 +38,6 @@ MAX_ROUNDS = 10
 def _get(url: str) -> str:
     with urllib.request.urlopen(url, timeout=10) as response:
         return response.read().decode()
-
-
-def _answers(url: str) -> bool:
-    """Whether `url` answers; a refused connection, nothing listening yet, means not yet."""
-    try:
-        _get(url)
-    except urllib.error.HTTPError:
-        raise
-    except urllib.error.URLError as error:
-        if not isinstance(error.reason, ConnectionRefusedError):
-            raise
-        return False
-    return True
 
 
 def _post(url: str, body: dict) -> int:
@@ -85,13 +76,10 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
     )
     base = f"http://127.0.0.1:{port}"
     try:
-        # Ready once both workers have built the app and the port accepts. A
-        # worker writes its `gauge_max` file when it builds the app, before its
-        # lifespan runs; the supervisor binds the port, but only a worker that
-        # has finished its lifespan listens on it, so until then a connection
-        # is refused.
+        # Ready once both workers have built the app, which writes their
+        # `gauge_max` files, and the port accepts connections (`answers`).
         deadline = time.monotonic() + STARTUP_SECONDS
-        while len(_pids(directory, "gauge_max")) < WORKERS or not _answers(f"{base}/health"):
+        while len(_pids(directory, "gauge_max")) < WORKERS or not answers(f"{base}/health"):
             assert process.poll() is None, "the service exited during startup"
             assert time.monotonic() < deadline, "the workers did not start in time"
             time.sleep(0.1)
