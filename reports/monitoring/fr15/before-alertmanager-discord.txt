@@ -1,0 +1,8 @@
+alertmanager_notifications_failed_total{integration="discord",reason="authError"} 0
+alertmanager_notifications_failed_total{integration="discord",reason="clientError"} 0
+alertmanager_notifications_failed_total{integration="discord",reason="contextCanceled"} 0
+alertmanager_notifications_failed_total{integration="discord",reason="contextDeadlineExceeded"} 0
+alertmanager_notifications_failed_total{integration="discord",reason="other"} 0
+alertmanager_notifications_failed_total{integration="discord",reason="rateLimited"} 0
+alertmanager_notifications_failed_total{integration="discord",reason="serverError"} 0
+alertmanager_notifications_total{integration="discord"} 3
