@@ -21,7 +21,7 @@ Atenea takes one PDF, so `build.sh` builds the EDN first and the report appends 
 
 ## Writing
 
-- Blue **Guidance** boxes say what a section must contain: the course template's prompt, the rubric question and points, and what the repo already has.
+- Blue **Guidance** boxes say what a section must contain: the course template's prompt, the rubric question and points, what the repo already has, and what the lecturer's feedback means for it ([references/lecturer-feedback.md](../../references/lecturer-feedback.md)).
   They disappear in submission builds, so there is no need to delete them.
 - `\tbd{...}` marks a placeholder.
   It renders in red in every build, and `make report-submit` counts the ones left.
