@@ -71,7 +71,7 @@ The course grades how we make engineering decisions and how we use AI in them, s
    Link the evidence (issue, PR, commit, experiment) and do not retell it.
    The AI interaction evidence, which the professor asked on 2026-10-27 to hold the prompt that led to the decision, has up to three lines, in this order:
    the question that raised the decision, from the AI's options question or from the issue (paraphrased when it is not word for word);
-   in an orchestrated session, the orchestrator's briefing to the subagent, its core marked "(core, paraphrased)", because the opening prompt of such a session is the same for every decision and says nothing about this one;
+   in an orchestrated session, the orchestrator's briefing to the subagent whose work raised the question (for a decision taken on a plan, the architect's briefing, never the briefs of the workers who implemented the answer), its core marked "(core, paraphrased)", because the opening prompt of such a session is the same for every decision and says nothing about this one;
    and "Lukas answered:" followed by the text of the option he took, which is the text of the AI's recommendation when he accepted it, never his own "take your recommendation".
    A line that does not exist is left out, never invented.
    So when a session leads to a decision, note the question, the options and the user's answer for the entry before the session ends.
