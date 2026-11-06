@@ -1,7 +1,8 @@
 \subsection{Milestone 4: Model Deployment -- API}
 \label{sec:m4}
 \guidance{
-  \textbf{Template:} Describe how you have deployed your model and the technologies used.
+  \textbf{Template:} Describe how you have deployed your model and the technologies used.\\
+  \textbf{Lecturer feedback:} put every measured number into a context the reader knows: latency, memory, and image size against their NFR budgets, and the serving energy per request from the load test (\texttt{docs/docs/load-testing.md}) also against an everyday activity, which the lecturer missed in 2.3.1 of the first report.
 }
 
 \subsubsection{ML-based component/system architecture}
@@ -12,7 +13,8 @@
   Selection and justification of design decisions (e.g.\ cloud provider).
   The demo repo compares free tiers of AWS, Azure, GCP, Okteto, and the FIB Virtech VM (free for the semester, 4\,GB RAM, 20\,GB storage); see references/course-demos.md.\\
   \textbf{Rubric (15 pts, the largest single item):} In what ways does our system design balance clarity and justified complexity while applying suitable architectural patterns and principles?\\
-  Component responsibilities and interactions are typical M4 EDN entries.
+  Component responsibilities and interactions are typical M4 EDN entries.\\
+  \textbf{Lecturer feedback:} draw diagrams for the reader; the lecturer preferred Fig.~3 of the first report, drawn from \texttt{dvc.yaml}, to DagsHub's generated DAG.
 }
 
 \tbd{logical and physical architecture with diagrams}
@@ -39,7 +41,8 @@ Nobody on the team has access to it yet; if this is still the case at the first 
 \guidance{
   \textbf{Template:} e.g.\ FastAPI.\\
   \textbf{Rubric (10 pts, shared with API testing):} To what extent do our API design and its documentation make the system robust, intuitive, and easy to adopt by others?\\
-  The demo separates the FastAPI app from its Pydantic request/response schemas and relies on the generated Swagger UI (\texttt{/docs}) and ReDoc (\texttt{/redoc}).
+  The demo separates the FastAPI app from its Pydantic request/response schemas and relies on the generated Swagger UI (\texttt{/docs}) and ReDoc (\texttt{/redoc}).\\
+  \textbf{Lecturer feedback:} the lecturer reads the README and the docs while grading, so they must describe the API as it is served; a stale README sentence drew the one criticism of 2.2.1 in the first report.
 }
 
 \tbd{endpoints, schemas and API documentation}
