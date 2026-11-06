@@ -15,6 +15,7 @@ reaches the stack's images.
 from collections.abc import Callable, Iterator
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import secrets
@@ -100,6 +101,84 @@ def without_stack_environment() -> dict[str, str]:
             ("API_IMAGE", "COMPOSE_", "RECOMMENDITOS_", "HTTP_PORT", "GRAFANA_", "DISCORD_")
         )
     }
+
+
+def containers_report() -> str:
+    """The state of each container of the drill's project, with the log of each that is unwell.
+
+    deploy.sh answers a failed start with "check `docker compose ps` and `... logs`",
+    and the fixture removes the containers as soon as the test ends, so a failure
+    message has to carry both. `up --wait` names a container "unhealthy" both when
+    its probes failed and when its process exited and Docker restarts it: the
+    restart count, the end of the last run, the probes, and the log tell the two
+    apart. The report is built inside a failing assertion's message, so it never
+    raises: whatever goes wrong in it becomes its text, and the assertion's own
+    message stays.
+    """
+    try:
+        return _containers_report()
+    except Exception as error:  # noqa: BLE001 - a message must not replace the failure it explains
+        return f"no report of the containers of {PROJECT}: {type(error).__name__}: {error}"
+
+
+def _containers_report() -> str:
+    listed = subprocess.run(
+        [
+            "docker",
+            "ps",
+            "--all",
+            "--quiet",
+            "--filter",
+            f"label=com.docker.compose.project={PROJECT}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    if listed.returncode != 0:
+        return f"docker ps failed: {listed.stderr.strip()}"
+    ids = listed.stdout.split()
+    if not ids:
+        return f"no container of {PROJECT} exists"
+    inspected = subprocess.run(
+        ["docker", "inspect", *ids], capture_output=True, text=True, timeout=60, check=False
+    )
+    if inspected.returncode != 0:
+        return f"docker inspect failed: {inspected.stderr.strip()}"
+    lines = [f"the containers of {PROJECT}:"]
+    for container in json.loads(inspected.stdout):
+        state = container["State"]
+        health = state.get("Health") or {}
+        service = container["Config"]["Labels"].get(
+            "com.docker.compose.service", container["Name"]
+        )
+        # Docker sets the exit code back to 0 when it restarts a container; the
+        # end of the last run and its error stay.
+        lines.append(
+            f"{service}: {state['Status']}, health {health.get('Status', 'none')}, "
+            f"exit code {state['ExitCode']}, error {state['Error'] or 'none'}, "
+            f"OOM-killed {state['OOMKilled']}, restarts {container['RestartCount']}, "
+            f"started {state['StartedAt']}, last run ended {state['FinishedAt']}"
+        )
+        well = health.get("Status", "healthy") == "healthy" and state["Status"] == "running"
+        done = state["Status"] == "exited" and state["ExitCode"] == 0
+        if (well or done) and container["RestartCount"] == 0:
+            continue
+        for probe in health.get("Log", [])[-3:]:
+            output = " ".join(probe["Output"].split())[:300]
+            lines.append(f"  probe at {probe['Start']}: exit code {probe['ExitCode']} {output}")
+        log = subprocess.run(
+            ["docker", "logs", "--tail", "40", container["Id"]],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+        )
+        lines.extend(f"  | {line}" for line in (log.stdout + log.stderr).splitlines())
+    return "\n".join(lines)
 
 
 class Stack:
@@ -188,6 +267,10 @@ class Stack:
                 break
         process.stdout.close()
         return process.wait(timeout=WAIT_TIMEOUT_S * 3 + 120)
+
+    def explain(self, result: subprocess.CompletedProcess[str]) -> str:
+        """What deploy.sh said, then the state of the drill's containers right after."""
+        return f"{result.stdout}{result.stderr}\n{containers_report()}"
 
     def env_tag(self) -> str:
         lines = (self.directory / ".env").read_text(encoding="utf-8").splitlines()
@@ -323,13 +406,13 @@ def last_line(result: subprocess.CompletedProcess[str]) -> str:
 @pytest.mark.req("FR-15", "NFR-13")
 def test_a_broken_tag_is_rolled_back_and_the_previous_one_serves_again(drill: Stack) -> None:
     first = drill.deploy_sh("deploy", GOOD)
-    assert first.returncode == 0, first.stdout + first.stderr
+    assert first.returncode == 0, drill.explain(first)
     assert last_line(first) == f"running: {GOOD}"
     assert drill.health().status_code == 200
 
     broken = drill.deploy_sh("deploy", BROKEN)
 
-    assert broken.returncode == 1, broken.stdout + broken.stderr
+    assert broken.returncode == 1, drill.explain(broken)
     assert last_line(broken) == f"running: {GOOD}"
     assert drill.env_tag() == GOOD
     assert drill.running_image() == f"{API}:{GOOD}"
@@ -342,18 +425,19 @@ def test_a_broken_tag_is_rolled_back_and_the_previous_one_serves_again(drill: St
 def test_rollback_after_a_failed_smoke_check_brings_the_previous_release_back(
     drill: Stack,
 ) -> None:
-    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good = drill.deploy_sh("deploy", GOOD)
+    assert good.returncode == 0, drill.explain(good)
     good_files = drill.stack_files()
     drill.build_stack(NEWER, marker="newer")
     newer = drill.deploy_sh("deploy", NEWER)
-    assert newer.returncode == 0, newer.stdout + newer.stderr
+    assert newer.returncode == 0, drill.explain(newer)
     assert drill.running_image() == f"{API}:{NEWER}"
     assert drill.marker().text == "newer"
 
     # What the workflow runs when `make smoke` fails against the new release.
     rollback = drill.deploy_sh("rollback")
 
-    assert rollback.returncode == 0, rollback.stdout + rollback.stderr
+    assert rollback.returncode == 0, drill.explain(rollback)
     assert last_line(rollback) == f"running: {GOOD}"
     assert drill.running_image() == f"{API}:{GOOD}"
     assert drill.stack_files() == good_files
@@ -361,7 +445,7 @@ def test_rollback_after_a_failed_smoke_check_brings_the_previous_release_back(
     assert drill.health().status_code == 200
     # One step back only: a second rollback would bring the failed release back.
     again = drill.deploy_sh("rollback")
-    assert again.returncode == 1
+    assert again.returncode == 1, drill.explain(again)
     assert last_line(again) == f"running: {GOOD}"
 
 
@@ -369,14 +453,15 @@ def test_rollback_after_a_failed_smoke_check_brings_the_previous_release_back(
 def test_a_change_to_the_stack_files_reaches_the_vm_and_leaves_env_as_it_is(
     drill: Stack,
 ) -> None:
-    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good = drill.deploy_sh("deploy", GOOD)
+    assert good.returncode == 0, drill.explain(good)
     assert drill.marker().status_code == 404
     env_before = (drill.directory / ".env").read_text(encoding="utf-8")
     drill.build_stack(NEWER, marker="changed nginx.conf")
 
     result = drill.deploy_sh("deploy", NEWER)
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 0, drill.explain(result)
     assert drill.marker().text == "changed nginx.conf"
     # Only the tag changed in .env, and no stack file came beside it.
     env_after = (drill.directory / ".env").read_text(encoding="utf-8")
@@ -394,13 +479,14 @@ def test_a_change_to_the_stack_files_reaches_the_vm_and_leaves_env_as_it_is(
 def test_a_failed_release_brings_back_the_previous_tag_and_stack_files_together(
     drill: Stack,
 ) -> None:
-    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good = drill.deploy_sh("deploy", GOOD)
+    assert good.returncode == 0, drill.explain(good)
     good_files = drill.stack_files()
     drill.build_stack(BROKEN, marker="broken")
 
     broken = drill.deploy_sh("deploy", BROKEN)
 
-    assert broken.returncode == 1, broken.stdout + broken.stderr
+    assert broken.returncode == 1, drill.explain(broken)
     assert drill.env_tag() == GOOD
     assert drill.stack_files() == good_files
     assert drill.running_image() == f"{API}:{GOOD}"
@@ -412,18 +498,19 @@ def test_a_failed_release_brings_back_the_previous_tag_and_stack_files_together(
 def test_rolling_back_to_a_release_without_a_service_removes_it_and_keeps_the_volumes(
     drill: Stack,
 ) -> None:
-    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good = drill.deploy_sh("deploy", GOOD)
+    assert good.returncode == 0, drill.explain(good)
     drill.api().exec("python", "-c", "open('/var/lib/recommenditos/drill-marker', 'w').close()")
     drill.build_stack(NEWER, extra_service=True)
     newer = drill.deploy_sh("deploy", NEWER)
-    assert newer.returncode == 0, newer.stdout + newer.stderr
+    assert newer.returncode == 0, drill.explain(newer)
     assert len(drill.containers("extra")) == 1
     volumes = project_volumes()
     assert {f"{PROJECT}_prediction-log", f"{PROJECT}_extra-data"} <= volumes
 
     rollback = drill.deploy_sh("rollback")
 
-    assert rollback.returncode == 0, rollback.stdout + rollback.stderr
+    assert rollback.returncode == 0, drill.explain(rollback)
     # GOOD's compose.yaml has no `extra`, so its container is gone (--remove-orphans) ...
     assert drill.containers("extra", everything=True) == []
     # ... and no volume is: Compose removes one only when asked to.
@@ -486,13 +573,13 @@ def test_the_first_release_takes_over_the_stack_files_that_were_copied_by_hand(
     # The first deploy with the new deploy.sh, of the tag that runs.
     result = drill.deploy_sh("deploy", GOOD)
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 0, drill.explain(result)
     assert drill.marker().status_code == 404
     assert not (drill.directory / "compose.yaml").exists()
     assert not (drill.directory / "nginx.conf").exists()
     # The files copied by hand are the previous release.
     rollback = drill.deploy_sh("rollback")
-    assert rollback.returncode == 0, rollback.stdout + rollback.stderr
+    assert rollback.returncode == 0, drill.explain(rollback)
     assert drill.marker().text == "by hand"
     assert drill.env_tag() == GOOD
 
@@ -513,7 +600,7 @@ def test_a_deploy_removes_the_release_two_deploys_back_and_keeps_the_rest(drill:
     drill.build_stack(NEWEST, marker="newest")
     for tag in (GOOD, NEWER, NEWEST):
         result = drill.deploy_sh("deploy", tag)
-        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.returncode == 0, drill.explain(result)
 
     assert not has_image(f"{API}:{GOOD}")
     assert not has_image(f"{STACK}:{GOOD}")
@@ -527,11 +614,12 @@ def test_a_deploy_removes_the_release_two_deploys_back_and_keeps_the_rest(drill:
 
 @pytest.mark.req("FR-15", "NFR-13")
 def test_the_rollback_finishes_when_the_client_goes_away(drill: Stack) -> None:
-    assert drill.deploy_sh("deploy", GOOD).returncode == 0
+    good = drill.deploy_sh("deploy", GOOD)
+    assert good.returncode == 0, drill.explain(good)
 
     returncode = drill.deploy_sh_and_hang_up("deploy", BROKEN)
 
-    assert returncode == 1
+    assert returncode == 1, containers_report()
     assert drill.env_tag() == GOOD
     assert drill.running_image() == f"{API}:{GOOD}"
     assert drill.health().status_code == 200
@@ -573,13 +661,13 @@ def test_a_deploy_needs_the_monitoring_image_of_the_release_too(drill: Stack) ->
     not start its drift job, so nothing changes.
     """
     first = drill.deploy_sh("deploy", GOOD)
-    assert first.returncode == 0, first.stdout + first.stderr
+    assert first.returncode == 0, drill.explain(first)
     monitoring = docker("image", "inspect", "--format", "{{.Id}}", f"{MONITORING}:{NEWER}")
     docker("image", "rm", f"{MONITORING}:{NEWER}")
     try:
         missing = drill.deploy_sh("deploy", NEWER)
 
-        assert missing.returncode == 1, missing.stdout + missing.stderr
+        assert missing.returncode == 1, drill.explain(missing)
         assert f"pulling {MONITORING}:{NEWER} failed; nothing changed" in missing.stdout
         assert drill.env_tag() == GOOD
         assert drill.health().status_code == 200
@@ -588,6 +676,6 @@ def test_a_deploy_needs_the_monitoring_image_of_the_release_too(drill: Stack) ->
 
     present = drill.deploy_sh("deploy", NEWER)
 
-    assert present.returncode == 0, present.stdout + present.stderr
+    assert present.returncode == 0, drill.explain(present)
     assert f"{MONITORING}:{NEWER} is on the VM already" in present.stdout
     assert drill.env_tag() == NEWER

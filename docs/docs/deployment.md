@@ -643,6 +643,10 @@ GRAFANA_ADMIN_PASSWORD=x DISCORD_WEBHOOK_URL=x python3 tools/image_scan.py scan 
   $(docker compose -f deploy/compose.yaml config --images)
 ```
 
+A local scan reuses the vulnerability database that trivy cached on your machine (by default under `~/.cache/trivy`) until trivy considers it expired, while CI downloads a new one on every run.
+A cached database older than a CVE therefore lets the local scan pass while CI fails, as on 2026-11-05 with CVE-2026-109518.
+Before you trust a clean local scan, run it with `TRIVY_CACHE_DIR` pointing at an empty directory (`TRIVY_CACHE_DIR=$(mktemp -d) python3 tools/image_scan.py scan ...`), which makes trivy download the current database, as CI does.
+
 When the scan fails, update the base image or the package; Dependabot's pull request may already do so.
 When no base image ships the fix yet but `trixie-security` does, the runtime stage upgrades that package by name with `apt-get install --only-upgrade`, not with a blanket `apt-get upgrade`: CD's build restores its layers from the Actions cache, which would keep a blanket upgrade at the versions of its first build, while a new package name in the line changes the layer and so rebuilds it.
 The runtime stages of both images take `apt` and `libapt-pkg7.0` 3.0.4 that way since 2026-11-05: the pinned base image and the newest `python:3.12-slim-trixie` (built 2026-10-28) ship 3.0.3, which has CVE-2026-109518 (HIGH, [DSA-6607-1](https://security-tracker.debian.org/tracker/CVE-2026-109518)); the line goes once Dependabot moves the base to an image that ships the fix.

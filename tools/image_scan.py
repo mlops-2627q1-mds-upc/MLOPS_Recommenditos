@@ -245,7 +245,8 @@ def check_ignore_file() -> None:
 
 def cmd_scan(trivy: str, images: list[str]) -> int:
     check_ignore_file()
-    results = [scan_image(trivy, image) for image in images]
+    # `docker compose config --images` names an image once per service using it.
+    results = [scan_image(trivy, image) for image in dict.fromkeys(images)]
     publish(render_scan(results, trivy_version(trivy)))
     return 0 if all(result.passed for result in results) else 1
 

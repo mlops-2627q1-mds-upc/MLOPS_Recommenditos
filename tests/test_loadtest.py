@@ -12,7 +12,7 @@ import pytest
 from tools.loadtest import measure
 from tools.loadtest.arrivals import Arrivals
 from tools.loadtest.plan import build_plan
-from tools.loadtest.run import seconds
+from tools.loadtest.run import _log, seconds
 
 from recommenditos.api.metrics import ApiMetrics
 from recommenditos.api.schemas.common import ModelInfo
@@ -253,3 +253,12 @@ def test_the_locust_json_ends_with_one_newline(tmp_path, written, kept):
 )
 def test_a_full_commit_sha_tag_is_shortened_in_the_report(image, written):
     assert measure.short_image(image) == written
+
+
+def test_the_log_section_says_why_the_check_was_skipped():
+    # Without a container probe (`--no-docker`) the result has no key at all.
+    skipped = " ".join(_log({}))
+    assert "--no-docker" in skipped
+    assert "no prediction log" not in skipped
+    # With the probe, a container whose log variable is empty has none.
+    assert "has no prediction log" in " ".join(_log({"prediction_log": None}))
