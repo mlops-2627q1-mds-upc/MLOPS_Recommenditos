@@ -14,12 +14,16 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
 
 from prometheus_client.parser import text_string_to_metric_families
 import pytest
-from tests.api.helpers import SKIP_UVICORN_WORKERS_ON_WINDOWS, free_port, stop_service
+from tests.api.helpers import (
+    SKIP_UVICORN_WORKERS_ON_WINDOWS,
+    answers,
+    free_port,
+    stop_service,
+)
 
 from recommenditos.api.metrics import MULTIPROC_DIR_ENV_VAR
 from recommenditos.api.settings import MODEL_DIR_ENV_VAR
@@ -72,12 +76,13 @@ def service(bundle: Path, tmp_path: Path) -> Iterator[tuple[str, Path]]:
     )
     base = f"http://127.0.0.1:{port}"
     try:
+        # Ready once both workers have built the app, which writes their
+        # `gauge_max` files, and the port accepts connections (`answers`).
         deadline = time.monotonic() + STARTUP_SECONDS
-        while len(_pids(directory, "gauge_max")) < WORKERS:
+        while len(_pids(directory, "gauge_max")) < WORKERS or not answers(f"{base}/health"):
             assert process.poll() is None, "the service exited during startup"
             assert time.monotonic() < deadline, "the workers did not start in time"
-            time.sleep(0.5)
-        _get(f"{base}/health")
+            time.sleep(0.1)
         yield base, directory
     finally:
         stop_service(process)

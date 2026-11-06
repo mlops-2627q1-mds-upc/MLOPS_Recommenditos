@@ -7,6 +7,8 @@ import socket
 import subprocess
 import sys
 from typing import Any
+import urllib.error
+import urllib.request
 
 from httpx2 import Response
 import pytest
@@ -92,6 +94,27 @@ def free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return int(probe.getsockname()[1])
+
+
+def answers(url: str) -> bool:
+    """Whether the service started on `url`'s port answers it yet.
+
+    With several workers, uvicorn 0.54's supervisor binds the port without
+    listening on it, and a worker calls `listen()` only after its lifespan has
+    started, so a worker that has built the app, or logged "Application startup
+    complete", may still refuse a connection for some milliseconds. A refused
+    connection is therefore "not yet"; any other error, an error status
+    included, is raised.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=10):
+            return True
+    except urllib.error.HTTPError:
+        raise
+    except urllib.error.URLError as error:
+        if isinstance(error.reason, ConnectionRefusedError):
+            return False
+        raise
 
 
 def stop_service(process: subprocess.Popen) -> None:
