@@ -65,9 +65,11 @@ COPY data/monitoring /app/data/monitoring
 # full-input coverage the drift job compares each window's error and coverage
 # with (#229), and the dvc.lock that names the model version of each variant's
 # values, so that a window is judged against its own model's after a
-# promotion (#307).
+# promotion (#307), and the test MdAPE per country, the market baseline of a
+# window's MdAPE (#306).
 COPY metrics.json /app/metrics.json
 COPY reports/metrics/interval-coverage-by-make.csv /app/interval-coverage-by-make.csv
+COPY reports/metrics/segments.csv /app/segments.csv
 COPY dvc.lock /app/dvc.lock
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
@@ -76,6 +78,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     RECOMMENDITOS_MONITOR_METRICS=/app/metrics.json \
     RECOMMENDITOS_MONITOR_COVERAGE=/app/interval-coverage-by-make.csv \
     RECOMMENDITOS_MONITOR_LOCK=/app/dvc.lock \
+    RECOMMENDITOS_MONITOR_SEGMENTS=/app/segments.csv \
     # Alibi Detect imports Matplotlib, Numba and transformers, which want a
     # writable cache directory; the root is read-only, /tmp a tmpfs. Without
     # PyTorch or TensorFlow, which the job does not need, transformers would

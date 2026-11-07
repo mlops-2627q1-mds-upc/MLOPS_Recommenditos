@@ -154,6 +154,18 @@ def test_the_monitoring_image_has_the_releases_dvc_lock(monitor):
     assert found == expected.hexdigest()
 
 
+def test_the_monitoring_image_has_the_releases_segments(monitor):
+    """They hold the test MdAPE per country, a window's market baseline (#306)."""
+    found = monitor.exec(
+        "python",
+        "-c",
+        "import hashlib; print(hashlib.md5(open('/app/segments.csv', 'rb').read()).hexdigest())",
+    )
+    segments = REPOSITORY / "reports" / "metrics" / "segments.csv"
+    expected = hashlib.md5(segments.read_bytes(), usedforsecurity=False)
+    assert found == expected.hexdigest()
+
+
 @pytest.mark.req("FR-14")
 def test_the_pass_at_the_start_succeeded(monitor):
     eventually(
@@ -246,6 +258,7 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         ("recommenditos_performance_test_coverage", None): pytest.approx(coverage),
         ("recommenditos_performance_final", None): 0,
     }
-    # Left out without labels: the two figures and the level the ranges state.
-    absent = {"mdape", "coverage", "nominal_level"}
+    # Left out without labels: the two figures, the level the ranges state, and
+    # the market baseline of the MdAPE.
+    absent = {"mdape", "coverage", "nominal_level", "baseline_mdape", "baseline_test_rows"}
     assert not {name for name, _ in exported} & {f"recommenditos_performance_{n}" for n in absent}

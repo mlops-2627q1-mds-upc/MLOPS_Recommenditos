@@ -68,7 +68,7 @@ ORDER BY seq
 #: join as the log's view `labelled_predictions`, written out so that it reads
 #: only the columns it needs.
 _LABELS = """
-SELECT p.request_id, p.endpoint, p.outputs, f.observed_price_eur
+SELECT p.request_id, p.endpoint, p.outputs, f.observed_price_eur, p.inputs
 FROM predictions AS p JOIN feedback AS f USING (request_id)
 WHERE p.seq BETWEEN ? AND ?
 ORDER BY p.seq
@@ -134,6 +134,8 @@ class Label:
     lower_eur: float | None
     upper_eur: float | None
     confidence_level: float | None
+    #: The listing's `country_code`, the market whose test MdAPE it is judged against (#306).
+    country_code: str | None = None
 
 
 def labels(
@@ -146,7 +148,7 @@ def labels(
         raise LogError(f"the feedback cannot be read: {error}") from error
     wanted = set(request_ids)
     found: list[Label] = []
-    for request_id, endpoint, outputs, observed in cursor:
+    for request_id, endpoint, outputs, observed, inputs in cursor:
         if request_id not in wanted:
             continue
         answer = json.loads(outputs)
@@ -162,9 +164,15 @@ def labels(
                 lower_eur=float(answer["lower_eur"]) if ranged else None,
                 upper_eur=float(answer["upper_eur"]) if ranged else None,
                 confidence_level=float(answer["confidence_level"]) if ranged else None,
+                country_code=_country(inputs),
             )
         )
     return found
+
+
+def _country(inputs: str | None) -> str | None:
+    country = json.loads(inputs).get("country_code") if inputs else None
+    return None if country is None else str(country)
 
 
 def first_seq(connection: sqlite3.Connection) -> int | None:
