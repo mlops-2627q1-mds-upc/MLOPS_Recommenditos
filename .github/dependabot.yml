@@ -64,13 +64,11 @@ updates:
       - dependency-name: nginxinc/nginx-unprivileged
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
-  # uv.lock and pyproject.toml, the project's and the monitoring image's
-  # (monitoring/). Minor and patch updates in one pull request a week; a major
+  # uv.lock and pyproject.toml of the project (/) and of the monitoring image
+  # (/monitoring). Minor and patch updates in one pull request a week; a major
   # update comes on its own, as it is the one likely to need code changes.
-  # monitoring/ caps numpy below 2 and pandas below 3 for Alibi Detect: a pull
-  # request that lifts a cap waits until Alibi Detect allows the new major.
   - package-ecosystem: uv
-    directories: ["/", "/monitoring"]
+    directory: /
     schedule:
       interval: weekly
       day: monday
@@ -80,3 +78,25 @@ updates:
       python:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  - package-ecosystem: uv
+    directory: /monitoring
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      python:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Alibi Detect 0.13, the latest release, needs numpy<2 and pandas<3, and
+      # pyarrow 25 imports only with numpy 2. Drop these once Alibi Detect
+      # allows the new majors.
+      - dependency-name: numpy
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pandas
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pyarrow
+        update-types: ["version-update:semver-major"]

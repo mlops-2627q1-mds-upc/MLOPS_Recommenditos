@@ -664,6 +664,7 @@ Its one kind of exception, DL3008 for a Debian package installed or upgraded wit
 `.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile`, of `deploy/compose.yaml` and of the report's TeX Live image (`reports/latex/Dockerfile`), and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.
 Every image is pinned by tag and digest (`python:3.12-slim-trixie@sha256:...`), so a rebuild starts from the bytes the last scan saw, and Dependabot moves both; a base image rebuilt under the same tag with Debian's security fixes is a new digest and so a pull request too, whose integration job scans the new image.
 Python's minor version and nginx's stable branch are not moved: those are changes of their own.
+In `/monitoring`, major updates of numpy, pandas, and pyarrow are not proposed either, as Alibi Detect 0.13 needs numpy 1 and pandas 2.
 The actions are pinned by commit SHA with the release in a comment, which Dependabot moves the same way.
 
 ## What M5 adds
