@@ -32,7 +32,7 @@ name: recommenditos
 # (`make stack` does), which keeps at most 5 compressed files of 20 MB per
 # container and loses them with the container.
 x-logging: &logging
-  driver: ${LOG_DRIVER:-journald}
+  driver: json-file
   options:
     tag: "{{.Name}}"
 
