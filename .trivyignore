@@ -49,10 +49,11 @@ CVE-2026-97031 exp:2026-12-04
 # gRPC-Go xDS RBAC in cAdvisor: it uses no xDS and serves no gRPC.
 GHSA-hrxh-6v49-42gf exp:2026-12-04
 
-# Grafana 13.3.0 (deploy/compose.yaml), the newest release on 2026-11-04: every
-# HIGH finding is in a backend binary of a data source plugin it bundles, none
-# in Grafana's own binary or in its Prometheus plugin
-# (gpx_grafana-prometheus-datasource), the one plugin process that runs. The Go
+# Grafana 13.3.0 (deploy/compose.yaml), the newest release on 2026-11-04: apart
+# from CVE-2026-78661 (x/net/html, see below), every HIGH finding is in a
+# backend binary of a data source plugin it bundles, none in Grafana's own
+# binary or in its Prometheus plugin (gpx_grafana-prometheus-datasource), the
+# one plugin process that runs. The Go
 # stdlib findings CVE-2026-111943, CVE-2026-78667, CVE-2026-78669 and
 # CVE-2026-97031 above match nine of them as well: the Jaeger, Loki, MSSQL,
 # MySQL, CloudWatch, InfluxDB, PostgreSQL, OpenTSDB and Pyroscope plugins; the
@@ -66,6 +67,30 @@ GHSA-hrxh-6v49-42gf exp:2026-12-04
 CVE-2026-21728 exp:2026-12-04
 # github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.10.3: the plugin is off.
 CVE-2026-28377 exp:2026-12-04
+
+# golang.org/x/net/html before 0.62.0 in every Go binary of the stack
+# (deploy/compose.yaml): no release of Prometheus (v3.16.0 included),
+# Alertmanager, node-exporter, cAdvisor or Grafana is built with 0.62.0 on
+# 2026-11-07. `govulncheck -mode=binary` (GO-2026-6860) finds the html package
+# in none of prometheus, promtool, alertmanager, amtool, node_exporter and
+# cadvisor, only the module, and in Grafana's own binary the package but none of
+# the affected functions. Of Grafana's bundled plugins, which link html.Parse,
+# only the Prometheus plugin runs (see Grafana's entries above), and its input
+# comes from the stack's own Prometheus and from users who reach Grafana through
+# the SSH tunnel. Accepted until releases with the fix, reviewed again with the entries
+# above (tracked in #286).
+# Quadratic time parsing crafted HTML, a denial of service: no binary that runs parses HTML a stranger sends.
+CVE-2026-78661 exp:2026-12-04
+
+# musl and zlib in the Alpine layers of nginx-unprivileged:1.30-alpine-slim and
+# cAdvisor v0.60.6 (deploy/compose.yaml): Alpine has the fixes, but no image of
+# either tag is rebuilt with them on 2026-11-07, and building our own nginx
+# image was ruled out (EDN-95). Reviewed again with the entries above (tracked
+# in #286).
+# musl's regcomp() with an untrusted regular expression: nginx compiles its regular expressions, all from its own configuration, with PCRE2 and imports no regcomp; neither cadvisor nor its libpfm imports it.
+CVE-2026-107891 exp:2026-12-04
+# zlib's gzwrite()/gzprintf() path: nginx imports zlib's deflate and inflate but no gz* function, cadvisor links no zlib. The API and monitoring images take the fixed zlib1g (Dockerfile), and CVE-2026-76844, fixed by the same package and not accepted, still fails the scan if zlib1g regresses there.
+CVE-2026-85091 exp:2026-12-04
 
 # transformers 4.57.6 in the monitoring image (monitoring/Dockerfile): Alibi
 # Detect 0.13 requires transformers<5 and imports it when it is imported, but
