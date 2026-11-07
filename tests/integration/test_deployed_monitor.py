@@ -63,15 +63,27 @@ print(len(rows))
 """
 
 
-#: A dvc.lock that names the served bundle's version for its variant, so that the
-#: test pass records the image's test values for the model the stack serves: in
-#: CI a synthetic bundle, whose version the image's dvc.lock does not name.
-WRITE_LOCK = """
+#: The lock the test pass reads: the image's own, when it names the served
+#: bundle's version, as in CD, where the stack serves the real bundle; otherwise
+#: one that names it, written into the container's /tmp, so that the pass still
+#: records the image's test values for the served model: in CI the stack serves
+#: a synthetic bundle, which the image's dvc.lock does not name. Prints its path.
+LOCK_FOR_SERVED_MODEL = """
 import sys
+from pathlib import Path
+from recommenditos_monitoring.performance import bundle_versions
 variant, version = sys.argv[1:]
-with open("/tmp/integration-dvc.lock", "w", encoding="utf-8") as lock:
-    lock.write(f"stages:\\n  train@{variant}:\\n    outs:\\n")
-    lock.write(f"    - path: models/{variant}\\n      md5: {version}.dir\\n")
+image = Path("/app/dvc.lock")
+if bundle_versions(image).get(variant) == version:
+    print(image)
+else:
+    written = Path("/tmp/integration-dvc.lock")
+    written.write_text(
+        f"stages:\\n  train@{variant}:\\n    outs:\\n"
+        f"    - path: models/{variant}\\n      md5: {version}.dir\\n",
+        encoding="utf-8",
+    )
+    print(written)
 """
 
 
@@ -162,7 +174,9 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         ids.append(answer.json()["request_id"])
     assert monitor.exec("python", "-c", COPY_REQUESTS, json.dumps(ids)) == str(WINDOW)
     served = health.json()["model"]
-    monitor.exec("python", "-c", WRITE_LOCK, served["variant"], served["version"])
+    lock = monitor.exec(
+        "python", "-c", LOCK_FOR_SERVED_MODEL, served["variant"], served["version"]
+    )
     started = time.time()
 
     out = monitor.exec(
@@ -175,7 +189,7 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         "--db",
         "/tmp/integration-monitor.db",  # noqa: S108 - the container's own tmpfs
         "--lock",
-        "/tmp/integration-dvc.lock",  # noqa: S108 - the container's own tmpfs
+        lock,
         "--window-size",
         str(WINDOW),
     )

@@ -639,9 +639,26 @@ A window is judged against the test values of the model that answered its reques
 So a stored report keeps its ratios when it is re-read after a promotion, and `ModelErrorHigh` right after a promotion compares the old model's error with the old model's test MdAPE.
 The image holds only its own release's evaluate outputs, so every pass first records them in `monitor.db`'s `model_test_values`, for the model version of each variant that the release's `dvc.lock` names: the hash of `models/<variant>` without `.dir`, which is the version the API reports in `/health` and logs with every answer (FR-12).
 The first record of a version stays, so a later release that carries the same model, a rollback for example, changes no comparison.
+That also keeps a wrong record: a release whose `metrics.json` was wrong, or an evaluation fix that leaves `models/<variant>` unchanged, does not replace the values already recorded for that version.
+To correct one, deploy the release with the right values first, then delete the version's row; the next pass records the running image's values again, and every window that is not final is scored against them, while a final window keeps its figures.
+Deleting the row while a release with the wrong values runs only records them again, and deleting the row of a version no release runs any more leaves its windows with the values they last had.
+On the VM, from `/opt/recommenditos`, with the version from `/health`:
+
+```bash
+docker compose -f stack/compose.yaml --env-file .env exec -T monitor python -c '
+import sqlite3, sys
+db = sqlite3.connect("/var/lib/recommenditos-monitor/monitor.db")
+with db:
+    deleted = db.execute(
+        "DELETE FROM model_test_values WHERE model_variant = ? AND model_version = ?", sys.argv[1:]
+    ).rowcount
+print(deleted, "row deleted")
+' lgbm-basic 2a60912bd232083e6950f26fe72fe6c4
+```
+
 A window then takes the values recorded for its `model_version`, also when it is first scored by the next release's image.
 A window never holds the answers of two models: the first answer of another `model_version` closes it as `partial` ([What it compares](#what-it-compares)), so a promotion inside a window splits it, and each part is judged against its own model's values.
-A window of a model that no pass of this job ran with, such as one answered before #307 by a model that was replaced before this job shipped, keeps the test values its last scoring stored, or has none if it was never scored; its figures then stand without the comparison, and the model alerts cannot fire on them.
+A window of a model that no pass since #307 ran with, such as one answered by a model that was replaced before #307 shipped, keeps the test values its last scoring stored, or has none if it was never scored; its figures then stand without the comparison, and the model alerts cannot fire on them.
 
 On a laptop stack on 2026-11-04, after 2,000 control listings and 1,500 `ES` listings of the replay, the two control windows had an MdAPE of 5.38 % and 5.28 % and a coverage of 96.8 % and 95.4 %, and the `ES` window, flagged in 14 features, an MdAPE of 9.41 %, 1.40 times the test value, and a coverage of 85.8 % of its 500 labelled ranges ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)).
 
