@@ -81,7 +81,8 @@ ARG MODEL_VARIANT=lgbm-basic
 # python:3.12-slim-trixie (built 2026-11-05), ships 1:1.3.dfsg+really1.3.1-1+b1,
 # which has CVE-2026-76844 and CVE-2026-85091, fixed in
 # 1:1.3.dfsg+really1.3.1-1+deb13u1 (DSA-6613-1). Once Dependabot moves the base
-# to one that ships the fix, the upgrade does nothing and the line can go.
+# to one that ships the fix, the upgrade does nothing and the line can go
+# (#334).
 # Not pinned to a version: Debian replaces a package version in its archive with
 # every security update, so a pin would break the build instead of patching it.
 # hadolint ignore=DL3008
