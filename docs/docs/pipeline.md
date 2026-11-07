@@ -39,7 +39,8 @@ So the dry run went on to `dvc repro --force` in the same clone, which ran all t
 - **Reproduced byte for byte**, by the MD5 the committed lock records: the raw and the interim Parquet, the five split files and `supported_makes.json`, both feature matrices, the validation summary, the fitted estimator of every variant (`lookup.parquet`, `pipeline.joblib` and both `booster.txt`) and `metrics.json`.
   The splits and every metric are therefore the same, without needing the ±0.1 percentage points NFR-06 allows.
 - **Different, because it records the run and not its result:** `model.json` (`trained_at`, the fit times, and the tracking fields, which are empty with tracking off), the `mlflow_run_id` line of each `reports/metrics/<variant>.json`, which is the only line of those files that changed, and the emissions files and the energy comparison, which are measurements.
-- **Different, and not looked into:** the Great Expectations context, the validation results and the Data Docs have other hashes than the lock records, while `summary.json`, the file the report quotes, has the same.
+- **Different, because Great Expectations stamped them:** the Great Expectations context, which gets fresh ids on every build (see [Data validation](#data-validation)), and the validation results and the Data Docs, which then carried the run's time and random ids; `summary.json`, the file the report quotes, had the same hash.
+  Since [#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289) a rerun of `validate-data` on the same data and the same context writes the same bytes, so on a forced run the results and the Data Docs now differ only because the context they were run against does.
 - **Not covered:** MLflow tracking, which a tracked `dvc repro` of record exercises and `reports/analysis/run_provenance_check.py` checks against the server, and any operating system other than Linux.
 
 Nothing of the forced run was pushed or committed, and the clone was removed afterwards.
@@ -291,6 +292,13 @@ What the stage writes, all under `reports/data-validation/`:
 - `summary.json`, git-tracked: per frame whether it passed, its row count, how many contract expectations ran and which failed, and every rule with its bounds and what it found. It carries no run id and no timestamp, so its diff in a pull request is what the data did.
 - `data-docs/`, the Data Docs rendered from the run. Open `data-docs/index.html` in a browser; `dvc pull reports/data-validation/data-docs` brings them to a clone.
 - `results/`, the full validation results the Data Docs are rendered from.
+
+The results and the Data Docs are byte-stable: a rerun on the same data and the same `gx/` writes the same bytes, so a rerun leaves the stage's hashes in `dvc.lock` as they were ([#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289)).
+Great Expectations stamps every result, its path and its Data Docs page with the moment of the run, so the stage stores its run under the snapshot it validates instead: run name `snapshot-2025-11-08` and run time `reference_date`, written in UTC whatever the machine's time zone.
+The Data Docs therefore show 2025-11-08 as the run time; when a validation was computed is in the commit that recorded its `dvc.lock`.
+`configure_gx` gives the results store a fixed id instead of a fresh UUID, and its Data Docs views number the page's collapsible blocks instead of giving each a random id, and load the logo without the render time and the context's id in its URL.
+`tests/test_validate_data.py` runs the stage twice on the fixture, as DVC does with its outputs deleted first and in two time zones, and fails when any file differs.
+On Windows the time zone cannot be switched inside the process, so the results there are byte-stable within one time zone, and byte-for-byte reproduction is promised on Linux only anyway (see [Known gaps](#known-gaps)).
 
 `gx/` itself is `configure_gx`'s output, cached and pushed rather than committed.
 Great Expectations writes a fresh UUID into every object it saves and ignores one passed in, so two builds from the same code differ in six of the nine files a context holds, and a committed store would be a diff on every rebuild.
@@ -579,6 +587,14 @@ Working on a stage
 Step 6 holds for every pull request that changes a file a stage lists under `deps`, not only for one that works on a stage, and even when the edit touches only comments: `dvc.lock` records each dependency by its hash, so the stage is stale until `dvc repro` re-runs it.
 CI's `Pipeline lock (dvc.lock)` job reports such stale stages, with the dependency or parameter that changed, in its job summary and as a warning on the pull request, on every pull request and every push to `main`, without blocking the merge; `uv run python -m tools.stale_lock` runs the same check locally.
 `recommenditos/config.py` and `recommenditos/schema.py` are dependencies of every stage.
+
+Before a single-stage `dvc repro <stage>` in a fresh clone or worktree, run `dvc pull --with-deps <stage>`, or a plain `dvc pull`.
+`dvc pull <stage>` restores only that stage's outputs, and `dvc repro <stage>` then reruns every stage before it whose outputs are missing from the workspace, unless DVC's run cache holds that exact run.
+Most of those reruns write the same bytes and leave `dvc.lock` as it was, `validate-data` included since [#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289).
+`configure_gx` does not: it rebuilds `gx/` with fresh ids, which rewrites its own hash and, through `gx/`, `validate-data`'s.
+Neither do `train`, `evaluate` and `compare-energy`, which record the run and not only its result (see [Running it](#running-it)).
+A lock line that moved in a pull request with no data change behind it is such a rerun: pull the stage's outputs, put the line back, and repro again.
+
 When several such pull requests are in flight, they may merge without the re-run if one pull request re-runs the pipeline and commits `dvc.lock` after the last of them has merged; each of them says that the lock is stale until then.
 None of them merges while a tracked re-run is in flight, or that run's lock is stale when it lands; if one does, the run is repeated on the merged `main`.
 A new stage writes its outputs outside any directory that other stages depend on as a whole: `evaluate` and `compare-energy` depend on all of `models/`, so one new file there makes both stale.

@@ -109,8 +109,8 @@ stages:
       size: 1488
     - path: recommenditos/data/gx_context_configuration.py
       hash: md5
-      md5: 5c837071919e8eafa0e7b821e433544c
-      size: 19414
+      md5: d14f8d036dfae43ef6c17c65fff587dd
+      size: 23086
     - path: recommenditos/pipeline.py
       hash: md5
       md5: a11ab511e3a0030fdc25b9b53c0879c0
@@ -135,8 +135,8 @@ stages:
     outs:
     - path: gx
       hash: md5
-      md5: 442876c18d7ed4c72ff829aa57423e47.dir
-      size: 64293
+      md5: fc9fcb949b38f45d4881870777da464c.dir
+      size: 64928
       nfiles: 12
   validate-data:
     cmd: python3 -m recommenditos.data.validate_data
@@ -151,8 +151,8 @@ stages:
       size: 215325680
     - path: gx
       hash: md5
-      md5: 442876c18d7ed4c72ff829aa57423e47.dir
-      size: 64293
+      md5: fc9fcb949b38f45d4881870777da464c.dir
+      size: 64928
       nfiles: 12
     - path: recommenditos/__init__.py
       hash: md5
@@ -164,12 +164,12 @@ stages:
       size: 1488
     - path: recommenditos/data/gx_context_configuration.py
       hash: md5
-      md5: 5c837071919e8eafa0e7b821e433544c
-      size: 19414
+      md5: d14f8d036dfae43ef6c17c65fff587dd
+      size: 23086
     - path: recommenditos/data/validate_data.py
       hash: md5
-      md5: 6afdd410f517c55d1eaea5cbd1befc91
-      size: 12751
+      md5: 262bf5cd9953a82a610131da5119372d
+      size: 16216
     - path: recommenditos/pipeline.py
       hash: md5
       md5: a11ab511e3a0030fdc25b9b53c0879c0
@@ -178,16 +178,19 @@ stages:
       hash: md5
       md5: 53fda2be439cb1a73b7afc593e6b6ab8
       size: 36807
+    params:
+      params.yaml:
+        reference_date: '2025-11-08'
     outs:
     - path: reports/data-validation/data-docs
       hash: md5
-      md5: 21aaf5107cbe13858dbddcb88383232b.dir
-      size: 4768268
+      md5: a805097a20106ada9cceaf039aa1108d.dir
+      size: 4758371
       nfiles: 25
     - path: reports/data-validation/results
       hash: md5
-      md5: 02608067a50fb2ce804b1c66fc72ca8e.dir
-      size: 134205
+      md5: 07c331d8fb2b3c7b7316b34d0a0a3f03.dir
+      size: 134211
       nfiles: 3
     - path: reports/data-validation/summary.json
       hash: md5
