@@ -1368,7 +1368,7 @@ How to add an entry:
 
 ### EDN-95: CI fails on fixable image vulnerabilities, and the containers run locked down
 
-> **Revised on 2026-11-07**: accepts two unreachable nginx findings; the decision is unchanged.
+> **Revised on 2026-11-07**: two unreachable nginx findings are accepted; the decision stands.
 >
 - **Date:** 2026-10-22
 - **Milestone:** M5: Model Packaging

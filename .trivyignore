@@ -5,16 +5,18 @@
 #
 #   # Only in the builder stage's uv, which the runtime image does not contain.
 #   CVE-2026-12345 exp:2026-12-31
+#
+# Every entry below was re-checked against the current advisories on
+# 2026-11-07 (#286). The expiry, 2027-01-31, lies after the final
+# presentation of 2026-12-15 and the end of the course, so the scan cannot
+# turn main red while the project is graded; it is the date of the next
+# review that the scan forces.
 
 # node-exporter v1.12.1 and cAdvisor v0.60.6 (deploy/compose.yaml), still the
 # newest releases on 2026-11-07, are built with Go and libraries older than
 # these fixes. Both publish no port and answer only Prometheus and their
 # healthcheck inside the Compose network (docs/docs/monitoring.md). Accepted
 # until a release with the fixes, which Dependabot proposes.
-# Re-checked against the current advisories on 2026-11-07 (#286). The expiry,
-# 2027-01-31, lies after the final presentation of 2026-12-15 and the end of
-# the course, so the scan cannot turn main red while the project is graded;
-# it is the date of the next review that the scan forces.
 # crypto/x509 intermediate certificates (Go stdlib): the exporters open no TLS connection; in Grafana's bundled plugins, see below.
 CVE-2026-111943 exp:2027-01-31
 # encoding/asn1 recursion (Go stdlib): the exporters parse no ASN.1 from a client, as they serve no TLS.
@@ -68,10 +70,6 @@ GHSA-hrxh-6v49-42gf exp:2027-01-31
 # (docs/docs/monitoring.md#grafana). The image's slim variant bundles none of
 # these plugins, but none of Prometheus either. Accepted until a Grafana release
 # with the fixes.
-# Re-checked against the current advisories on 2026-11-07 (#286). The expiry,
-# 2027-01-31, lies after the final presentation of 2026-12-15 and the end of
-# the course, so the scan cannot turn main red while the project is graded;
-# it is the date of the next review that the scan forces.
 # github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.8.4: the plugin is off.
 CVE-2026-21728 exp:2027-01-31
 # github.com/grafana/tempo in the bundled Tempo plugin, fixed in Tempo 2.10.3: the plugin is off.
@@ -87,10 +85,6 @@ CVE-2026-28377 exp:2027-01-31
 # only the Prometheus plugin runs (see Grafana's entries above), and its input
 # comes from the stack's own Prometheus and from users who reach Grafana
 # through the SSH tunnel. Accepted until releases with the fix.
-# Re-checked against the current advisories on 2026-11-07 (#286). The expiry,
-# 2027-01-31, lies after the final presentation of 2026-12-15 and the end of
-# the course, so the scan cannot turn main red while the project is graded;
-# it is the date of the next review that the scan forces.
 # Quadratic time parsing crafted HTML, a denial of service: no binary that runs parses HTML a stranger sends.
 CVE-2026-78661 exp:2027-01-31
 
@@ -98,10 +92,6 @@ CVE-2026-78661 exp:2027-01-31
 # cAdvisor v0.60.6 (deploy/compose.yaml): Alpine has the fixes, but no image of
 # either tag is rebuilt with them on 2026-11-07, and building our own nginx
 # image was ruled out (EDN-95).
-# Re-checked against the current advisories on 2026-11-07 (#286). The expiry,
-# 2027-01-31, lies after the final presentation of 2026-12-15 and the end of
-# the course, so the scan cannot turn main red while the project is graded;
-# it is the date of the next review that the scan forces.
 # musl's regcomp() with an untrusted regular expression: nginx compiles its regular expressions, all from its own configuration, with PCRE2 and imports no regcomp; neither cadvisor nor its libpfm imports it.
 CVE-2026-107891 exp:2027-01-31
 # zlib's gzwrite()/gzprintf() path: nginx imports zlib's deflate and inflate but no gz* function, cadvisor links no zlib. The API and monitoring images take the fixed zlib1g (Dockerfile), and CVE-2026-76844, fixed by the same package and not accepted, still fails the scan if zlib1g regresses there.
@@ -113,10 +103,6 @@ CVE-2026-85091 exp:2027-01-31
 # configuration with it, and the image has no PyTorch or TensorFlow to run one.
 # Accepted until an Alibi Detect release allows transformers 5 (0.13.0 is still
 # the newest on 2026-11-07).
-# Re-checked against the current advisories on 2026-11-07 (#286). The expiry,
-# 2027-01-31, lies after the final presentation of 2026-12-15 and the end of
-# the course, so the scan cannot turn main red while the project is graded;
-# it is the date of the next review that the scan forces.
 # Remote code from a crafted config.json in from_pretrained(): the job loads no model.
 CVE-2026-4372 exp:2027-01-31
 # Code execution while initialising a LightGlue model: the job loads no model.
