@@ -550,13 +550,19 @@ def test_a_deploy_removes_the_old_tags_of_every_release_image(tmp_path: Path):
 
 
 def compose_available() -> bool:
-    """Whether the real `docker compose` runs here; `config` needs no daemon."""
+    """Whether the real `docker compose` runs here; `config` needs no daemon.
+
+    Asked only where the module runs at all: on a Windows runner the call hangs.
+    """
     docker = shutil.which("docker")
-    if docker is None:
+    if sys.platform == "win32" or docker is None:
         return False
-    version = subprocess.run(
-        [docker, "compose", "version"], capture_output=True, timeout=30, check=False
-    )
+    try:
+        version = subprocess.run(
+            [docker, "compose", "version"], capture_output=True, timeout=30, check=False
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return version.returncode == 0
 
 
