@@ -274,7 +274,10 @@ For the MdAPE it draws 20,000 windows of 200 to 1,000 labelled answers from the 
 `market_baseline.py` asks whether ModelErrorHigh and ModelCoverageLow should judge a window against the test values of its market instead of the model's overall ones, after both fired on an `ES` window of the FR-15 rehearsal at the model's own `ES` error ([fr15-rehearsal.md](../monitoring/fr15-rehearsal.md)).
 It compares four baselines with the rules' form kept: A, the overall test MdAPE and the nominal level (the rules as they are); B, the test values of the window's majority country; C, the per-country test values weighted by the window's countries; and D, C's baseline with a margin for the baseline's own sampling error, as a two-sample test.
 With the method of `model_alert_thresholds.py` it draws 20,000 windows per market and count from the test set of `lgbm-basic`, and measures each option's false-alarm rate, its miss rate on windows whose errors are 1.2 or 1.3 times higher or whose coverage is 3 or 5 points lower, and its verdict on the rehearsal's windows.
-`market_baseline_results.txt` is its output (2026-11-07).
+Its last section calibrates D's constant as `model_alert_thresholds.py` calibrated C: the smallest constant at or above the 99.5th percentile of (multiple - 1) / sqrt(1 / n + 1 / m) at every count from 200 to 1,000 in every group with its own baseline, once with the test values taken as the truth (fixed) and once with each baseline drawn again from its own test rows (redrawn).
+`market_baseline_results.txt` is its output (2026-11-07): against the overall baseline (A), half of the `ES` windows and 98 % of the `FR` windows of 1,000 answers fire with nothing changed; the majority country (B) fires on 17 % of the windows of the test mix; the weighted baseline without a margin (C) fires on 7.8 % of the `ES` windows once its baseline's sampling error is counted; D stays at or below 0.011.
+The constant is 3.55 fixed and 4.00 redrawn; at 3.55 the fixed rate is at most 0.0044 and the redrawn one reaches 0.0081 for `ES`, and 4.00 would miss an `ES` window with 1.2 times its error in 63 % of the windows instead of 47 %.
+EDN-103 takes D at 3.55 for ModelErrorHigh and keeps A, the nominal floor, for ModelCoverageLow.
 
 ## The windows of the ES replay on the VM (#232)
 

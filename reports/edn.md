@@ -1579,6 +1579,35 @@ How to add an entry:
 - **Other evidence:** [Issue #231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231), [The split](../docs/docs/pipeline.md#the-split), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-03, EDN-12.
 - **In LaTeX:** yes
 
+### EDN-103: The error alert judges a window against its countries' test MdAPE
+
+- **Date:** 2026-11-07
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Model Evaluation
+- **Participants:** Lukas Häußler (decided), AI agents (options, analysis, implementation)
+- **Decision:** ModelErrorHigh compares a window's MdAPE with the test MdAPE of its countries in `segments.csv`, weighted by its labelled answers, and fires above 1 + 3.55 sqrt(1 / n + 1 / m) times it, m the test rows of that baseline.
+  A country with fewer than 500 test rows takes the overall value.
+  ModelCoverageLow keeps the nominal 90 % floor.
+- **Alternatives considered:**
+  - The overall test MdAPE (EDN-101): 51 % of the `ES` and 98 % of the `FR` windows of 1,000 answers fire with nothing changed.
+  - The majority country's test MdAPE: 17 % false alarms on windows of the test mix.
+  - The weighted baseline without the margin: 7.8 % of the `ES` windows fire from the noise of its 593 test rows.
+  - Market baselines for the coverage too: a new `evaluate` output, and twice the misses in small markets.
+- **Rationale:** Only the two-sample ceiling keeps false alarms near 0.005 in every market: at most 0.0044 with the test values taken as the truth, 0.0081 for `ES` once its baseline's own noise counts.
+  It costs power where the baseline is thin: an `ES` window 20 % worse is missed in 47 % of windows.
+  The coverage floor is the ranges' promise to users, the same in every market.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured the options by resampling the test set, recommended the margin for the error alert and the nominal floor for coverage, and implemented them; the orchestrator checked the numbers against the results file.
+  Lukas took the recommendation unchanged.
+  Under his decision the orchestrator took the constant 3.55 over 4.00, which holds both rates at 0.005 but misses that `ES` window in 63 %.
+- **AI interaction evidence:** Claude Code session of 2026-11-07.
+  Question (translated from German, paraphrased): "#306: how should ModelErrorHigh and ModelCoverageLow judge a window? Today both compare with the overall test value, so windows of only ES or only FR raise alerts without any degradation (ES 51 %, FR 98 % at 1,000 answers, against a level of 0.5 %)."
+  Orchestrator briefing (core, paraphrased): "Give Lukas the options of #306 (keep the overall baseline, a per-country baseline from segments.csv, a baseline weighted by the window's market mix) with their false-alarm and miss rates, measured with the resampling method of model_alert_thresholds.py, and what the rehearsal windows would have shown; implement nothing yet."
+  Lukas answered: "D for the error alert, coverage stays: ModelErrorHigh compares with the per-country test values, weighted by the window's country mix, plus a margin for their noise: false alarms near 0.5 % everywhere (at most 1.1 %), at the cost of missing ES +20 % in 47 % of windows. ModelCoverageLow stays at the 90 % promise; no new evaluate output. Window 18 of the rehearsal still fires the coverage alert." (translated from German)
+- **Other evidence:** [Issue #306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), [`market_baseline_results.txt`](analysis/market_baseline_results.txt), [Why these model thresholds](../docs/docs/monitoring.md#why-these-model-thresholds), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-101.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

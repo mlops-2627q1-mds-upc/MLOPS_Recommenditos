@@ -23,6 +23,13 @@ Then the family-wise rate of the three window alerts, and the rules applied to
 the windows of reports/monitoring/laptop-es-replay-2026-11-04.md, which the model
 before #303 answered, so their MdAPE is a multiple of that model's test MdAPE.
 
+Since #306 (EDN-103) ModelErrorHigh judges a window against the test MdAPE of
+its countries, above 1 + 3.55 sqrt(1 / n + 1 / m) times it, m the test rows of
+that baseline; reports/analysis/market_baseline.py measures and calibrates that
+rule. The MdAPE part here is the one-sample ceiling of the rule before, kept as
+the record EDN-101 cites; for a window of the test mix m is the whole test set,
+so the two ceilings differ by at most 0.004.
+
 Run from the repository root after `dvc pull train features`:
     python reports/analysis/model_alert_thresholds.py
 Output: reports/analysis/model_alert_thresholds_results.txt
