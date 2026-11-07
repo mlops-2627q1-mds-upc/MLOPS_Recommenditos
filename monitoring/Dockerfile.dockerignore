@@ -9,6 +9,7 @@
 !data/monitoring/
 !metrics.json
 !reports/metrics/interval-coverage-by-make.csv
+!dvc.lock
 
 **/__pycache__
 **/*.py[co]

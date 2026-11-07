@@ -27,8 +27,16 @@ from recommenditos_monitoring.performance import (
     NO_BASELINE,
     Baseline,
     baseline,
+    bundle_versions,
+    release_test_values,
 )
-from recommenditos_monitoring.store import INSUFFICIENT_LABELS, OK, Performance, Store
+from recommenditos_monitoring.store import (
+    INSUFFICIENT_LABELS,
+    OK,
+    ModelTestValues,
+    Performance,
+    Store,
+)
 from recommenditos_monitoring.textfile import FILE_NAME
 
 START = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
@@ -39,22 +47,30 @@ SAME_MONTH = datetime(2025, 11, 9, 12, 0, tzinfo=UTC)
 REPOSITORY = Path(__file__).parents[2]
 METRICS = REPOSITORY / "metrics.json"
 COVERAGE = REPOSITORY / "reports" / "metrics" / "interval-coverage-by-make.csv"
+LOCK = REPOSITORY / "dvc.lock"
 #: The fixture's test values, not the repository's: a retrain changes those.
 TEST_MDAPE, TEST_COVERAGE = 0.08, 0.88
 OBSERVED = 10_000.0
 PREDICT, RANGE = "/v1/predict", "/v1/price-range"
 
 
-def write_test_values(directory: Path) -> tuple[Path, Path]:
-    """A metrics.json and a coverage-by-make table in the evaluate stage's formats.
+def write_test_values(
+    directory: Path,
+    mdape: float = TEST_MDAPE,
+    covered: float = TEST_COVERAGE,
+    version: str = "v1",
+) -> tuple[Path, Path, Path]:
+    """A release's metrics.json, coverage-by-make table and dvc.lock, in their formats.
 
     The table's other rows, another make and the partial-input scenario SC-05
-    judges, hold other values, so a lookup of the wrong row shows.
+    judges, hold other values, so a lookup of the wrong row shows. The lock names
+    `version` for lgbm-basic's bundle, the version the fixture log's answers
+    have by default, and another for b0, which metrics.json has no values for.
     """
     directory.mkdir(parents=True, exist_ok=True)
     metrics = directory / "metrics.json"
     metrics.write_text(
-        json.dumps({"variants": {"lgbm-basic": {"mdape": TEST_MDAPE, "sc05_coverage": 0.95}}})
+        json.dumps({"variants": {"lgbm-basic": {"mdape": mdape, "sc05_coverage": 0.95}}})
     )
     coverage = directory / "interval-coverage-by-make.csv"
     coverage.write_text(
@@ -62,16 +78,36 @@ def write_test_values(directory: Path) -> tuple[Path, Path]:
         'lgbm-basic,"(P1: make, model, registration date, mileage)",(pooled),100,0.95,0.01,0.9,'
         "in_band\n"
         "lgbm-basic,full,BMW,50,0.81,0.01,0.4,in_band\n"
-        f"lgbm-basic,full,(pooled),100,{TEST_COVERAGE},0.01,0.4,in_band\n"
+        f"lgbm-basic,full,(pooled),100,{covered},0.01,0.4,in_band\n"
     )
-    return metrics, coverage
+    lock = directory / "dvc.lock"
+    lock.write_text(
+        "schema: '2.0'\n"
+        "stages:\n"
+        "  train@lgbm-basic:\n"
+        "    outs:\n"
+        "    - path: models/lgbm-basic\n"
+        f"      md5: {version}.dir\n"
+        "  train@b0:\n"
+        "    outs:\n"
+        "    - path: models/b0\n"
+        "      md5: b0-version.dir\n"
+        "  evaluate@lgbm-basic:\n"
+        "    deps:\n"
+        "    - path: models/lgbm-basic\n"
+        f"      md5: {version}.dir\n"
+        "    outs:\n"
+        "    - path: reports/metrics/lgbm-basic.json\n"
+        "      md5: 0123\n"
+    )
+    return metrics, coverage, lock
 
 
 @pytest.fixture
 def paths(tmp_path: Path) -> Paths:
     textfile = tmp_path / "textfile"
     textfile.mkdir()
-    metrics, coverage = write_test_values(tmp_path / "evaluate")
+    metrics, coverage, lock = write_test_values(tmp_path / "evaluate")
     return Paths(
         log=tmp_path / "prediction-log.sqlite3",
         db=tmp_path / "results" / "monitor.db",
@@ -79,7 +115,16 @@ def paths(tmp_path: Path) -> Paths:
         textfile_dir=textfile,
         metrics=metrics,
         coverage=coverage,
+        lock=lock,
     )
+
+
+def promoted(paths: Paths, mdape: float, covered: float, version: str) -> Paths:
+    """The paths of the image of a release that promoted model `version`."""
+    metrics, coverage, lock = write_test_values(
+        paths.db.parent.parent / f"evaluate-{version}", mdape, covered, version
+    )
+    return replace(paths, metrics=metrics, coverage=coverage, lock=lock)
 
 
 @pytest.fixture
@@ -399,6 +444,131 @@ def test_a_partial_window_has_its_error_too(paths, log):
     assert performance(paths).mdape == pytest.approx(0.1, abs=1e-12)
 
 
+def test_the_lock_names_the_version_of_each_variants_bundle(paths):
+    assert bundle_versions(paths.lock) == {"lgbm-basic": "v1", "b0": "b0-version"}
+    assert bundle_versions(None) == bundle_versions(paths.db.parent / "none.lock") == {}
+
+
+def test_the_repositorys_lock_names_the_version_the_api_reports_for_each_variant():
+    """The hash of each evaluated variant's bundle, without DVC's `.dir`: /health's form."""
+    variants = json.loads(METRICS.read_text())["variants"]
+    versions = bundle_versions(LOCK)
+
+    assert set(variants) <= set(versions)
+    assert all(len(versions[variant]) == 32 for variant in variants)
+    recorded = release_test_values(METRICS, COVERAGE, LOCK, START)
+    assert {(value.model_variant, value.model_version) for value in recorded} == {
+        (variant, versions[variant]) for variant in variants
+    }
+
+
+def test_a_window_scored_after_a_promotion_keeps_its_models_test_values(paths, log):
+    """#307: the image of the new release holds only the new model's evaluate outputs."""
+    seqs = add_answers(log, MIN_LABELLED + 50, endpoint=PREDICT, start=START, error=0.1)
+    label(log, seqs[:MIN_LABELLED])
+    run_once(paths, window_size=len(seqs), now=lambda: START + timedelta(hours=1))
+    before = performance(paths)
+    assert (before.labelled, before.test_mdape, before.test_coverage) == (
+        MIN_LABELLED,
+        TEST_MDAPE,
+        TEST_COVERAGE,
+    )
+
+    # Model v2 is promoted and deployed; the window's last labels come in after.
+    label(log, seqs[MIN_LABELLED:])
+    after_promotion = promoted(paths, mdape=0.06, covered=0.91, version="v2")
+    run_once(after_promotion, window_size=len(seqs), now=lambda: START + timedelta(hours=2))
+
+    after = performance(paths)
+    assert after.labelled == MIN_LABELLED + 50
+    assert (after.test_mdape, after.test_coverage) == (TEST_MDAPE, TEST_COVERAGE)
+    # ModelErrorHigh reads the latest window's test MdAPE from the textfile.
+    assert series(paths)["recommenditos_performance_test_mdape"] == TEST_MDAPE
+
+
+def test_a_promotion_inside_a_window_splits_it_and_each_part_has_its_models_values(paths, log):
+    """The answers of two models never share a window: the new model's first closes it.
+
+    The old model's part is closed and first scored by the new release's image,
+    which holds only the new model's evaluate outputs.
+    """
+    size = MIN_LABELLED + 100
+    old = add_answers(log, MIN_LABELLED + 50, endpoint=PREDICT, start=START, error=0.1)
+    label(log, old)
+    run_once(paths, window_size=size, now=lambda: START + timedelta(hours=1))
+
+    new = [
+        log.add(
+            body(i),
+            START + (1000 + i) * STEP,
+            model_version="v2",
+            outputs=answer(OBSERVED * 1.2),
+        )
+        for i in range(size)
+    ]
+    label(log, new)
+    after_promotion = promoted(paths, mdape=0.06, covered=0.91, version="v2")
+    outcome = run_once(after_promotion, window_size=size, now=lambda: START + timedelta(hours=2))
+
+    assert [(w.status, w.model_version) for w in outcome.closed] == [
+        ("partial", "v1"),
+        ("tested", "v2"),
+    ]
+    first, second = (performance(paths, w.window_id) for w in outcome.closed)
+    assert (first.mdape, first.test_mdape, first.test_coverage) == (
+        pytest.approx(0.1, abs=1e-12),
+        TEST_MDAPE,
+        TEST_COVERAGE,
+    )
+    assert (second.mdape, second.test_mdape, second.test_coverage) == (
+        pytest.approx(0.2, abs=1e-12),
+        0.06,
+        0.91,
+    )
+
+
+def test_a_window_of_a_model_no_pass_recorded_keeps_the_values_it_was_scored_with(paths, log):
+    """A model whose release ran before #307: none on its first scoring, its last ones after."""
+    seqs = add_answers(log, MIN_LABELLED, endpoint=PREDICT, start=START, error=0.1)
+    with sqlite3.connect(paths.log) as connection:
+        connection.execute("UPDATE predictions SET model_version = 'v0'")
+    label(log, seqs)
+    run_once(paths, window_size=len(seqs), now=lambda: START + timedelta(hours=1))
+    first = performance(paths)
+    assert (first.mdape, first.test_mdape, first.test_coverage) == (
+        pytest.approx(0.1, abs=1e-12),
+        None,
+        None,
+    )
+
+    # As the job before #307 stored it: the values of the image it ran in.
+    store = Store.open(paths.db)
+    store.set_performance(replace(first, test_mdape=0.07, test_coverage=0.9))
+    store.close()
+    run_once(paths, window_size=len(seqs), now=lambda: START + timedelta(hours=2))
+
+    assert (performance(paths).test_mdape, performance(paths).test_coverage) == (0.07, 0.9)
+
+
+def test_the_first_record_of_a_models_test_values_stays(paths):
+    store = Store.open(paths.db)
+    try:
+        store.record_test_values(
+            release_test_values(paths.metrics, paths.coverage, paths.lock, START)
+        )
+        again = promoted(paths, mdape=0.5, covered=0.5, version="v1")
+        store.record_test_values(
+            release_test_values(again.metrics, again.coverage, again.lock, START + STEP)
+        )
+        recorded = store.test_values("lgbm-basic", "v1")
+    finally:
+        store.close()
+
+    assert recorded == ModelTestValues(
+        "lgbm-basic", "v1", TEST_MDAPE, TEST_COVERAGE, "2026-11-09T12:00:00.000+00:00"
+    )
+
+
 def _cli(paths: Paths, *args: str) -> int:
     return cli.main(["report", "--db", str(paths.db), *args])
 
@@ -508,6 +678,8 @@ def test_run_once_prints_each_closed_windows_error_and_coverage(paths, log, caps
             str(paths.metrics),
             "--coverage",
             str(paths.coverage),
+            "--lock",
+            str(paths.lock),
             "--window-size",
             str(MIN_LABELLED),
         ]
