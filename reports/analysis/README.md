@@ -269,6 +269,13 @@ Each fit runs in a process of its own, as the stage runs it with CodeCarbon, wit
 For the MdAPE it draws 20,000 windows of 200 to 1,000 labelled answers from the test set's errors of `lgbm-basic` and compares the 99.5th percentile of their MdAPE with ModelErrorHigh's ceiling, 1 + 3.52 / sqrt(n) times the test MdAPE; for the coverage it computes the exact binomial false-alarm rate of ModelCoverageLow's floor at the nominal 0.9 for every count from 300 to 1,000, and the 0.5th percentile of windows drawn from the test set's range outcomes.
 `model_alert_thresholds_results.txt` is its output (2026-11-05, run again for the promoted model `2a60912b` in #309): the ceiling is 0.004 to 0.010 above the 99.5th percentile at every count (3.52 was set for the model before it, where it was 0.0001 above at 200), so ModelErrorHigh's false-alarm rate is 0.0027 to 0.0040; ModelCoverageLow's exact rate is 0.0043 to 0.0069 (mean 0.0054); the three window alerts together fire on at most 1.7 % of the windows of an unchanged distribution, and the replay's `ES` window crosses both thresholds where its control windows do not ([Why these model thresholds](../../docs/docs/monitoring.md#why-these-model-thresholds)).
 
+## A window against its market's baseline (#306)
+
+`market_baseline.py` asks whether ModelErrorHigh and ModelCoverageLow should judge a window against the test values of its market instead of the model's overall ones, after both fired on an `ES` window of the FR-15 rehearsal at the model's own `ES` error ([fr15-rehearsal.md](../monitoring/fr15-rehearsal.md)).
+It compares four baselines with the rules' form kept: A, the overall test MdAPE and the nominal level (the rules as they are); B, the test values of the window's majority country; C, the per-country test values weighted by the window's countries; and D, C's baseline with a margin for the baseline's own sampling error, as a two-sample test.
+With the method of `model_alert_thresholds.py` it draws 20,000 windows per market and count from the test set of `lgbm-basic`, and measures each option's false-alarm rate, its miss rate on windows whose errors are 1.2 or 1.3 times higher or whose coverage is 3 or 5 points lower, and its verdict on the rehearsal's windows.
+`market_baseline_results.txt` is its output (2026-11-07).
+
 ## The windows of the ES replay on the VM (#232)
 
 `es_replay_figure.py` draws the report's figure of the replay of 2026-11-04 on the VM: the drifted features, the real MdAPE, and the range coverage of each of the ten windows, with the alert thresholds at each window's label counts, computed as in `deploy/prometheus/rules/model-performance.yml`.
