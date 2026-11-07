@@ -439,6 +439,68 @@ def test_nfr04_the_log_is_pruned_to_its_cap_oldest_first_with_its_feedback(
 
 
 @pytest.mark.req("NFR-04")
+def test_nfr04_a_cap_smaller_than_a_batch_keeps_rows_and_seq_keeps_growing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The cap holds far fewer rows than one batch: a prune must not empty the log.
+
+    An emptied table numbers its next row 1 again, and the drift job, which
+    forms its windows by `seq`, would see the log start over.
+    """
+    monkeypatch.setattr(prediction_log, "PRUNE_EVERY", 10**9)
+    assert prediction_log.PRUNE_BATCH == 1000
+    # The store's own pruning thread stays out of it; this test runs the prunes.
+    prune = SqliteStore.prune
+    monkeypatch.setattr(SqliteStore, "prune", lambda self: 0)
+    store = SqliteStore(tmp_path / "log.sqlite3", max_bytes=10**9)
+    try:
+        for index in range(200):
+            store.record_answer(answer_record(f"old-{index:03d}"))
+        # A cap that holds about 60 of the 200 rows, far fewer than a batch.
+        store.max_bytes = store.used_bytes() * 3 // 10
+        deleted = prune(store)
+        highest_before = _rows(store.path, "SELECT max(seq) FROM predictions")[0][0]
+        for index in range(20):
+            store.record_answer(answer_record(f"new-{index:03d}"))
+        prune(store)
+        used = store.used_bytes()
+    finally:
+        store.close()
+
+    kept = _rows(store.path, "SELECT seq, request_id FROM predictions ORDER BY seq")
+    assert 0 < deleted < 200
+    assert 1 < len(kept) < 100
+    assert used <= store.max_bytes
+    assert highest_before == 200
+    # `seq` goes on from 200 and never starts again at 1, and the newest survive.
+    seqs = [seq for seq, _ in kept]
+    assert seqs == list(range(seqs[0], 221))
+    assert kept[-1][1] == "new-019"
+
+
+@pytest.mark.req("NFR-04")
+def test_nfr04_a_cap_below_one_row_keeps_the_newest_answer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(prediction_log, "PRUNE_EVERY", 10**9)
+    prune = SqliteStore.prune
+    monkeypatch.setattr(SqliteStore, "prune", lambda self: 0)
+    store = SqliteStore(tmp_path / "log.sqlite3", max_bytes=10**9)
+    try:
+        for index in range(50):
+            store.record_answer(answer_record(f"r-{index:02d}"))
+        store.max_bytes = 1
+        prune(store)
+        store.record_answer(answer_record("r-50"))
+        prune(store)
+    finally:
+        store.close()
+
+    rows = _rows(store.path, "SELECT seq, request_id FROM predictions")
+    assert [tuple(row) for row in rows] == [(51, "r-50")]
+
+
+@pytest.mark.req("NFR-04")
 def test_nfr04_nothing_is_pruned_under_the_cap(store: SqliteStore):
     for index in range(50):
         store.record_answer(answer_record(f"r-{index}"))
