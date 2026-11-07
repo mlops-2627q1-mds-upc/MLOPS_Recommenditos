@@ -16,9 +16,11 @@ break is caught - and, for a tolerant rule, that the tolerance is where
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
 import shutil
-import time
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pandas as pd
@@ -26,7 +28,7 @@ import pytest
 from tests import conftest
 from tests.conftest import PII_COLUMNS
 
-from recommenditos.config import PARAMS_FILE
+from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import gx_context_configuration as configure_gx
 from recommenditos.data import validate_data
 from recommenditos.data.gx_context_configuration import (
@@ -159,13 +161,15 @@ def _file_digests(directory: Path) -> dict[str, str]:
 
 
 @pytest.mark.req("NFR-06")
-def test_a_rerun_on_the_same_data_writes_the_same_bytes(frames, tmp_path, monkeypatch):
+def test_a_rerun_on_the_same_data_writes_the_same_bytes(frames, tmp_path):
     # The results and the Data Docs are cached DVC outputs. A single-stage
     # `dvc repro` in a fresh worktree reruns this stage when they are missing,
     # and if the rerun wrote other bytes it would rewrite their hashes in
     # `dvc.lock` with no data change behind them (#289). So the stage runs
-    # twice as DVC runs it, its outputs deleted first, at two moments and, where
-    # the platform can switch it, in two time zones, and every file must match.
+    # twice as DVC runs it: its outputs deleted first, each time in a process of
+    # its own, at two moments and, off Windows, in two time zones, because
+    # Great Expectations writes times in the zone it finds at its first look and
+    # keeps it for the life of the process. Every file must match.
     # The fixture's two frames fail nothing, so the Data Docs cover passing
     # results; a failing one renders the same templates.
     paths = {
@@ -179,19 +183,33 @@ def test_a_rerun_on_the_same_data_writes_the_same_bytes(frames, tmp_path, monkey
 
     runs = []
     for zone in ("Europe/Madrid", "America/Los_Angeles"):
-        if hasattr(time, "tzset"):
-            monkeypatch.setenv("TZ", zone)
-            time.tzset()
         for directory in (paths["results"], paths["docs"]):
             shutil.rmtree(directory, ignore_errors=True)
         paths["summary"].unlink(missing_ok=True)
-        validate_main(
-            frames["raw_path"], frames["interim_path"], paths["summary"], paths["context"]
+        # Windows reads its zone from the system, not from `TZ`.
+        env = dict(os.environ) if sys.platform == "win32" else {**os.environ, "TZ": zone}
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "recommenditos.data.validate_data",
+                "--raw-path",
+                str(frames["raw_path"]),
+                "--interim-path",
+                str(frames["interim_path"]),
+                "--summary-path",
+                str(paths["summary"]),
+                "--context-dir",
+                str(paths["context"]),
+            ],
+            env=env,
+            cwd=PROJ_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
+        assert completed.returncode == 0, completed.stderr[-3000:]
         runs.append(_file_digests(outputs))
-    monkeypatch.undo()
-    if hasattr(time, "tzset"):
-        time.tzset()
 
     first, second = runs
     assert len(first) > 20 and any(name.startswith("results/") for name in first)

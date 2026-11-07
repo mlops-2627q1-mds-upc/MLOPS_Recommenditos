@@ -44,22 +44,21 @@ the same bytes, so `dvc.lock` moves only when the data or the suites do (#289).
 Great Expectations dates every result, its path and the Data Docs page drawn
 from it with the moment of the run, so the stage names the run after the
 snapshot it validates instead (`run_id`), with `reference_date` as its time, and
-writes it in UTC whatever the machine's time zone. `configure_gx` covers the
-rest: the results store's id and the Data Docs' element ids.
+writes its times in UTC whatever the machine's time zone. `configure_gx` covers
+the rest: the results store's id and the Data Docs' element ids.
 """
 
 from collections.abc import Iterator
 from contextlib import contextmanager
 import datetime as dt
-import os
 from pathlib import Path
-import time
 from typing import Any
 
 import great_expectations as gx
 from great_expectations.core.run_identifier import RunIdentifier
 from great_expectations.data_context.data_context.context_factory import project_manager
 from great_expectations.execution_engine import pandas_execution_engine
+from great_expectations.render.renderer import site_index_page_renderer
 from loguru import logger
 import pandas as pd
 import typer
@@ -205,31 +204,43 @@ def run_id(params: dict[str, Any]) -> RunIdentifier:
     return RunIdentifier(run_name=f"snapshot-{snapshot:%Y-%m-%d}", run_time=snapshot)
 
 
-@contextmanager
-def _local_time_in_utc() -> Iterator[None]:
-    """Make UTC the process's local time zone while results are stored.
+class _UTCZone:
+    """`tzlocal` as the Data Docs index renderer sees it: always UTC."""
 
-    Great Expectations stores a run's time converted to the local zone, so the
-    same run would read `+01:00` on a laptop in Barcelona, `+02:00` there in
-    summer and `+00:00` on a CI runner. `time.tzset` exists only on Unix; on
-    Windows the zone stays the machine's, so its results are byte-stable within
-    one zone only, as the rest of the pipeline is byte-stable on Linux only
-    (docs/docs/pipeline.md, "Known gaps").
+    @staticmethod
+    def get_localzone() -> dt.tzinfo:
+        return dt.UTC
+
+
+@contextmanager
+def _great_expectations_in_utc() -> Iterator[None]:
+    """Make Great Expectations write UTC where it would write the local zone.
+
+    Two places, in Great Expectations 1.24.1, put the machine's time zone into
+    what the stage writes: `RunIdentifierSchema` converts a run's time to the
+    local zone (`set_run_time_tz(None)`) before it stores a result, and the
+    Data Docs index renderer prints each run's time in `tzlocal`'s zone. The
+    same run would then read `+01:00` on a laptop in Barcelona, `+02:00` there in
+    summer and `+00:00` on a CI runner. Both calls are patched for the length of
+    the block, on every platform, and put back afterwards, as
+    `_without_batch_fingerprint` does; the stage's test runs it in two zones,
+    so an upgrade that moves either call shows there.
     """
-    tzset = getattr(time, "tzset", None)
-    previous = os.environ.get("TZ")
-    os.environ["TZ"] = "UTC"
-    if tzset:
-        tzset()
+    set_run_time_tz = RunIdentifier.set_run_time_tz
+    local_zone = site_index_page_renderer.tzlocal
+
+    def set_run_time_tz_utc(self: RunIdentifier, tz: dt.timezone | None) -> None:
+        set_run_time_tz(self, tz or dt.UTC)
+
+    # `setattr`, because mypy refuses a direct assignment to a method or a
+    # module, which is the point of the patch.
+    setattr(RunIdentifier, "set_run_time_tz", set_run_time_tz_utc)  # noqa: B010
+    setattr(site_index_page_renderer, "tzlocal", _UTCZone)  # noqa: B010
     try:
         yield
     finally:
-        if previous is None:
-            del os.environ["TZ"]
-        else:
-            os.environ["TZ"] = previous
-        if tzset:
-            tzset()
+        setattr(RunIdentifier, "set_run_time_tz", set_run_time_tz)  # noqa: B010
+        setattr(site_index_page_renderer, "tzlocal", local_zone)  # noqa: B010
 
 
 def _store_with_the_run_time(context, run) -> None:
@@ -278,7 +289,7 @@ def validate_frame(
             f"rebuild it with `dvc repro configure_gx`"
         )
     project_manager.set_project(context)
-    with _without_batch_fingerprint(), _local_time_in_utc():
+    with _without_batch_fingerprint(), _great_expectations_in_utc():
         checkpoint_run = context.checkpoints.get(name).run(
             batch_parameters={"dataframe": _as_validated(name, frame)}, run_id=run
         )
@@ -350,7 +361,8 @@ def main(
     # Both before the raise, so a failed run leaves a readable record of which
     # rule broke, and Data Docs that show a sample of the failing values, rather
     # than only a traceback in the DVC log.
-    context.build_data_docs()
+    with _great_expectations_in_utc():
+        context.build_data_docs()
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(summary, summary_path)
 

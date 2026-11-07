@@ -294,11 +294,11 @@ What the stage writes, all under `reports/data-validation/`:
 - `results/`, the full validation results the Data Docs are rendered from.
 
 The results and the Data Docs are byte-stable: a rerun on the same data and the same `gx/` writes the same bytes, so a rerun leaves the stage's hashes in `dvc.lock` as they were ([#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289)).
-Great Expectations stamps every result, its path and its Data Docs page with the moment of the run, so the stage stores its run under the snapshot it validates instead: run name `snapshot-2025-11-08` and run time `reference_date`, written in UTC whatever the machine's time zone.
-The Data Docs therefore show 2025-11-08 as the run time; when a validation was computed is in the commit that recorded its `dvc.lock`.
+Great Expectations stamps every result, its path and its Data Docs page with the moment of the run, so the stage stores its run under the snapshot it validates instead: run name `snapshot-2025-11-08` and run time `reference_date`.
+Great Expectations would also write that time in the machine's time zone, in the stored results and on the Data Docs' index page, so the stage makes both calls that ask for the zone answer UTC while it runs, on every platform.
+The Data Docs therefore show `2025-11-08 00:00:00 UTC` as the run time, whoever renders them; when a validation was computed is in the commit that recorded its `dvc.lock`.
 `configure_gx` gives the results store a fixed id instead of a fresh UUID, and its Data Docs views number the page's collapsible blocks instead of giving each a random id, and load the logo without the render time and the context's id in its URL.
-`tests/test_validate_data.py` runs the stage twice on the fixture, as DVC does with its outputs deleted first and in two time zones, and fails when any file differs.
-On Windows the time zone cannot be switched inside the process, so the results there are byte-stable within one time zone, and byte-for-byte reproduction is promised on Linux only anyway (see [Known gaps](#known-gaps)).
+`tests/test_validate_data.py` runs the stage twice on the fixture as DVC does, each run in a process of its own with the outputs deleted first, off Windows in two time zones, and fails when any file differs.
 
 `gx/` itself is `configure_gx`'s output, cached and pushed rather than committed.
 Great Expectations writes a fresh UUID into every object it saves and ignores one passed in, so two builds from the same code differ in six of the nine files a context holds, and a committed store would be a diff on every rebuild.
