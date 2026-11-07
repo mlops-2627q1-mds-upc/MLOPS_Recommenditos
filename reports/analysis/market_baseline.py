@@ -397,3 +397,57 @@ for window, share, mdape, answers, coverage, ranges, when in rehearsal:
             f"{lead} {option}       {multiple:.3f} vs {high:.3f}           "
             f"{coverage:.4f} vs {low:.4f}   {', '.join(fires) or 'quiet'}"
         )
+
+# --------------------------------------------------------------------------
+# D's constant, calibrated for the two-sample case (#306, EDN-103)
+# --------------------------------------------------------------------------
+# As model_alert_thresholds.py sets C: the smallest constant K whose ceiling
+# 1 + K sqrt(1 / n + 1 / m) is at or above the 99.5th percentile of the
+# window's multiple of its baseline at every count and in every group with a
+# baseline of its own, here per draw as the 99.5th percentile of
+# (multiple - 1) / sqrt(1 / n + 1 / m), once with the fixed baselines and once
+# with the redrawn ones.
+
+CALIBRATION_COUNTS = (200, 250, 300, 400, 500, 600, 700, 800, 1000)
+calibrated = [g for g in groups if g.name != "LU"]
+
+
+def standardised(group: Group, n: int, factor: float = 1.0) -> dict[str, np.ndarray]:
+    """Per draw: (window / D's baseline - 1) / sqrt(1 / n + 1 / m), fixed and redrawn."""
+    out = {kind: np.empty(DRAWS) for kind in ("fixed", "redrawn")}
+    for part, drawn, counts in chunks(group, n):
+        window = np.median(ape[drawn], axis=1) * factor
+        weights = counts / n
+        scale = np.sqrt(1 / n + weights**2 @ inverse_rows_mdape)
+        out["fixed"][part] = (window / (weights @ base_mdape) - 1) / scale
+        out["redrawn"][part] = (window / (weights * redrawn_mdape[part]).sum(axis=1) - 1) / scale
+    return out
+
+
+print("\nD's constant: the 99.5th percentile of (multiple - 1) / sqrt(1 / n + 1 / m), fixed / redrawn")
+print(("group                    " + "  ".join(f"{n:<11}" for n in CALIBRATION_COUNTS)).rstrip())
+needed: dict[str, list[float]] = {"fixed": [], "redrawn": []}
+for group in calibrated:
+    cells = []
+    for n in CALIBRATION_COUNTS:
+        z = standardised(group, n)
+        q = {kind: float(np.quantile(values, 1 - ALPHA)) for kind, values in z.items()}
+        for kind in needed:
+            needed[kind].append(q[kind])
+        cells.append(f"{q['fixed']:.2f}/{q['redrawn']:.2f}")
+    print((f"{group.name:<24} " + "  ".join(f"{c:<11}" for c in cells)).rstrip())
+constants = {kind: float(np.ceil(max(values) * 100) / 100) for kind, values in needed.items()}
+print(f"smallest constant at or above every percentile: fixed {constants['fixed']:.2f}, redrawn {constants['redrawn']:.2f}")
+
+print("\nD at each constant: false-alarm rate (fixed / redrawn) and miss rate of x1.2, x1.3 (fixed / redrawn)")
+print("group                    n     K     false alarm      miss x1.2        miss x1.3")
+for k_name, k in (("C", C), ("fixed", constants["fixed"]), ("redrawn", constants["redrawn"])):
+    for group in calibrated:
+        for n in (ANSWERS[0], REPLAY[0]):
+            null, worse, worst = standardised(group, n), standardised(group, n, 1.2), standardised(group, n, 1.3)
+            print(
+                f"{group.name:<24} {n:<5} {k:<5.2f} "
+                f"{(null['fixed'] > k).mean():.4f}/{(null['redrawn'] > k).mean():.4f}  "
+                f"{(worse['fixed'] <= k).mean():.4f}/{(worse['redrawn'] <= k).mean():.4f}  "
+                f"{(worst['fixed'] <= k).mean():.4f}/{(worst['redrawn'] <= k).mean():.4f}"
+            )
