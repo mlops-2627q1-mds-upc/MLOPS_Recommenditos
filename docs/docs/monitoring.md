@@ -635,6 +635,14 @@ They are not compared with the replay's control listings: those are training lis
 A window of the training distribution therefore has a lower MdAPE than the test value and a coverage above it; a window the model prices worse than its test set has a higher MdAPE and a lower coverage.
 `report` prints the ratio to the test MdAPE and the test coverage beside each figure, and the [model alerts](#model-alerts) fire on them.
 
+A window is judged against the test values of the model that answered its requests, its `model_version`, not those of the model running when a pass scores it ([#307](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307)).
+So a stored report keeps its ratios when it is re-read after a promotion, and `ModelErrorHigh` right after a promotion compares the old model's error with the old model's test MdAPE.
+The image holds only its own release's evaluate outputs, so every pass first records them in `monitor.db`'s `model_test_values`, for the model version of each variant that the release's `dvc.lock` names: the hash of `models/<variant>` without `.dir`, which is the version the API reports in `/health` and logs with every answer (FR-12).
+The first record of a version stays, so a later release that carries the same model, a rollback for example, changes no comparison.
+A window then takes the values recorded for its `model_version`, also when it is first scored by the next release's image.
+A window never holds the answers of two models: the first answer of another `model_version` closes it as `partial` ([What it compares](#what-it-compares)), so a promotion inside a window splits it, and each part is judged against its own model's values.
+A window of a model that no pass of this job ran with, such as one answered before #307 by a model that was replaced before this job shipped, keeps the test values its last scoring stored, or has none if it was never scored; its figures then stand without the comparison, and the model alerts cannot fire on them.
+
 On a laptop stack on 2026-11-04, after 2,000 control listings and 1,500 `ES` listings of the replay, the two control windows had an MdAPE of 5.38 % and 5.28 % and a coverage of 96.8 % and 95.4 %, and the `ES` window, flagged in 14 features, an MdAPE of 9.41 %, 1.40 times the test value, and a coverage of 85.8 % of its 500 labelled ranges ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)).
 
 ### How it runs
@@ -667,6 +675,7 @@ The image is 1.26 GB, most of it Alibi Detect's dependencies.
 | `window_features` | Feature of a tested window: the test (`ks` or `chi2`), the p-value, the statistic, the values compared, and `drifted` |
 | `window_requests` | Request of a window that the log still holds, with its `request_id`, so a window's labels are the feedback of exactly its requests ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)) |
 | `window_performance` | Closed window: its range answers, `labelled`, `labelled_ranges`, `mdape` and `coverage` each with its status (`ok` or `insufficient_labels`), `nominal_level`, the test values `test_mdape` and `test_coverage`, `final`, and when it was computed ([Error and coverage](#error-and-coverage)) |
+| `model_test_values` | Model version, with its variant, its test values `test_mdape` and `test_coverage`, and when a pass first recorded them ([The baseline](#the-baseline)) |
 | `open_window` | The window being filled: n of 1,000 |
 | `runs` | Pass, with its outcome, the last 10,000 |
 
