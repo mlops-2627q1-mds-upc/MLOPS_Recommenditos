@@ -78,7 +78,8 @@ What each part guarantees:
   nginx matches the normalised path, so `//feedback`, `/v1/./feedback` and percent-encoded spellings are refused too.
   It sends `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY`, hides its version (`server_tokens off`), and sends no HSTS header, because there is no TLS (NFR-09).
   It refuses bodies above 16 KB, as defence in depth behind the API's own 10 KB limit, and answers its own errors (403, 413, 503) as RFC 9457 problems like the API does (FR-16).
-  While the API is down, for example in the seconds after a crash, it answers 503 within 2 s.
+  While the API is down, for example in the seconds after a crash, it answers 503 within 2 s: the problem for every client, and for a browser (an `Accept` header that names `text/html`) a small page that says the price service is restarting and retries by itself every 5 seconds, with `Retry-After: 5` ([web page](web-ui.md#errors)).
+  The page is inline in `nginx.conf`, which travels with a release in the stack image, so it reaches the VM with the next deploy and needs no bootstrap run.
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
@@ -152,6 +153,7 @@ It covers what the in-process API tests cannot see:
 - through the proxy: `/health` answers 200 and reports the bundle in the image, `GET /`, `/docs` and `/openapi.json` answer, a valid `/v1/predict` returns its documented shape, an invalid request and an unknown route return RFC 9457 problems, the security headers are set and the `Server` header names no version;
 - the limits and refusals: a body over the API's 10 KB is refused by the API, one over the proxy's 16 KB by nginx, and `/feedback` and `/metrics`, versioned or not, get the proxy's 403 (FR-10, NFR-09);
 - on the Docker host: every container of `deploy/compose.yaml` runs with a read-only root file system, no capability, `no-new-privileges` and limits on memory and processes, and as a non-root user except cAdvisor, whose host mounts are all read-only; no container but the proxy publishes a port, and none shares the host's network, PID or IPC namespace; the image holds no package outside the serving runtime of `uv.lock`, its `recommenditos` package matches the checkout module by module, `/metrics` answers inside the Compose network, `/v1/feedback` with the key stores a price that the prediction log on the volume joins to its answer (skipped when the stack runs without a key), every Prometheus target is up and the resource figures of [Monitoring](monitoring.md#the-questions-it-answers) reach Prometheus with a value, Prometheus keeps its TSDB in a named volume with both retention caps, and after a SIGKILL of the API process, and after the API hangs, `/health` is 200 again within 30 s (NFR-05);
+- with the API stopped: a browser gets the proxy's HTML page with `Retry-After`, and every other client the unchanged JSON problem (#273);
 - the rollback drill: `deploy.sh` puts the previous tag back when a new one does not start, as a second Compose project beside the stack ([Every deploy](#every-deploy)).
 
 ```bash
