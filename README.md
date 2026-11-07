@@ -21,7 +21,7 @@ All Spanish listings are held out as a "new market", so we can show that our mon
 
 The course grades how well we apply MLOps practices, not model accuracy.
 So we focus on clean, reproducible and well-justified engineering: data and model versioning, experiment tracking, testing, a containerised API, CI/CD and monitoring.
-The model is LightGBM on 16 basic properties of a car (`lgbm-basic`): it is strong on tabular data, trains in under a minute on a CPU, and its own SHAP export explains each valuation.
+The model is LightGBM on 16 basic properties of a car (`lgbm-basic`): it is strong on tabular data, trains in minutes on a CPU, and its own SHAP export explains each valuation.
 It passes the release gate of our six success criteria, with one miss the team accepted as a limitation, the error on cars older than 20 years ([EDN-62](reports/edn.md)), and it is the model the API serves.
 
 The API runs on the course's VM at <http://nattech.fib.upc.edu:40520>: a browser gets a web page for it, and [`/docs`](http://nattech.fib.upc.edu:40520/docs) documents its endpoints.
