@@ -23,6 +23,10 @@ writer there would hold up the API's workers. The tables:
   its price ranges, computed from the feedback of its requests (#229,
   `performance.py`), with the test values they are compared with. A pass
   recomputes a row until it is `final`.
+- `model_test_values`: per model version, the test values it was evaluated
+  with, recorded by the first pass that ran in a release of that model (#307),
+  so that a window is compared with its own model's values after a promotion
+  too, when the image holds only the new model's.
 - `open_window`: the progress of the window being filled, one row.
 - `runs`: the last `RUNS_KEPT` passes of the job, so that its last success is
   on record.
@@ -106,6 +110,14 @@ CREATE TABLE IF NOT EXISTS window_performance (
     CHECK ((mdape_status = 'ok') = (mdape IS NOT NULL)),
     CHECK ((coverage_status = 'ok') = (coverage IS NOT NULL))
 );
+CREATE TABLE IF NOT EXISTS model_test_values (
+    model_variant TEXT NOT NULL,
+    model_version TEXT NOT NULL,
+    test_mdape    REAL,
+    test_coverage REAL,
+    recorded_at   TEXT NOT NULL,
+    PRIMARY KEY (model_variant, model_version)
+);
 CREATE TABLE IF NOT EXISTS open_window (
     singleton         INTEGER PRIMARY KEY CHECK (singleton = 1),
     requests          INTEGER NOT NULL,
@@ -158,6 +170,19 @@ class Window:
 
 
 @dataclass(frozen=True)
+class ModelTestValues:
+    """A model version's test values, as `model_test_values` holds them."""
+
+    model_variant: str
+    #: The version the API reports and logs: the hash dvc.lock records for the bundle.
+    model_version: str
+    #: The test MdAPE and coverage with every input given; None where the evaluation has none.
+    test_mdape: float | None
+    test_coverage: float | None
+    recorded_at: str
+
+
+@dataclass(frozen=True)
 class OpenWindow:
     requests: int
     window_size: int
@@ -206,6 +231,7 @@ class Performance:
 _SELECT_WINDOWS = f"SELECT {', '.join(Window.__dataclass_fields__)} FROM windows"  # noqa: S608
 _PERFORMANCE_COLUMNS = ", ".join(Performance.__dataclass_fields__)
 _SELECT_PERFORMANCE = f"SELECT {_PERFORMANCE_COLUMNS} FROM window_performance"  # noqa: S608
+_TEST_VALUES_COLUMNS = ", ".join(ModelTestValues.__dataclass_fields__)
 
 
 class Store:
@@ -393,6 +419,28 @@ class Store:
     def performances(self) -> dict[int, Performance]:
         rows = self._connection.execute(f"{_SELECT_PERFORMANCE} ORDER BY window_id").fetchall()
         return {performance.window_id: performance for performance in map(_performance, rows)}
+
+    def record_test_values(self, values: Sequence[ModelTestValues]) -> None:
+        """Record each model version's test values, unless a pass recorded that version's before.
+
+        The first record stays, so a window's comparison never changes once made.
+        """
+        marks = ", ".join("?" for _ in ModelTestValues.__dataclass_fields__)
+        with self.transaction() as connection:
+            connection.executemany(
+                f"INSERT OR IGNORE INTO model_test_values ({_TEST_VALUES_COLUMNS}) "  # noqa: S608
+                f"VALUES ({marks})",
+                [tuple(value.__dict__.values()) for value in values],
+            )
+
+    def test_values(self, model_variant: str, model_version: str) -> ModelTestValues | None:
+        """The test values recorded for one model version, None if no pass recorded them."""
+        row = self._connection.execute(
+            f"SELECT {_TEST_VALUES_COLUMNS} FROM model_test_values "  # noqa: S608
+            "WHERE model_variant = ? AND model_version = ?",
+            (model_variant, model_version),
+        ).fetchone()
+        return None if row is None else ModelTestValues(*row)
 
     def open_window(self) -> OpenWindow | None:
         row = self._connection.execute(

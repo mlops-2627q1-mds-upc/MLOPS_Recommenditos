@@ -31,6 +31,14 @@ required fields: the test MdAPE in `metrics.json` and the coverage of the
 (not `sc05_coverage`, the worst scenario's, which drops inputs). Not with the
 replay's control listings, which are training listings and so give an
 optimistic error and coverage.
+
+They are the values of the model that answered the window's requests
+(`judged_against`, #307), not of the model running when a pass scores it. The
+image holds the evaluate outputs of its own release only, so every pass records
+them in `monitor.db` for each model version its `dvc.lock` names
+(`release_test_values`), and a window is judged against the values recorded for
+its `model_version`, after a promotion too. A window holds one model's answers:
+a new `model_version` closes it (`job.py`).
 """
 
 from collections.abc import Sequence
@@ -41,8 +49,18 @@ import json
 from pathlib import Path
 import statistics
 
+import yaml
+
 from recommenditos_monitoring.log import Label
-from recommenditos_monitoring.store import INSUFFICIENT_LABELS, OK, Performance, Window, timestamp
+from recommenditos_monitoring.store import (
+    INSUFFICIENT_LABELS,
+    OK,
+    ModelTestValues,
+    Performance,
+    Store,
+    Window,
+    timestamp,
+)
 
 #: The fewest labelled answers that give an MdAPE.
 MIN_LABELLED = 200
@@ -100,6 +118,61 @@ def baseline(metrics: Path | None, coverage: Path | None, variant: str) -> Basel
     return Baseline(
         mdape=tested_mdape(metrics, variant), coverage=tested_coverage(coverage, variant)
     )
+
+
+def bundle_versions(lock: Path | None) -> dict[str, str]:
+    """The model version of each variant whose bundle `lock` (dvc.lock) records.
+
+    The hash of `models/<variant>` without DVC's `.dir`, the version the API
+    computes from the bundle's files, reports in /health and logs with every
+    answer (FR-12). A missing file gives none.
+    """
+    if lock is None or not lock.is_file():
+        return {}
+    stages = yaml.safe_load(lock.read_text(encoding="utf-8")).get("stages", {})
+    versions = {}
+    for stage in stages.values():
+        for out in stage.get("outs", []):
+            path = str(out.get("path", ""))
+            if path.startswith("models/") and path.count("/") == 1 and out.get("md5"):
+                versions[path.removeprefix("models/")] = str(out["md5"]).removesuffix(".dir")
+    return versions
+
+
+def release_test_values(
+    metrics: Path | None, coverage: Path | None, lock: Path | None, recorded_at: datetime
+) -> list[ModelTestValues]:
+    """The test values the image's evaluate outputs give each model version of its dvc.lock.
+
+    The three files are one release's, so each variant's values belong to the
+    bundle that release's dvc.lock records. A variant without any value is left
+    out, so that a later image with its values can still record them.
+    """
+    values = []
+    for variant, version in sorted(bundle_versions(lock).items()):
+        test = baseline(metrics, coverage, variant)
+        if test != NO_BASELINE:
+            values.append(
+                ModelTestValues(
+                    variant, version, test.mdape, test.coverage, timestamp(recorded_at)
+                )
+            )
+    return values
+
+
+def judged_against(store: Store, window: Window, previous: Performance | None) -> Baseline:
+    """The test values `window`'s figures are compared with: those of the model that answered it.
+
+    Those recorded for its `model_version`. A window of a model that no pass of
+    this code ran with, one answered before #307, keeps the values its last
+    scoring stored, or has none.
+    """
+    recorded = store.test_values(window.model_variant, window.model_version)
+    if recorded is not None:
+        return Baseline(recorded.test_mdape, recorded.test_coverage)
+    if previous is not None:
+        return Baseline(previous.test_mdape, previous.test_coverage)
+    return NO_BASELINE
 
 
 def absolute_percentage_error(label: Label) -> float:

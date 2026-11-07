@@ -50,6 +50,8 @@ METRICS_VARIABLE = "RECOMMENDITOS_MONITOR_METRICS"
 #: The evaluate stage's coverage table, with the test coverage the coverage is compared with.
 COVERAGE_VARIABLE = "RECOMMENDITOS_MONITOR_COVERAGE"
 COVERAGE_TABLE = "reports/metrics/interval-coverage-by-make.csv"
+#: The release's dvc.lock, which names the model version the test values belong to.
+LOCK_VARIABLE = "RECOMMENDITOS_MONITOR_LOCK"
 
 
 def positive_rate(text: str) -> float:
@@ -166,6 +168,12 @@ def parser() -> argparse.ArgumentParser:
         help=f"the models' test coverage (default: ${COVERAGE_VARIABLE} or {COVERAGE_TABLE})",
     )
     run.add_argument(
+        "--lock",
+        type=Path,
+        default=Path(os.environ.get(LOCK_VARIABLE, "dvc.lock")),
+        help=f"the model version of those test values (default: ${LOCK_VARIABLE} or dvc.lock)",
+    )
+    run.add_argument(
         "--window-size",
         type=int,
         default=WINDOW_SIZE,
@@ -220,6 +228,7 @@ def run_once_command(args: argparse.Namespace) -> int:
         textfile_dir=args.textfile_dir,
         metrics=args.metrics,
         coverage=args.coverage,
+        lock=args.lock,
     )
     try:
         outcome = run_once(paths, window_size=args.window_size)
