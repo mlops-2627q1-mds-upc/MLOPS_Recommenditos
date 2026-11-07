@@ -14,8 +14,11 @@ break is caught - and, for a tolerant rule, that the tolerance is where
 """
 
 import hashlib
+import importlib
 import json
 from pathlib import Path
+import shutil
+import time
 from types import SimpleNamespace
 
 import pandas as pd
@@ -145,6 +148,62 @@ def test_the_summary_carries_no_run_id_or_timestamp(stage, built, frames, tmp_pa
     validate_main(frames["raw_path"], frames["interim_path"], again, built["context"])
 
     assert again.read_bytes() == stage["path"].read_bytes()
+
+
+def _file_digests(directory: Path) -> dict[str, str]:
+    return {
+        path.relative_to(directory).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
+    }
+
+
+@pytest.mark.req("NFR-06")
+def test_a_rerun_on_the_same_data_writes_the_same_bytes(frames, tmp_path, monkeypatch):
+    # The results and the Data Docs are cached DVC outputs. A single-stage
+    # `dvc repro` in a fresh worktree reruns this stage when they are missing,
+    # and if the rerun wrote other bytes it would rewrite their hashes in
+    # `dvc.lock` with no data change behind them (#289). So the stage runs
+    # twice as DVC runs it, its outputs deleted first, at two moments and, where
+    # the platform can switch it, in two time zones, and every file must match.
+    # The fixture's two frames fail nothing, so the Data Docs cover passing
+    # results; a failing one renders the same templates.
+    paths = {
+        "context": tmp_path / "gx",
+        "results": tmp_path / "data-validation" / "results",
+        "docs": tmp_path / "data-validation" / "data-docs",
+        "summary": tmp_path / "data-validation" / "summary.json",
+    }
+    configure_gx.main(paths["context"], paths["results"], paths["docs"], PARAMS_FILE)
+    outputs = paths["summary"].parent
+
+    runs = []
+    for zone in ("Europe/Madrid", "America/Los_Angeles"):
+        if hasattr(time, "tzset"):
+            monkeypatch.setenv("TZ", zone)
+            time.tzset()
+        for directory in (paths["results"], paths["docs"]):
+            shutil.rmtree(directory, ignore_errors=True)
+        paths["summary"].unlink(missing_ok=True)
+        validate_main(
+            frames["raw_path"], frames["interim_path"], paths["summary"], paths["context"]
+        )
+        runs.append(_file_digests(outputs))
+    monkeypatch.undo()
+    if hasattr(time, "tzset"):
+        time.tzset()
+
+    first, second = runs
+    assert len(first) > 20 and any(name.startswith("results/") for name in first)
+    assert first == second
+
+
+def test_the_data_docs_views_import_from_where_the_site_config_says():
+    # DVC runs `configure_gx` as `__main__`, so the module the config names is
+    # spelled out; a rename that missed it would fail only on the real stage.
+    module = importlib.import_module(configure_gx.VIEWS_MODULE)
+    assert module.StablePageView is configure_gx.StablePageView
+    assert module.StableIndexPageView is configure_gx.StableIndexPageView
 
 
 def test_validation_renders_the_data_docs_outside_the_context(stage, built):

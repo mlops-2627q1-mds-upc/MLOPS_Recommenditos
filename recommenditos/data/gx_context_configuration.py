@@ -47,6 +47,13 @@ while building it:
   the Data Docs go to `reports/data-validation/`, which is `validate-data`'s
   output. Inside `gx/` they would modify this stage's output every time
   validation ran, and `dvc status` would report it changed after every run.
+- **What validation writes is byte-stable.** `validate-data`'s outputs are
+  cached, so a rerun on the same data has to write the same bytes, or a
+  single-stage `dvc repro` that reruns it for missing outputs rewrites its hashes
+  in `dvc.lock` with no data change behind them (#289). Two of the three causes
+  are configured here: the results store gets a fixed id instead of a fresh
+  UUID, and the Data Docs are rendered by `StablePageView` and
+  `StableIndexPageView`. The third, the run's time, is `validate-data`'s.
 
 What the suites check, and where each rule of issue #25 lives:
 
@@ -112,14 +119,18 @@ supposed to satisfy it. The guarantee is enforced where the list is applied, and
 checked by `train` and `evaluate` (docs/docs/pipeline.md, "The supported makes").
 """
 
+from collections.abc import Iterator
+import itertools
 import os
 from pathlib import Path
 import shutil
 from typing import Any
+import uuid
 
 import great_expectations as gx
 from great_expectations.data_context.types.base import ProgressBarsConfig
 import great_expectations.expectations as gxe
+from great_expectations.render.view import DefaultJinjaIndexPageView, DefaultJinjaPageView
 from loguru import logger
 import pandas as pd
 import typer
@@ -187,6 +198,16 @@ REQUIRED_FILLED_COLUMNS: tuple[str, ...] = (
     "equipment_extra",
     "equipment_safety",
 )
+
+#: The id of the validation results store. Great Expectations writes a fresh
+#: UUID into the store's `.ge_store_backend_id` when it creates the store, which
+#: it does on every `validate-data` run, because DVC deletes the results first.
+#: A fixed one keeps that file byte-stable; nothing reads it but the store.
+RESULTS_STORE_ID = uuid.uuid5(uuid.NAMESPACE_URL, "recommenditos/validation_results_store")
+
+#: Where Great Expectations imports the Data Docs views from. Spelled out,
+#: because `__name__` is `__main__` when DVC runs this module.
+VIEWS_MODULE = "recommenditos.data.gx_context_configuration"
 
 app = typer.Typer()
 
@@ -339,6 +360,69 @@ SUITES = {RAW: raw_suite, INTERIM: interim_suite}
 
 
 # --------------------------------------------------------------------------
+# The Data Docs
+# --------------------------------------------------------------------------
+
+
+def _without_query(url: str, add_datetime: bool = True) -> str:
+    """The URL as the template wrote it, in place of the filter that dates it."""
+    return url
+
+
+class StablePageView(DefaultJinjaPageView):
+    """A Data Docs page that renders the same bytes from the same results.
+
+    Great Expectations' default view puts two things into a page that depend on
+    the moment and not on the results: every collapsible block gets a fresh
+    `uuid4` as its HTML id, and the logo is loaded from Great Expectations' S3
+    bucket with the render time and the context's id as query parameters. Here
+    the ids count up within the page, which is all an HTML id needs, and the
+    logo's URL carries no query, which also stops the page sending that bucket
+    the context's id.
+    """
+
+    def __init__(self, custom_styles_directory=None, custom_views_directory=None) -> None:
+        super().__init__(custom_styles_directory, custom_views_directory)
+        self._element_ids: Iterator[int] = itertools.count(1)
+        self.env.filters["add_data_context_id_to_url"] = _without_query
+
+    def render(self, document, template=None, **kwargs):
+        self._element_ids = itertools.count(1)
+        return super().render(document, template, **kwargs)
+
+    def generate_html_element_uuid(self, prefix: str | None = None) -> str:
+        return f"{prefix or ''}{next(self._element_ids)}"
+
+
+class StableIndexPageView(StablePageView, DefaultJinjaIndexPageView):
+    """The Data Docs' index page, rendered as `StablePageView` renders a page."""
+
+
+def _data_docs_site(data_docs_dir: Path, context_dir: Path) -> dict[str, Any]:
+    """The site config: Great Expectations' default site, drawn by the views above."""
+    module = VIEWS_MODULE
+
+    def view(name: str) -> dict[str, str]:
+        return {"module_name": module, "class_name": name}
+
+    return {
+        "class_name": "SiteBuilder",
+        "site_index_builder": {
+            "class_name": "DefaultSiteIndexBuilder",
+            "view": view(StableIndexPageView.__name__),
+        },
+        "site_section_builders": {
+            section: {"view": view(StablePageView.__name__)}
+            for section in ("expectations", "validations", "profiling")
+        },
+        "store_backend": {
+            "class_name": "TupleFilesystemStoreBackend",
+            "base_directory": _store_path(data_docs_dir, context_dir),
+        },
+    }
+
+
+# --------------------------------------------------------------------------
 # The context
 # --------------------------------------------------------------------------
 
@@ -378,21 +462,11 @@ def main(
     # A progress bar per checkpoint run is noise in a DVC log.
     context.variables.progress_bars = ProgressBarsConfig(globally=False)
     stores = context.variables.config.stores
-    stores["validation_results_store"]["store_backend"]["base_directory"] = _store_path(
-        results_dir, context_dir
-    )
+    results_backend = stores["validation_results_store"]["store_backend"]
+    results_backend["base_directory"] = _store_path(results_dir, context_dir)
+    results_backend["manually_initialize_store_backend_id"] = str(RESULTS_STORE_ID)
+    context.variables.data_docs_sites = {"local_site": _data_docs_site(data_docs_dir, context_dir)}
     context.variables.save()
-    context.update_data_docs_site(
-        "local_site",
-        {
-            "class_name": "SiteBuilder",
-            "site_index_builder": {"class_name": "DefaultSiteIndexBuilder"},
-            "store_backend": {
-                "class_name": "TupleFilesystemStoreBackend",
-                "base_directory": _store_path(data_docs_dir, context_dir),
-            },
-        },
-    )
 
     source = context.data_sources.add_pandas(DATASOURCE)
     for frame in FRAMES:

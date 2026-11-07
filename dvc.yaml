@@ -150,8 +150,10 @@ stages:
   # which makes it a leaf nothing depends on, so `dvc repro split` would walk
   # straight past it.
   #
-  # It reads no parameter itself: every bound is in the suites, which is what
-  # the dependency on `gx` carries.
+  # Every bound is in the suites, which is what the dependency on `gx` carries.
+  # The one parameter it reads is `reference_date`, as the name and the time of
+  # the run it stores its results under, so that a rerun on the same data writes
+  # the same bytes (#289).
   # ----------------------------------------------------------------------
   validate-data:
     cmd: python3 -m recommenditos.data.validate_data
@@ -165,11 +167,16 @@ stages:
       - gx
       - data/raw/listings.parquet
       - data/interim/listings.parquet
+    params:
+      - reference_date
     outs:
       # The full validation results and the Data Docs rendered from them. Cached
-      # and pushed rather than committed, because both carry the run's timestamp
-      # in their paths and their content, so every run would be a diff; `dvc
-      # pull` brings them to any clone, and `data-docs/index.html` opens offline.
+      # and pushed rather than committed, because they are 5 MB of generated
+      # JSON, HTML and fonts that nobody reviews line by line; `dvc pull`
+      # brings them to any clone, and `data-docs/index.html` opens in a browser
+      # without a server. Byte-stable: a rerun on the same data and the same
+      # `gx/` writes the same bytes, so a single-stage repro that reruns this
+      # stage for missing outputs leaves `dvc.lock` as it was (#289).
       - reports/data-validation/results
       - reports/data-validation/data-docs
       # Not cached, so the validation result is git-tracked and shows up in the
