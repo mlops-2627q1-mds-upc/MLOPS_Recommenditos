@@ -1368,7 +1368,7 @@ How to add an entry:
 
 ### EDN-95: CI fails on fixable image vulnerabilities, and the containers run locked down
 
-> **Revised on 2026-11-07**: two unreachable nginx findings are accepted; the decision is unchanged.
+> **Revised on 2026-11-07**: accepts two unreachable nginx findings; the decision is unchanged.
 >
 - **Date:** 2026-10-22
 - **Milestone:** M5: Model Packaging
@@ -1382,7 +1382,7 @@ How to add an entry:
 - **Alternatives considered:**
   - `aquasecurity/trivy-action`: its tags were moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)), so trivy is the release binary, pinned by SHA-256.
   - Waiting for the VM load test (#143): laptop measurements sufficed, and the VM run kept 768 MiB (EDN-88).
-  - Our own nginx image with `apk upgrade` ([PR #238](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238)): a second image to maintain outweighs the slim image's two findings ([PR #271](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271)), which nginx never calls ([PR #331](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/331)).
+  - Our own nginx image with `apk upgrade` ([PR #238](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238)): maintaining a second image outweighs the slim image's two findings ([PR #271](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271)), whose affected functions nginx never calls ([PR #331](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/331)).
 - **Rationale:** Counting unfixed findings keeps unpatched Debian CVEs from blocking pull requests.
   The canary fails the October 2023 Python image with 93 fixable findings; the API image has none.
   The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB.

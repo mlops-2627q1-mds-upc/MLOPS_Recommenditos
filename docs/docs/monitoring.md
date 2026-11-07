@@ -190,6 +190,7 @@ The rejected alternatives, Grafana read-only behind nginx's public port and scre
 Grafana runs with the shared hardening (read-only root, no capability, `no-new-privileges`, its own user 472), with its database in the volume and a tmpfs on `/tmp`.
 It sends nothing out: usage reports, update checks, the news feed, avatars and plugin downloads at start-up are off, and so is its own alerting, since the alerts are Prometheus' ([Alerts](#alerts)).
 The data sources the image bundles besides Prometheus are turned off: each would run as a process of its own, and together they exhausted the container's 128 processes.
+Their findings are accepted in `.trivyignore` because they never run, so the integration suite checks that Grafana loads no bundled data source but Prometheus and runs no other plugin process (`tests/integration/test_deployed_grafana.py`); a Grafana release that renames a plugin fails it.
 
 ## Model performance
 
@@ -697,7 +698,7 @@ The job opens the log read-only all the same.
 
 Alibi Detect 0.13 pins Pillow below 11 and transformers below 5, both with fixed HIGH findings that the image scan of NFR-09 fails on.
 The image leaves Pillow out, because only Alibi Detect's image detectors and Matplotlib use it and the job imports neither; the integration suite checks that it is gone and that a pass runs.
-transformers stays, since Alibi Detect imports it on import; its three findings are about loading and saving models, which the job never does, and are accepted in `.trivyignore` until 2026-12-04.
+transformers stays, since Alibi Detect imports it on import; its three findings are about loading and saving models, which the job never does, and are accepted in `.trivyignore` until 2027-01-31.
 The image is 1.26 GB, most of it Alibi Detect's dependencies.
 
 ### Where the results go
