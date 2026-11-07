@@ -566,8 +566,10 @@ def compose_available() -> bool:
     return version.returncode == 0
 
 
-#: Stands in for a secret value in `.env`, such as the API key.
+#: Stand in for secret values in `.env`, such as the API key; the second is
+#: one word, as Compose prints the name of a `$NAME` it finds inside a value.
 HIDDEN = "stand-in-for-a-value-of-dot-env"
+HIDDEN_WORD = "standInForAValueOfDotEnv"
 #: A release's compose.yaml that requires a variable, as ours requires the
 #: Grafana password, with the API key in the environment and the host port in a
 #: field Compose checks.
@@ -596,7 +598,27 @@ REJECTED_ENV = {
         f"HTTP_PORT={HIDDEN}\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n",
         "invalid hostPort: <HTTP_PORT>",
     ),
+    # Compose prints an invalid template Go-quoted, with `\\` and `\"` escaped.
+    "an invalid template with a backslash and a quote": (
+        f'RECOMMENDITOS_API_KEY={HIDDEN}\\"{HIDDEN}${{x\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n',
+        'Invalid template: "<RECOMMENDITOS_API_KEY>"',
+    ),
+    # Compose warns that the `$NAME` inside the value is not set.
+    "a dollar inside a value": (
+        f"GRAFANA_ADMIN_PASSWORD=Xy${HIDDEN_WORD}\nHTTP_PORT=notaport\n",
+        "invalid hostPort: <HTTP_PORT>",
+    ),
+    # A tab in a line of `.env`, after `export`.
+    "an unterminated quote after export and a tab": (
+        f'export\tRECOMMENDITOS_API_KEY="{HIDDEN}\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n',
+        "unterminated quoted value <RECOMMENDITOS_API_KEY>",
+    ),
 }
+
+
+def windows_of(secret: str, output: str) -> list[str]:
+    """The pieces of 8 characters of `secret` that `output` holds."""
+    return [secret[i : i + 8] for i in range(len(secret) - 7) if secret[i : i + 8] in output]
 
 
 @pytest.mark.req("NFR-13", "NFR-15")
@@ -619,8 +641,9 @@ def test_a_rejected_configuration_is_named_without_printing_a_value_of_env(
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Compose does not accept the compose.yaml" in result.stdout
-    assert named in result.stdout
-    assert HIDDEN not in result.stdout + result.stderr
+    for secret in (HIDDEN, HIDDEN_WORD):
+        assert windows_of(secret, result.stdout + result.stderr) == [], result.stdout
+    assert named in result.stdout, result.stdout
     assert vm.env_file.read_text(encoding="utf-8") == env_before
     assert vm.stack_link() == "stacks/0123456789abcdef"
     assert " up " not in vm.log.read_text(encoding="utf-8")
@@ -635,5 +658,6 @@ def test_a_stack_image_without_a_compose_yaml_is_refused(tmp_path: Path):
     result = vm.run("deploy", SHA)
 
     assert result.returncode == 1, result.stdout + result.stderr
-    assert "holds no compose.yaml; nothing changed" in result.stdout
+    assert "holds no compose.yaml" in result.stdout
+    assert "nothing changed" in result.stdout
     assert vm.stack_link() == "stacks/0123456789abcdef"
