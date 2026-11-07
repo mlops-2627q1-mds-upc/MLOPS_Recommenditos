@@ -14,6 +14,7 @@ rewrites again.
 """
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 import time
@@ -59,6 +60,18 @@ target.execute(
 )
 target.commit()
 print(len(rows))
+"""
+
+
+#: A dvc.lock that names the served bundle's version for its variant, so that the
+#: test pass records the image's test values for the model the stack serves: in
+#: CI a synthetic bundle, whose version the image's dvc.lock does not name.
+WRITE_LOCK = """
+import sys
+variant, version = sys.argv[1:]
+with open("/tmp/integration-dvc.lock", "w", encoding="utf-8") as lock:
+    lock.write(f"stages:\\n  train@{variant}:\\n    outs:\\n")
+    lock.write(f"    - path: models/{variant}\\n      md5: {version}.dir\\n")
 """
 
 
@@ -118,6 +131,17 @@ def test_the_monitoring_image_has_no_pillow(monitor):
     assert found == "None"
 
 
+def test_the_monitoring_image_has_the_releases_dvc_lock(monitor):
+    """It names the model version of each variant's test values (#307)."""
+    found = monitor.exec(
+        "python",
+        "-c",
+        "import hashlib; print(hashlib.md5(open('/app/dvc.lock', 'rb').read()).hexdigest())",
+    )
+    expected = hashlib.md5((REPOSITORY / "dvc.lock").read_bytes(), usedforsecurity=False)
+    assert found == expected.hexdigest()
+
+
 @pytest.mark.req("FR-14")
 def test_the_pass_at_the_start_succeeded(monitor):
     eventually(
@@ -129,7 +153,7 @@ def test_the_pass_at_the_start_succeeded(monitor):
 
 @pytest.mark.req("FR-14")
 def test_a_pass_reaches_prometheus_through_node_exporter(
-    monitor, prometheus_container, client, listing
+    monitor, prometheus_container, client, listing, health
 ):
     ids = []
     for _ in range(WINDOW):
@@ -137,6 +161,8 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         assert answer.status_code == 200, answer.text
         ids.append(answer.json()["request_id"])
     assert monitor.exec("python", "-c", COPY_REQUESTS, json.dumps(ids)) == str(WINDOW)
+    served = health.json()["model"]
+    monitor.exec("python", "-c", WRITE_LOCK, served["variant"], served["version"])
     started = time.time()
 
     out = monitor.exec(
@@ -148,6 +174,8 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         "/tmp/integration-log.sqlite3",  # noqa: S108 - the container's own tmpfs
         "--db",
         "/tmp/integration-monitor.db",  # noqa: S108 - the container's own tmpfs
+        "--lock",
+        "/tmp/integration-dvc.lock",  # noqa: S108 - the container's own tmpfs
         "--window-size",
         str(WINDOW),
     )
@@ -184,7 +212,7 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
     # The window's error and coverage beside its drift (#229), every series of
     # them: four labels of four point estimates are too few for a figure, which
     # is then left out, and the test values are the image's copies of the
-    # evaluate outputs, the repository's.
+    # evaluate outputs, the repository's, recorded for the served model.
     mdape, coverage = deployed_test_values()
     exported = {
         (series["metric"]["__name__"], series["metric"].get("figure")): float(series["value"][1])
