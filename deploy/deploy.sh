@@ -103,6 +103,47 @@ env_value() {
     sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1
 }
 
+# Compose's error output $1, each line indented, with every value in .env of 8
+# characters or more replaced by its name in angle brackets. This output is the
+# job log of the Deploy workflow, which anyone can read in this public
+# repository, and an error about .env can quote a line of it, such as
+# `line 3: unterminated quoted value "...`; a missing variable is named by
+# Compose itself. A value is hidden as written, and without the blanks, quotes
+# and comment around it. A shorter value is no secret worth hiding: the secrets
+# are generated and far longer (.env.template).
+masked_compose_error() {
+    local text=$1 line name value number=0 hidden=
+    if [[ -r $ENV_FILE ]]; then
+        while IFS= read -r line || [[ -n $line ]]; do
+            number=$((number + 1))
+            if [[ $line == *=* ]]; then
+                name=${line%%=*}
+                value=${line#*=}
+            else
+                name="line $number of .env"
+                value=$line
+            fi
+            name=${name#"${name%%[![:space:]]*}"}
+            name=${name%"${name##*[![:space:]]}"}
+            for value in "$value" \
+                "$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<<"$value")" \
+                "$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//' <<<"$value")" \
+                "$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^["'\'']//; s/["'\'']$//' <<<"$value")"; do
+                if ((${#value} >= 8)); then
+                    hidden+="${#value}"$'\t'"$name"$'\t'"$value"$'\n'
+                fi
+            done
+        done <"$ENV_FILE"
+    fi
+    # The longest value first, so that a value inside another leaves none of it.
+    while IFS=$'\t' read -r _ name value; do
+        if [[ -n $value ]]; then
+            text=${text//"$value"/<$name>}
+        fi
+    done < <(sort -t $'\t' -k 1,1nr <<<"$hidden")
+    out "$text" | sed 's/^/  /'
+}
+
 set_tag() {
     if grep -q '^API_IMAGE_TAG=' "$ENV_FILE"; then
         # GNU sed -i keeps the file's mode, so .env stays readable by its owner alone.
@@ -239,7 +280,7 @@ pull_image() {
 # any other reason or does not hold a stack Compose accepts.
 fetched=
 fetch_stack() {
-    local tag=$1 repository image log staging container
+    local tag=$1 repository image log staging container errors
     fetched=
     repository=$(stack_repository)
     if [[ -z $repository ]]; then
@@ -293,10 +334,17 @@ fetch_stack() {
         rm -rf "$staging"
         return 1
     fi
-    if [[ ! -f $staging/compose.yaml ]] ||
-        ! API_IMAGE_TAG=$tag docker compose --project-directory "$staging" -f "$staging/compose.yaml" \
-            --env-file "$ENV_FILE" config --quiet >/dev/null 2>&1; then
-        say "the compose.yaml of $image is missing or not valid"
+    if [[ ! -f $staging/compose.yaml ]]; then
+        say "$image holds no compose.yaml; nothing changed"
+        rm -rf "$staging"
+        return 1
+    fi
+    # Compose's own error names a missing variable, or the line of .env it
+    # cannot read; its standard output, the configuration, goes nowhere.
+    if ! errors=$(API_IMAGE_TAG=$tag docker compose --project-directory "$staging" -f "$staging/compose.yaml" \
+        --env-file "$ENV_FILE" config --quiet 2>&1 >/dev/null); then
+        say "Compose does not accept the compose.yaml of $image with $ENV_FILE; nothing changed:"
+        masked_compose_error "$errors"
         rm -rf "$staging"
         return 1
     fi
