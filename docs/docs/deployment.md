@@ -649,16 +649,17 @@ Before you trust a clean local scan, run it with `TRIVY_CACHE_DIR` pointing at a
 
 When the scan fails, update the base image or the package; Dependabot's pull request may already do so.
 When no base image ships the fix yet but `trixie-security` does, the runtime stage upgrades that package by name with `apt-get install --only-upgrade`, not with a blanket `apt-get upgrade`: CD's build restores its layers from the Actions cache, which would keep a blanket upgrade at the versions of its first build, while a new package name in the line changes the layer and so rebuilds it.
-The runtime stages of both images take `apt` and `libapt-pkg7.0` 3.0.4 that way since 2026-11-05: the pinned base image and the newest `python:3.12-slim-trixie` (built 2026-10-28) ship 3.0.3, which has CVE-2026-109518 (HIGH, [DSA-6607-1](https://security-tracker.debian.org/tracker/CVE-2026-109518)); the line goes once Dependabot moves the base to an image that ships the fix.
+The runtime stages of both images take `zlib1g` `1:1.3.dfsg+really1.3.1-1+deb13u1` that way since 2026-11-07: the pinned base image, the newest `python:3.12-slim-trixie` (built 2026-11-05), ships `1:1.3.dfsg+really1.3.1-1+b1`, which has CVE-2026-76844 and CVE-2026-85091 (both HIGH, [DSA-6613-1](https://security-tracker.debian.org/tracker/CVE-2026-85091)); the line goes once Dependabot moves the base to an image that ships the fix.
 If neither is possible yet, accept the finding in `.trivyignore`: the vulnerability ID with an expiry date (`CVE-2026-12345 exp:2026-12-31`), after which trivy reports it again, and a comment line above it that says why the risk is accepted.
 The scan refuses an entry without either.
 On 2026-10-30 the API image had no fixable HIGH or CRITICAL finding and 44 without a fix, all in Debian packages.
 The nginx image is the slim variant, `nginx-unprivileged:1.30-alpine-slim`: nginx with its core modules only, without the optional modules, their libraries (such as fontconfig and libexpat) and curl, none of which the proxy uses.
-On 2026-11-03 it had no finding, where `1.30-alpine` had two fixable ones in libexpat and three accepted in `.trivyignore` (brotli-libs, curl and libcurl); `.trivyignore` holds no entry now.
+On 2026-11-03 it had no finding, where `1.30-alpine` had two fixable ones in libexpat and three accepted in `.trivyignore` (brotli-libs, curl and libcurl).
+On 2026-11-07 the database added fixable findings in its musl and zlib, and in the same packages of cAdvisor's Alpine layer, that no rebuilt image of either tag ships yet; `.trivyignore` accepts them, because nginx calls neither of the two affected functions (it compiles its regular expressions with PCRE2 and compresses with zlib's `deflate`) and cAdvisor links no zlib and calls no `regcomp`.
 
 **The Dockerfile lint.**
 [hadolint](https://github.com/hadolint/hadolint) checks the `Dockerfile` in the pre-commit hook and in CI's required `Lint & format` job.
-Its one kind of exception, DL3008 for a Debian package installed or upgraded without a pinned version (`libgomp1` and the upgrade of `apt` in the `Dockerfile` and `monitoring/Dockerfile`, the TeX Live image's tools in `reports/latex/Dockerfile`), carries its reason beside each: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
+Its one kind of exception, DL3008 for a Debian package installed or upgraded without a pinned version (`libgomp1` and the upgrade of `zlib1g` in the `Dockerfile` and `monitoring/Dockerfile`, the TeX Live image's tools in `reports/latex/Dockerfile`), carries its reason beside each: Debian removes a package version from its archive with every security update, so a pinned version would break the build instead of patching it.
 
 **Dependabot.**
 `.github/dependabot.yml` proposes updates every Monday for the GitHub Actions, the images of the `Dockerfile`, of `deploy/compose.yaml` and of the report's TeX Live image (`reports/latex/Dockerfile`), and `uv.lock`, one grouped pull request per ecosystem, with titles such as `chore(deps): bump the docker group with 2 updates`.

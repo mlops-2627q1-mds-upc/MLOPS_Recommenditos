@@ -18,7 +18,7 @@
 # Dependabot moves together with the tag.
 FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
-FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 AS dependencies
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS dependencies
 COPY --from=uv /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -36,14 +36,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # (tests/integration/test_deployed_monitor.py).
 RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
-FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
-# apt and libapt-pkg7.0 from trixie-security, as in the API's Dockerfile, which
-# says why (CVE-2026-109518), why the download runs without retries, and when
-# the line can go. Not pinned to a version, for the reason the API's Dockerfile
-# gives for libgomp1.
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+# zlib1g from trixie-security, as in the API's Dockerfile, which says why
+# (CVE-2026-76844 and CVE-2026-85091) and when the line can go. Not pinned to a
+# version, for the reason the API's Dockerfile gives for libgomp1.
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 10002 monitor \
     && useradd --system --uid 10002 --gid monitor --no-create-home --shell /usr/sbin/nologin monitor
