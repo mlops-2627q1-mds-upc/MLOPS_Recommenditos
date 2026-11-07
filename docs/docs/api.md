@@ -332,7 +332,8 @@ Every 1,000 records, and at startup, a background thread of each worker process 
 Over the cap, it deletes the oldest answers, with their feedback, in batches of 1,000 until the data fits 90 % of the cap.
 A batch is smaller when the excess holds fewer rows, and the newest answer is never deleted: `seq` has no AUTOINCREMENT, so an emptied table would number its next row 1 again and the drift job, which forms its windows by `seq`, would see the log start over.
 It takes the lock per batch and pauses 50 ms between batches, so a request waits for one batch at most, and no request runs the pruning itself.
-A batch of 1,000 held the lock for 2 ms at the median and 26 ms at most, measured on a 47 MB log of 150,000 records on a development laptop.
+A batch of 1,000 held the lock for 22 to 28 ms at the median and 53 ms at most, measured in two runs on a log of 150,000 records (59 MB) whose request IDs are random UUIDs, as the API's are, on a development laptop.
+The same log with sequential request IDs took 2 to 7 ms at the median.
 SQLite reuses the freed pages for new records instead of growing the file, so the file stays at about the cap without a `VACUUM`, and the WAL file is truncated to 64 MB after each checkpoint.
 Setting the variable and the volume on the VM is part of the deployment (NFR-04).
 
