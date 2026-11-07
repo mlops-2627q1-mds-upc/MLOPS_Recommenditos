@@ -303,7 +303,7 @@ The error and coverage thresholds are therefore one-sided tests at 0.005 per win
   Against the overall value, half of the `ES` windows and 98 % of the `FR` windows of 1,000 answers that the model prices exactly as on the test set would fire ([#306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), `reports/analysis/market_baseline.py`).
   The alert therefore compares a window's MdAPE with the test MdAPE of its countries, `baseline_mdape`: the per-country test MdAPE of `reports/metrics/segments.csv`, weighted by the countries of the window's labelled answers; a country with fewer than 500 test rows, SC-04's minimum segment, takes the overall test MdAPE ([The baseline](#the-baseline)).
   A market's test MdAPE rests on a few hundred rows, 593 for `ES`, and has a sampling error of its own, 5.7 % of its value for `ES`, so the ceiling is a two-sample test: 1 + 3.55 sqrt(1 / n + 1 / m) times the baseline, n the labelled answers and m the test rows of the baseline, `baseline_test_rows`, with 1 / m the sum of w² / m_c over the window's countries, w a country's share of the labelled answers and m_c its test rows.
-  For a window of the test mix, m is about 20,000, and the ceiling is 1.25 times the baseline at 200 labelled answers, 1.21 at 300, 1.16 at 500 and 1.12 at 1,000; for a window of `ES` alone it is 1.29, 1.25, 1.22 and 1.18.
+  For a window of the test mix, m is about 20,000, and the ceiling is 1.25 times the baseline at 200 labelled answers, 1.21 at 300, 1.16 at 500 and 1.115 at 1,000; for a window of `ES` alone it is 1.29, 1.25, 1.22 and 1.18.
   The spread of a median has no closed form, so 3.55 comes from drawing 20,000 windows of n labelled answers from the test errors of `lgbm-basic` of each market, of the test mix and of a mix of 78 % `ES`, for n from 200, the fewest the job reports an MdAPE for, to 1,000: it is the smallest constant at or above the 99.5th percentile of (multiple - 1) / sqrt(1 / n + 1 / m) at every n and in every group, with the test values taken as the truth, as for the constant 3.52 of the rule before.
   The false-alarm rate is then at most 0.0044 per window in every market, at 200 and at 1,000 labelled answers.
   Counting the sampling error of the baselines as well, by drawing each again from its test rows, it reaches 0.0081 for `ES`; the constant 4.00 would hold 0.005 there too, at the cost of missing an `ES` window with 1.2 times its error in 63 % of the windows instead of 47 %.
@@ -323,11 +323,12 @@ On the windows the laptop replay measured on 2026-11-04 ([the evidence](https://
 |--------|-------|-------|----------|---------------|----------------|------------------|
 | 1, control | none | 5.38 %, 0.80 x test | 96.8 % of 500 | quiet | quiet | quiet |
 | 2, control | none | 5.28 %, 0.78 x test | 95.4 % of 500 | quiet | quiet | quiet |
-| 3, `ES` | 14 features | 9.41 % of 1,000, 1.40 x test, ceiling 1.12 x | 85.8 % of 500, floor 86.4 % | fires | fires | fires |
+| 3, `ES` | 14 features | 9.41 % of 1,000, 1.40 x test, ceiling 1.115 x | 85.8 % of 500, floor 86.4 % | fires | fires | fires |
 
 `reports/analysis/model_alert_thresholds.py` applies the thresholds to these windows, and the rule tests use their values.
 That model's test set had no `ES` rows, so the `ES` window's baseline is the overall test MdAPE, on all its 19,665 test rows.
-On the `ES` windows of the FR-15 rehearsal ([the record](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/fr15-rehearsal.md)), ModelErrorHigh fires for window 14, before the retraining, at 1.36 times the overall test MdAPE against a ceiling of 1.12, and stays quiet for window 18, after it, at 1.03 times the 7.61 % of the 593 `ES` test rows against a ceiling of 1.18; against the overall test MdAPE, window 18 was at 1.15, above 1.11, and fired.
+On the `ES` windows of the FR-15 rehearsal ([the record](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/fr15-rehearsal.md)), the rule would fire ModelErrorHigh for window 14, before the retraining, at 1.36 times the overall test MdAPE against a ceiling of 1.115, and would stay quiet for window 18, after it, at 1.03 times the 7.61 % of the 593 `ES` test rows against a ceiling of 1.18; against the overall test MdAPE, window 18 was at 1.15, above 1.11, and fired.
+That is what the rule would do with these values; after the deploy, window 14 has no baseline in the live monitor, because the release of its model recorded no country values.
 The coverage of the `ES` window is 0.6 points below its floor, so an `ES` window with fewer labelled ranges may not fire it (at 300 ranges the floor is 85.4 %); the drift alert covers that case.
 The rules' tests replay these values, `deploy/prometheus/tests/model-performance.test.yml`, together with the edges of each threshold.
 
@@ -649,7 +650,7 @@ The `evaluate` stage's `reports/metrics/segments.csv` holds each variant's test 
 A window's `baseline_mdape` is the mean of its countries' test MdAPE, weighted by their share of its labelled answers, and `baseline_test_rows` the test rows it rests on, m in 1 / m = the sum of w² / m_c, which widens ModelErrorHigh's ceiling for a baseline of few rows ([Why these model thresholds](#why-these-model-thresholds)).
 A country with fewer than 500 test rows, SC-04's minimum segment (`LU` with 147), or one the test set lacks, takes the overall test MdAPE, resting on all test rows; so does `ES` for a model whose split held out every `ES` seller, which the market's own error then counts against, as it should.
 Every pass records the release's values per country in `model_country_test_values` for the model version its `dvc.lock` names, the first record staying, as for `model_test_values`.
-A window of a model whose release recorded none, one answered before #306, has no baseline and the error alert cannot fire on it; its `test_mdape` and the report's ratio to it stay.
+A window of a model last released before #306, whose release recorded no country values, has no baseline and the error alert cannot fire on it; its `test_mdape` and the report's ratio to it stay.
 The coverage keeps the nominal level, the promise the ranges make in every market (EDN-103).
 
 A window is judged against the test values of the model that answered its requests, its `model_version`, not those of the model running when a pass scores it ([#307](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307)).

@@ -89,7 +89,7 @@ The job stores every window with each feature's p-value in SQLite, so a finding 
 \begin{figure}[ht]
   \centering
   \includegraphics{es-replay-windows}
-  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds at each window's 1,000 answers and 500 ranges. The coverage of windows 9 and 10, 86.6\,\%, lies just above the floor. The control figures are in-sample; the test coverage of the model the replay ran against, before the retrain of \cref{sec:m6-feedback}, is 90.2\,\%, close to the nominal level.}
+  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds of the rule at the time of the replay, at each window's 1,000 answers and 500 ranges. The coverage of windows 9 and 10, 86.6\,\%, lies just above the floor. The control figures are in-sample; the test coverage of the model the replay ran against, before the retrain of \cref{sec:m6-feedback}, is 90.2\,\%, close to the nominal level.}
   \label{fig:m6-replay}
 \end{figure}
 

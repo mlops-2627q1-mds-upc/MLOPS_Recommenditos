@@ -49,7 +49,7 @@ NOMINAL = 0.9
 ALPHA = 0.005
 DRAWS = 20_000
 SEED = 230
-C = 3.52  # the MdAPE ceiling's constant, as in the rules file
+C = 3.52  # the MdAPE ceiling's constant of the rule in force at the time of this analysis; the rules file now uses K = 3.55
 #: The test MdAPE of the lgbm-basic model that answered the replay of 2026-11-04
 #: (afc3335e, before #303), the baseline its windows were compared with.
 REPLAY_TEST_MDAPE = 0.0673

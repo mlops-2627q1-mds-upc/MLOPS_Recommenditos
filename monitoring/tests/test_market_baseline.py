@@ -203,9 +203,10 @@ def test_the_first_record_of_a_models_country_values_stays(paths):
     assert other == []
 
 
-def test_a_monitor_db_of_the_previous_release_gets_the_baseline_columns(paths):
+def test_a_monitor_db_of_the_previous_release_gets_the_baseline_columns(paths, log):
     """Its rows stay, with no baseline, and `user_version` is unchanged."""
-    Store.open(paths.db).close()
+    es_and_de_window(paths, log, es=MIN_LABELLED, de=MIN_LABELLED)
+    before = performance(paths)
     connection = sqlite3.connect(paths.db)
     for column in ("baseline_test_rows", "baseline_mdape"):
         connection.execute(f"ALTER TABLE window_performance DROP COLUMN {column}")
@@ -220,6 +221,8 @@ def test_a_monitor_db_of_the_previous_release_gets_the_baseline_columns(paths):
 
     assert {"baseline_mdape", "baseline_test_rows"} <= columns
     assert reopened == version
+    assert performance(paths) == before
+    assert (before.baseline_mdape, before.baseline_test_rows) == (None, None)
 
 
 def test_the_repositorys_segments_give_the_deployed_models_test_mdape_per_country():
