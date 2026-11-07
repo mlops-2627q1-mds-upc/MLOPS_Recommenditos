@@ -232,6 +232,33 @@ The screenshot is a local stand-in, taken on a laptop's stack on 2026-11-04 with
 DriftDetected, ModelErrorHigh, and ModelCoverageLow were firing and had reached Alertmanager when the screenshot was taken, four minutes after the pass.
 The replay on the VM of the same evening shows the same step in the drift panel, but its error and coverage panels begin only after the replay, when the release that exports them was deployed; the windows of that replay are in [vm-es-replay-2026-11-04.md](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/vm-es-replay-2026-11-04.md).
 
+## Logs
+
+Every container of the stack logs to the VM's journal through Docker's `journald` log driver, so its log outlives the container ([EDN-104](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md), [#313](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/313)).
+A deploy recreates `proxy`, `api` and `monitor`, and with Docker's default `json-file` driver their logs went with them; the journal keeps nginx's access log with each request's `$request_time`, the API's access log and tracebacks, the drift job's passes and the replay's output.
+`docker logs` reads the container that runs now, as the [Runbook](#runbook) does; `journalctl` reads every container of a name, the ones before the last deploys too.
+On the VM, as `recommenditos`, who is in the `systemd-journal` group for this, or as an admin with `sudo`:
+
+```bash
+# The API's log of an hour, across the deploys within it.
+journalctl CONTAINER_NAME=recommenditos-api-1 --since "2026-11-07 18:00" --until "2026-11-07 19:00"
+# nginx's access log of the last hour, the lines alone, as `docker logs` prints them.
+journalctl CONTAINER_NAME=recommenditos-proxy-1 --since -1h -o cat
+# nginx and the API together, in the order of time, to match a slow request on both sides.
+journalctl CONTAINER_NAME=recommenditos-proxy-1 CONTAINER_NAME=recommenditos-api-1 --since -10min
+# The drift job's last 50 lines; a replay that has ended and was removed.
+journalctl CONTAINER_NAME=recommenditos-monitor-1 -n 50
+journalctl CONTAINER_NAME=replay -o cat
+journalctl --disk-usage
+```
+
+Each line of `journalctl` starts with the container's name (the driver's `tag`), and `CONTAINER_ID` tells the containers of one name apart.
+journald bounds the journal itself, at 10 % of the file system and 4 GB at most by default, 2 GB of the VM's 20 GB (NFR-04), and leaves at least 15 % of it free; the oldest entries go first, and the VM's own system logs share the space.
+How many days that holds depends on the traffic: the API's healthcheck alone writes 17,280 lines a day, and a line took 843 bytes in the journal's export format in a measurement on a laptop, so about 15 MB a day.
+The journal is kept on disk, across reboots, because `/var/log/journal` exists; `bootstrap.sh` creates it where it is missing ([First time](deployment.md#first-time-bootstrap-a-fresh-vm)).
+journald drops a service's lines beyond its rate limit, by default 10,000 in 30 s, and every container counts as Docker's: a burst of 30,000 lines kept 19,998 on a laptop, while NFR-03's 20 requests/s write about 40 lines a second, nginx's and the API's.
+A local stack (`make stack`) logs with Docker's `local` driver instead, since Docker Desktop's VM has no journald, so locally `docker logs` is all there is, and a recreated container's log is gone.
+
 ## Alerts
 
 Prometheus evaluates the alerting rules in `deploy/prometheus/rules/` every 15 s and hands what fires to Alertmanager, which posts it to the team's Discord channel through a webhook ([EDN-99](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
@@ -359,7 +386,7 @@ On the VM, the commands below run as `recommenditos` over SSH, from `/opt/recomm
 The API has not answered Prometheus' scrape for a minute, so it did not recover within NFR-05's 30 s on its own.
 
 1. `./deploy.sh status` and `docker ps -a`: is the container running, restarting or gone?
-2. `docker logs --tail 100 recommenditos-api-1`: a traceback at start-up is a broken image or bundle; a kill is memory (the API memory panel).
+2. `docker logs --tail 100 recommenditos-api-1`, or `journalctl CONTAINER_NAME=recommenditos-api-1 -n 100` for a container that is gone ([Logs](#logs)): a traceback at start-up is a broken image or bundle; a kill is memory (the API memory panel).
 3. If the last deploy brought it, `./deploy.sh rollback` starts the previous release.
 4. If the container is up but does not answer, the healthcheck ends it within about 21 s (EDN-93); if that does not happen, `docker restart recommenditos-api-1`.
 
@@ -375,7 +402,7 @@ More than 5 % of a route's answers took longer than NFR-02's target for five min
 
 More than 1 % of the `/v1/` answers were server errors for five minutes.
 
-1. `docker logs --since 10m recommenditos-api-1`: the failing requests, their status codes and request IDs, and the tracebacks.
+1. `docker logs --since 10m recommenditos-api-1`, or `journalctl CONTAINER_NAME=recommenditos-api-1 --since -10min` if a deploy recreated the API meanwhile ([Logs](#logs)): the failing requests, their status codes and request IDs, and the tracebacks.
 2. A full disk or a locked prediction log shows in the disk panel and the log; free space ([DiskFreeLow](#diskfreelow)).
 3. If the errors began with a deploy, `./deploy.sh rollback`.
 
@@ -384,7 +411,7 @@ More than 1 % of the `/v1/` answers were server errors for five minutes.
 The API answered at least five `/v1/` requests with a server error (5xx) in the last 15 minutes, which a healthy API never does, at any traffic.
 On a busy API that stays above NFR-03's 1 %, [ErrorRateHigh](#errorratehigh) follows and holds this warning back.
 
-1. `docker logs --since 20m recommenditos-api-1`: the failing requests, their status codes, request IDs and tracebacks.
+1. `docker logs --since 20m recommenditos-api-1`, or `journalctl CONTAINER_NAME=recommenditos-api-1 --since -20min` if a deploy recreated the API meanwhile ([Logs](#logs)): the failing requests, their status codes, request IDs and tracebacks.
 2. One client's requests, or every request? A single malformed body that the API fails on instead of answering 422 is a bug: open an issue with the request ID.
 3. If the errors began with a deploy, `./deploy.sh rollback`.
 
@@ -546,7 +573,7 @@ The replay streams the samples a listing at a time and keeps only its counts: in
 Over SSH, with UPClink off campus, as `recommenditos`, from `/opt/recommenditos`, with the paths `deploy.sh` uses ([The stack files on the VM](deployment.md#the-stack-files-on-the-vm)).
 `deploy.sh` pulls the monitoring image of every release beside the API image, so the image of the running tag is there; `.env` names its repository in `MONITORING_IMAGE`, as `.env.template` does.
 A long run goes in the background, so a dropped SSH connection does not end it.
-Its output goes into a file beside `.env` as it is written, because the next deploy's `up --remove-orphans` removes a replay container that has ended, and its logs with it, so the summary must not wait in `docker logs`:
+Its output goes into a file beside `.env` as it is written, because the next deploy's `up --remove-orphans` removes a replay container that has ended, and `docker logs` with it; the journal keeps it too (`journalctl CONTAINER_NAME=replay -o cat`, [Logs](#logs)), but the file is the summary at hand:
 
 ```bash
 ssh -p 22052 recommenditos@nattech.fib.upc.edu

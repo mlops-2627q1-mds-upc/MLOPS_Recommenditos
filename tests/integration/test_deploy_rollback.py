@@ -421,6 +421,35 @@ def test_a_broken_tag_is_rolled_back_and_the_previous_one_serves_again(drill: St
     assert f"rollback {BROKEN} -> {GOOD} ok" in history
 
 
+@pytest.mark.req("NFR-13")
+def test_a_deploy_keeps_the_log_of_the_api_container_it_replaces(drill: Stack) -> None:
+    """compose.yaml logs to the journal, which outlives a recreated container (#313)."""
+    first = drill.deploy_sh("deploy", GOOD)
+    assert first.returncode == 0, drill.explain(first)
+    (replaced,) = drill.containers("api")
+    driver = docker("inspect", "--format", "{{.HostConfig.LogConfig.Type}}", replaced)
+    if driver != "journald":
+        pytest.skip(f"this host's stack logs with {driver} (LOG_DRIVER), not journald")
+    before = Container(replaced).log_lines()
+
+    newer = drill.deploy_sh("deploy", NEWER)
+
+    assert newer.returncode == 0, drill.explain(newer)
+    assert drill.containers("api") != [replaced]
+    assert replaced not in drill.containers("api", everything=True)
+    journal = subprocess.run(
+        ["journalctl", "--no-pager", "-o", "cat", f"CONTAINER_ID={replaced}"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    lines = journal.stdout.splitlines()
+    assert lines, f"no journal entries of the replaced container: {journal.stderr.strip()}"
+    assert before, "the API logged nothing before the deploy"
+    assert before[0] in lines
+
+
 @pytest.mark.req("FR-15", "NFR-13")
 def test_rollback_after_a_failed_smoke_check_brings_the_previous_release_back(
     drill: Stack,

@@ -82,7 +82,8 @@ What each part guarantees:
   Its access log carries the request ID of each answer: the API's `X-Request-ID`, or nginx's own for a 403, 413 or 503 it answers itself, which it also sends as `X-Request-ID`.
   It resolves the API's address again every 10 s, so a recreated API container is found without restarting nginx.
   nginx runs as a non-root user too (`nginxinc/nginx-unprivileged`), which is why it listens on 8080 inside its container.
-- **Docker** keeps each container's log in at most five files of 10 MB, so the eight logs take at most 400 MB of the VM's disk (NFR-04); each service's 50 MB hold about 120,000 requests of history, and the API's healthcheck alone writes 17,280 of them a day (about 7 MB), so its 50 MB hold about a week of history.
+- **Docker** writes every container's log to the host's journal (the `journald` log driver), where it outlives the container, so a deploy that recreates a container keeps its log; journald's own limit, 2 GB of the VM's 20 GB by default, bounds it (NFR-04), and [Logs](monitoring.md#logs) says how to read it ([EDN-104](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
+  A local stack (`make stack`) sets `LOG_DRIVER=local`, Docker's `local` driver, at most five compressed files of 20 MB per container, since Docker Desktop's VM has no journald.
 
 ## Run it locally
 
@@ -284,7 +285,7 @@ The stack files need neither: they come with every release.
 `bootstrap.sh` is idempotent and does four things:
 
 1. installs Docker Engine and the compose plugin from Docker's apt repository, following Docker's install page (it first removes the distribution's conflicting packages, such as `docker.io`), and enables Docker at boot;
-2. creates the deploy user `recommenditos`, a member of the `docker` group, whose home `/opt/recommenditos` holds the stack;
+2. creates the deploy user `recommenditos`, a member of the `docker` group, whose home `/opt/recommenditos` holds the stack, and of `systemd-journal`, to read the containers' logs, and creates `/var/log/journal` where it is missing, so the journal outlives a reboot ([Logs](monitoring.md#logs));
 3. lets every SSH key of the account that ran it log in as `recommenditos`, so that every later step is `ssh recommenditos@<vm>` without sudo;
 4. installs `deploy.sh` and `.env.template` into `/opt/recommenditos`, and creates `.env` from the template, readable by the deploy user alone, unless it exists; the stack files come with the first deploy.
 
