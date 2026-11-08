@@ -53,6 +53,8 @@ from contextlib import contextmanager
 import datetime as dt
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import great_expectations as gx
 from great_expectations.core.run_identifier import RunIdentifier
@@ -258,6 +260,42 @@ def _store_with_the_run_time(context, run) -> None:
         context.validation_results_store.set(key, validation)
 
 
+def _docs_index(context) -> Path:
+    """Where `build_data_docs` writes the Data Docs' index page."""
+    (site,) = context.get_docs_sites_urls(only_if_exists=False)
+    return Path(url2pathname(urlparse(site["site_url"]).path))
+
+
+def _check_the_data_docs(context) -> None:
+    """Fail when the Data Docs are not the whole site the stored results call for.
+
+    Great Expectations renders each page inside a `try` that logs any exception
+    and goes on, so a template that no longer renders leaves an empty index and
+    no pages, and `build_data_docs` returns as if all had gone well (shown on
+    1.24.1 by breaking a patched template). The stage would then record broken
+    Data Docs and exit 0. So the site is counted: a non-empty index, and one
+    non-empty page for each stored validation result and for each suite.
+    """
+    index = _docs_index(context)
+    docs = index.parent
+    expected = {
+        "validations": len(context.validation_results_store.list_keys()),
+        "expectations": len(context.suites.all()),
+    }
+    problems = []
+    if not index.is_file() or not index.stat().st_size:
+        problems.append(f"{index.name} is missing or empty")
+    for section, count in expected.items():
+        pages = [path for path in (docs / section).glob("**/*.html") if path.stat().st_size]
+        if len(pages) != count:
+            problems.append(f"{section}/ has {len(pages)} pages for {count} stored")
+    if problems:
+        raise DataValidationError(
+            f"the Data Docs are incomplete ({'; '.join(problems)}); Great Expectations logs "
+            "the exception that stopped a page instead of raising it, so read the log above"
+        )
+
+
 def validate_frame(
     context, name: str, frame: pd.DataFrame, run: RunIdentifier | None = None
 ) -> dict[str, Any]:
@@ -365,6 +403,7 @@ def main(
         context.build_data_docs()
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(summary, summary_path)
+    _check_the_data_docs(context)
 
     failed = {name: failures(entry) for name, entry in summary.items() if not entry["passed"]}
     if failed:

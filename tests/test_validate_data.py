@@ -234,7 +234,24 @@ def test_every_data_docs_page_loads_its_logo_and_favicon_from_the_site(stage, bu
         assert len(favicon) == 1 and len(logo) == 1, page
         for reference in (*favicon, *logo):
             assert "://" not in reference, f"{page.name} loads {reference} from elsewhere"
-            assert (page.parent / reference).resolve().is_file(), f"{page}: {reference}"
+            image = (page.parent / reference).resolve()
+            assert image.is_relative_to(docs.resolve()) and image.is_file(), f"{page}: {reference}"
+
+
+def test_the_stage_fails_when_a_data_docs_page_cannot_be_rendered(frames, tmp_path, monkeypatch):
+    # Great Expectations renders every page inside a `try` that only logs the
+    # exception, so a template it can no longer patch used to leave an empty
+    # index and no pages while the stage exited 0 and recorded them. Here the
+    # patched text of `top_navbar.j2` is one that is not there, as after an
+    # upgrade that moves it.
+    context_dir = tmp_path / "gx"
+    configure_gx.main(context_dir, tmp_path / "results", tmp_path / "data-docs", PARAMS_FILE)
+    monkeypatch.setitem(configure_gx._TEMPLATE_FIXES, "top_navbar.j2", ("not in the template", ""))
+
+    with pytest.raises(DataValidationError, match="Data Docs are incomplete"):
+        validate_main(
+            frames["raw_path"], frames["interim_path"], tmp_path / "summary.json", context_dir
+        )
 
 
 def test_the_data_docs_views_import_from_where_the_site_config_says():

@@ -382,8 +382,10 @@ _LOCAL_IMAGES_ON_THE_INDEX = (
 )
 
 #: What Great Expectations 1.24.1 gets wrong in two of its page templates, as
-#: (old, new) per template. Each `old` is checked to be there, so an upgrade
-#: that moves it fails the render instead of silently bringing the bug back.
+#: (old, new) per template. Each `old` is checked to be there, and a template
+#: that no longer holds it raises while the page renders. Great Expectations
+#: catches that and logs it, so the check that fails the stage is
+#: `validate_data._check_the_data_docs`, which finds the site incomplete.
 #:
 #: - `top_navbar.j2` overwrites the image directory it has just worked out with
 #:   its S3 bucket, which answers 301 since the bucket moved region, so the logo
