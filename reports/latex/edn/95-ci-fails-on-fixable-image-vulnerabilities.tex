@@ -3,7 +3,7 @@
 \ednentry{
   id = {EDN-95},
   title = {CI fails on fixable image vulnerabilities, and the containers run locked down},
-  note = {\textbf{Revised on 2026-11-07}: two unreachable nginx findings are accepted; the decision is unchanged.},
+  note = {\textbf{Revised on 2026-11-07}: two unreachable nginx findings are accepted; the decision stands.},
   date = {2026-10-22},
   milestone = {M5: Model Packaging},
   topic = {CI/CD, Security, Containerization},
@@ -17,7 +17,7 @@ Both containers run read-only, without capabilities, with \texttt{no-\allowbreak
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item \texttt{aquasecurity/\allowbreak{}trivy-\allowbreak{}action}: its tags were moved to a credential stealer in March 2026 (\href{https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23}{GHSA-69fq-xp46-6x23}), so trivy is the release binary, pinned by SHA-256.
 \item Waiting for the VM load test (\#143): laptop measurements sufficed, and the VM run kept 768 MiB (EDN-88).
-\item Our own nginx image with \texttt{apk upgrade} (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238}{PR \#238}): a second image to maintain outweighs the slim image's two findings (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271}{PR \#271}), which nginx never calls (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/331}{PR \#331}).
+\item Our own nginx image with \texttt{apk upgrade} (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238}{PR \#238}): maintaining a second image outweighs the slim image's two findings (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271}{PR \#271}), whose affected functions nginx never calls (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/331}{PR \#331}).
 \end{itemize}
 \par
 \emph{Why:} Counting unfixed findings keeps unpatched Debian CVEs from blocking pull requests.

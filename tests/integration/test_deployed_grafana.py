@@ -131,6 +131,29 @@ def test_grafana_is_published_on_the_hosts_loopback_only(grafana):
     assert {binding["HostIp"] for binding in bindings} == {"127.0.0.1"}, bindings
 
 
+@pytest.mark.req("NFR-09")
+def test_grafana_runs_no_bundled_data_source_but_prometheus(grafana):
+    """`.trivyignore` accepts the findings of Grafana's bundled data source plugins because
+    `GF_PLUGINS_DISABLE_PLUGINS` keeps every one but Prometheus from loading.
+
+    A bundled plugin is a binary of its own under `plugins-bundled`, which Grafana starts as a
+    process; the core data sources (signature `internal`) are part of Grafana's own binary. A
+    Grafana release that renames a plugin's ID leaves it out of the list, so it loads again.
+    """
+    loaded = grafana_get(grafana, "/api/plugins?type=datasource", admin=True)
+    bundled = sorted(plugin["id"] for plugin in loaded if plugin["signature"] != "internal")
+    assert bundled == ["prometheus"], (
+        f"Grafana loads the bundled data sources {bundled}; add every one but prometheus "
+        "to GF_PLUGINS_DISABLE_PLUGINS in deploy/compose.yaml, or re-check .trivyignore"
+    )
+
+    processes = grafana.exec("ps", "-o", "args").splitlines()
+    plugins = sorted(line for line in processes if "/plugins-bundled/" in line)
+    assert len(plugins) == 1 and "/gpx_grafana-prometheus-datasource_" in plugins[0], (
+        f"Grafana runs these plugin processes: {plugins}"
+    )
+
+
 @pytest.mark.req("FR-11")
 def test_prometheus_has_every_alerting_rule_loaded(prometheus_container):
     groups = api_get(prometheus_container, "/api/v1/rules?type=alert")["groups"]
