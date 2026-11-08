@@ -150,7 +150,7 @@ jobs:
             echo "MONITORING_REPOSITORY=ghcr.io/${GITHUB_REPOSITORY,,}/monitoring"
             echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.12"
           enable-cache: true
@@ -359,7 +359,7 @@ jobs:
           mapfile -t images < <(docker compose -f deploy/compose.yaml --profile '*' config --images)
           python3 tools/image_scan.py scan "${images[@]}"
 
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
