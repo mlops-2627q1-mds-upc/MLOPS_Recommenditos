@@ -52,6 +52,7 @@ from recommenditos.data.split_data import (
     check_ratios,
     cross_holdout_sellers,
     dispersion_bounds,
+    held_out,
     realised_shares,
     supported_makes,
 )
@@ -65,6 +66,8 @@ SEEDS = int(sys.argv[2]) if len(sys.argv) > 2 else 2000
 RATIOS = {"train": 0.60, "validation": 0.10, "calibration": 0.10, "test": 0.20}
 PROJECT_SEED = 20251108
 HOLDOUT_COUNTRY = "ES"
+# The share of its sellers `split` holds out (EDN-102); the others are in the pool.
+HOLDOUT_SELLER_SHARE = 0.4
 MIN_LISTINGS_PER_MAKE = 300
 
 # What `apply_row_rules` reads, so that the scope below is the pipeline's and not a
@@ -119,6 +122,13 @@ def scope(frame):
     kept = kept.copy()
     kept["seller_group_id"] = hash_seller_group(kept)
     return kept
+
+
+def held_out_rows(frame):
+    """The rows `split` holds out: the stage's own rule, not a copy of it (EDN-102)."""
+    return held_out(
+        frame["country_code"], frame["seller_group_id"], HOLDOUT_COUNTRY, HOLDOUT_SELLER_SHARE, PROJECT_SEED
+    )
 
 
 def sweep(group_sizes, seeds):
@@ -179,7 +189,7 @@ def report_pool(label, group_sizes, seeds):
 def main():
     seeds = range(1, SEEDS + 1)
     interim = scope(pd.read_csv(CSV, usecols=SCOPE_COLS, low_memory=False))
-    held = interim["country_code"] == HOLDOUT_COUNTRY
+    held = held_out_rows(interim)
     holdout, pool = interim[held], interim[~held]
     groups = pool["seller_group_id"]
     group_sizes = groups.value_counts()
@@ -296,14 +306,15 @@ def main():
     all_sweeps = [report_pool("real snapshot", group_sizes, seeds)]
     for rows in (2000, 20000):
         fixture = scope(generate_raw_listings(rows))
-        fixture_pool = fixture[fixture["country_code"] != HOLDOUT_COUNTRY]
+        fixture_held = held_out_rows(fixture)
+        fixture_pool = fixture[~fixture_held]
         fixture_sizes = fixture_pool["seller_group_id"].value_counts()
         shapes[rows] = (int(fixture_sizes.sum()), len(fixture_sizes))
         all_sweeps.append(
             report_pool(f"synthetic fixture, {rows:,} raw rows", fixture_sizes, seeds)
         )
         fixture_crossing = cross_holdout_sellers(
-            fixture[fixture["country_code"] == HOLDOUT_COUNTRY]["seller_group_id"],
+            fixture[fixture_held]["seller_group_id"],
             fixture_pool["seller_group_id"],
         )
         print(
