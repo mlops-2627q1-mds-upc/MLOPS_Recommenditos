@@ -1647,11 +1647,11 @@ How to add an entry:
   - CD without a cache, like CI: uncached builds rewrite the bytecode files, so the VM would pull about 540 MB per release instead of 0.6 MB.
   - The versions apt would install as the key: more precise, but its package list can drift from the Dockerfiles.
 - **Rationale:** A security fix reaches the next release once Debian publishes it, which happens before trivy reports it as fixable.
-  It costs one rebuild of about 60 s for the API image and 100 s for the monitoring image after each publication, about daily, instead of on every run, and the cache keeps the VM's pulls small.
+  It costs one rebuild of at most about 60 s (API) and 100 s (monitoring) after each publication, about daily, not on every run, and `COPY --link` keeps the VM's pull after it under 1 MB per image.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI measured the build steps of 19 CD and 25 CI runs, compared the layer digests in GHCR, showed that two uncached builds differ in 4,874 of 12,191 environment files, recommended the archive key, and built it.
-  Lukas took the recommendation unchanged; a local build confirmed that a new key rebuilds only the apt layer and the layers after it.
+- **Assessment of the AI contribution:** AI measured 19 CD and 25 CI runs and the layer digests in GHCR, showed that two uncached builds differ in 4,874 of 12,191 environment files, recommended the archive key, and built it.
+  Lukas took the recommendation unchanged. An independent agent review found that a new key still moved the 171 MB and 370 MB environment layers; `COPY --link` fixed it, measured with two keys.
 - **AI interaction evidence:** Claude Code session of 2026-11-07.
   Question (translated from German, paraphrased): "#314: when should CD rebuild the cached apt steps, so that a Debian security fix does not stay stuck in the cache?"
   Orchestrator briefing (core, paraphrased): "Lay out #314's options (a periodic cache key, BuildKit no-cache-filter, the same cache policy for CI and CD, a key from the Debian archive's state), measure CD's build time with and without a warm cache from real runs, how soon a Debian fix reaches the image and how it interacts with Dependabot's digest bumps; do not implement; end with DECISION NEEDED."
