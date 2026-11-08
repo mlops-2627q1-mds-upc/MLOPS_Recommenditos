@@ -345,8 +345,8 @@ jobs:
         run: docker compose -f deploy/compose.yaml --profile '*' down --volumes
 
       # NFR-09: no image with a HIGH or CRITICAL vulnerability that has a fix is
-      # pushed. The same canary and scan as CI's integration job, over the images
-      # this stack ran (the API image as recommenditos-api:cd, nginx, and the
+      # pushed. The same canary and scan as CI's integration job, over every image
+      # of deploy/compose.yaml (the API image as recommenditos-api:cd, the
       # monitoring image as recommenditos-monitoring:cd, the very images pushed
       # below, as the check before the start showed), after the tests and before
       # the push; the result goes into the job summary.

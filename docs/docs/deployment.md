@@ -203,7 +203,7 @@ For every other commit, one job:
 2. builds the image with the OCI labels `source`, `revision` (the commit), `version` and `created`, reusing unchanged layers from the GitHub Actions cache, the stack image from `deploy/` and the monitoring image with the samples, with the same labels;
 3. fails if the image is larger than 1 GB (NFR-04);
 4. starts the Compose stack with it and runs the [integration suite](#integration-tests) with no expected-version override, so `/health` has to report the hashes `dvc.lock` records, and then a replay of 20 control and 20 ES listings, every one of which must be priced and its price stored;
-5. scans the API image, the nginx image and the monitoring image with trivy and fails on a HIGH or CRITICAL vulnerability that has a fix available ([Vulnerabilities and dependency updates](#vulnerabilities-and-dependency-updates));
+5. scans every image of the Compose stack, eight in all (the API image, the monitoring image, nginx, Grafana, cAdvisor, node-exporter, Prometheus, and Alertmanager), with trivy and fails on a HIGH or CRITICAL vulnerability that has a fix available ([Vulnerabilities and dependency updates](#vulnerabilities-and-dependency-updates));
 6. pushes `:<commit SHA>` of the stack image and the monitoring image, then of the API image, so an API image on GHCR always has the rest of its release there, and moves `:latest` of all three to it, unless `:latest` already names a newer commit, which happens when the CI runs of two merges finish in the opposite order;
 7. writes the pushed tags, the digests, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
 
@@ -236,6 +236,7 @@ Debian publishes into `trixie-security` about daily: it announced 126 security a
 The rebuild costs at most about 60 s for the API image and 100 s for the monitoring image, most of it in exporting the rebuilt layers to the runner's Docker and to the cache, measured on CD run [42399145722](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42399145722), which rebuilt both runtime stages.
 The dependencies are not installed again, and every `COPY` below the apt line uses `--link`, which builds its layer on an empty snapshot instead of on the layers below, so that its digest depends on its files alone.
 Built locally with two keys on 2026-11-08 (a `docker-container` builder and gzip-compressed OCI output, as a registry stores the layers), the images changed only in the apt layer and the small `RUN` layers after it, 0.3 MB for the API image and 0.7 MB for the monitoring image, which is what the VM pulls after such a rebuild; without `--link`, the environment's layer changed too, 171 MB and 370 MB.
+The release that introduced `--link` (94afbdc, #340) changed the environment layers of the API image (171 MB) and the monitoring image (370 MB) once, so the VM pulled them once; later releases keep them unless `uv.lock` or the code changes.
 `--link` left the final file trees the same, with the same paths, owners, permissions, sizes, and link targets.
 The step's log names the key it used, and on a run after Debian published, the build shows the apt step as `DONE` instead of `CACHED`.
 When a Release file cannot be read, the key is today's date and the job shows a warning, so an outage of Debian's archive costs at most one rebuild a day and never a release.
@@ -647,7 +648,9 @@ Three checks keep it that way.
 **The image scan.**
 `tools/image_scan.py` scans an image with [trivy](https://trivy.dev) for HIGH and CRITICAL vulnerabilities, in the Debian packages and in the Python packages of the virtual environment.
 A finding with a fix available fails the job; one without a fix is counted in the summary and does not, so that a CVE of the base image that Debian has not patched yet does not block every pull request and every deploy.
-CI's `Integration (Compose stack)` job scans both images of the stack, the API image it built and the nginx image, on every pull request that changes the image, and CD scans them again before it pushes.
+CI's `Integration (Compose stack)` job scans every image of `deploy/compose.yaml`, on every pull request that changes the image, and CD scans them again before it pushes.
+Both take the list from `docker compose --profile '*' config --images`, which names the images of the services behind a profile too, so the monitoring image of the replay is among them.
+That makes eight images: the API and monitoring images the job built, nginx, Grafana, cAdvisor, node-exporter, Prometheus, and Alertmanager (`tools/image_scan.py` scans an image once, however many services use it).
 The result, a table per image, goes into the job summary.
 Before the scan, a canary scans `python:3.12.0-slim-bookworm` as published in October 2023, pinned by digest and pulled from Amazon ECR Public, or from Docker Hub when ECR answers with its pull limit, and fails the job unless the same scan finds fixable findings there (93 on 2026-10-22), so a scan that passes is evidence, as the gitleaks job's planted token is for NFR-15.
 trivy is the release binary, pinned by version and SHA-256 in `.github/actions/setup-trivy`, not `aquasecurity/trivy-action`, whose tags an attacker moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)).
