@@ -18,9 +18,11 @@ more. `SqliteStore` implements it:
   answers first, together with their feedback. Every `PRUNE_EVERY` records, and
   when the store opens, a background thread of the process compares the pages
   in use with the cap and deletes the oldest answers in batches of
-  `PRUNE_BATCH` until the data fits 90 % of it. It takes the lock per batch,
-  so a request never waits for more than one batch, and none runs the pruning
-  itself. The
+  `PRUNE_BATCH` until the data fits 90 % of it, fewer whenever the excess holds
+  fewer rows than a batch, and never the newest one, so `seq`, which would start at 1
+  again in an empty table, keeps growing for the drift job. It takes the lock
+  per batch, so a request never waits for more than one batch, and none runs
+  the pruning itself. The
   file does not shrink, because SQLite reuses the freed pages for new rows
   instead, so it stays at about the cap; `PRAGMA journal_size_limit` keeps the
   WAL file small after each checkpoint.
@@ -48,6 +50,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import enum
 import json
+import math
 from pathlib import Path
 import sqlite3
 import threading
@@ -387,18 +390,43 @@ class SqliteStore:
         return deleted
 
     def _delete_oldest(self, limit: float) -> int:
-        """One batch: the oldest `PRUNE_BATCH` answers, if the data is over `limit`."""
-        with self._lock:
-            if self._used_bytes() <= limit:
+        """One batch of the oldest answers, if the data is over `limit`; returns how many.
+
+        A batch is at most `PRUNE_BATCH` answers and no more than the data's
+        excess over `PRUNE_TARGET` of the cap takes, estimated from the average
+        size of a row, so a cap that holds fewer rows than a batch is not
+        emptied. The newest answer always stays: `seq` is a rowid without
+        AUTOINCREMENT, so an empty table would hand out 1 again and the drift
+        job, which forms its windows by `seq`, would see the log start over.
+
+        The size, the row count and the delete are one write transaction: the
+        lock of the store is per process, and two workers pruning at the same
+        time would otherwise both count the same rows and delete them twice.
+        """
+        with self._lock, self._transaction() as connection:
+            used = self._used_bytes()
+            if used <= limit:
                 return 0
-            with self._transaction() as connection:
-                return int(
-                    connection.execute(
-                        "DELETE FROM predictions WHERE seq IN "
-                        "(SELECT seq FROM predictions ORDER BY seq LIMIT ?)",
-                        (PRUNE_BATCH,),
-                    ).rowcount
-                )
+            # Rows leave only from the old end, so `seq` has no gap, and the two
+            # subqueries are index lookups where `count(*)` would scan the table.
+            (rows,) = connection.execute(
+                "SELECT (SELECT max(seq) FROM predictions)"
+                " - (SELECT min(seq) FROM predictions) + 1"
+            ).fetchone()
+            if rows is None:
+                return 0
+            excess = used - self.max_bytes * PRUNE_TARGET
+            needed = math.ceil(rows * excess / used)
+            count = min(PRUNE_BATCH, needed, rows - 1)
+            if count < 1:
+                return 0
+            return int(
+                connection.execute(
+                    "DELETE FROM predictions WHERE seq IN "
+                    "(SELECT seq FROM predictions ORDER BY seq LIMIT ?)",
+                    (count,),
+                ).rowcount
+            )
 
     def close(self) -> None:
         self._closing = True

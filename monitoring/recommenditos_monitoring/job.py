@@ -11,9 +11,12 @@ requests by `seq`, and for each full window
 3. stores the window, its requests and every feature's result in `monitor.db`
    in one transaction.
 
-Then, for every closed window that is not final, it joins the feedback of the
-window's requests and stores its error and coverage (`performance.py`), so a
-label that arrives after its window closed still counts in that window.
+Then it records the test values of the models its release evaluated, and for
+every closed window that is not final, it joins the feedback of the window's
+requests and stores its error and coverage against the test values of the model
+that answered them, the MdAPE against those of the window's countries
+(`performance.py`), so a label that arrives after its window
+closed still counts in that window.
 
 A request answered by another `model_version` than the window's first closes
 the window early as `partial`, untested, so that every window and its error
@@ -59,9 +62,11 @@ from recommenditos_monitoring.log import (
 )
 from recommenditos_monitoring.performance import (
     RANGE_ENDPOINT,
-    baseline,
     describe,
+    judged_against,
     labels_are_in,
+    release_country_values,
+    release_test_values,
     score,
 )
 from recommenditos_monitoring.store import (
@@ -100,6 +105,10 @@ class Paths:
     metrics: Path | None = None
     #: The evaluate stage's interval-coverage-by-make.csv with their test coverage; None, none.
     coverage: Path | None = None
+    #: The release's dvc.lock, with the model version of each variant's values; None, none.
+    lock: Path | None = None
+    #: The evaluate stage's segments.csv with the test MdAPE per country (#306); None, none.
+    segments: Path | None = None
 
 
 @dataclass
@@ -168,6 +177,10 @@ def run_once(
 
 
 def _pass(store: Store, paths: Paths, window_size: int, now: Callable[[], datetime]) -> Outcome:
+    # First, so that a window this pass closes on its model's last answer, the
+    # model of this release, has the values to be judged against.
+    store.record_test_values(release_test_values(paths.metrics, paths.coverage, paths.lock, now()))
+    store.record_country_values(release_country_values(paths.segments, paths.lock, now()))
     reference, reference_date = read_reference(paths.data_dir)
     test: DriftTest | None = None
     closed: list[Window] = []
@@ -199,7 +212,7 @@ def _pass(store: Store, paths: Paths, window_size: int, now: Callable[[], dateti
                 features = test.run(window_features(current, reference_date))
                 closed.append(_close(store, current, window_size, now(), (test, features)))
                 current = []
-        scored = _score_windows(store, log, paths, now())
+        scored = _score_windows(store, log, now())
     finally:
         log.close()
     store.set_open_window(
@@ -257,9 +270,7 @@ def _close(
     return stored
 
 
-def _score_windows(
-    store: Store, log: sqlite3.Connection, paths: Paths, now: datetime
-) -> dict[int, Performance]:
+def _score_windows(store: Store, log: sqlite3.Connection, now: datetime) -> dict[int, Performance]:
     """Compute the error and coverage of every closed window that is not final."""
     scored: dict[int, Performance] = {}
     for window in store.unfinished_windows():
@@ -281,7 +292,8 @@ def _score_windows(
             window,
             found,
             ranges=sum(r.endpoint == RANGE_ENDPOINT for r in held),
-            test=baseline(paths.metrics, paths.coverage, window.model_variant),
+            test=judged_against(store, window, previous),
+            countries=store.country_values(window.model_variant, window.model_version),
             computed_at=now,
             final=not intact or labels_are_in(window, now),
         )

@@ -50,6 +50,11 @@ METRICS_VARIABLE = "RECOMMENDITOS_MONITOR_METRICS"
 #: The evaluate stage's coverage table, with the test coverage the coverage is compared with.
 COVERAGE_VARIABLE = "RECOMMENDITOS_MONITOR_COVERAGE"
 COVERAGE_TABLE = "reports/metrics/interval-coverage-by-make.csv"
+#: The release's dvc.lock, which names the model version the test values belong to.
+LOCK_VARIABLE = "RECOMMENDITOS_MONITOR_LOCK"
+#: The evaluate stage's segments table, with the test MdAPE per country (#306).
+SEGMENTS_VARIABLE = "RECOMMENDITOS_MONITOR_SEGMENTS"
+SEGMENTS_TABLE = "reports/metrics/segments.csv"
 
 
 def positive_rate(text: str) -> float:
@@ -166,6 +171,21 @@ def parser() -> argparse.ArgumentParser:
         help=f"the models' test coverage (default: ${COVERAGE_VARIABLE} or {COVERAGE_TABLE})",
     )
     run.add_argument(
+        "--lock",
+        type=Path,
+        default=Path(os.environ.get(LOCK_VARIABLE, "dvc.lock")),
+        help=f"the model version of those test values (default: ${LOCK_VARIABLE} or dvc.lock)",
+    )
+    run.add_argument(
+        "--segments",
+        type=Path,
+        default=Path(os.environ.get(SEGMENTS_VARIABLE, SEGMENTS_TABLE)),
+        help=(
+            f"the models' test MdAPE per country (default: ${SEGMENTS_VARIABLE} or "
+            f"{SEGMENTS_TABLE})"
+        ),
+    )
+    run.add_argument(
         "--window-size",
         type=int,
         default=WINDOW_SIZE,
@@ -220,6 +240,8 @@ def run_once_command(args: argparse.Namespace) -> int:
         textfile_dir=args.textfile_dir,
         metrics=args.metrics,
         coverage=args.coverage,
+        lock=args.lock,
+        segments=args.segments,
     )
     try:
         outcome = run_once(paths, window_size=args.window_size)

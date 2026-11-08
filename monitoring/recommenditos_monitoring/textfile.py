@@ -5,7 +5,7 @@ The job is no server that Prometheus could scrape, so after each pass it writes
 (deploy/compose.yaml), and node-exporter serves its lines with its own metrics.
 Only the latest tested window is exported, with the open window's progress and
 the pass's time: the history is `monitor.db`'s, and Prometheus keeps the
-series over time anyway. About 45 series:
+series over time anyway. About 47 series:
 
     recommenditos_drift_window_flagged                    1 when the window drifted
     recommenditos_drift_window_drifted_features           how many of the 23 drifted
@@ -32,6 +32,8 @@ and the error and coverage of the same window (#229, `performance.py`):
     recommenditos_performance_nominal_level               the share the ranges promise, 0.9
     recommenditos_performance_test_mdape                  the model's test MdAPE
     recommenditos_performance_test_coverage               the model's test coverage, full inputs
+    recommenditos_performance_baseline_mdape              the test MdAPE of the window's countries
+    recommenditos_performance_baseline_test_rows          the test rows that baseline rests on
     recommenditos_performance_final                       1 when no label can still arrive
 
 A figure without enough labels is left out, not written as 0 or NaN, so a
@@ -225,6 +227,16 @@ def performance_metrics(store: Store) -> list[Metric]:
             "test_coverage",
             "The model's range coverage on the test set with every input given, all makes.",
             performance.test_coverage,
+        ),
+        *gauge(
+            "baseline_mdape",
+            "The test MdAPE of the window's countries, weighted by its labelled answers (#306).",
+            performance.baseline_mdape,
+        ),
+        *gauge(
+            "baseline_test_rows",
+            "The test rows the window's baseline MdAPE rests on: 1 / sum of share^2 / rows.",
+            performance.baseline_test_rows,
         ),
         *gauge(
             "final",

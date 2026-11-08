@@ -23,12 +23,21 @@ writer there would hold up the API's workers. The tables:
   its price ranges, computed from the feedback of its requests (#229,
   `performance.py`), with the test values they are compared with. A pass
   recomputes a row until it is `final`.
+- `model_test_values`: per model version, the test values it was evaluated
+  with, recorded by the first pass that ran in a release of that model (#307),
+  so that a window is compared with its own model's values after a promotion
+  too, when the image holds only the new model's.
+- `model_country_test_values`: per model version and country, its test rows
+  and test MdAPE (segments.csv), recorded the same way, the market baseline a
+  window's MdAPE is judged against (#306, `performance.market_baseline`).
 - `open_window`: the progress of the window being filled, one row.
 - `runs`: the last `RUNS_KEPT` passes of the job, so that its last success is
   on record.
 
 A later table is added with `CREATE TABLE IF NOT EXISTS` and leaves these as
-they are, as `window_performance` was after #228's; `user_version` changes only
+they are, as `window_performance` was after #228's, and a later column with
+`ALTER TABLE ... ADD COLUMN` when a file lacks it (`ADDED_COLUMNS`), which a
+reader that names its columns does not notice; `user_version` changes only
 with a change a reader of these tables would notice.
 """
 
@@ -103,8 +112,27 @@ CREATE TABLE IF NOT EXISTS window_performance (
     test_coverage   REAL,
     final           INTEGER NOT NULL CHECK (final IN (0, 1)),
     computed_at     TEXT NOT NULL,
+    baseline_mdape  REAL,
+    baseline_test_rows REAL,
     CHECK ((mdape_status = 'ok') = (mdape IS NOT NULL)),
     CHECK ((coverage_status = 'ok') = (coverage IS NOT NULL))
+);
+CREATE TABLE IF NOT EXISTS model_test_values (
+    model_variant TEXT NOT NULL,
+    model_version TEXT NOT NULL,
+    test_mdape    REAL,
+    test_coverage REAL,
+    recorded_at   TEXT NOT NULL,
+    PRIMARY KEY (model_variant, model_version)
+);
+CREATE TABLE IF NOT EXISTS model_country_test_values (
+    model_variant TEXT NOT NULL,
+    model_version TEXT NOT NULL,
+    country_code  TEXT NOT NULL,
+    test_rows     INTEGER NOT NULL,
+    test_mdape    REAL NOT NULL,
+    recorded_at   TEXT NOT NULL,
+    PRIMARY KEY (model_variant, model_version, country_code)
 );
 CREATE TABLE IF NOT EXISTS open_window (
     singleton         INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -158,6 +186,19 @@ class Window:
 
 
 @dataclass(frozen=True)
+class ModelTestValues:
+    """A model version's test values, as `model_test_values` holds them."""
+
+    model_variant: str
+    #: The version the API reports and logs: the hash dvc.lock records for the bundle.
+    model_version: str
+    #: The test MdAPE and coverage with every input given; None where the evaluation has none.
+    test_mdape: float | None
+    test_coverage: float | None
+    recorded_at: str
+
+
+@dataclass(frozen=True)
 class OpenWindow:
     requests: int
     window_size: int
@@ -200,12 +241,38 @@ class Performance:
     #: No later pass changes the row: its labels are in, or its requests rotated away.
     final: bool
     computed_at: str
+    #: The test MdAPE of the window's countries, weighted by its labelled answers,
+    #: and the test rows it rests on, m in 1 / m = sum of w_c^2 / m_c (#306,
+    #: `performance.market_baseline`); None for a model without country values.
+    baseline_mdape: float | None = None
+    baseline_test_rows: float | None = None
+
+
+@dataclass(frozen=True)
+class CountryTestValues:
+    """A model version's test values in one country, as `model_country_test_values` holds them."""
+
+    model_variant: str
+    model_version: str
+    country_code: str
+    #: The country's listings in the test set, and the MdAPE the model has on them.
+    test_rows: int
+    test_mdape: float
+    recorded_at: str
+
+
+#: Columns that a file of an earlier release lacks, added when it is opened.
+ADDED_COLUMNS = {
+    "window_performance": (("baseline_mdape", "REAL"), ("baseline_test_rows", "REAL")),
+}
 
 
 #: Every column of `windows`, in `Window`'s order: the class's own field names.
 _SELECT_WINDOWS = f"SELECT {', '.join(Window.__dataclass_fields__)} FROM windows"  # noqa: S608
 _PERFORMANCE_COLUMNS = ", ".join(Performance.__dataclass_fields__)
 _SELECT_PERFORMANCE = f"SELECT {_PERFORMANCE_COLUMNS} FROM window_performance"  # noqa: S608
+_TEST_VALUES_COLUMNS = ", ".join(ModelTestValues.__dataclass_fields__)
+_COUNTRY_VALUES_COLUMNS = ", ".join(CountryTestValues.__dataclass_fields__)
 
 
 class Store:
@@ -228,6 +295,11 @@ class Store:
             for statement in _SCHEMA.split(";"):
                 if statement.strip():
                     connection.execute(statement)
+            for table, columns in ADDED_COLUMNS.items():
+                present = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+                for name, kind in columns:
+                    if name not in present:
+                        connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         return store
 
@@ -393,6 +465,50 @@ class Store:
     def performances(self) -> dict[int, Performance]:
         rows = self._connection.execute(f"{_SELECT_PERFORMANCE} ORDER BY window_id").fetchall()
         return {performance.window_id: performance for performance in map(_performance, rows)}
+
+    def record_test_values(self, values: Sequence[ModelTestValues]) -> None:
+        """Record each model version's test values, unless a pass recorded that version's before.
+
+        The first record stays, so a window's comparison never changes once made.
+        """
+        marks = ", ".join("?" for _ in ModelTestValues.__dataclass_fields__)
+        with self.transaction() as connection:
+            connection.executemany(
+                f"INSERT OR IGNORE INTO model_test_values ({_TEST_VALUES_COLUMNS}) "  # noqa: S608
+                f"VALUES ({marks})",
+                [tuple(value.__dict__.values()) for value in values],
+            )
+
+    def test_values(self, model_variant: str, model_version: str) -> ModelTestValues | None:
+        """The test values recorded for one model version, None if no pass recorded them."""
+        row = self._connection.execute(
+            f"SELECT {_TEST_VALUES_COLUMNS} FROM model_test_values "  # noqa: S608
+            "WHERE model_variant = ? AND model_version = ?",
+            (model_variant, model_version),
+        ).fetchone()
+        return None if row is None else ModelTestValues(*row)
+
+    def record_country_values(self, values: Sequence[CountryTestValues]) -> None:
+        """Record each model version's test values per country, unless a pass recorded them before.
+
+        The first record stays, as `record_test_values`'s does.
+        """
+        marks = ", ".join("?" for _ in CountryTestValues.__dataclass_fields__)
+        with self.transaction() as connection:
+            connection.executemany(
+                f"INSERT OR IGNORE INTO model_country_test_values ({_COUNTRY_VALUES_COLUMNS}) "  # noqa: S608
+                f"VALUES ({marks})",
+                [tuple(value.__dict__.values()) for value in values],
+            )
+
+    def country_values(self, model_variant: str, model_version: str) -> list[CountryTestValues]:
+        """The test values per country recorded for one model version; none if no pass did."""
+        rows = self._connection.execute(
+            f"SELECT {_COUNTRY_VALUES_COLUMNS} FROM model_country_test_values "  # noqa: S608
+            "WHERE model_variant = ? AND model_version = ? ORDER BY country_code",
+            (model_variant, model_version),
+        ).fetchall()
+        return [CountryTestValues(*row) for row in rows]
 
     def open_window(self) -> OpenWindow | None:
         row = self._connection.execute(

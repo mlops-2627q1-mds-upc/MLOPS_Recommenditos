@@ -190,6 +190,7 @@ The rejected alternatives, Grafana read-only behind nginx's public port and scre
 Grafana runs with the shared hardening (read-only root, no capability, `no-new-privileges`, its own user 472), with its database in the volume and a tmpfs on `/tmp`.
 It sends nothing out: usage reports, update checks, the news feed, avatars and plugin downloads at start-up are off, and so is its own alerting, since the alerts are Prometheus' ([Alerts](#alerts)).
 The data sources the image bundles besides Prometheus are turned off: each would run as a process of its own, and together they exhausted the container's 128 processes.
+Their findings are accepted in `.trivyignore` because they never run, so the integration suite checks that Grafana loads no bundled data source but Prometheus and runs no other plugin process (`tests/integration/test_deployed_grafana.py`); a Grafana release that renames a plugin fails it.
 
 ## Model performance
 
@@ -199,14 +200,14 @@ The job writes its results into node-exporter's [textfile collector](#the-textfi
 | Panel | What it shows | Alert |
 |-------|---------------|-------|
 | Input drift, Drifted features | Whether any of the 23 features is below p 0.005 / 23, and how many are | [DriftDetected](#driftdetected) |
-| Real MdAPE | The window's MdAPE over its labelled answers, the alert's ceiling and the test MdAPE | [ModelErrorHigh](#modelerrorhigh) |
+| Real MdAPE | The window's MdAPE over its labelled answers, the alert's ceiling and the test MdAPE of its countries | [ModelErrorHigh](#modelerrorhigh) |
 | Range coverage | The share of the window's labelled ranges that hold the observed price, the alert's floor and the nominal level | [ModelCoverageLow](#modelcoveragelow) |
 | ES share | The window's share of `ES` listings, the market the model was not trained on | - |
 | Labelled answers and ranges | The window's answers and ranges with an observed price, red below the 200 and 300 a figure needs | - |
 | Window | Its number in `monitor.db` and when its last request was answered | - |
 | Last successful pass | How long ago a pass of the job last succeeded, red after 45 minutes | [MonitorStale](#monitorstale) |
 | Window being filled | The requests of the open window, of 1,000 | - |
-| Drifted features and ES share, Real MdAPE against the test MdAPE, Range coverage against the nominal level | The same figures over time, with the alert thresholds as dashed red lines | as above |
+| Drifted features and ES share, Real MdAPE against the test MdAPE of its countries, Range coverage against the nominal level | The same figures over time, with the alert thresholds as dashed red lines | as above |
 | p-value of each feature | The latest window's p-value per feature and test, sorted, red below 0.005 / 23 | [DriftDetected](#driftdetected) |
 | Labelled answers and ranges over time | The counts against the 200 and 300 a figure needs; they grow while labels arrive | - |
 | Predicted prices of `/v1/predict`, Prediction warnings by field | The live model outputs (FR-11, FR-05), moved here from Service health; the percentiles are drawn only where `/v1/predict` answered at least 30 requests in their 30 minutes, so they are empty in quiet traffic | - |
@@ -279,7 +280,7 @@ Each says what to do: look at the drifted features, check that the data and the 
 | Alert | Fires when | For | Severity |
 |-------|------------|-----|----------|
 | [DriftDetected](#driftdetected) | a feature of the latest tested window is below p 0.005 / 23 (NFR-11) | at once | warning |
-| [ModelErrorHigh](#modelerrorhigh) | the window's MdAPE is above 1 + 3.52 / sqrt(n) times the test MdAPE, n its labelled answers, at least 200 | at once | critical |
+| [ModelErrorHigh](#modelerrorhigh) | the window's MdAPE is above 1 + 3.55 sqrt(1 / n + 1 / m) times the test MdAPE of its countries, n its labelled answers, at least 200, and m the test rows of that baseline | at once | critical |
 | [ModelCoverageLow](#modelcoveragelow) | the window's coverage is below the nominal level by more than 2.576 binomial standard errors and 0.5 / n, n its labelled ranges, at least 300 | at once | critical |
 | [MonitorStale](#monitorstale) | no pass of the job has succeeded for 45 minutes, or none has written its figures | 5 minutes, within the 45 | warning |
 
@@ -299,10 +300,16 @@ The error and coverage thresholds are therefore one-sided tests at 0.005 per win
   Drawing windows from the test set's range outcomes puts their 0.5th percentile 0.6 to 0.8 points above these floors, because the test coverage of 90.6 % is 0.6 points above the nominal level.
   The rule takes n from the window itself, so the level holds at any count; a fixed margin taken at the minimum of 300 would hold it only at 300 and miss a loss of 4 points at 500.
   It compares with the nominal level, the promise the ranges make to users, not with the test coverage.
-- **MdAPE.** The spread of a median has no closed form, so it comes from drawing 20,000 windows of n labelled answers from the test set's 20,258 errors of `lgbm-basic`, for n from 200, the fewest the job reports an MdAPE for, to 1,000.
-  Their 99.5th percentile falls with n like 1 + c / sqrt(n); the alert takes c = 3.52, the smallest constant at or above the percentile at every n measured for the model before #303 (3.45 for the promoted one), so its ceiling is 1.25 times the test MdAPE at 200 labelled answers, 1.20 at 300, 1.16 at 500 and 1.11 at 1,000.
-  For the promoted model the ceiling is 0.004 to 0.010 above the percentile, so the false-alarm rate is 0.0027 to 0.0040 per window; the least-squares constant, 3.39, would reach 0.0057.
-  It compares with `test_mdape`, which a retrained model brings with it, and the constant is checked again with the script when the model's errors change shape.
+- **MdAPE.** A market's error differs from the average on the test set itself: `ES` has a test MdAPE of 7.61 %, 1.12 times the overall 6.80 %, and `FR` 8.10 %, 1.19 times.
+  Against the overall value, half of the `ES` windows and 98 % of the `FR` windows of 1,000 answers that the model prices exactly as on the test set would fire ([#306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), `reports/analysis/market_baseline.py`).
+  The alert therefore compares a window's MdAPE with the test MdAPE of its countries, `baseline_mdape`: the per-country test MdAPE of `reports/metrics/segments.csv`, weighted by the countries of the window's labelled answers; a country with fewer than 500 test rows, SC-04's minimum segment, takes the overall test MdAPE ([The baseline](#the-baseline)).
+  A market's test MdAPE rests on a few hundred rows, 593 for `ES`, and has a sampling error of its own, 5.7 % of its value for `ES`, so the ceiling is a two-sample test: 1 + 3.55 sqrt(1 / n + 1 / m) times the baseline, n the labelled answers and m the test rows of the baseline, `baseline_test_rows`, with 1 / m the sum of w² / m_c over the window's countries, w a country's share of the labelled answers and m_c its test rows.
+  For a window of the test mix, m is about 20,000, and the ceiling is 1.25 times the baseline at 200 labelled answers, 1.21 at 300, 1.16 at 500 and 1.115 at 1,000; for a window of `ES` alone it is 1.29, 1.25, 1.22 and 1.18.
+  The spread of a median has no closed form, so 3.55 comes from drawing 20,000 windows of n labelled answers from the test errors of `lgbm-basic` of each market, of the test mix and of a mix of 78 % `ES`, for n from 200, the fewest the job reports an MdAPE for, to 1,000: it is the smallest constant at or above the 99.5th percentile of (multiple - 1) / sqrt(1 / n + 1 / m) at every n and in every group, with the test values taken as the truth, as for the constant 3.52 of the rule before.
+  The false-alarm rate is then at most 0.0044 per window in every market, at 200 and at 1,000 labelled answers.
+  Counting the sampling error of the baselines as well, by drawing each again from its test rows, it reaches 0.0081 for `ES`; the constant 4.00 would hold 0.005 there too, at the cost of missing an `ES` window with 1.2 times its error in 63 % of the windows instead of 47 %.
+  A window of a model whose release recorded no test MdAPE per country has no baseline, and the alert cannot fire on it.
+  The constant is checked again with the script when the model's errors change shape.
 - **Labels.** Both alerts require `labels_sufficient`, so a window with too few labels cannot fire.
   Labels can arrive for 7 days after a window closed and every pass recomputes the figures, so a window is tested several times while its count grows; each look has the level 0.005, the window as a whole somewhat more.
 - **Drift** is NFR-11's own test, the Bonferroni threshold over 23 features; its level flags at most 1 in 200 windows of the training distribution, so one flagged window between quiet ones is a false alarm until the next window or the error and coverage alerts confirm it.
@@ -317,9 +324,12 @@ On the windows the laptop replay measured on 2026-11-04 ([the evidence](https://
 |--------|-------|-------|----------|---------------|----------------|------------------|
 | 1, control | none | 5.38 %, 0.80 x test | 96.8 % of 500 | quiet | quiet | quiet |
 | 2, control | none | 5.28 %, 0.78 x test | 95.4 % of 500 | quiet | quiet | quiet |
-| 3, `ES` | 14 features | 9.41 % of 1,000, 1.40 x test, ceiling 1.11 x | 85.8 % of 500, floor 86.4 % | fires | fires | fires |
+| 3, `ES` | 14 features | 9.41 % of 1,000, 1.40 x test, ceiling 1.115 x | 85.8 % of 500, floor 86.4 % | fires | fires | fires |
 
 `reports/analysis/model_alert_thresholds.py` applies the thresholds to these windows, and the rule tests use their values.
+That model's test set had no `ES` rows, so the `ES` window's baseline is the overall test MdAPE, on all its 19,665 test rows.
+On the `ES` windows of the FR-15 rehearsal ([the record](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/fr15-rehearsal.md)), the rule would fire ModelErrorHigh for window 14, before the retraining, at 1.36 times the overall test MdAPE against a ceiling of 1.115, and would stay quiet for window 18, after it, at 1.03 times the 7.61 % of the 593 `ES` test rows against a ceiling of 1.18; against the overall test MdAPE, window 18 was at 1.15, above 1.11, and fired.
+That is what the rule would do with these values; after the deploy, window 14 has no baseline in the live monitor, because the release of its model recorded no country values.
 The coverage of the `ES` window is 0.6 points below its floor, so an `ES` window with fewer labelled ranges may not fire it (at 300 ranges the floor is 85.4 %); the drift alert covers that case.
 The rules' tests replay these values, `deploy/prometheus/tests/model-performance.test.yml`, together with the edges of each threshold.
 
@@ -428,7 +438,8 @@ A feature of the latest tested window is below p 0.005 / 23: its requests are un
 
 #### ModelErrorHigh
 
-The real MdAPE of the latest tested window, over at least 200 answers with an observed price, is above its ceiling, 1 + 3.52 / sqrt(n) times the test MdAPE for n labelled answers ([Why these model thresholds](#why-these-model-thresholds)).
+The real MdAPE of the latest tested window, over at least 200 answers with an observed price, is above its ceiling, 1 + 3.55 sqrt(1 / n + 1 / m) times the test MdAPE of its countries for n labelled answers and a baseline of m test rows ([Why these model thresholds](#why-these-model-thresholds)).
+The ceiling is wider for a window of a small market, whose test MdAPE rests on few rows, so an `ES` window of 1,000 answers whose error grew by 20 % is missed in 42 to 47 % of the windows; a lasting degradation shows in the next windows too.
 
 1. The drift panels: which inputs changed in the same window?
 2. Check the observed prices: feedback with a wrong price, or prices from another source, raises the MdAPE too (`report --window N --json` lists the window's figures).
@@ -635,6 +646,39 @@ They are not compared with the replay's control listings: those are training lis
 A window of the training distribution therefore has a lower MdAPE than the test value and a coverage above it; a window the model prices worse than its test set has a higher MdAPE and a lower coverage.
 `report` prints the ratio to the test MdAPE and the test coverage beside each figure, and the [model alerts](#model-alerts) fire on them.
 
+The MdAPE is judged against the test MdAPE of the window's countries as well ([#306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306)): a market's error differs from the average on the test set itself, `ES` 7.61 % and `FR` 8.10 % against the overall 6.80 %.
+The `evaluate` stage's `reports/metrics/segments.csv` holds each variant's test MdAPE and test rows per `country_code`, and the monitoring image copies it beside the other two files.
+A window's `baseline_mdape` is the mean of its countries' test MdAPE, weighted by their share of its labelled answers, and `baseline_test_rows` the test rows it rests on, m in 1 / m = the sum of w² / m_c, which widens ModelErrorHigh's ceiling for a baseline of few rows ([Why these model thresholds](#why-these-model-thresholds)).
+A country with fewer than 500 test rows, SC-04's minimum segment (`LU` with 147), or one the test set lacks, takes the overall test MdAPE, resting on all test rows; so does `ES` for a model whose split held out every `ES` seller, which the market's own error then counts against, as it should.
+Every pass records the release's values per country in `model_country_test_values` for the model version its `dvc.lock` names, the first record staying, as for `model_test_values`.
+A window of a model last released before #306, whose release recorded no country values, has no baseline and the error alert cannot fire on it; its `test_mdape` and the report's ratio to it stay.
+The coverage keeps the nominal level, the promise the ranges make in every market (EDN-103).
+
+A window is judged against the test values of the model that answered its requests, its `model_version`, not those of the model running when a pass scores it ([#307](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307)).
+So a stored report keeps its ratios when it is re-read after a promotion, and `ModelErrorHigh` right after a promotion compares the old model's error with the old model's test MdAPE.
+The image holds only its own release's evaluate outputs, so every pass first records them in `monitor.db`'s `model_test_values`, for the model version of each variant that the release's `dvc.lock` names: the hash of `models/<variant>` without `.dir`, which is the version the API reports in `/health` and logs with every answer (FR-12).
+The first record of a version stays, so a later release that carries the same model, a rollback for example, changes no comparison.
+That also keeps a wrong record: a release whose `metrics.json` was wrong, or an evaluation fix that leaves `models/<variant>` unchanged, does not replace the values already recorded for that version.
+To correct one, deploy the release with the right values first, then delete the version's row; the next pass records the running image's values again, and every window that is not final is scored against them, while a final window keeps its figures.
+Deleting the row while a release with the wrong values runs only records them again, and deleting the row of a version no release runs any more leaves its windows with the values they last had.
+On the VM, from `/opt/recommenditos`, with the version from `/health`:
+
+```bash
+docker compose -f stack/compose.yaml --env-file .env exec -T monitor python -c '
+import sqlite3, sys
+db = sqlite3.connect("/var/lib/recommenditos-monitor/monitor.db")
+with db:
+    deleted = db.execute(
+        "DELETE FROM model_test_values WHERE model_variant = ? AND model_version = ?", sys.argv[1:]
+    ).rowcount
+print(deleted, "row deleted")
+' lgbm-basic 2a60912bd232083e6950f26fe72fe6c4
+```
+
+A window then takes the values recorded for its `model_version`, also when it is first scored by the next release's image.
+A window never holds the answers of two models: the first answer of another `model_version` closes it as `partial` ([What it compares](#what-it-compares)), so a promotion inside a window splits it, and each part is judged against its own model's values.
+A window of a model that no pass since #307 ran with, such as one answered by a model that was replaced before #307 shipped, keeps the test values its last scoring stored, or has none if it was never scored; its figures then stand without the comparison, and the model alerts cannot fire on them.
+
 On a laptop stack on 2026-11-04, after 2,000 control listings and 1,500 `ES` listings of the replay, the two control windows had an MdAPE of 5.38 % and 5.28 % and a coverage of 96.8 % and 95.4 %, and the `ES` window, flagged in 14 features, an MdAPE of 9.41 %, 1.40 times the test value, and a coverage of 85.8 % of its 500 labelled ranges ([the evidence](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/laptop-es-replay-2026-11-04.md)).
 
 ### How it runs
@@ -654,7 +698,7 @@ The job opens the log read-only all the same.
 
 Alibi Detect 0.13 pins Pillow below 11 and transformers below 5, both with fixed HIGH findings that the image scan of NFR-09 fails on.
 The image leaves Pillow out, because only Alibi Detect's image detectors and Matplotlib use it and the job imports neither; the integration suite checks that it is gone and that a pass runs.
-transformers stays, since Alibi Detect imports it on import; its three findings are about loading and saving models, which the job never does, and are accepted in `.trivyignore` until 2026-12-04.
+transformers stays, since Alibi Detect imports it on import; its three findings are about loading and saving models, which the job never does, and are accepted in `.trivyignore` until 2027-01-31.
 The image is 1.26 GB, most of it Alibi Detect's dependencies.
 
 ### Where the results go
@@ -666,13 +710,15 @@ The image is 1.26 GB, most of it Alibi Detect's dependencies.
 | `windows` | Closed window: `status` (`tested` or `partial`), its first and last `seq`, its time range (`first_answered_at`, `last_answered_at`), the model, `es_share`, and when tested `flagged`, `drifted_features` and the threshold |
 | `window_features` | Feature of a tested window: the test (`ks` or `chi2`), the p-value, the statistic, the values compared, and `drifted` |
 | `window_requests` | Request of a window that the log still holds, with its `request_id`, so a window's labels are the feedback of exactly its requests ([#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229)) |
-| `window_performance` | Closed window: its range answers, `labelled`, `labelled_ranges`, `mdape` and `coverage` each with its status (`ok` or `insufficient_labels`), `nominal_level`, the test values `test_mdape` and `test_coverage`, `final`, and when it was computed ([Error and coverage](#error-and-coverage)) |
+| `window_performance` | Closed window: its range answers, `labelled`, `labelled_ranges`, `mdape` and `coverage` each with its status (`ok` or `insufficient_labels`), `nominal_level`, the test values `test_mdape` and `test_coverage`, the market baseline `baseline_mdape` and `baseline_test_rows`, `final`, and when it was computed ([Error and coverage](#error-and-coverage)) |
+| `model_test_values` | Model version, with its variant, its test values `test_mdape` and `test_coverage`, and when a pass first recorded them ([The baseline](#the-baseline)) |
+| `model_country_test_values` | Model version and country, with its variant, the country's `test_rows` and `test_mdape`, and when a pass first recorded them ([The baseline](#the-baseline)) |
 | `open_window` | The window being filled: n of 1,000 |
 | `runs` | Pass, with its outcome, the last 10,000 |
 
 After each pass the job writes `monitor.prom` into the volume `monitor-textfile`, which node-exporter serves ([The textfile collector](#the-textfile-collector)): the latest tested window's flag, its number of drifted features, each feature's p-value (`recommenditos_drift_feature_p_value{feature, test}`), the threshold, its number, last `seq`, end time and ES share, the open window's progress, and `recommenditos_monitor_last_success_timestamp_seconds`, the end of the last pass that succeeded.
 That last one, and node-exporter's `node_textfile_mtime_seconds`, show a job that stopped.
-Beside them, the same window's error and coverage: `recommenditos_performance_mdape`, `_coverage` and `_nominal_level`, the test values `_test_mdape` and `_test_coverage`, the counts `_requests`, `_ranges`, `_labelled_requests` and `_labelled_ranges`, `_labels_sufficient{figure}` with the thresholds in `_min_labels{figure}`, and `_final`.
+Beside them, the same window's error and coverage: `recommenditos_performance_mdape`, `_coverage` and `_nominal_level`, the test values `_test_mdape` and `_test_coverage`, the market baseline `_baseline_mdape` with the test rows it rests on, `_baseline_test_rows`, the counts `_requests`, `_ranges`, `_labelled_requests` and `_labelled_ranges`, `_labels_sufficient{figure}` with the thresholds in `_min_labels{figure}`, and `_final`.
 A figure with too few labels is left out of the file, not written as 0, so a panel shows no value and an alert on it cannot fire; `_labels_sufficient` says why.
 
 ### How large it grows

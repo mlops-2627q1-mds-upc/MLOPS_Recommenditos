@@ -3,12 +3,12 @@
 \ednentry{
   id = {EDN-95},
   title = {CI fails on fixable image vulnerabilities, and the containers run locked down},
-  note = {\textbf{Revised on 2026-11-03}: nginx's slim image leaves \texttt{.\allowbreak{}trivyignore} without nginx entries.},
+  note = {\textbf{Revised on 2026-11-07}: two unreachable nginx findings are accepted; the decision stands.},
   date = {2026-10-22},
   milestone = {M5: Model Packaging},
   topic = {CI/CD, Security, Containerization},
-  participants = {@lukas2510 asked for the M5 work and delegated it under his account; the AI wrote \#199 and \#200, chose the implementation and merged PRs \#210 and \#212},
-  decision = {trivy scans the API and nginx images in every integration run that builds the image and in CD before the push.
+  participants = {@lukas2510 delegated the M5 work under his account; the AI wrote \#199 and \#200, chose the implementation and merged PRs \#210 and \#212},
+  decision = {trivy scans the stack's images in every integration run that builds them and in CD before the push.
 It fails on HIGH or CRITICAL findings that have a fix and counts the others; \texttt{.\allowbreak{}trivyignore} takes a finding only with a reason and an expiry, which the scan tool enforces.
 A canary scan of a 2023 image must fail.
 Dependabot moves pinned images.
@@ -17,18 +17,21 @@ Both containers run read-only, without capabilities, with \texttt{no-\allowbreak
 \begin{itemize}[leftmargin=*, topsep=2pt]
 \item \texttt{aquasecurity/\allowbreak{}trivy-\allowbreak{}action}: its tags were moved to a credential stealer in March 2026 (\href{https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23}{GHSA-69fq-xp46-6x23}), so trivy is the release binary, pinned by SHA-256.
 \item Waiting for the VM load test (\#143): laptop measurements sufficed, and the VM run kept 768 MiB (EDN-88).
-\item Our own nginx image with \texttt{apk upgrade} (PR \#238): a second image to maintain; nginx's slim image, core modules only, has no finding (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271}{PR \#271}).
+\item Our own nginx image with \texttt{apk upgrade} (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238}{PR \#238}): maintaining a second image outweighs the slim image's two findings (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271}{PR \#271}), whose affected functions nginx never calls (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/331}{PR \#331}).
 \end{itemize}
 \par
 \emph{Why:} Counting unfixed findings keeps unpatched Debian CVEs from blocking pull requests.
 The canary fails the October 2023 Python image with 93 fixable findings; the API image has none.
-The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB, and p95 stayed at 140 to 170 ms.},
+The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB.},
   ai = {Alternative generation, Alternative assessment, Solution generation, Other: wrote the issues},
   response = {Accepted},
   assessment = {AI wrote the issues and built the scan, the Dependabot file and the hardening; it chose how trivy is installed and run, measured the limits and merged the pull requests.
 Two independent review agents raised five should-fix points, all fixed; no human code review.},
   aievidence = {Claude Code sessions of 2026-10-22.
 Scope prompt: ``please look at what is needed for milestone 5. also look at the demo repo and what is in it. then create issues for M5'' (translated from German).
-Implementation session, opening prompt: ``use the orchestrate skill and solve M4. don't do the report yet, I want to do it at the end. also solve bugs that exist right now or come up meanwhile and are urgent'' (translated from German).},
-  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199}{Issue \#199}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200}{issue \#200}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/212}{PR \#212}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/210}{PR \#210}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238}{PR \#238}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md\#vulnerabilities-and-dependency-updates}{deployment docs}.},
+Implementation prompt: ``use the orchestrate skill and solve M4. don't do the report yet, I want to do it at the end. also solve bugs that exist right now or come up meanwhile and are urgent'' (translated from German).
+Question of 2026-11-07 (translated, paraphrased): ``EDN-95 says nginx's slim image has no findings and therefore rejects our own nginx image with `apk upgrade'. Since today's trivy database it has two (musl regcomp, zlib gz\_vacate); per readelf nginx calls none of the affected functions. \#331 accepts them until 2026-12-04. How to proceed?''
+Orchestrator briefing (core, paraphrased): ``Check every accepted entry of PR \#331 against its advisory and its reachability; an acceptance that hides something reachable and fixable is a blocker.''
+Lukas answered: ``Accept, update EDN-95: the slim image stays, the two unreachable findings stand in .trivyignore with a reason and an expiry; EDN-95 is rewritten to state today's facts (decision unchanged, reason: a second image to maintain outweighs two unreachable findings). Dependabot brings the rebuilt digest once nginx publishes it.'' (translated from German)},
+  evidence = {\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199}{Issue \#199}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200}{issue \#200}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/212}{PR \#212}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/210}{PR \#210}, \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/deployment.md\#vulnerabilities-and-dependency-updates}{deployment docs}.},
 }

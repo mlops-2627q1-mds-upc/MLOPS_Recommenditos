@@ -31,6 +31,24 @@ required fields: the test MdAPE in `metrics.json` and the coverage of the
 (not `sc05_coverage`, the worst scenario's, which drops inputs). Not with the
 replay's control listings, which are training listings and so give an
 optimistic error and coverage.
+
+They are the values of the model that answered the window's requests
+(`judged_against`, #307), not of the model running when a pass scores it. The
+image holds the evaluate outputs of its own release only, so every pass records
+them in `monitor.db` for each model version its `dvc.lock` names
+(`release_test_values`), and a window is judged against the values recorded for
+its `model_version`, after a promotion too. A window holds one model's answers:
+a new `model_version` closes it (`job.py`).
+
+The MdAPE is judged against the window's market (`market_baseline`, #306): the
+test MdAPE of each country in `reports/metrics/segments.csv`, weighted by the
+countries of the window's labelled answers, since a market's error differs
+from the average on the test set itself (`ES` 1.12 times the overall MdAPE).
+A country with fewer than `MIN_BASELINE_ROWS` test rows takes the overall test
+MdAPE. The baseline comes with the test rows it rests on, so that the alert's
+ceiling allows for the baseline's own sampling error
+(docs/docs/monitoring.md#why-these-model-thresholds). The coverage keeps the
+nominal level, the promise the ranges make in every market.
 """
 
 from collections.abc import Sequence
@@ -41,8 +59,19 @@ import json
 from pathlib import Path
 import statistics
 
+import yaml
+
 from recommenditos_monitoring.log import Label
-from recommenditos_monitoring.store import INSUFFICIENT_LABELS, OK, Performance, Window, timestamp
+from recommenditos_monitoring.store import (
+    INSUFFICIENT_LABELS,
+    OK,
+    CountryTestValues,
+    ModelTestValues,
+    Performance,
+    Store,
+    Window,
+    timestamp,
+)
 
 #: The fewest labelled answers that give an MdAPE.
 MIN_LABELLED = 200
@@ -52,6 +81,11 @@ MIN_LABELLED_RANGES = 300
 LABEL_HORIZON = timedelta(days=7)
 
 RANGE_ENDPOINT = "/v1/price-range"
+#: The fewest test rows a country's own test MdAPE needs to be its baseline:
+#: SC-04's minimum segment, `evaluate.success_criteria.sc04_min_segment_rows`.
+MIN_BASELINE_ROWS = 500
+#: The `segment` of segments.csv whose levels are the countries.
+COUNTRY_SEGMENT = "country_code"
 
 
 @dataclass(frozen=True)
@@ -102,6 +136,123 @@ def baseline(metrics: Path | None, coverage: Path | None, variant: str) -> Basel
     )
 
 
+def bundle_versions(lock: Path | None) -> dict[str, str]:
+    """The model version of each variant whose bundle `lock` (dvc.lock) records.
+
+    The hash of `models/<variant>` without DVC's `.dir`, the version the API
+    computes from the bundle's files, reports in /health and logs with every
+    answer (FR-12). A missing file gives none.
+    """
+    if lock is None or not lock.is_file():
+        return {}
+    stages = yaml.safe_load(lock.read_text(encoding="utf-8")).get("stages", {})
+    versions = {}
+    for stage in stages.values():
+        for out in stage.get("outs", []):
+            path = str(out.get("path", ""))
+            if path.startswith("models/") and path.count("/") == 1 and out.get("md5"):
+                versions[path.removeprefix("models/")] = str(out["md5"]).removesuffix(".dir")
+    return versions
+
+
+def release_test_values(
+    metrics: Path | None, coverage: Path | None, lock: Path | None, recorded_at: datetime
+) -> list[ModelTestValues]:
+    """The test values the image's evaluate outputs give each model version of its dvc.lock.
+
+    The three files are one release's, so each variant's values belong to the
+    bundle that release's dvc.lock records. A variant without any value is left
+    out, so that a later image with its values can still record them.
+    """
+    values = []
+    for variant, version in sorted(bundle_versions(lock).items()):
+        test = baseline(metrics, coverage, variant)
+        if test != NO_BASELINE:
+            values.append(
+                ModelTestValues(
+                    variant, version, test.mdape, test.coverage, timestamp(recorded_at)
+                )
+            )
+    return values
+
+
+def judged_against(store: Store, window: Window, previous: Performance | None) -> Baseline:
+    """The test values `window`'s figures are compared with: those of the model that answered it.
+
+    Those recorded for its `model_version`. A window of a model that no pass of
+    this code ran with, one answered before #307, keeps the values its last
+    scoring stored, or has none.
+    """
+    recorded = store.test_values(window.model_variant, window.model_version)
+    if recorded is not None:
+        return Baseline(recorded.test_mdape, recorded.test_coverage)
+    if previous is not None:
+        return Baseline(previous.test_mdape, previous.test_coverage)
+    return NO_BASELINE
+
+
+def release_country_values(
+    segments: Path | None, lock: Path | None, recorded_at: datetime
+) -> list[CountryTestValues]:
+    """Each model version's test rows and test MdAPE per country, from the release's segments.csv.
+
+    Like `release_test_values`: the evaluate stage's segments.csv and dvc.lock
+    are one release's, so each variant's rows belong to the bundle dvc.lock
+    records. A missing file gives none.
+    """
+    versions = bundle_versions(lock)
+    if not versions or segments is None or not segments.is_file():
+        return []
+    with segments.open(newline="", encoding="utf-8") as table:
+        return [
+            CountryTestValues(
+                row["variant"],
+                versions[row["variant"]],
+                row["level"],
+                int(row["n"]),
+                float(row["mdape"]),
+                timestamp(recorded_at),
+            )
+            for row in csv.DictReader(table)
+            if row["segment"] == COUNTRY_SEGMENT and row["variant"] in versions and row["mdape"]
+        ]
+
+
+@dataclass(frozen=True)
+class MarketBaseline:
+    """The test MdAPE a window's MdAPE is judged against, and the test rows it rests on."""
+
+    mdape: float
+    #: m in 1 / m = sum over the window's countries of w_c^2 / m_c.
+    test_rows: float
+
+
+def market_baseline(
+    labels: Sequence[Label], overall: float | None, countries: Sequence[CountryTestValues]
+) -> MarketBaseline | None:
+    """The test MdAPE of the countries of `labels`, weighted by their share of the labels.
+
+    A country with fewer than `MIN_BASELINE_ROWS` test rows, or none, takes the
+    `overall` test MdAPE, which rests on all test rows. None without labels, an
+    overall value, or country values: a model whose release did not record
+    them, so its figures stand without the comparison.
+    """
+    if not labels or overall is None or not countries:
+        return None
+    own = {c.country_code: c for c in countries if c.test_rows >= MIN_BASELINE_ROWS}
+    all_rows = sum(c.test_rows for c in countries)
+    counts: dict[str | None, int] = {}
+    for label in labels:
+        counts[label.country_code] = counts.get(label.country_code, 0) + 1
+    mdape = inverse_rows = 0.0
+    for country, count in counts.items():
+        share = count / len(labels)
+        values = own.get(country) if country is not None else None
+        mdape += share * (values.test_mdape if values else overall)
+        inverse_rows += share**2 / (values.test_rows if values else all_rows)
+    return MarketBaseline(mdape=mdape, test_rows=1 / inverse_rows)
+
+
 def absolute_percentage_error(label: Label) -> float:
     return abs(label.observed_price_eur - label.price_eur) / label.observed_price_eur
 
@@ -112,10 +263,14 @@ def score(  # noqa: PLR0913 - every input of the figures is one argument
     *,
     ranges: int,
     test: Baseline,
+    countries: Sequence[CountryTestValues] = (),
     computed_at: datetime,
     final: bool,
 ) -> Performance:
-    """The figures of `window` from its `labels`; `ranges` is its number of range answers."""
+    """The figures of `window` from its `labels`; `ranges` is its number of range answers.
+
+    `countries` are the test values per country of the model that answered it.
+    """
     ranged = [label for label in labels if label.endpoint == RANGE_ENDPOINT]
     mdape = (
         statistics.median(absolute_percentage_error(label) for label in labels)
@@ -133,6 +288,7 @@ def score(  # noqa: PLR0913 - every input of the figures is one argument
         else None
     )
     levels = [label.confidence_level for label in ranged if label.confidence_level is not None]
+    market = market_baseline(labels, test.mdape, countries) if mdape is not None else None
     return Performance(
         window_id=window.window_id,
         ranges=ranges,
@@ -147,6 +303,8 @@ def score(  # noqa: PLR0913 - every input of the figures is one argument
         test_coverage=test.coverage,
         final=final,
         computed_at=timestamp(computed_at),
+        baseline_mdape=None if market is None else market.mdape,
+        baseline_test_rows=None if market is None else market.test_rows,
     )
 
 
@@ -175,6 +333,11 @@ def describe(performance: Performance | None) -> str:
             error += (
                 f", {performance.mdape / performance.test_mdape:.2f} x the test MdAPE of "
                 f"{_percent(performance.test_mdape)}"
+            )
+        if performance.baseline_mdape:
+            error += (
+                f" and {performance.mdape / performance.baseline_mdape:.2f} x the "
+                f"{_percent(performance.baseline_mdape)} of its countries on the test set"
             )
     if performance.coverage is None:
         coverage = (

@@ -14,6 +14,7 @@ rewrites again.
 """
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 import time
@@ -59,6 +60,30 @@ target.execute(
 )
 target.commit()
 print(len(rows))
+"""
+
+
+#: The lock the test pass reads: the image's own, when it names the served
+#: bundle's version, as in CD, where the stack serves the real bundle; otherwise
+#: one that names it, written into the container's /tmp, so that the pass still
+#: records the image's test values for the served model: in CI the stack serves
+#: a synthetic bundle, which the image's dvc.lock does not name. Prints its path.
+LOCK_FOR_SERVED_MODEL = """
+import sys
+from pathlib import Path
+from recommenditos_monitoring.performance import bundle_versions
+variant, version = sys.argv[1:]
+image = Path("/app/dvc.lock")
+if bundle_versions(image).get(variant) == version:
+    print(image)
+else:
+    written = Path("/tmp/integration-dvc.lock")
+    written.write_text(
+        f"stages:\\n  train@{variant}:\\n    outs:\\n"
+        f"    - path: models/{variant}\\n      md5: {version}.dir\\n",
+        encoding="utf-8",
+    )
+    print(written)
 """
 
 
@@ -118,6 +143,29 @@ def test_the_monitoring_image_has_no_pillow(monitor):
     assert found == "None"
 
 
+def test_the_monitoring_image_has_the_releases_dvc_lock(monitor):
+    """It names the model version of each variant's test values (#307)."""
+    found = monitor.exec(
+        "python",
+        "-c",
+        "import hashlib; print(hashlib.md5(open('/app/dvc.lock', 'rb').read()).hexdigest())",
+    )
+    expected = hashlib.md5((REPOSITORY / "dvc.lock").read_bytes(), usedforsecurity=False)
+    assert found == expected.hexdigest()
+
+
+def test_the_monitoring_image_has_the_releases_segments(monitor):
+    """They hold the test MdAPE per country, a window's market baseline (#306)."""
+    found = monitor.exec(
+        "python",
+        "-c",
+        "import hashlib; print(hashlib.md5(open('/app/segments.csv', 'rb').read()).hexdigest())",
+    )
+    segments = REPOSITORY / "reports" / "metrics" / "segments.csv"
+    expected = hashlib.md5(segments.read_bytes(), usedforsecurity=False)
+    assert found == expected.hexdigest()
+
+
 @pytest.mark.req("FR-14")
 def test_the_pass_at_the_start_succeeded(monitor):
     eventually(
@@ -129,7 +177,7 @@ def test_the_pass_at_the_start_succeeded(monitor):
 
 @pytest.mark.req("FR-14")
 def test_a_pass_reaches_prometheus_through_node_exporter(
-    monitor, prometheus_container, client, listing
+    monitor, prometheus_container, client, listing, health
 ):
     ids = []
     for _ in range(WINDOW):
@@ -137,6 +185,10 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         assert answer.status_code == 200, answer.text
         ids.append(answer.json()["request_id"])
     assert monitor.exec("python", "-c", COPY_REQUESTS, json.dumps(ids)) == str(WINDOW)
+    served = health.json()["model"]
+    lock = monitor.exec(
+        "python", "-c", LOCK_FOR_SERVED_MODEL, served["variant"], served["version"]
+    )
     started = time.time()
 
     out = monitor.exec(
@@ -148,6 +200,8 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         "/tmp/integration-log.sqlite3",  # noqa: S108 - the container's own tmpfs
         "--db",
         "/tmp/integration-monitor.db",  # noqa: S108 - the container's own tmpfs
+        "--lock",
+        lock,
         "--window-size",
         str(WINDOW),
     )
@@ -184,7 +238,7 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
     # The window's error and coverage beside its drift (#229), every series of
     # them: four labels of four point estimates are too few for a figure, which
     # is then left out, and the test values are the image's copies of the
-    # evaluate outputs, the repository's.
+    # evaluate outputs, the repository's, recorded for the served model.
     mdape, coverage = deployed_test_values()
     exported = {
         (series["metric"]["__name__"], series["metric"].get("figure")): float(series["value"][1])
@@ -204,6 +258,7 @@ def test_a_pass_reaches_prometheus_through_node_exporter(
         ("recommenditos_performance_test_coverage", None): pytest.approx(coverage),
         ("recommenditos_performance_final", None): 0,
     }
-    # Left out without labels: the two figures and the level the ranges state.
-    absent = {"mdape", "coverage", "nominal_level"}
+    # Left out without labels: the two figures, the level the ranges state, and
+    # the market baseline of the MdAPE.
+    absent = {"mdape", "coverage", "nominal_level", "baseline_mdape", "baseline_test_rows"}
     assert not {name for name, _ in exported} & {f"recommenditos_performance_{n}" for n in absent}

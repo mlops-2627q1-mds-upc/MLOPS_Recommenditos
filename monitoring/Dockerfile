@@ -18,7 +18,7 @@
 # Dependabot moves together with the tag.
 FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
-FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 AS dependencies
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS dependencies
 COPY --from=uv /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -36,14 +36,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # (tests/integration/test_deployed_monitor.py).
 RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
-FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
-# apt and libapt-pkg7.0 from trixie-security, as in the API's Dockerfile, which
-# says why (CVE-2026-109518), why the download runs without retries, and when
-# the line can go. Not pinned to a version, for the reason the API's Dockerfile
-# gives for libgomp1.
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+# zlib1g from trixie-security, as in the API's Dockerfile, which says why
+# (CVE-2026-76844 and CVE-2026-85091) and when the line can go (#334). Not
+# pinned to a version, for the reason the API's Dockerfile gives for libgomp1.
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 10002 monitor \
     && useradd --system --uid 10002 --gid monitor --no-create-home --shell /usr/sbin/nologin monitor
@@ -64,15 +63,22 @@ COPY data/monitoring /app/data/monitoring
 # The evaluate stage's outputs of the commit the image is built from, the same
 # commit as the API image's model, both committed to git: the test MdAPE and the
 # full-input coverage the drift job compares each window's error and coverage
-# with (#229).
+# with (#229), and the dvc.lock that names the model version of each variant's
+# values, so that a window is judged against its own model's after a
+# promotion (#307), and the test MdAPE per country, the market baseline of a
+# window's MdAPE (#306).
 COPY metrics.json /app/metrics.json
 COPY reports/metrics/interval-coverage-by-make.csv /app/interval-coverage-by-make.csv
+COPY reports/metrics/segments.csv /app/segments.csv
+COPY dvc.lock /app/dvc.lock
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     RECOMMENDITOS_MONITORING_DATA_DIR=/app/data/monitoring \
     RECOMMENDITOS_MONITOR_METRICS=/app/metrics.json \
     RECOMMENDITOS_MONITOR_COVERAGE=/app/interval-coverage-by-make.csv \
+    RECOMMENDITOS_MONITOR_LOCK=/app/dvc.lock \
+    RECOMMENDITOS_MONITOR_SEGMENTS=/app/segments.csv \
     # Alibi Detect imports Matplotlib, Numba and transformers, which want a
     # writable cache directory; the root is read-only, /tmp a tmpfs. Without
     # PyTorch or TensorFlow, which the job does not need, transformers would

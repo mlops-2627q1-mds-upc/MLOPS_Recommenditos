@@ -1368,13 +1368,13 @@ How to add an entry:
 
 ### EDN-95: CI fails on fixable image vulnerabilities, and the containers run locked down
 
-> **Revised on 2026-11-03**: nginx's slim image leaves `.trivyignore` without nginx entries.
+> **Revised on 2026-11-07**: two unreachable nginx findings are accepted; the decision stands.
 >
 - **Date:** 2026-10-22
 - **Milestone:** M5: Model Packaging
 - **Activity / Topic:** CI/CD, Security, Containerization
-- **Participants:** @lukas2510 asked for the M5 work and delegated it under his account; the AI wrote #199 and #200, chose the implementation and merged PRs #210 and #212
-- **Decision:** trivy scans the API and nginx images in every integration run that builds the image and in CD before the push.
+- **Participants:** @lukas2510 delegated the M5 work under his account; the AI wrote #199 and #200, chose the implementation and merged PRs #210 and #212
+- **Decision:** trivy scans the stack's images in every integration run that builds them and in CD before the push.
   It fails on HIGH or CRITICAL findings that have a fix and counts the others; `.trivyignore` takes a finding only with a reason and an expiry, which the scan tool enforces.
   A canary scan of a 2023 image must fail.
   Dependabot moves pinned images.
@@ -1382,18 +1382,21 @@ How to add an entry:
 - **Alternatives considered:**
   - `aquasecurity/trivy-action`: its tags were moved to a credential stealer in March 2026 ([GHSA-69fq-xp46-6x23](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)), so trivy is the release binary, pinned by SHA-256.
   - Waiting for the VM load test (#143): laptop measurements sufficed, and the VM run kept 768 MiB (EDN-88).
-  - Our own nginx image with `apk upgrade` (PR #238): a second image to maintain; nginx's slim image, core modules only, has no finding ([PR #271](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271)).
+  - Our own nginx image with `apk upgrade` ([PR #238](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238)): maintaining a second image outweighs the slim image's two findings ([PR #271](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/271)), whose affected functions nginx never calls ([PR #331](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/331)).
 - **Rationale:** Counting unfixed findings keeps unpatched Debian CVEs from blocking pull requests.
   The canary fails the October 2023 Python image with 93 fixable findings; the API image has none.
-  The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB, and p95 stayed at 140 to 170 ms.
+  The API peaked at 606 to 634 MiB; 768 MiB is 1.2 to 1.3 times that, below NFR-04's 1 GB.
 - **AI involvement:** Alternative generation, Alternative assessment, Solution generation, Other: wrote the issues
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI wrote the issues and built the scan, the Dependabot file and the hardening; it chose how trivy is installed and run, measured the limits and merged the pull requests.
   Two independent review agents raised five should-fix points, all fixed; no human code review.
 - **AI interaction evidence:** Claude Code sessions of 2026-10-22.
   Scope prompt: "please look at what is needed for milestone 5. also look at the demo repo and what is in it. then create issues for M5" (translated from German).
-  Implementation session, opening prompt: "use the orchestrate skill and solve M4. don't do the report yet, I want to do it at the end. also solve bugs that exist right now or come up meanwhile and are urgent" (translated from German).
-- **Other evidence:** [Issue #199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199), [issue #200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200), [PR #212](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/212), [PR #210](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/210), [PR #238](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/238), [deployment docs](../docs/docs/deployment.md#vulnerabilities-and-dependency-updates).
+  Implementation prompt: "use the orchestrate skill and solve M4. don't do the report yet, I want to do it at the end. also solve bugs that exist right now or come up meanwhile and are urgent" (translated from German).
+  Question of 2026-11-07 (translated, paraphrased): "EDN-95 says nginx's slim image has no findings and therefore rejects our own nginx image with 'apk upgrade'. Since today's trivy database it has two (musl regcomp, zlib gz_vacate); per readelf nginx calls none of the affected functions. #331 accepts them until 2026-12-04. How to proceed?"
+  Orchestrator briefing (core, paraphrased): "Check every accepted entry of PR #331 against its advisory and its reachability; an acceptance that hides something reachable and fixable is a blocker."
+  Lukas answered: "Accept, update EDN-95: the slim image stays, the two unreachable findings stand in .trivyignore with a reason and an expiry; EDN-95 is rewritten to state today's facts (decision unchanged, reason: a second image to maintain outweighs two unreachable findings). Dependabot brings the rebuilt digest once nginx publishes it." (translated from German)
+- **Other evidence:** [Issue #199](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/199), [issue #200](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/200), [PR #212](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/212), [PR #210](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/210), [deployment docs](../docs/docs/deployment.md#vulnerabilities-and-dependency-updates).
 - **In LaTeX:** yes
 
 ### EDN-96: The web page ships in the API image as plain files, without a framework
@@ -1574,6 +1577,35 @@ How to add an entry:
   Orchestrator briefing (core, paraphrased): "Plan the FR-15 rehearsal with options for getting ES into training."
   Lukas answered: "A, share 0.4 (recommended): 40 % of the ES sellers held out: about 2,460 replay rows, ES = 3.5 % of training." (translated from German)
 - **Other evidence:** [Issue #231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231), [The split](../docs/docs/pipeline.md#the-split), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-03, EDN-12.
+- **In LaTeX:** yes
+
+### EDN-103: The error alert judges a window against its countries' test MdAPE
+
+- **Date:** 2026-11-07
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Monitoring, Model Evaluation
+- **Participants:** Lukas Häußler (decided), AI agents (options, analysis, implementation)
+- **Decision:** ModelErrorHigh compares a window's MdAPE with the test MdAPE of its countries in `segments.csv`, weighted by its labelled answers, and fires above 1 + 3.55 sqrt(1 / n + 1 / m) times it, m the test rows of that baseline.
+  A country with fewer than 500 test rows takes the overall value.
+  ModelCoverageLow keeps the nominal 90 % floor.
+- **Alternatives considered:**
+  - The overall test MdAPE (EDN-101): 51 % of the `ES` and 98 % of the `FR` windows of 1,000 answers fire with nothing changed.
+  - The majority country's test MdAPE: 17 % false alarms on windows of the test mix.
+  - The weighted baseline without the margin: 7.8 % of the `ES` windows fire from the noise of its 593 test rows.
+  - Market baselines for the coverage too: a new `evaluate` output, and twice the misses in small markets.
+- **Rationale:** Only the two-sample ceiling keeps false alarms near 0.005 in every market: at most 0.0044 with the test values taken as the truth, 0.0081 for `ES` once its baseline's own noise counts.
+  It costs power where the baseline is thin: an `ES` window 20 % worse is missed in 47 % of windows.
+  The coverage floor is the ranges' promise to users, the same in every market.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured the options by resampling the test set, recommended the margin for the error alert and the nominal floor for coverage, and implemented them; the orchestrator checked the numbers against the results file.
+  Lukas took the recommendation unchanged.
+  Under his decision the orchestrator took the constant 3.55 over 4.00, which holds both rates at 0.005 but misses that `ES` window in 63 %.
+- **AI interaction evidence:** Claude Code session of 2026-11-07.
+  Question (translated from German, paraphrased): "#306: how should ModelErrorHigh and ModelCoverageLow judge a window? Today both compare with the overall test value, so windows of only ES or only FR raise alerts without any degradation (ES 51 %, FR 98 % at 1,000 answers, against a level of 0.5 %)."
+  Orchestrator briefing (core, paraphrased): "Give Lukas the options of #306 (keep the overall baseline, a per-country baseline from segments.csv, a baseline weighted by the window's market mix) with their false-alarm and miss rates, measured with the resampling method of model_alert_thresholds.py, and what the rehearsal windows would have shown; implement nothing yet."
+  Lukas answered: "D for the error alert, coverage stays: ModelErrorHigh compares with the per-country test values, weighted by the window's country mix, plus a margin for their noise: false alarms near 0.5 % everywhere (at most 1.1 %), at the cost of missing ES +20 % in 47 % of windows. ModelCoverageLow stays at the 90 % promise; no new evaluate output. Window 18 of the rehearsal still fires the coverage alert." (translated from German)
+- **Other evidence:** [Issue #306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), [PR #332](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/332), [`market_baseline_results.txt`](analysis/market_baseline_results.txt), [Why these model thresholds](../docs/docs/monitoring.md#why-these-model-thresholds), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-101.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs

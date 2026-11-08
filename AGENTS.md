@@ -50,6 +50,8 @@ Read these before working on a milestone, the report, or the EDN:
 - [references/mlops_report_template.md](references/mlops_report_template.md) - the official report structure.
 - [references/Instruction_EDN_MLOps_v2026.md](references/Instruction_EDN_MLOps_v2026.md) - the Engineering Decision Notebook (EDN): which decisions to record and the fields of an entry.
 - [references/course-demos.md](references/course-demos.md) - takeaways from the teachers' demo repo: expected tools and setup per milestone.
+- [references/lecturer-feedback.md](references/lecturer-feedback.md) - what the lecturers said about our work, what the final report is graded on, and what follows for it.
+  Add new feedback there, with the lesson in the guidance box of the section it concerns.
 
 The source PDFs and DOCX files are gitignored; the Markdown files above are their conversions.
 

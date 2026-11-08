@@ -39,7 +39,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "reports" / "monitoring" / "vm-es-replay-2026-11-04.json"
 OUT = ROOT / "reports" / "figures" / "es-replay-windows.pdf"
 
-#: The constants of deploy/prometheus/rules/model-performance.yml.
+#: The constants of deploy/prometheus/rules/model-performance.yml at the time of the replay
+#: (2026-11-04); the rules file has since moved to the market baseline of #306 (K = 3.55).
 MDAPE_C = 3.52
 COVERAGE_Z = 2.576
 FEATURES = 23

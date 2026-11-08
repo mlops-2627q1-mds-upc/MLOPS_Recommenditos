@@ -20,7 +20,7 @@
 # the pin.
 FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
-FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 AS dependencies
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS dependencies
 
 COPY --from=uv /uv /bin/uv
 
@@ -70,25 +70,24 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && cp -a "$site"/recommenditos/api/healthcheck.py /project/app/healthcheck.py
 
 
-FROM python:3.12-slim-trixie@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
 
 # The bundle to serve. `/health` reports the DVC hash of this directory, so it is
 # copied whole and unchanged, and FR-12's check compares it with dvc.lock.
 ARG MODEL_VARIANT=lgbm-basic
 
 # LightGBM's native library links against GNU OpenMP, which the slim image lacks.
-# apt and libapt-pkg7.0 come from trixie-security: the pinned base image ships
-# 3.0.3, which has CVE-2026-109518, fixed in 3.0.4 (DSA-6607-1), and no published
-# python image ships the fix yet. Once Dependabot moves the base to one that
-# does, the upgrade does nothing and the line can go.
-# The upgrade itself still downloads with the vulnerable apt, and
-# CVE-2026-109518 needs a non-zero Acquire::Retries (3 by default since Debian
-# 12, per Debian's security tracker), so that one download runs without retries.
+# zlib1g comes from trixie-security: the pinned base image, the newest
+# python:3.12-slim-trixie (built 2026-11-05), ships 1:1.3.dfsg+really1.3.1-1+b1,
+# which has CVE-2026-76844 and CVE-2026-85091, fixed in
+# 1:1.3.dfsg+really1.3.1-1+deb13u1 (DSA-6613-1). Once Dependabot moves the base
+# to one that ships the fix, the upgrade does nothing and the line can go
+# (#334).
 # Not pinned to a version: Debian replaces a package version in its archive with
 # every security update, so a pin would break the build instead of patching it.
 # hadolint ignore=DL3008
 RUN apt-get update \
-    && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg7.0 \
+    && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
