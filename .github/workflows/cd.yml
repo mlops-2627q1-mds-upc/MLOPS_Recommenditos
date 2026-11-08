@@ -300,6 +300,10 @@ jobs:
       - name: Run the integration suite against the versions in dvc.lock
         # No RECOMMENDITOS_EXPECTED_* override: /health has to report the hashes
         # dvc.lock records for the bundle and the index (FR-12).
+        # The VM's log driver, so the journal test of the rollback drill runs:
+        # `make test-integration` defaults to `local`, as a laptop's stack does.
+        env:
+          LOG_DRIVER: journald
         run: make test-integration
       - name: Replay a few listings of the baked samples against the stack
         # The monitoring image with the real samples and the real model: every
