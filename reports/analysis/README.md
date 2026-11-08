@@ -53,7 +53,9 @@ seeds on three pools: the real snapshot and the two synthetic fixtures the tests
 It exists because the first version of the constant was justified by a sweep that stopped at 200
 seeds and was wrong by 2,000, in both directions at once: sound splits would have been failed and
 a calibration set at 0.58 of its intended size would have passed.
-`split_gate_results.txt` is the output of the run recorded in EDN-03 and in the archived EDN-39 (2026-09-30).
+`split_gate_results.txt` is the output of the latest run (2026-11-08, on the pool with the `ES` training sellers of EDN-102), recorded in EDN-03.
+The archived EDN-39 (2026-09-30) recorded the older run on the pool without them, with a worst sigma of 4.25 and a smallest share of 0.820.
+The gate holds on the latest run: on the real pool no seed trips either rule, the worst sigma is 4.19 against the bound of 5.0, and the smallest share is 0.825 of its ratio against the floor of 0.75.
 
 Unlike the other scripts here it imports the stage's own functions rather than re-deriving them,
 so the justification cannot drift from the code it justifies; it therefore has to run from the

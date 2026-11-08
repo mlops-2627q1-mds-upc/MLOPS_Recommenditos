@@ -96,7 +96,7 @@ MAKES_FILE = "supported_makes.json"
 #:
 #: 0.75 comes from a stated budget: no seed may trip it on data that satisfies
 #: `MAX_GROUP_SHARE`. Over 2,000 seeds on the real snapshot the smallest share
-#: any set reached was 0.820 of its ratio, so 0.75 sits 9 % below the worst
+#: any set reached was 0.825 of its ratio, so 0.75 sits 9 % below the worst
 #: measured case, and it rejects the calibration set at 0.58 of its intended
 #: size that the derived bound alone accepted. See
 #: `reports/analysis/split_gate.py`.
@@ -108,8 +108,8 @@ MIN_SHARE_OF_RATIO = 0.75
 #: is a statement about many small independent groups. Checking it separately
 #: is what turns the old failure mode inside out: concentration now *fires* the
 #: gate instead of widening it. On the real snapshot the largest dealer holds
-#: 3.41 % of the pool, so 5 % leaves room for the snapshot to grow without a
-#: false alarm while a mis-set `group_key` - grouping by `make` puts 34.6 % in
+#: 3.28 % of the pool, so 5 % leaves room for the snapshot to grow without a
+#: false alarm while a mis-set `group_key` - grouping by `make` puts 34.7 % in
 #: one group, by `country_code` more - is far above it.
 MAX_GROUP_SHARE = 0.05
 
@@ -117,7 +117,7 @@ MAX_GROUP_SHARE = 0.05
 #:
 #: Without a cap the bound is unbounded: grouping by `country_code` derived a
 #: 101 pp allowance, which no realised share can miss. 0.15 is above the widest
-#: bound any pool the project runs on needs (the 1,865-row fixture pool asks
+#: bound any pool the project runs on needs (the 1,940-row fixture pool asks
 #: 13.2 pp at `DISPERSION_SIGMAS`), so it never binds on a pool this project
 #: splits, and it stops the pathological cases from being vacuous.
 MAX_DISPERSION_BOUND = 0.15
@@ -128,19 +128,19 @@ MAX_DISPERSION_BOUND = 0.15
 #: Sellers are assigned independently, so a set's share is a sum over sellers
 #: and its standard deviation follows from the group sizes: see
 #: `dispersion_bounds`. The multiple is not a normal-theory quantile, and it
-#: must not be read as one - 81 % of the variance of the train share comes from
+#: must not be read as one - 80 % of the variance of any set's share comes from
 #: the single largest dealer, so the share's distribution is dominated by one
 #: Bernoulli and "four sigma" would have no calibrated meaning here.
 #:
 #: It is chosen from a measured false-alarm budget instead: at most 1 seed in
 #: 1,000 may turn the stage red on a pool that satisfies `MAX_GROUP_SHARE`.
-#: Over 2,000 seeds the worst case is 4.25 sigma on the real snapshot, 4.19 on
-#: the 20,000-row fixture pool and 3.69 on the 1,865-row one, and the real
+#: Over 2,000 seeds the worst case is 4.19 sigma on the real snapshot, 4.22 on
+#: the 20,000-row fixture pool and 3.92 on the 1,940-row one, and the real
 #: snapshot's 99.9th percentile is 4.16. 5.0 clears every one of those 6,000
-#: trials, so the measured false-alarm rate is 0, with 0.75 sigma of margin
-#: above the worst observed. The previous 4.0 did not: seeds 1 to 400 already
-#: reach 3.92 and the sweep to 2,000 reaches 4.25, so the next `dvc exp` seed
-#: sweep would have turned the stage red on a sound split.
+#: trials, so the measured false-alarm rate is 0, with 0.78 sigma of margin
+#: above the worst observed. The previous 4.0 did not: the sweep to 2,000
+#: reaches 4.22, so the next `dvc exp` seed sweep would have turned the stage
+#: red on a sound split.
 #:
 #: This rule is not what catches an undersized set - `MIN_SHARE_OF_RATIO` is.
 #: It catches *scatter*: shares that move more than independent assignment can
