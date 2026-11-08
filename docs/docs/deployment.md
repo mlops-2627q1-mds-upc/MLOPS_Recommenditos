@@ -361,7 +361,9 @@ Without either, save to a file instead: `docker save -o api.tar $IMAGE:$TAG`, `s
 ### A release that needs a new variable in `.env`
 
 `.env` stays on the VM and never travels with a release, so a release whose `compose.yaml` requires a variable that `.env` lacks cannot start there.
-`deploy.sh` checks the new `compose.yaml` with `.env` before it changes anything (`docker compose config`), so such a deploy fails with "the compose.yaml of ... is missing or not valid", and the release that runs keeps running.
+`deploy.sh` checks the new `compose.yaml` with `.env` before it changes anything (`docker compose config`), so such a deploy fails with "Compose does not accept the compose.yaml of ...", and the release that runs keeps running.
+Below that line it shows Compose's own error, which names the variable, as in `required variable GRAFANA_ADMIN_PASSWORD is missing a value`, or the line of `.env` that Compose cannot read.
+The Deploy workflow's log is public, and such an error can quote a line of `.env`, so `deploy.sh` replaces every value of `.env` of 8 characters or more in it by the variable's name in angle brackets, also where Compose quotes the value with escapes, as in `unterminated quoted value <RECOMMENDITOS_API_KEY>`, and leaves out Compose's warnings, since one names a `$NAME` found inside a value; `tests/test_deploy_script.py` checks this against the real Compose.
 `compose.yaml` requires a variable with `${NAME:?...}` when a stack without it would be broken without anyone noticing, as for `GRAFANA_ADMIN_PASSWORD` and `DISCORD_WEBHOOK_URL` ([Monitoring](monitoring.md#grafana)); an empty value counts as missing.
 Before such a pull request is merged, add the variable to `/opt/recommenditos/.env`, readable by the deploy user alone, with the value from the team's own `.env`:
 

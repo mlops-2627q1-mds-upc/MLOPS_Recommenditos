@@ -103,6 +103,58 @@ env_value() {
     sed -n "s/^$1=//p" "$ENV_FILE" | tail -n 1
 }
 
+# Compose's error output $1, each line indented, with every value in .env of 8
+# characters or more replaced by its name in angle brackets. This output is the
+# job log of the Deploy workflow, which anyone can read in this public
+# repository, and an error about .env can quote a line of it, such as
+# `line 3: unterminated quoted value "...`; a missing variable is named by
+# Compose itself. A value is hidden as written; without the blanks, quotes and
+# comment around it; with the escapes of a quoted value resolved; and each of
+# these as Go quotes it (`\` as `\\`, `"` as `\"`), as Compose prints an
+# invalid template. A shorter value is no secret worth hiding: the secrets are
+# generated and far longer (.env.template). Compose's warnings are left out:
+# the only one a value causes names a `$NAME` it found inside the value, which
+# is part of the value, and a warning never is what rejects a configuration.
+masked_compose_error() {
+    local text line name value form number=0 i
+    local -a names=() values=() forms
+    text=$(grep -vE 'level=warning|^WARN\[' <<<"$1" || true)
+    if [[ -r $ENV_FILE ]]; then
+        while IFS= read -r line || [[ -n $line ]]; do
+            number=$((number + 1))
+            if [[ $line == *=* ]]; then
+                name=${line%%=*}
+                value=${line#*=}
+            else
+                name="line $number of .env"
+                value=$line
+            fi
+            name=$(sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/[[:space:]]+$//' <<<"$name")
+            forms=("$value"
+                "$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<<"$value")"
+                "$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+#.*$//; s/[[:space:]]+$//' <<<"$value")")
+            value=$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^["'\'']//; s/["'\'']$//' <<<"$value")
+            forms+=("$value" "$(printf '%b' "${value//\\\"/\"}")")
+            for form in "${forms[@]}"; do
+                if ((${#form} < 8)); then
+                    continue
+                fi
+                names+=("$name" "$name")
+                values+=("$form")
+                form=${form//\\/\\\\}
+                form=${form//\"/\\\"}
+                form=${form//$'\t'/\\t}
+                values+=("${form//$'\n'/\\n}")
+            done
+        done <"$ENV_FILE"
+    fi
+    # The longest value first, so that a value inside another leaves none of it.
+    while read -r _ i; do
+        text=${text//"${values[i]}"/<${names[i]}>}
+    done < <(for i in "${!values[@]}"; do out "${#values[i]} $i"; done | sort -k 1,1nr)
+    out "$text" | sed 's/^/  /'
+}
+
 set_tag() {
     if grep -q '^API_IMAGE_TAG=' "$ENV_FILE"; then
         # GNU sed -i keeps the file's mode, so .env stays readable by its owner alone.
@@ -239,7 +291,7 @@ pull_image() {
 # any other reason or does not hold a stack Compose accepts.
 fetched=
 fetch_stack() {
-    local tag=$1 repository image log staging container
+    local tag=$1 repository image log staging container errors
     fetched=
     repository=$(stack_repository)
     if [[ -z $repository ]]; then
@@ -284,19 +336,26 @@ fetch_stack() {
     # Regular files and directories only: a link could point a bind mount at
     # any path on the VM, and the content hash covers regular files alone.
     if [[ -n $(find "$staging" -mindepth 1 ! -type f ! -type d -print -quit) ]]; then
-        say "$image holds something other than files and directories, such as a link; nothing changed"
+        say "$image holds something other than files and directories, such as a link"
         rm -rf "$staging"
         return 1
     fi
     if [[ -e $staging/.env ]]; then
-        say "$image holds a .env, which never travels with a release; nothing changed"
+        say "$image holds a .env, which never travels with a release"
         rm -rf "$staging"
         return 1
     fi
-    if [[ ! -f $staging/compose.yaml ]] ||
-        ! API_IMAGE_TAG=$tag docker compose --project-directory "$staging" -f "$staging/compose.yaml" \
-            --env-file "$ENV_FILE" config --quiet >/dev/null 2>&1; then
-        say "the compose.yaml of $image is missing or not valid"
+    if [[ ! -f $staging/compose.yaml ]]; then
+        say "$image holds no compose.yaml"
+        rm -rf "$staging"
+        return 1
+    fi
+    # Compose's own error names a missing variable, or the line of .env it
+    # cannot read; its standard output, the configuration, goes nowhere.
+    if ! errors=$(API_IMAGE_TAG=$tag docker compose --project-directory "$staging" -f "$staging/compose.yaml" \
+        --env-file "$ENV_FILE" config --quiet 2>&1 >/dev/null); then
+        say "Compose does not accept the compose.yaml of $image with $ENV_FILE:"
+        masked_compose_error "$errors"
         rm -rf "$staging"
         return 1
     fi

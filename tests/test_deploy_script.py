@@ -171,13 +171,15 @@ def test_the_registry_flag_needs_one_token_on_standard_input(tmp_path: Path, std
 #: succeeds, any other fails with $FAKE_PULL_ANSWER; the stack image's files are
 #: those of $FAKE_STACK_FILES; `compose up` succeeds. The stack's images are the
 #: API image, nginx and one image per repository in $FAKE_RELEASE_REPOSITORIES,
-#: all with the tag but nginx.
+#: all with the tag but nginx. `compose config --quiet` succeeds, or, with
+#: $REAL_DOCKER set, is the real Compose's check.
 FAKE_DOCKER = """#!/usr/bin/env bash
 log=$FAKE_DOCKER_LOG
 { printf 'argv:'; printf ' %s' "$@"; printf '\\n'; env | sed 's/^/env: /'; } >>"$log"
 case "$1" in
     compose)
         case "$*" in
+            *"config --quiet"*) if [ -n "${REAL_DOCKER:-}" ]; then exec "$REAL_DOCKER" "$@"; fi ;;
             *"config --images api"*) echo "ghcr.io/example/api:$API_IMAGE_TAG" ;;
             *"--profile * config --images"*)
                 echo "ghcr.io/example/api:$API_IMAGE_TAG"
@@ -545,3 +547,117 @@ def test_a_deploy_removes_the_old_tags_of_every_release_image(tmp_path: Path):
     assert f"argv: image rm {MONITORING_IMAGE}:{older}" in calls
     assert f"argv: image rm {MONITORING_IMAGE}:{OLD}" not in calls
     assert f"argv: image rm {MONITORING_IMAGE}:{SHA}" not in calls
+
+
+def compose_available() -> bool:
+    """Whether the real `docker compose` runs here; `config` needs no daemon.
+
+    Asked only where the module runs at all: on a Windows runner the call hangs.
+    """
+    docker = shutil.which("docker")
+    if sys.platform == "win32" or docker is None:
+        return False
+    try:
+        version = subprocess.run(
+            [docker, "compose", "version"], capture_output=True, timeout=30, check=False
+        )
+    except subprocess.TimeoutExpired:
+        return False
+    return version.returncode == 0
+
+
+#: Stand in for secret values in `.env`, such as the API key; the second is
+#: one word, as Compose prints the name of a `$NAME` it finds inside a value.
+HIDDEN = "stand-in-for-a-value-of-dot-env"
+HIDDEN_WORD = "standInForAValueOfDotEnv"
+#: A release's compose.yaml that requires a variable, as ours requires the
+#: Grafana password, with the API key in the environment and the host port in a
+#: field Compose checks.
+REQUIRING_COMPOSE = """services:
+  api:
+    image: busybox:1
+    ports: ["${HTTP_PORT:-8080}:8080"]
+    environment:
+      RECOMMENDITOS_API_KEY: ${RECOMMENDITOS_API_KEY:-}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set it in .env}
+"""
+REJECTED_ENV = {
+    "a missing variable": (
+        f"RECOMMENDITOS_API_KEY={HIDDEN}\n",
+        "required variable GRAFANA_ADMIN_PASSWORD is missing a value: set it in .env",
+    ),
+    "an unterminated quote": (
+        f'RECOMMENDITOS_API_KEY="{HIDDEN}\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n',
+        "unterminated quoted value <RECOMMENDITOS_API_KEY>",
+    ),
+    "an invalid template": (
+        f"RECOMMENDITOS_API_KEY={HIDDEN}${{x\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n",
+        'Invalid template: "<RECOMMENDITOS_API_KEY>"',
+    ),
+    "a value in a checked field": (
+        f"HTTP_PORT={HIDDEN}\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n",
+        "invalid hostPort: <HTTP_PORT>",
+    ),
+    # Compose prints an invalid template Go-quoted, with `\\` and `\"` escaped.
+    "an invalid template with a backslash and a quote": (
+        f'RECOMMENDITOS_API_KEY={HIDDEN}\\"{HIDDEN}${{x\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n',
+        'Invalid template: "<RECOMMENDITOS_API_KEY>"',
+    ),
+    # Compose warns that the `$NAME` inside the value is not set.
+    "a dollar inside a value": (
+        f"GRAFANA_ADMIN_PASSWORD=Xy${HIDDEN_WORD}\nHTTP_PORT=notaport\n",
+        "invalid hostPort: <HTTP_PORT>",
+    ),
+    # A tab in a line of `.env`, after `export`.
+    "an unterminated quote after export and a tab": (
+        f'export\tRECOMMENDITOS_API_KEY="{HIDDEN}\nGRAFANA_ADMIN_PASSWORD=x{HIDDEN}\n',
+        "unterminated quoted value <RECOMMENDITOS_API_KEY>",
+    ),
+}
+
+
+def windows_of(secret: str, output: str) -> list[str]:
+    """The pieces of 8 characters of `secret` that `output` holds."""
+    return [secret[i : i + 8] for i in range(len(secret) - 7) if secret[i : i + 8] in output]
+
+
+@pytest.mark.req("NFR-13", "NFR-15")
+@pytest.mark.skipif(not compose_available(), reason="needs the real docker compose")
+@pytest.mark.parametrize(("lines", "named"), REJECTED_ENV.values(), ids=REJECTED_ENV.keys())
+def test_a_rejected_configuration_is_named_without_printing_a_value_of_env(
+    tmp_path: Path, lines: str, named: str
+):
+    """The deploy log is public: Compose's error is shown, the values of .env are not."""
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text(f"{API_IMAGE}:{SHA}\n{STACK_IMAGE}:{SHA}\n", encoding="utf-8")
+    (vm.files / "compose.yaml").write_text(REQUIRING_COMPOSE, encoding="utf-8")
+    vm.env_file.write_text(
+        f"API_IMAGE={API_IMAGE}\nAPI_IMAGE_TAG={OLD}\n{lines}", encoding="utf-8"
+    )
+    vm.environment["REAL_DOCKER"] = str(shutil.which("docker"))
+    env_before = vm.env_file.read_text(encoding="utf-8")
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Compose does not accept the compose.yaml" in result.stdout
+    for secret in (HIDDEN, HIDDEN_WORD):
+        assert windows_of(secret, result.stdout + result.stderr) == [], result.stdout
+    assert named in result.stdout, result.stdout
+    assert vm.env_file.read_text(encoding="utf-8") == env_before
+    assert vm.stack_link() == "stacks/0123456789abcdef"
+    assert " up " not in vm.log.read_text(encoding="utf-8")
+
+
+@pytest.mark.req("NFR-13")
+def test_a_stack_image_without_a_compose_yaml_is_refused(tmp_path: Path):
+    vm = FakeVM(tmp_path)
+    vm.local_images.write_text(f"{API_IMAGE}:{SHA}\n{STACK_IMAGE}:{SHA}\n", encoding="utf-8")
+    (vm.files / "compose.yaml").unlink()
+
+    result = vm.run("deploy", SHA)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "holds no compose.yaml" in result.stdout
+    assert "nothing changed" in result.stdout
+    assert vm.stack_link() == "stacks/0123456789abcdef"
