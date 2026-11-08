@@ -1606,6 +1606,7 @@ How to add an entry:
   Orchestrator briefing (core, paraphrased): "Give Lukas the options of #306 (keep the overall baseline, a per-country baseline from segments.csv, a baseline weighted by the window's market mix) with their false-alarm and miss rates, measured with the resampling method of model_alert_thresholds.py, and what the rehearsal windows would have shown; implement nothing yet."
   Lukas answered: "D for the error alert, coverage stays: ModelErrorHigh compares with the per-country test values, weighted by the window's country mix, plus a margin for their noise: false alarms near 0.5 % everywhere (at most 1.1 %), at the cost of missing ES +20 % in 47 % of windows. ModelCoverageLow stays at the 90 % promise; no new evaluate output. Window 18 of the rehearsal still fires the coverage alert." (translated from German)
 - **Other evidence:** [Issue #306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), [PR #332](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/332), [`market_baseline_results.txt`](analysis/market_baseline_results.txt), [Why these model thresholds](../docs/docs/monitoring.md#why-these-model-thresholds), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-101.
+- **In LaTeX:** yes
 
 ### EDN-104: The containers log to the VM's journal, so their logs survive a deploy
 
