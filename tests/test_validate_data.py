@@ -34,6 +34,7 @@ from recommenditos.data import gx_context_configuration as configure_gx
 from recommenditos.data import validate_data
 from recommenditos.data.gx_context_configuration import (
     CONTRACT,
+    FRAMES,
     INTERIM,
     KIND,
     RAW,
@@ -238,6 +239,26 @@ def test_every_data_docs_page_loads_its_logo_and_favicon_from_the_site(stage, bu
             assert image.is_relative_to(docs.resolve()) and image.is_file(), f"{page}: {reference}"
 
 
+def test_every_validation_page_names_its_asset_and_no_breadcrumb_repeats_it(stage, built):
+    # Great Expectations 1.24.1 reads the asset's name only from `meta.batch_spec`,
+    # so a dataframe asset's page said "Data asset: None" (#347). The name is copied
+    # in there; it then reaches the breadcrumb too, where it repeats the suite's,
+    # because asset and suite share a name, and the navbar template drops it.
+    pages = sorted((built["docs"] / "validations").rglob("*.html"))
+    assert {page.relative_to(built["docs"]).parts[1] for page in pages} == set(FRAMES)
+
+    for page in pages:
+        name = page.relative_to(built["docs"]).parts[1]
+        html = page.read_text(encoding="utf-8")
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+        assert f"Data asset: {name} " in text, f"{page.name} does not name its asset"
+        assert "Data asset: None" not in text
+        (breadcrumb,) = re.findall(r'aria-current="page">\s*([^<]+?)\s*</li>', html)
+        segments = [segment.strip() for segment in breadcrumb.split(" / ")]
+        assert segments[:2] == ["Validations", name], breadcrumb
+        assert len(segments) == len(set(segments)), f"repeated segment in {breadcrumb!r}"
+
+
 def test_the_stage_fails_when_a_data_docs_page_cannot_be_rendered(frames, tmp_path, monkeypatch):
     # Great Expectations renders every page inside a `try` that only logs the
     # exception, so a template it can no longer patch used to leave an empty
@@ -246,7 +267,9 @@ def test_the_stage_fails_when_a_data_docs_page_cannot_be_rendered(frames, tmp_pa
     # upgrade that moves it.
     context_dir = tmp_path / "gx"
     configure_gx.main(context_dir, tmp_path / "results", tmp_path / "data-docs", PARAMS_FILE)
-    monkeypatch.setitem(configure_gx._TEMPLATE_FIXES, "top_navbar.j2", ("not in the template", ""))
+    monkeypatch.setitem(
+        configure_gx._TEMPLATE_FIXES, "top_navbar.j2", (("not in the template", ""),)
+    )
 
     with pytest.raises(DataValidationError, match="are incomplete"):
         validate_main(
