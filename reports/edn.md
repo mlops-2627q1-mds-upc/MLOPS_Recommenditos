@@ -656,7 +656,7 @@ How to add an entry:
 
 ### EDN-32: The split is 60/10/10/20 by seller, with the snapshot date as seed
 
-> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept; spread re-measured 2026-11-08 on the current pool (#315).
+> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept; spread re-measured 2026-11-08 (#315).
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
