@@ -47,9 +47,9 @@ SEED_SWEEP = range(1, 26)
 #: project's `MIN_SHARE_OF_RATIO`.
 #:
 #: The floor is a statement about a pool of the real snapshot's granularity.
-#: The fixture pool has 614 seller groups against the snapshot's 28,435, so its
+#: The fixture pool has 628 seller groups against the snapshot's 29,564, so its
 #: shares scatter far more: over 2,000 seeds the smallest share any set reaches
-#: is 0.478 of its ratio here against 0.820 on the snapshot
+#: is 0.505 of its ratio here against 0.825 on the snapshot
 #: (`reports/analysis/split_gate_results.txt`). Sweeping the project's 0.75 here
 #: would therefore measure the fixture's size, not the stage's correctness. The
 #: project value is exercised on the one real run of the stage, in `processed`.
@@ -452,8 +452,8 @@ def test_the_fixture_pool_is_big_enough_for_the_project_floor(
 ):
     # Every test above that runs the stage does so against the real params.yaml,
     # so the project's floor is genuinely exercised - but the margin here is
-    # thin, because 614 seller groups scatter far more than the snapshot's
-    # 28,435. This test exists so that shrinking the fixture fails with a
+    # thin, because 628 seller groups scatter far more than the snapshot's
+    # 29,564. This test exists so that shrinking the fixture fails with a
     # sentence that says what to do, instead of a gate error raised inside a
     # module-scoped fixture that every other test then reports as an error too.
     ratios = params["split"]["ratios"]
