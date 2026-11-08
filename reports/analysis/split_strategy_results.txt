@@ -112,28 +112,28 @@ committed hyperparameters {'learning_rate': 0.05, 'num_leaves': 63, 'n_estimator
 alternative, validation only: num_leaves 255, everything else as committed
 
      seed  test n  test MdAPE  within 20  o20 n  o20 MdAPE  SC-04  worst SC-04 level                        trees  val MdAPE  alt-com   alt-com L1  prep s  fit s  largest dealer in
- 20251108  20,258    6.8004%     89.74%     817     17.64%   miss  age_bucket=over 20 17.64% (n 817)   1,010   7.0078%   -0.022%   +0.00038     2    14  train   <- the committed seed, as a check of the method
+ 20251108  20,258    6.8004%     89.74%     817     17.64%   miss  age_bucket=over 20 17.64% (n 817)   1,010   7.0078%   -0.022%   +0.00038     2    13  train   <- the committed seed, as a check of the method
 metrics.json records MdAPE 6.8004% and within 20 % 89.74% for lgbm-basic; this script reproduces them to 0.0e+00 and 0.0e+00
-        1  19,761    6.9495%     89.46%     795     19.87%   miss  age_bucket=over 20 19.87% (n 795)   1,065   7.0754%   -0.086%   -0.00047     2    16  train
-        2  20,220    6.9213%     90.02%     769     17.34%   miss  age_bucket=over 20 17.34% (n 769)   1,067   6.7223%   -0.023%   +0.00006     2    14  calibration
-        3  18,946    7.0231%     89.29%     773     18.46%   miss  age_bucket=over 20 18.46% (n 773)   1,121   5.9832%   +0.077%   +0.00046     1    15  validation
+        1  19,761    6.9495%     89.46%     795     19.87%   miss  age_bucket=over 20 19.87% (n 795)   1,065   7.0754%   -0.086%   -0.00047     1    14  train
+        2  20,220    6.9213%     90.02%     769     17.34%   miss  age_bucket=over 20 17.34% (n 769)   1,067   6.7223%   -0.023%   +0.00006     1    13  calibration
+        3  18,946    7.0231%     89.29%     773     18.46%   miss  age_bucket=over 20 18.46% (n 773)   1,121   5.9832%   +0.077%   +0.00046     2    14  validation
         4  23,363    6.2168%     91.58%     798     17.48%   miss  age_bucket=over 20 17.48% (n 798)   1,278   7.0539%   +0.026%   +0.00013     2    15  test
         5  22,479    6.3477%     91.21%     779     19.13%   miss  age_bucket=over 20 19.13% (n 779)   1,211   6.7729%   -0.091%   -0.00030     2    15  test
         6  19,769    6.9303%     89.64%     767     18.87%   miss  age_bucket=over 20 18.87% (n 767)   1,106   6.1115%   -0.192%   -0.00025     2    14  validation
-        7  20,347    6.7555%     90.08%     845     17.42%   miss  age_bucket=over 20 17.42% (n 845)   1,020   6.8918%   -0.194%   -0.00087     2    14  train
-        8  19,589    6.9408%     89.38%     825     18.19%   miss  age_bucket=over 20 18.19% (n 825)   1,112   6.7473%   -0.088%   +0.00088     2    15  train
-        9  19,841    6.9254%     89.50%     791     17.82%   miss  age_bucket=over 20 17.82% (n 791)     855   6.1621%   +0.009%   +0.00029     2    12  validation
-       10  21,894    6.4507%     90.79%     857     17.69%   miss  age_bucket=over 20 17.69% (n 857)   1,760   6.9236%   +0.051%   +0.00010     1    20  test
-       11  19,537    6.9193%     89.80%     780     19.01%   miss  age_bucket=over 20 19.01% (n 780)   1,296   6.9567%   -0.059%   -0.00072     2    17  train
-       12  23,083    6.3370%     90.92%     842     18.18%   miss  age_bucket=over 20 18.18% (n 842)   1,616   6.8554%   -0.084%   -0.00018     2    19  test
-       13  19,794    6.7662%     89.89%     820     17.88%   miss  age_bucket=over 20 17.88% (n 820)   1,397   5.9889%   +0.093%   +0.00066     2    17  validation
-       14  18,741    6.8855%     89.37%     826     17.91%   miss  age_bucket=over 20 17.91% (n 826)     955   7.0506%   -0.136%   -0.00064     2    14  train
-       15  20,828    6.9108%     90.23%     838     17.74%   miss  age_bucket=over 20 17.74% (n 838)   1,294   7.0670%   -0.054%   +0.00075     2    19  train
-       16  24,089    6.3048%     91.28%     770     18.53%   miss  age_bucket=over 20 18.53% (n 770)   1,132   6.9352%   +0.006%   -0.00011     2    15  test
-       17  19,066    6.9506%     89.59%     804     17.40%   miss  age_bucket=over 20 17.40% (n 804)   1,173   6.8219%   -0.037%   +0.00018     2    16  train
-       18  20,490    6.5924%     90.30%     801     16.93%   miss  age_bucket=over 20 16.93% (n 801)   1,795   7.0791%   -0.043%   +0.00038     2    21  train
-       19  18,912    6.8300%     89.64%     764     17.58%   miss  age_bucket=over 20 17.58% (n 764)     842   6.0664%   -0.064%   -0.00026     2    12  validation
-       20  19,464    6.8854%     89.67%     763     19.24%   miss  age_bucket=over 20 19.24% (n 763)     783   6.8582%   -0.050%   -0.00010     2    12  train
+        7  20,347    6.7555%     90.08%     845     17.42%   miss  age_bucket=over 20 17.42% (n 845)   1,020   6.8918%   -0.194%   -0.00087     1    13  train
+        8  19,589    6.9408%     89.38%     825     18.19%   miss  age_bucket=over 20 18.19% (n 825)   1,112   6.7473%   -0.088%   +0.00088     2    14  train
+        9  19,841    6.9254%     89.50%     791     17.82%   miss  age_bucket=over 20 17.82% (n 791)     855   6.1621%   +0.009%   +0.00029     1    12  validation
+       10  21,894    6.4507%     90.79%     857     17.69%   miss  age_bucket=over 20 17.69% (n 857)   1,760   6.9236%   +0.051%   +0.00010     1    19  test
+       11  19,537    6.9193%     89.80%     780     19.01%   miss  age_bucket=over 20 19.01% (n 780)   1,296   6.9567%   -0.059%   -0.00072     1    16  train
+       12  23,083    6.3370%     90.92%     842     18.18%   miss  age_bucket=over 20 18.18% (n 842)   1,616   6.8554%   -0.084%   -0.00018     2    18  test
+       13  19,794    6.7662%     89.89%     820     17.88%   miss  age_bucket=over 20 17.88% (n 820)   1,397   5.9889%   +0.093%   +0.00066     1    17  validation
+       14  18,741    6.8855%     89.37%     826     17.91%   miss  age_bucket=over 20 17.91% (n 826)     955   7.0506%   -0.136%   -0.00064     2    13  train
+       15  20,828    6.9108%     90.23%     838     17.74%   miss  age_bucket=over 20 17.74% (n 838)   1,294   7.0670%   -0.054%   +0.00075     1    16  train
+       16  24,089    6.3048%     91.28%     770     18.53%   miss  age_bucket=over 20 18.53% (n 770)   1,132   6.9352%   +0.006%   -0.00011     1    14  test
+       17  19,066    6.9506%     89.59%     804     17.40%   miss  age_bucket=over 20 17.40% (n 804)   1,173   6.8219%   -0.037%   +0.00018     2    15  train
+       18  20,490    6.5924%     90.30%     801     16.93%   miss  age_bucket=over 20 16.93% (n 801)   1,795   7.0791%   -0.043%   +0.00038     1    20  train
+       19  18,912    6.8300%     89.64%     764     17.58%   miss  age_bucket=over 20 17.58% (n 764)     842   6.0664%   -0.064%   -0.00026     2    11  validation
+       20  19,464    6.8854%     89.67%     763     19.24%   miss  age_bucket=over 20 19.24% (n 763)     783   6.8582%   -0.050%   -0.00010     1    11  train
 
 over the 20 other seeds                     committed     mean      sd      min      max
 test MdAPE                                 6.800%   6.742%  0.263%   6.217%   7.023%
@@ -149,7 +149,7 @@ SC-04 (bound 15%) passes on 0 of 20 seeds; the over-20 segment is at or under th
 SC-01 (MdAPE at most 9%) and SC-02 (at least 85% within 20 %) hold on 20 of 20 seeds
 
 the tuning grid of EDN-73 against this noise
-  the grid's validation MdAPE spans 6.88 % to 7.04 %, 0.16 pp; the validation MdAPE of the committed point has a standard deviation of 0.40 pp over the splits and a range of 1.10 pp
+  the grid's validation MdAPE spans 6.88 % to 7.04 %, 0.16 pp (EDN-73's sweep of 2026-10-05, on the earlier pool, not re-run here); the validation MdAPE of the committed point has a standard deviation of 0.40 pp over the splits and a range of 1.10 pp
   num_leaves 255 minus committed, same split, validation MdAPE: committed split -0.022 pp; over the seeds mean -0.047 pp, sd 0.077 pp, lower on 14 of 20
   the same in validation L1 (log price), which the tuning protocol decides by: committed split +0.00038; mean -0.00000, sd 0.00048, lower on 10 of 20
 
@@ -163,7 +163,7 @@ the tuning grid of EDN-73 against this noise
 ====================================================================================================
 6. The stratified-group alternative (StratifiedGroupKFold on make), assignment only
 ====================================================================================================
-3 seeds, 42 s; no seller is in two sets under any of them
+3 seeds, 40 s; no seller is in two sets under any of them
 the largest dealer lands in: train (seed 1), train (seed 2), train (seed 3)
 
                                     hash, committed  hash, 1,000 seeds   stratified, 3 seeds
@@ -190,4 +190,4 @@ metrics.json: criteria_not_measured = 'sc05', deployable_variant = 'lgbm-basic'
   lgbm-extended  sc05_status 'not_measured', sc05_coverage None
 SC-05 is measured for lgbm-basic; `evaluate` writes the coverage per make to reports/metrics/interval-coverage-by-make.csv: True.
 
-total run time 13.1 min
+total run time 12.4 min

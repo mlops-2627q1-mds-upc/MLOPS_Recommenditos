@@ -224,7 +224,7 @@ The split
 `split` assigns whole sellers to train, validation, calibration and test by a hash of `seed` and the seller key, at 60/10/10/20, after the `ES` holdout has left, and it stratifies on nothing ([EDN-32](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/edn.md)).
 That keeps two properties a stratified assignment gives up.
 A clean clone reproduces the split from the seed and the key alone (NFR-06), and adding sellers leaves every seller already there in its set, which is what makes FR-15's retrain with `ES` comparable to the model before it.
-Measured on the real snapshot, a stratified-group split on `make` moves 52.6 % of the existing rows when the `ES` listings join the pool, and the hash split moves none.
+Measured on the real snapshot, a stratified-group split on `make` would move 47.6 % of the existing rows if the 2,402 held-out `ES` rows joined the pool, and the hash split moves none.
 
 ### The `ES` holdout
 
@@ -255,7 +255,7 @@ Three rules follow from it:
   Changing it reshuffles the sellers, so it is a new split, and every figure and any FR-15 comparison starts over.
   No seed is chosen for a better mix or a better number.
 - **A figure of the committed split is reported with its spread.**
-  On the current pool the candidate's test MdAPE of 6.80 % comes with a standard deviation of 0.26 pp over the 20 other splits, and the 17.64 % of cars older than 20 years with their mean of 18.1 %.
+  On the current pool the candidate's test MdAPE of 6.80 % comes with a standard deviation of 0.26 pp over the 20 other splits, and the 17.64 % of cars older than 20 years with their mean of 18.13 %.
 - **The script is re-run when what it measured changes**: the snapshot, the scope, the split ratios, or the candidate and its hyperparameters, because the spread is that model's on that pool.
 
 Data validation

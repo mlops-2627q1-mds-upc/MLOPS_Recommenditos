@@ -189,7 +189,7 @@ Same scope as above (without `ES`), deduplicated, 80/20 split grouped by seller,
 - SC-03: the exploratory LightGBM is 44 % better than B0.
 - SC-04: all segments stay at or below 10.4 % except **cars older than 20 years, at 15.3 %**.
   The reference run named this as the known risk of the basic feature set, with the extended features or a scope change for classic cars as the possible remedies.
-  The pipeline has since measured the segment at 17.64 % for the promoted candidate over 817 test rows (18.1 % on average over 20 other splits, see the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)), and it has ruled the extended features out as the remedy: they made this segment 1.6 pp worse on the earlier split, and on the current one leave it at 17.09 %, still over the bound.
+  The pipeline has since measured the segment at 17.64 % for the promoted candidate over 817 test rows (18.13 % on average over 20 other splits, see the [model card](model-card.md#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)), and it has ruled the extended features out as the remedy: they made this segment 1.6 pp worse on the earlier split, and on the current one leave it at 17.09 %, still over the bound.
   The miss is accepted: SC-04 is recorded as missed, the 15 % threshold and the scope stay as they are, and the release gate reports it as waived by that entry rather than blocking on it ([EDN-62](#decision-records), NFR-01).
   The hyperparameter search kept the committed values ([EDN-73](#decision-records)), and the segment is over the bound on 20 of 20 other splits ([EDN-32](#decision-records)).
   The [model card](model-card.md#bias-risks-and-limitations) states the limitation in full.

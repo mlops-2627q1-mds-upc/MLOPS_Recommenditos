@@ -16,7 +16,9 @@ Seven blocks, numbered as the results file has them:
    stage's own fit of the candidate, once per seed, in a temporary directory with tracking off, and
    the test MdAPE, the over-20 segment and SC-04's verdict of each. Beside it, on the validation
    rows only, the grid point EDN-73 found with the lowest validation MdAPE against the committed
-   one, to ask whether that 0.08 pp survives another split.
+   one, to ask whether its edge survives another split: 0.08 pp in EDN-73's sweep of 2026-10-05 on
+   the earlier pool (6.88 % against 6.96 %, the two figures hard-coded below), measured here on the
+   current pool, where it is 0.02 pp on the committed split.
 5. Adversarial validation: one classifier that tries to tell train rows from test rows.
 6. The stratified-group alternative, assignment only: how much better the make balance gets, and
    how many sellers move when the `ES` listings still held out (EDN-102) join the pool.
@@ -67,7 +69,8 @@ FIT_SEEDS = tuple(range(1, 21))
 ASSIGNMENT_SEEDS = range(1, 1001)
 #: Three, because one assignment takes about 45 s and they hardly differ from each other.
 STRATIFIED_SEEDS = (1, 2, 3)
-#: EDN-73's grid point with the lowest validation MdAPE, 6.88 % against the committed 6.96 %.
+#: EDN-73's grid point with the lowest validation MdAPE, 6.88 % against the committed 6.96 %, both from
+#: its tuning sweep of 2026-10-05 on the earlier pool (reports/analysis/tuning_sweep_results.txt).
 ALTERNATIVE_NUM_LEAVES = 255
 #: Ten folds give the configured 60/10/10/20 as six, one, one and two of them.
 FOLD_SETS = ("train",) * 6 + ("validation", "calibration") + ("test",) * 2
@@ -380,7 +383,8 @@ validation_sd = np.std([result["val_mdape"] for result in results], ddof=1)
 difference = np.array([result["alt_val_mdape"] - result["val_mdape"] for result in results])
 difference_l1 = np.array([result["alt_val_l1"] - result["val_l1"] for result in results])
 print("\nthe tuning grid of EDN-73 against this noise")
-print(f"  the grid's validation MdAPE spans 6.88 % to 7.04 %, 0.16 pp; the validation MdAPE of the committed point "
+print(f"  the grid's validation MdAPE spans 6.88 % to 7.04 %, 0.16 pp (EDN-73's sweep of 2026-10-05, on the earlier "
+      f"pool, not re-run here); the validation MdAPE of the committed point "
       f"has a standard deviation of {validation_sd * 100:.2f} pp over the splits and a range of "
       f"{(max(r['val_mdape'] for r in results) - min(r['val_mdape'] for r in results)) * 100:.2f} pp")
 print(f"  num_leaves {ALTERNATIVE_NUM_LEAVES} minus committed, same split, validation MdAPE: committed split "
