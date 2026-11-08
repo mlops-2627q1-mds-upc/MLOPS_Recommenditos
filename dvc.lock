@@ -168,8 +168,8 @@ stages:
       size: 25774
     - path: recommenditos/data/validate_data.py
       hash: md5
-      md5: bc917e873f77111f10558a9f7e07ab19
-      size: 18905
+      md5: 713b86f8b57951ecb2005b9aa54243ae
+      size: 19087
     - path: recommenditos/pipeline.py
       hash: md5
       md5: a11ab511e3a0030fdc25b9b53c0879c0

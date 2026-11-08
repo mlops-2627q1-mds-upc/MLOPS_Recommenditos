@@ -248,7 +248,7 @@ def test_the_stage_fails_when_a_data_docs_page_cannot_be_rendered(frames, tmp_pa
     configure_gx.main(context_dir, tmp_path / "results", tmp_path / "data-docs", PARAMS_FILE)
     monkeypatch.setitem(configure_gx._TEMPLATE_FIXES, "top_navbar.j2", ("not in the template", ""))
 
-    with pytest.raises(DataValidationError, match="Data Docs are incomplete"):
+    with pytest.raises(DataValidationError, match="are incomplete"):
         validate_main(
             frames["raw_path"], frames["interim_path"], tmp_path / "summary.json", context_dir
         )

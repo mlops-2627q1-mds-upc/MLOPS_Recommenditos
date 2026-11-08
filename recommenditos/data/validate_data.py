@@ -53,8 +53,6 @@ from contextlib import contextmanager
 import datetime as dt
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
-from urllib.request import url2pathname
 
 import great_expectations as gx
 from great_expectations.core.run_identifier import RunIdentifier
@@ -261,9 +259,14 @@ def _store_with_the_run_time(context, run) -> None:
 
 
 def _docs_index(context) -> Path:
-    """Where `build_data_docs` writes the Data Docs' index page."""
-    (site,) = context.get_docs_sites_urls(only_if_exists=False)
-    return Path(url2pathname(urlparse(site["site_url"]).path))
+    """Where `build_data_docs` writes the Data Docs' index page.
+
+    Read from the site's store config, which names its directory relative to the
+    context, rather than from the URL Great Expectations reports for the site.
+    """
+    site = context.variables.data_docs_sites["local_site"]
+    directory = Path(context.root_directory) / site["store_backend"]["base_directory"]
+    return directory.resolve() / "index.html"
 
 
 def _check_the_data_docs(context) -> None:
@@ -291,8 +294,9 @@ def _check_the_data_docs(context) -> None:
             problems.append(f"{section}/ has {len(pages)} pages for {count} stored")
     if problems:
         raise DataValidationError(
-            f"the Data Docs are incomplete ({'; '.join(problems)}); Great Expectations logs "
-            "the exception that stopped a page instead of raising it, so read the log above"
+            f"the Data Docs in {docs} are incomplete ({'; '.join(problems)}); Great "
+            "Expectations logs the exception that stopped a page instead of raising it, so "
+            "read the log above"
         )
 
 
