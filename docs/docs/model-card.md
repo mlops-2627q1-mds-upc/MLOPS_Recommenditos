@@ -150,6 +150,7 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
 - **Classic and old cars: an accepted limitation.**
   The candidate misses SC-04 for cars older than 20 years: its MdAPE there is 17.64 % over 817 test rows against the 15 % bound.
   Over 20 other splits of the current pool it averages 18.1 % (standard deviation 0.77 pp, range 16.93 % to 19.87 %), and its committed 17.64 % is lower than 14 of them.
+  The committed figure therefore understates the typical miss by about 0.5 pp (17.64 % against the mean of 18.13 %).
   The team accepted the miss and reports the criterion as missed (EDN-62), because an upper age bound would pass SC-04 by removing the rows it fails on and a higher threshold would fit the criterion to its result: the 15 % bound, the scope and the age breakdown stay as they are, and NFR-01's gate reports SC-04 as missed and waived by EDN-62 (`gate_waived` in `metrics.json`) rather than blocking on it.
   The extended features do not close the gap (17.09 %), the hyperparameter search kept the committed values after 34 fits (EDN-73), and the segment is over the bound on 20 of 20 other splits of the current pool (EDN-32).
   What a user must know: an estimate for a car older than 20 years is less reliable than for a younger one, with half of these estimates off by more than 17.64 % of the listing price against 6.80 % over all cars, and 54.3 % of them within 20 % of it against 89.7 %.
@@ -592,10 +593,11 @@ The 20 splits share one pool of listings, so the spread describes how a figure m
   The committed split has that dealer in train, so its figure is of the less flattering kind.
 - **SC-04's miss on old cars is not an artefact of the draw.**
   The segment is over the 15 % bound on 20 of 20 splits, and it is the worst qualifying level on every one.
-  The committed 17.64 % comes with a mean of 18.1 % over the 20 other splits and is lower than 14 of them.
+  The committed 17.64 % comes with a mean of 18.13 % over the 20 other splits and is lower than 14 of them, so it understates the typical miss by about 0.5 pp.
 - **A tuning difference has to be read against this.**
   The validation MdAPE of the committed hyperparameters has a standard deviation of 0.40 pp over the splits, and a range of 1.10 pp, against the 0.16 pp the whole grid of EDN-73 spans on the committed one.
-  Compared on the same split the noise is much smaller: the grid's lowest-MdAPE point, 255 leaves, is lower than the committed 63 on 14 of 20 splits, by 0.05 pp on average (standard deviation 0.08 pp), and higher in validation L1, the metric the tuning protocol decides by, on 10 of 20.
+  Compared on the same split the noise is much smaller: the grid's lowest-MdAPE point, 255 leaves, is lower than the committed 63 on 14 of 20 splits, by 0.05 pp on average (standard deviation 0.08 pp), and higher in validation L1, the metric the tuning protocol decides by, on 10 of 20, with a mean difference of 0.00000 there.
+  That advantage is not distinguishable from the split noise: the 0.05 pp is smaller than the 0.08 pp standard deviation of the difference itself and about a fifth of the 0.26 pp standard deviation of the test MdAPE across splits.
 
 Two things this does not cover.
 A temporal split would be the stronger test for a price model and is impossible, because the snapshot carries no listing dates (see [Bias, Risks, and Limitations](#bias-risks-and-limitations)).
