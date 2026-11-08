@@ -37,23 +37,33 @@ Three properties the course demo's equivalent does not have:
 The summary is git-tracked, so it is written to be read in a diff: no run id, no
 timestamp, the contract expectations as a count and every rule with what it
 found. A data change then shows up in the pull request as the counts that moved.
-The full validation results and the Data Docs, which carry the run time, are
-DVC outputs beside it.
+The full validation results and the Data Docs are DVC outputs beside it.
+
+All three are byte-stable: a rerun on the same data and the same `gx/` writes
+the same bytes, so `dvc.lock` moves only when the data or the suites do (#289).
+Great Expectations dates every result, its path and the Data Docs page drawn
+from it with the moment of the run, so the stage names the run after the
+snapshot it validates instead (`run_id`), with `reference_date` as its time, and
+writes its times in UTC whatever the machine's time zone. `configure_gx` covers
+the rest: the results store's id and the Data Docs' element ids.
 """
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+import datetime as dt
 from pathlib import Path
 from typing import Any
 
 import great_expectations as gx
+from great_expectations.core.run_identifier import RunIdentifier
 from great_expectations.data_context.data_context.context_factory import project_manager
 from great_expectations.execution_engine import pandas_execution_engine
+from great_expectations.render.renderer import site_index_page_renderer
 from loguru import logger
 import pandas as pd
 import typer
 
-from recommenditos.config import INTERIM_DATA_DIR, RAW_DATA_DIR
+from recommenditos.config import INTERIM_DATA_DIR, PARAMS_FILE, RAW_DATA_DIR
 from recommenditos.data.gx_context_configuration import (
     CONTRACT,
     GX_DIR,
@@ -63,7 +73,7 @@ from recommenditos.data.gx_context_configuration import (
     RAW_AS_VALIDATED,
     VALIDATION_SUMMARY_FILE,
 )
-from recommenditos.pipeline import read_frame, write_json
+from recommenditos.pipeline import load_params, read_frame, write_json
 from recommenditos.schema import INTERIM_SCHEMA, RAW_SCHEMA, Schema, SchemaError
 
 #: How many decimals of `unexpected_percent` the summary keeps. Enough to tell
@@ -72,6 +82,9 @@ _PERCENT_DECIMALS = 4
 
 #: The result fields a rule reports, where Great Expectations computes them.
 _COUNTS = ("element_count", "missing_count", "unexpected_count", "unexpected_percent")
+
+#: How Great Expectations writes a batch's load time.
+_LOAD_TIME_FORMAT = "%Y%m%dT%H%M%S.%fZ"
 
 app = typer.Typer()
 
@@ -178,7 +191,76 @@ def _without_batch_fingerprint() -> Iterator[None]:
         pandas_execution_engine.HASH_THRESHOLD = previous
 
 
-def validate_frame(context, name: str, frame: pd.DataFrame) -> dict[str, Any]:
+def run_id(params: dict[str, Any]) -> RunIdentifier:
+    """The run every result of the stage is stored under: the snapshot it checks.
+
+    Great Expectations names a run by the moment it starts, by default, and
+    writes that moment into the result's path, its `run_id`, its
+    `validation_time` and the Data Docs page drawn from it, so every rerun on the
+    same data would write a different result. The snapshot's date is what a
+    result is about; when it was computed is in the commit that recorded it.
+    """
+    snapshot = dt.datetime.fromisoformat(params["reference_date"]).replace(tzinfo=dt.UTC)
+    return RunIdentifier(run_name=f"snapshot-{snapshot:%Y-%m-%d}", run_time=snapshot)
+
+
+class _UTCZone:
+    """`tzlocal` as the Data Docs index renderer sees it: always UTC."""
+
+    @staticmethod
+    def get_localzone() -> dt.tzinfo:
+        return dt.UTC
+
+
+@contextmanager
+def _great_expectations_in_utc() -> Iterator[None]:
+    """Make Great Expectations write UTC where it would write the local zone.
+
+    Two places, in Great Expectations 1.24.1, put the machine's time zone into
+    what the stage writes: `RunIdentifierSchema` converts a run's time to the
+    local zone (`set_run_time_tz(None)`) before it stores a result, and the
+    Data Docs index renderer prints each run's time in `tzlocal`'s zone. The
+    same run would then read `+01:00` on a laptop in Barcelona, `+02:00` there in
+    summer and `+00:00` on a CI runner. Both calls are patched for the length of
+    the block, on every platform, and put back afterwards, as
+    `_without_batch_fingerprint` does; the stage's test runs it in two zones,
+    so an upgrade that moves either call shows there.
+    """
+    set_run_time_tz = RunIdentifier.set_run_time_tz
+    local_zone = site_index_page_renderer.tzlocal
+
+    def set_run_time_tz_utc(self: RunIdentifier, tz: dt.timezone | None) -> None:
+        set_run_time_tz(self, tz or dt.UTC)
+
+    # `setattr`, because mypy refuses a direct assignment to a method or a
+    # module, which is the point of the patch.
+    setattr(RunIdentifier, "set_run_time_tz", set_run_time_tz_utc)  # noqa: B010
+    setattr(site_index_page_renderer, "tzlocal", _UTCZone)  # noqa: B010
+    try:
+        yield
+    finally:
+        setattr(RunIdentifier, "set_run_time_tz", set_run_time_tz)  # noqa: B010
+        setattr(site_index_page_renderer, "tzlocal", local_zone)  # noqa: B010
+
+
+def _store_with_the_run_time(context, run) -> None:
+    """Store each result again with the batch's load time set to the run's time.
+
+    The load time is the one moment left in a result once the run has a fixed
+    id: the pandas engine stamps a batch with the clock when it receives the
+    frame, and the stamp is shown on the frame's Data Docs page.
+    """
+    for key, validation in run.run_results.items():
+        markers = validation.meta.get("batch_markers") or {}
+        if "ge_load_time" not in markers:
+            continue
+        markers["ge_load_time"] = run.run_id.run_time.strftime(_LOAD_TIME_FORMAT)
+        context.validation_results_store.set(key, validation)
+
+
+def validate_frame(
+    context, name: str, frame: pd.DataFrame, run: RunIdentifier | None = None
+) -> dict[str, Any]:
     """Run `name`'s checkpoint on `frame` and summarise what it found.
 
     Public, so a test can hand a suite a frame the contract would have refused
@@ -195,6 +277,10 @@ def validate_frame(context, name: str, frame: pd.DataFrame) -> dict[str, Any]:
     process - a notebook, the test suite - the other one's stores would be read
     and the run would fail on a freshness check, or validate against the wrong
     suite.
+
+    `run` is the run to store the result under; without one, Great Expectations
+    names it by the moment it starts, which is enough for a check that reads
+    only the summary.
     """
     expected = len(context.suites.get(name).expectations)
     if not expected:
@@ -203,11 +289,13 @@ def validate_frame(context, name: str, frame: pd.DataFrame) -> dict[str, Any]:
             f"rebuild it with `dvc repro configure_gx`"
         )
     project_manager.set_project(context)
-    with _without_batch_fingerprint():
-        run = context.checkpoints.get(name).run(
-            batch_parameters={"dataframe": _as_validated(name, frame)}
+    with _without_batch_fingerprint(), _great_expectations_in_utc():
+        checkpoint_run = context.checkpoints.get(name).run(
+            batch_parameters={"dataframe": _as_validated(name, frame)}, run_id=run
         )
-    (validation,) = run.run_results.values()
+        if run is not None:
+            _store_with_the_run_time(context, checkpoint_run)
+    (validation,) = checkpoint_run.run_results.values()
     if len(validation.results) != expected:
         raise DataValidationError(
             f"the {name!r} suite has {expected} expectations but {len(validation.results)} "
@@ -249,8 +337,10 @@ def main(
     interim_path: Path = INTERIM_DATA_DIR / "listings.parquet",
     summary_path: Path = VALIDATION_SUMMARY_FILE,
     context_dir: Path = GX_DIR,
+    params_path: Path = PARAMS_FILE,
 ) -> dict[str, Any]:
     context = load_context(context_dir)
+    run = run_id(load_params(params_path))
     frames: tuple[tuple[str, Path, Schema], ...] = (
         (RAW, raw_path, RAW_SCHEMA),
         (INTERIM, interim_path, INTERIM_SCHEMA),
@@ -263,7 +353,7 @@ def main(
         except SchemaError as error:
             summary[name] = {"passed": False, "rows": None, "error": f"{path}: {error}"}
             continue
-        summary[name] = validate_frame(context, name, frame)
+        summary[name] = validate_frame(context, name, frame, run)
         for rule in summary[name]["rules"]:
             if rule["success"] and rule.get("unexpected_count"):
                 logger.warning(f"{name}: {_describe(rule)}, within its tolerance")
@@ -271,7 +361,8 @@ def main(
     # Both before the raise, so a failed run leaves a readable record of which
     # rule broke, and Data Docs that show a sample of the failing values, rather
     # than only a traceback in the DVC log.
-    context.build_data_docs()
+    with _great_expectations_in_utc():
+        context.build_data_docs()
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(summary, summary_path)
 

@@ -14,8 +14,13 @@ break is caught - and, for a tolerant rule, that the tolerance is where
 """
 
 import hashlib
+import importlib
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pandas as pd
@@ -23,7 +28,7 @@ import pytest
 from tests import conftest
 from tests.conftest import PII_COLUMNS
 
-from recommenditos.config import PARAMS_FILE
+from recommenditos.config import PARAMS_FILE, PROJ_ROOT
 from recommenditos.data import gx_context_configuration as configure_gx
 from recommenditos.data import validate_data
 from recommenditos.data.gx_context_configuration import (
@@ -145,6 +150,78 @@ def test_the_summary_carries_no_run_id_or_timestamp(stage, built, frames, tmp_pa
     validate_main(frames["raw_path"], frames["interim_path"], again, built["context"])
 
     assert again.read_bytes() == stage["path"].read_bytes()
+
+
+def _file_digests(directory: Path) -> dict[str, str]:
+    return {
+        path.relative_to(directory).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
+    }
+
+
+@pytest.mark.req("NFR-06")
+def test_a_rerun_on_the_same_data_writes_the_same_bytes(frames, tmp_path):
+    # The results and the Data Docs are cached DVC outputs. A single-stage
+    # `dvc repro` in a fresh worktree reruns this stage when they are missing,
+    # and if the rerun wrote other bytes it would rewrite their hashes in
+    # `dvc.lock` with no data change behind them (#289). So the stage runs
+    # twice as DVC runs it: its outputs deleted first, each time in a process of
+    # its own, at two moments and, off Windows, in two time zones, because
+    # Great Expectations writes times in the zone it finds at its first look and
+    # keeps it for the life of the process. Every file must match.
+    # The fixture's two frames fail nothing, so the Data Docs cover passing
+    # results; a failing one renders the same templates.
+    paths = {
+        "context": tmp_path / "gx",
+        "results": tmp_path / "data-validation" / "results",
+        "docs": tmp_path / "data-validation" / "data-docs",
+        "summary": tmp_path / "data-validation" / "summary.json",
+    }
+    configure_gx.main(paths["context"], paths["results"], paths["docs"], PARAMS_FILE)
+    outputs = paths["summary"].parent
+
+    runs = []
+    for zone in ("Europe/Madrid", "America/Los_Angeles"):
+        for directory in (paths["results"], paths["docs"]):
+            shutil.rmtree(directory, ignore_errors=True)
+        paths["summary"].unlink(missing_ok=True)
+        # Windows reads its zone from the system, not from `TZ`.
+        env = dict(os.environ) if sys.platform == "win32" else {**os.environ, "TZ": zone}
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "recommenditos.data.validate_data",
+                "--raw-path",
+                str(frames["raw_path"]),
+                "--interim-path",
+                str(frames["interim_path"]),
+                "--summary-path",
+                str(paths["summary"]),
+                "--context-dir",
+                str(paths["context"]),
+            ],
+            env=env,
+            cwd=PROJ_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr[-3000:]
+        runs.append(_file_digests(outputs))
+
+    first, second = runs
+    assert len(first) > 20 and any(name.startswith("results/") for name in first)
+    assert first == second
+
+
+def test_the_data_docs_views_import_from_where_the_site_config_says():
+    # DVC runs `configure_gx` as `__main__`, so the module the config names is
+    # spelled out; a rename that missed it would fail only on the real stage.
+    module = importlib.import_module(configure_gx.VIEWS_MODULE)
+    assert module.StablePageView is configure_gx.StablePageView
+    assert module.StableIndexPageView is configure_gx.StableIndexPageView
 
 
 def test_validation_renders_the_data_docs_outside_the_context(stage, built):
