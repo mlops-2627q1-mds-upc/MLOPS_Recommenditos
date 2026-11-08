@@ -2,7 +2,8 @@
 # Prepares a fresh Ubuntu or Debian VM for the serving stack (docs/docs/deployment.md):
 #
 #   1. Docker Engine and the compose plugin, from Docker's own apt repository;
-#   2. the deploy user `recommenditos`, whose home /opt/recommenditos holds the stack;
+#   2. the deploy user `recommenditos`, whose home /opt/recommenditos holds the stack,
+#      and who reads the containers' logs in the journal, which is kept on disk;
 #   3. SSH access to that user for whoever runs this script with sudo;
 #   4. deploy.sh and the stack's `.env`, readable by the deploy user alone.
 #
@@ -80,6 +81,17 @@ fi
 # root on this VM, which is why only the deploy user and the admins are in it.
 usermod -aG docker "$DEPLOY_USER"
 chmod 750 "$STACK_DIR"
+# The containers log to the journal (deploy/compose.yaml), which the
+# systemd-journal group may read; the group may write nothing.
+usermod -aG systemd-journal "$DEPLOY_USER"
+# journald keeps the journal on disk, across reboots, only where
+# /var/log/journal exists (Storage=auto); its own limit, 10 % of the file system
+# and 4 GB at most, bounds it (docs/docs/monitoring.md#logs).
+if [[ ! -d /var/log/journal ]]; then
+    install -d -m 2755 -g systemd-journal /var/log/journal
+    systemd-tmpfiles --create --prefix /var/log/journal
+    journalctl --flush
+fi
 
 echo "== 3. SSH access as $DEPLOY_USER"
 admin_home=$(getent passwd "${SUDO_USER:-root}" | cut -d: -f6)

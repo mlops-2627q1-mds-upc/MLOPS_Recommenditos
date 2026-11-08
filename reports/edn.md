@@ -1608,6 +1608,31 @@ How to add an entry:
 - **Other evidence:** [Issue #306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), [PR #332](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/332), [`market_baseline_results.txt`](analysis/market_baseline_results.txt), [Why these model thresholds](../docs/docs/monitoring.md#why-these-model-thresholds), [FR-15 rehearsal](monitoring/fr15-rehearsal.md), EDN-101.
 - **In LaTeX:** yes
 
+### EDN-104: The containers log to the VM's journal, so their logs survive a deploy
+
+- **Date:** 2026-11-07
+- **Milestone:** M6: Monitoring
+- **Activity / Topic:** Deployment, Monitoring
+- **Participants:** Lukas Häußler (decided), AI agents (options, measurements, implementation)
+- **Decision:** Every container logs through Docker's `journald` driver (the `x-logging` anchor of `deploy/compose.yaml`); journald's own limit bounds the size, `journalctl CONTAINER_NAME=...` reads the logs of replaced containers, and `docker logs` still reads the running one.
+- **Alternatives considered:**
+  - `json-file` (before) or `local`: the log of a recreated container is gone (measured).
+  - A log volume per service: survives, but needs changes to nginx, the API, and the monitor, a rotation sidecar, and `docker logs` no longer shows them.
+  - `deploy.sh` saving `docker logs` before `up`: covers deploys only, and the script is installed by hand.
+  - Loki and Alloy: two more services and memory, and Alloy needs the Docker socket, against NFR-09.
+- **Rationale:** One line in a file that travels with each release keeps the logs of every recreate, as a throwaway stack showed.
+  The default cap, 2 GB of the VM's 20 GB, fits NFR-04.
+- **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured which options keep the log across a recreate and recommended journald, which Lukas took unchanged; the team checked that a recreated container's log survives, in a throwaway project and in CI's rollback drill, and that `json-file` fails it.
+  Its burst test kept 19,998 of 30,000 lines, probably journald's rate limit, unverified, and far above NFR-03's 20 requests/s.
+- **AI interaction evidence:** Claude Code session of 2026-11-07.
+  Question (translated from German, paraphrased): "#313: how should the containers' logs (nginx, the API, the drift job) survive a deploy? Today every recreate loses them (json-file driver, measured)."
+  Orchestrator briefing (core, paraphrased): "Do #312, and lay out #313's options (journald driver, local driver, a log volume per service, Loki): for each, measure whether logs survive a recreate, where the size cap is set, how an operator reads them, and what changes on the VM; end with DECISION NEEDED."
+  Lukas answered: "journald driver: one line in the x-logging anchor of compose.yaml; logs survive every recreate (measured), readable with journalctl CONTAINER_NAME=..., docker logs keeps working for the running container. journald caps the size (default 10 % of the disk, at most 4 GB); on the VM the deploy user joins systemd-journal. In the burst test only 19,998 of 30,000 lines arrived (probably the rate limit, unverified); far below at 20 req/s." (translated from German)
+- **Other evidence:** [Issue #313](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/313), [Logs](../docs/docs/monitoring.md#logs), EDN-94.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

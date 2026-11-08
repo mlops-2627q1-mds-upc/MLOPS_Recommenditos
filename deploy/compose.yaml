@@ -19,16 +19,22 @@
 
 name: recommenditos
 
-# Docker keeps a container's log in json-file without a limit by default. Each
-# service keeps at most 5 files of 10 MB, 400 MB for the eight services, of the
-# VM's 20 GB (NFR-04): the API's healthcheck alone, probing every 5 s, writes about 7 MB a
-# day, so the API's 50 MB hold about a week of it, and each service's 50 MB
-# hold about 120,000 requests of history.
+# Every container logs to the host's journal (EDN-104, #313), so its log
+# outlives the container: a deploy recreates proxy, api and monitor, and a
+# json-file or `local` log goes with the container it belongs to. journald
+# bounds the journal itself, by default at 10 % of the file system and 4 GB at
+# most, 2 GB of the VM's 20 GB (NFR-04), and drops the oldest entries first.
+# `docker logs` still reads the running container; `journalctl
+# CONTAINER_NAME=recommenditos-api-1` reads every container of that name, the
+# ones before the last deploy too (docs/docs/monitoring.md#logs). The tag puts
+# the container's name, not its ID, in front of each line of `journalctl`.
+# A host without journald, such as Docker Desktop's VM, sets LOG_DRIVER=local
+# (`make stack` does), which keeps at most 5 compressed files of 20 MB per
+# container and loses them with the container.
 x-logging: &logging
-  driver: json-file
+  driver: ${LOG_DRIVER:-journald}
   options:
-    max-size: "10m"
-    max-file: "5"
+    tag: "{{.Name}}"
 
 # The hardening every service shares (NFR-09, #200). The root file system is
 # read-only, so a service writes only to the tmpfs mounts and the volumes listed

@@ -134,7 +134,9 @@ api:
 # and a webhook that goes nowhere whatever the shell says: a laptop's alerts are
 # not the team's. LOCAL_DISCORD_WEBHOOK_URL=<url> sends them somewhere on purpose.
 LOCAL_DISCORD_WEBHOOK_URL ?= http://127.0.0.1:9/discarded
-COMPOSE = GRAFANA_ADMIN_PASSWORD="$${GRAFANA_ADMIN_PASSWORD:-$$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}" \
+# The local stack logs with Docker's `local` driver: Docker Desktop's VM has no
+# journald, and a laptop's journal is no place for the stack's logs (deploy/compose.yaml).
+COMPOSE = LOG_DRIVER="$${LOG_DRIVER:-local}" GRAFANA_ADMIN_PASSWORD="$${GRAFANA_ADMIN_PASSWORD:-$$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}" \
 	DISCORD_WEBHOOK_URL="$(LOCAL_DISCORD_WEBHOOK_URL)" docker compose -f deploy/compose.yaml
 # The tag a deployment ships: the commit the image is built from.
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
@@ -186,7 +188,7 @@ INTEGRATION_MARKERS ?= integration
 ## Run the integration suite against a running stack: make test-integration [STACK_URL=...]
 .PHONY: test-integration
 test-integration:
-	RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
+	LOG_DRIVER="$${LOG_DRIVER:-local}" RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
 		--no-cov --junitxml=reports/junit-integration.xml
 
 # The load test of docs/docs/load-testing.md (issue #143): Locust against a base
