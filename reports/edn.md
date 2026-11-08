@@ -1633,6 +1633,32 @@ How to add an entry:
 - **Other evidence:** [Issue #313](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/313), [Logs](../docs/docs/monitoring.md#logs), EDN-94.
 - **In LaTeX:** yes
 
+### EDN-105: CD rebuilds its cached apt layers whenever Debian publishes
+
+- **Date:** 2026-11-07
+- **Milestone:** M5: Model Packaging
+- **Activity / Topic:** CI/CD, Containerization, Security
+- **Participants:** Lukas Häußler (decided), AI agents (measurements, options, implementation)
+- **Decision:** CD reads the `Date` of Debian's `trixie` and `trixie-security` Release files and passes it as the build argument `DEBIAN_ARCHIVE_STATE`, declared above the apt line of both Dockerfiles.
+  The first run after Debian publishes rebuilds the apt layer and the layers after it, and other runs keep the cache; when the read fails, the key is today's date.
+- **Alternatives considered:**
+  - `no-cache-filters` on the runtime stage: rebuilds on every run, about 160 s more per CD run.
+  - A weekly cache key: CI can stay green while CD's scan fails for up to 7 days.
+  - CD without a cache, like CI: uncached builds rewrite the bytecode files, so the VM would pull about 540 MB per release instead of 0.6 MB.
+  - The versions apt would install as the key: more precise, but its package list can drift from the Dockerfiles.
+- **Rationale:** A security fix reaches the next release once Debian publishes it, which happens before trivy reports it as fixable.
+  It costs one rebuild of about 60 s for the API image and 100 s for the monitoring image after each publication, about daily, instead of on every run, and the cache keeps the VM's pulls small.
+- **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
+- **Response to AI:** Accepted
+- **Assessment of the AI contribution:** AI measured the build steps of 19 CD and 25 CI runs, compared the layer digests in GHCR, showed that two uncached builds differ in 4,874 of 12,191 environment files, recommended the archive key, and built it.
+  Lukas took the recommendation unchanged; a local build confirmed that a new key rebuilds only the apt layer and the layers after it.
+- **AI interaction evidence:** Claude Code session of 2026-11-07.
+  Question (translated from German, paraphrased): "#314: when should CD rebuild the cached apt steps, so that a Debian security fix does not stay stuck in the cache?"
+  Orchestrator briefing (core, paraphrased): "Lay out #314's options (a periodic cache key, BuildKit no-cache-filter, the same cache policy for CI and CD, a key from the Debian archive's state), measure CD's build time with and without a warm cache from real runs, how soon a Debian fix reaches the image and how it interacts with Dependabot's digest bumps; do not implement; end with DECISION NEEDED."
+  Lukas answered: "Key from the Debian archive: CD reads with curl (under 1 s) the date of the trixie-security Release file and passes it as a build argument above the apt line: it rebuilds whenever Debian publishes (about daily) and keeps the cache otherwise. The fix is in the next release and the VM's pulls stay small; if the fetch fails it falls back to today's date." (translated from German)
+- **Other evidence:** [Issue #314](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/314), [The apt layer in CD](../docs/docs/deployment.md#continuous-delivery), [CD run 42399145722](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42399145722), EDN-91.
+- **In LaTeX:** yes
+
 ## Retired and merged IDs
 
 These IDs had entries until the notebook was trimmed on 2026-10-12 and 2026-10-13.

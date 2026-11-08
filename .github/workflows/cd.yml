@@ -186,11 +186,26 @@ jobs:
           RECOMMENDITOS_REQUIRE_MONITORING_SAMPLES: "1"
         run: make test-monitoring
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Read the state of Debian's archive
+        # The key of both images' apt layers (#314): the dates of the trixie and
+        # trixie-security Release files, which change whenever Debian publishes.
+        # Passed as DEBIAN_ARCHIVE_STATE, it rebuilds the cached apt layer on the
+        # first run after Debian published, so a security fix that CI's uncached
+        # build already has cannot fail this job's scan; on other runs the cache
+        # holds. Falls back to today's date when Debian cannot be read.
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          key=$(python3 tools/debian_archive_state.py)
+          echo "The apt layers are keyed on: $key"
+          echo "DEBIAN_ARCHIVE_STATE=$key" >> "$GITHUB_ENV"
       - name: Build the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          build-args: MODEL_VARIANT=${{ env.MODEL_VARIANT }}
+          build-args: |
+            MODEL_VARIANT=${{ env.MODEL_VARIANT }}
+            DEBIAN_ARCHIVE_STATE=${{ env.DEBIAN_ARCHIVE_STATE }}
           # Into the runner's Docker, to be tested before anything is pushed.
           load: true
           push: false
@@ -235,6 +250,7 @@ jobs:
         with:
           context: .
           file: monitoring/Dockerfile
+          build-args: DEBIAN_ARCHIVE_STATE=${{ env.DEBIAN_ARCHIVE_STATE }}
           load: true
           push: false
           tags: |

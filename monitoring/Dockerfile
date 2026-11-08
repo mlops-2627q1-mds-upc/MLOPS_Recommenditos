@@ -37,6 +37,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
 FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+# The state of Debian's archive, which CD passes so that its cached apt layer is
+# rebuilt whenever Debian publishes, as in the API's Dockerfile, which says how.
+ARG DEBIAN_ARCHIVE_STATE
 # zlib1g from trixie-security, as in the API's Dockerfile, which says why
 # (CVE-2026-76844 and CVE-2026-85091) and when the line can go (#334). Not
 # pinned to a version, for the reason the API's Dockerfile gives for libgomp1.

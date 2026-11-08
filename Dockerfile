@@ -76,6 +76,14 @@ FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12
 # copied whole and unchanged, and FR-12's check compares it with dvc.lock.
 ARG MODEL_VARIANT=lgbm-basic
 
+# The state of Debian's archive, which CD passes (the Date of the trixie and
+# trixie-security Release files): every RUN below a changed build argument
+# misses the cache, so CD's cached apt layer is rebuilt whenever Debian
+# publishes, and a security fix reaches the next release (#314,
+# docs/docs/deployment.md#vulnerabilities-and-dependency-updates). Unused by the
+# commands themselves; a build without it, such as CI's, has no cache to miss.
+ARG DEBIAN_ARCHIVE_STATE
+
 # LightGBM's native library links against GNU OpenMP, which the slim image lacks.
 # zlib1g comes from trixie-security: the pinned base image, the newest
 # python:3.12-slim-trixie (built 2026-11-05), ships 1:1.3.dfsg+really1.3.1-1+b1,
