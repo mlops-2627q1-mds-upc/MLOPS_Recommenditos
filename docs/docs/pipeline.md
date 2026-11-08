@@ -595,7 +595,8 @@ Before a single-stage `dvc repro <stage>` in a fresh clone or worktree, run `dvc
 Most of those reruns write the same bytes and leave `dvc.lock` as it was, `validate-data` included since [#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289).
 `configure_gx` does not: it rebuilds `gx/` with fresh ids, which rewrites its own hash and, through `gx/`, `validate-data`'s.
 Neither do `train`, `evaluate` and `compare-energy`, which record the run and not only its result (see [Running it](#running-it)).
-A lock line that moved in a pull request with no data change behind it is such a rerun: pull the stage's outputs, put the line back, and repro again.
+A lock line that moved in a pull request with no data change behind it is such a rerun: pull the stage's outputs and put the line back.
+Repro-ing the stage does not restore the old line while the installed pyarrow differs from the one that built the committed lock (see Known gaps); `uv run --with pyarrow==25.0.1 dvc repro <stage>` does, and reproduced the committed hashes.
 
 When several such pull requests are in flight, they may merge without the re-run if one pull request re-runs the pipeline and commits `dvc.lock` after the last of them has merged; each of them says that the lock is stale until then.
 None of them merges while a tracked re-run is in flight, or that run's lock is stale when it lands; if one does, the run is repeated on the merged `main`.
@@ -611,6 +612,7 @@ Known gaps
 - The fixture's make distribution is the real one, but scaled down: at 2,000 rows only three makes clear the 300-listing support threshold, and at 20,000 rows seven do. A test about supported makes should set the threshold it wants rather than relying on the project's.
 - Neither source's output is byte-stable across a toolchain bump, so `dvc.lock` is only reproducible within one.
   The project's own source, `zenodo`, is pinned hard on the input and not all the way on the output: `download.md5` pins the *input* CSV, while every Parquet file a stage writes embeds the pyarrow version (`created_by`), so a pyarrow bump changes the output hashes and invalidates the lock for everyone even though the data is identical.
+  The committed `dvc.lock` was built with pyarrow 25.0.1 and the project's lock has had 26.0.1 since [#329](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/329), so the next `dvc repro` rewrites the processed outputs with equal tables and needs a tracked retrain to settle the lock.
   A pandas bump alone no longer changes the bytes: `write_parquet` in `recommenditos/pipeline.py`, which every stage and `b0`'s `lookup.parquet` go through, drops the `pandas` metadata that `DataFrame.to_parquet` stores, because it records the pandas version that wrote the file, so the pandas version no longer reaches the file.
   A pandas release that changes the Arrow types it hands over (as pandas 3's `str` dtype did) still changes the bytes.
   Nothing needs that metadata to read a file back: the Arrow schema restores `str`, `float64`, `bool`, `datetime64[ns]` and `category` with its levels, and `read_frame` restores the one kind it cannot tell apart, pandas' nullable dtypes such as the extended matrix's `boolean` equipment flags, back to what the contract declares, and only when the file stores the column as that dtype's Arrow type, so a wrongly stored column is still reported by the contract (`tests/test_parquet.py`).

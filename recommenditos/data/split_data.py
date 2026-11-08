@@ -139,8 +139,8 @@ MAX_DISPERSION_BOUND = 0.15
 #: snapshot's 99.9th percentile is 4.16. 5.0 clears every one of those 6,000
 #: trials, so the measured false-alarm rate is 0, with 0.78 sigma of margin
 #: above the worst observed. The previous 4.0 did not: the sweep to 2,000
-#: reaches 4.22, so the next `dvc exp` seed
-#: sweep would have turned the stage red on a sound split.
+#: reaches 4.22, so the next `dvc exp` seed sweep would have turned the stage
+#: red on a sound split.
 #:
 #: This rule is not what catches an undersized set - `MIN_SHARE_OF_RATIO` is.
 #: It catches *scatter*: shares that move more than independent assignment can
