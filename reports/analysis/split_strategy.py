@@ -19,14 +19,14 @@ Seven blocks, numbered as the results file has them:
    one, to ask whether that 0.08 pp survives another split.
 5. Adversarial validation: one classifier that tries to tell train rows from test rows.
 6. The stratified-group alternative, assignment only: how much better the make balance gets, and
-   how many sellers move when the `ES` listings join the pool, which is FR-15's retrain.
-7. Whether SC-05's interval coverage can be checked per make today.
+   how many sellers move when the `ES` listings still held out (EDN-102) join the pool.
+7. Whether SC-05's interval coverage can be checked per make today, and where it is written.
 
 The split seed and the model seed are separate here on purpose: only the split seed varies, and
 every fit uses the committed `seed` and hyperparameters, so the spread is the split's and not the
 fit's. Nothing under `data/`, `models/`, `metrics.json` or `dvc.lock` is written.
 
-Run from the repository root after `dvc pull`, with tracking off (about 15 minutes on a laptop):
+Run from the repository root after `dvc pull`, with tracking off (about an hour on a throttled laptop):
 
     MLFLOW_TRACKING_URI= uv run python reports/analysis/split_strategy.py \
         > reports/analysis/split_strategy_results.txt
@@ -55,7 +55,7 @@ from recommenditos.config import (
 )
 from recommenditos.data import build_features, split_data
 from recommenditos.data.build_features import age_years, read_supported_makes
-from recommenditos.data.split_data import SPLIT_NAMES, assign_split
+from recommenditos.data.split_data import SPLIT_NAMES, assign_split, held_out
 from recommenditos.modeling import evaluate
 from recommenditos.modeling.model import Model, RequestContract, fit_variant
 from recommenditos.modeling.train import read_matrices
@@ -89,7 +89,15 @@ criteria = params["evaluate"]["success_criteria"]
 supported = read_supported_makes(PROCESSED_DATA_DIR)
 
 interim = pd.read_parquet(INTERIM_DATA_DIR / "listings.parquet")
-is_holdout = interim["country_code"] == params["split"]["holdout_country"]
+# The pool is what `split` leaves after its holdout: since EDN-102 only the held-out share of the
+# `ES` sellers, chosen by the stage's own function, so the rest of them are in the pool.
+is_holdout = held_out(
+    interim["country_code"],
+    interim[params["split"]["group_key"]],
+    params["split"]["holdout_country"],
+    params["split"]["holdout_seller_share"],
+    params["seed"],
+).to_numpy()
 pool = interim[~is_holdout].reset_index(drop=True)
 holdout = interim[is_holdout].reset_index(drop=True)
 pool_make = pool["make"].where(pool["make"].isin(supported), "(unsupported)")
@@ -132,7 +140,7 @@ def worst_make_gap(make_share: np.ndarray) -> float:
 
 print("# reports/analysis/split_strategy.py on the real snapshot")
 print(f"pool {len(pool):,} rows in {len(sellers):,} seller groups after the "
-      f"{params['split']['holdout_country']} holdout of {len(holdout):,}; committed seed {committed_seed}; "
+      f"{params['split']['holdout_country']} holdout of {len(holdout):,} rows ({params['split']['holdout_seller_share']:.0%} of its sellers); committed seed {committed_seed}; "
       f"ratios {ratios}")
 print("No seed is chosen from this file. The seeds below measure the noise of the split; "
       "the committed seed stays as it is.")
@@ -448,8 +456,9 @@ for label, pick in ((f"{MAKE} share, calibration", lambda d: d["make_share"][2, 
           f"{fmt.format(np.mean([pick(draw) for draw in draws])) + ' mean':>19s}"
           f"{fmt.format(np.mean([pick(draw) for draw in described])) + ' mean':>22s}")
 
-print(f"\nFR-15's retrain adds the {len(holdout):,} `{params['split']['holdout_country']}` rows to the pool. "
-      "Sellers already in the pool that change set when it does:")
+print(f"\nThe {len(holdout):,} `{params['split']['holdout_country']}` rows of the held-out sellers are the "
+      "one part of the interim frame still outside the pool. If they joined it, these sellers of the pool "
+      "would change set:")
 grown_groups = np.concatenate([pool[group_key].to_numpy(), holdout[group_key].to_numpy()])
 grown_sellers, grown_seller_of_row = np.unique(grown_groups, return_inverse=True)
 grown_make = pd.concat([pool["make"], holdout["make"]], ignore_index=True)
@@ -477,10 +486,17 @@ print(f"Model has `{evaluate.INTERVAL_METHOD}`: {hasattr(Model, evaluate.INTERVA
 summary = json.loads(METRICS_FILE.read_text(encoding="utf-8"))
 print(f"metrics.json: criteria_not_measured = {summary['criteria_not_measured']!r}, "
       f"deployable_variant = {summary['deployable_variant']!r}")
+measured_variants = []
 for name in params["train"]["variants"]:
     record = json.loads((REPORTS_DIR / "metrics" / f"{name}.json").read_text(encoding="utf-8"))
     print(f"  {name:14s} sc05_status {record['sc05_status']!r}, sc05_coverage {record['sc05_coverage']!r}")
-print("No interval exists, so no coverage can be computed, per make or pooled. The calibration set is written "
-      "by `split` and read by no model yet.")
+    if record["sc05_status"] == "measured":
+        measured_variants.append(name)
+by_make = REPORTS_DIR / "metrics" / "interval-coverage-by-make.csv"
+if measured_variants:
+    print(f"SC-05 is measured for {', '.join(measured_variants)}; `evaluate` writes the coverage per make to "
+          f"{by_make.relative_to(REPORTS_DIR.parent)}: {by_make.is_file()}.")
+else:
+    print("No interval exists, so no coverage can be computed, per make or pooled.")
 
 print(f"\ntotal run time {(time.perf_counter() - started_at) / 60:.1f} min")
