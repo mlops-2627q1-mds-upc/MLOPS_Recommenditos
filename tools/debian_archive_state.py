@@ -17,7 +17,9 @@ cache. When a Release file cannot be read, the line is today's date instead
 never a release; a warning in the job says so. CD's step falls back the same
 way when this script fails or runs longer than 60 s.
 
-Standard library only, so CD runs it with the runner's Python.
+Standard library only, so CD runs it with the runner's Python. It needs Python
+3.11 or newer (`datetime.UTC`): on a laptop whose system `python3` is older, run
+it with `uv run python tools/debian_archive_state.py`.
 """
 
 from collections.abc import Callable
