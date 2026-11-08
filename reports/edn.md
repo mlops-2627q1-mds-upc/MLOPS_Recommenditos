@@ -656,22 +656,22 @@ How to add an entry:
 
 ### EDN-32: The split is 60/10/10/20 by seller, with the snapshot date as seed
 
-> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept; spread re-measured 2026-10-13 (EDN-82).
+> **Absorbs EDN-79** (2026-10-12): the split was reviewed after training and kept; spread re-measured 2026-11-08 (#315).
 
 - **Date:** 2026-09-29
 - **Milestone:** M2: Reproducibility
 - **Activity / Topic:** Evaluation Protocol
 - **Participants:** @lukas2510
-- **Decision:** The listings outside `ES` are split 60 % train, 10 % validation, 10 % calibration, and 20 % test, with the seed `20251108`, both pinned in `params.yaml`.
+- **Decision:** The pool, all but the held-out `ES` sellers, is split 60 % train, 10 % validation, 10 % calibration, and 20 % test, with the seed `20251108`, both pinned in `params.yaml`.
   Whole sellers are assigned by a hash of the seed and `seller_group_id`, without stratification.
   The model card states the spread over 20 other splits and, as a limitation, that the snapshot has no listing dates for a temporal split.
 - **Alternatives considered:**
   - 70/10/10/10: halves the test set, so Volvo and Suzuki would fall under the 500 test rows SC-04 needs.
   - A stratified-group split on `make`: better make balance, but about half of the existing rows change set when the `ES` listings join, which confounds FR-15's retrain comparison.
 - **Rationale:** SC-04 checks a segment only from 500 test rows, so the test share decides how many makes the quality gate covers.
-  The seed is the snapshot date, so it is obviously not tuned.
-  Over 20 other splits the candidate's test MdAPE is 6.72 % on average, with a standard deviation of 0.26 pp, and SC-01 and SC-02 hold on all 20.
-  Cars older than 20 years miss SC-04 on all 20 as well, at 18.2 % on average, so that miss is no artefact of the draw.
+  The seed is the snapshot date, so not tuned.
+  Over 20 other splits the candidate's test MdAPE is 6.74 % on average, with a standard deviation of 0.26 pp, and SC-01 and SC-02 hold on all 20.
+  Cars older than 20 years miss SC-04 on all 20 as well, at 18.13 % on average, so that miss is no draw artefact.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
 - **Assessment of the AI contribution:** AI found a coupling the ticket did not mention: the published per-make analysis assumed a 20 % test share while the split was still unpinned.
