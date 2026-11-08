@@ -115,8 +115,10 @@ The API's other optional fields, such as the equipment lists and colours, are le
   A 503, such as the one nginx answers while the API restarts, or no answer at all says that the price service is not answering; a 500 says the estimate failed and names the request to quote, when the problem carries one (`instance`).
 - When only the range or the listings fail, the estimate is shown and the failed part says why.
 
-One case the page cannot handle: while the API is down, for example for the few seconds of a deploy or a restart, nginx answers every path with its own 503, so a browser that loads `/` in that moment sees nginx's JSON problem instead of the page.
-An HTML fallback would need an `error_page` for `/` in `deploy/nginx.conf`, which reaches the VM only through the bootstrap; it is a possible follow-up, not part of this change.
+While the API is down, for example for the few seconds of a deploy or a restart, nginx cannot forward `/`, so the page itself is not served.
+A browser, which asks for `text/html`, gets a small page of nginx's own instead: the header's wordmark, "The price service is restarting", a "Try again" button, and a refresh that retries by itself every 5 seconds, so the page comes back without a click (HTTP 503 with `Retry-After: 5`).
+It is part of `deploy/nginx.conf`, so it needs nothing from the API, with no request of its own and the system's fonts in place of BDO Grotesk, which the API serves; it follows the system's theme, or the one chosen with the toggle.
+Every other request, the page's own calls and the API's clients, still gets nginx's JSON 503 problem.
 
 ## Accessibility
 
