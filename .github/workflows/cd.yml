@@ -192,11 +192,15 @@ jobs:
         # Passed as DEBIAN_ARCHIVE_STATE, it rebuilds the cached apt layer on the
         # first run after Debian published, so a security fix that CI's uncached
         # build already has cannot fail this job's scan; on other runs the cache
-        # holds. Falls back to today's date when Debian cannot be read.
+        # holds. Falls back to today's date when Debian cannot be read, and so
+        # does the step when the script fails or hangs: Debian never stops CD.
         timeout-minutes: 2
         shell: bash
         run: |
-          key=$(python3 tools/debian_archive_state.py)
+          if ! key=$(timeout 60 python3 tools/debian_archive_state.py); then
+            key="today@$(date -u +%F)"
+            echo "::warning::tools/debian_archive_state.py failed; the apt layers are keyed on today's date instead."
+          fi
           echo "The apt layers are keyed on: $key"
           echo "DEBIAN_ARCHIVE_STATE=$key" >> "$GITHUB_ENV"
       - name: Build the image

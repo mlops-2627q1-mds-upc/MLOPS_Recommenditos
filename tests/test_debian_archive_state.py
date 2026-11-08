@@ -6,9 +6,11 @@ reaches a build argument above the apt line of each image CD builds.
 """
 
 from datetime import UTC, datetime
+import http.client
 from pathlib import Path
 import posixpath
 import re
+import time
 
 import pytest
 from tools import debian_archive_state
@@ -53,11 +55,43 @@ def test_the_date_is_read_in_utc():
     )
 
 
+@pytest.fixture
+def local_zone_ahead_of_utc(monkeypatch):
+    """A local time zone other than UTC, which CI's runners otherwise have."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset exists on POSIX only")
+    monkeypatch.setenv("TZ", "Asia/Tokyo")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+@pytest.mark.req("NFR-09")
+@pytest.mark.usefixtures("local_zone_ahead_of_utc")
+def test_a_date_without_a_zone_is_read_as_utc():
+    # RFC 5322's "-0000": a naive datetime, which must not take the local zone.
+    date = release_date(IN_RELEASE.replace("UTC", "-0000"))
+
+    assert date == datetime(2026, 11, 8, 0, 34, 44, tzinfo=UTC)
+    assert date.tzinfo is UTC
+
+
+def raising(error: Exception):
+    def read(url: str) -> str:
+        raise error
+
+    return read
+
+
 @pytest.mark.req("NFR-09")
 @pytest.mark.parametrize(
     "read",
     [
-        pytest.param(lambda url: (_ for _ in ()).throw(TimeoutError("timed out")), id="timeout"),
+        pytest.param(raising(TimeoutError("timed out")), id="timeout"),
+        pytest.param(raising(http.client.IncompleteRead(b"Origin")), id="incomplete-read"),
+        pytest.param(raising(http.client.BadStatusLine("")), id="bad-status-line"),
+        pytest.param(raising(http.client.LineTooLong("header line")), id="line-too-long"),
         pytest.param(lambda url: "Origin: Debian\n", id="no-date-field"),
     ],
 )
@@ -94,6 +128,20 @@ def test_the_runtime_stage_declares_the_key_above_its_apt_line(dockerfile):
     assert f"ARG {ARG}" in stage[:apt]
 
 
+@pytest.mark.req("NFR-09")
+@pytest.mark.parametrize("dockerfile", APT_DOCKERFILES)
+def test_every_copy_below_the_apt_line_is_linked(dockerfile):
+    # Without --link, a COPY's layer is a diff against the layers below it, so
+    # a rebuilt apt layer gives the environment's layer a new digest and the VM
+    # pulls it again after every Debian publication.
+    stage = final_stage(dockerfile)
+    apt = next(i for i, line in enumerate(stage) if line.startswith("RUN ") and "apt-get" in line)
+    copies = [line for line in stage[apt:] if line.startswith("COPY ")]
+
+    assert copies
+    assert [line for line in copies if "--link" not in line.split()] == []
+
+
 def dockerfile_of(build: dict[str, str]) -> str:
     """The Dockerfile of a build-push-action step, relative to the repository."""
     # posixpath, not os.path: the workflow's paths use "/" on every runner.
@@ -112,12 +160,16 @@ def test_cd_passes_the_key_to_every_image_with_an_apt_line():
         for i, step in enumerate(steps)
         if step.get("uses", "").startswith("docker/build-push-action@")
     }
+    written = re.findall(
+        r'^\s*echo "(\w+)=\$key" >> "\$GITHUB_ENV"$', steps[sets_key]["run"], flags=re.MULTILINE
+    )
     with_apt = {
         i: build
         for i, build in builds.items()
         if any("apt-get" in line for line in final_stage(dockerfile_of(build)))
     }
 
+    assert written == [ARG]
     assert sorted(dockerfile_of(build) for build in with_apt.values()) == sorted(APT_DOCKERFILES)
     for i, build in with_apt.items():
         assert i > sets_key

@@ -115,12 +115,17 @@ RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
 # promotion changes; and last the project's files, laid over the dependencies,
 # so a code change rebuilds only that layer, which holds the healthcheck's
 # script too, and the VM pulls only that one.
-COPY --from=dependencies /app/.venv /app/.venv
-COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
+# `--link` builds each of these layers on an empty snapshot instead of on the
+# layers below, so that its digest depends on its files alone: when CD rebuilds
+# the apt layer for a new DEBIAN_ARCHIVE_STATE, these layers keep their digests
+# and the VM pulls only the apt layer and the two small ones after it, not the
+# environment again (#314).
+COPY --link --from=dependencies /app/.venv /app/.venv
+COPY --link models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # FR-09's index, beside the bundle, where the API looks for it; `/health`
 # reports its md5, which is what dvc.lock records for it.
-COPY data/processed/comparables.parquet /app/models/comparables.parquet
-COPY --from=builder /project/app /app
+COPY --link data/processed/comparables.parquet /app/models/comparables.parquet
+COPY --link --from=builder /project/app /app
 
 # PROMETHEUS_MULTIPROC_DIR: where every uvicorn worker writes its metrics, so
 # that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
