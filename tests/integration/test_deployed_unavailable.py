@@ -6,7 +6,10 @@ tries again by itself; every other client keeps the RFC 9457 problem. The API
 is started again and waited for, so the tests after this file find it healthy.
 """
 
+import base64
 from collections.abc import Iterator
+import hashlib
+import re
 import time
 
 import httpx2
@@ -66,6 +69,16 @@ def test_a_browser_gets_a_page_that_retries_while_the_api_is_down(client):
     assert '<meta http-equiv="refresh" content="5">' in page
     assert "src=" not in page.replace("<script>", "")
     assert 'rel="stylesheet"' not in page
+
+    # The CSP lets exactly the page's one inline script run, by its hash, and the
+    # empty icon load, so that the console stays clean and /favicon.ico is not asked.
+    (script,) = re.findall(r"<script>(.*?)</script>", page, flags=re.DOTALL)
+    digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+    policy = response.headers["content-security-policy"]
+    assert f"script-src 'sha256-{digest}'" in policy, policy
+    assert "'unsafe-inline'" not in policy.split("style-src")[0], policy
+    assert "img-src data:" in policy, policy
+    assert "frame-ancestors 'none'" in policy, policy
 
 
 @pytest.mark.usefixtures("api_down")
