@@ -14,14 +14,19 @@
 # The error and coverage thresholds are one-sided tests at 0.005 per window,
 # NFR-11's false-alarm level for drift, against the model's own test values
 # (docs/docs/monitoring.md#why-these-model-thresholds,
-# reports/analysis/model_alert_thresholds.py). Both depend on the window's
-# labelled count n and are recorded below, so that the alerts and the panels
-# of deploy/grafana/dashboards/model-performance.json read the same series:
-#   - MdAPE: above 1 + 3.52 / sqrt(n) times the test MdAPE, n the labelled
-#     answers; the smallest constant whose ceiling is at or above the 99.5th
-#     percentile of the MdAPE of n answers drawn from the test set's errors of
-#     lgbm-basic at every n from 200 (the fewest the job reports a figure for)
-#     to 1,000;
+# reports/analysis/model_alert_thresholds.py, reports/analysis/market_baseline.py).
+# Both depend on the window's labelled count n and are recorded below, so that
+# the alerts and the panels of deploy/grafana/dashboards/model-performance.json
+# read the same series:
+#   - MdAPE: above 1 + 3.55 sqrt(1 / n + 1 / m) times the test MdAPE of the
+#     window's countries (#306, EDN-103), n the labelled answers and m the
+#     test rows that baseline rests on, a two-sample test, since a market's
+#     test MdAPE from a few hundred rows has an error of its own; 3.55 is the
+#     smallest constant at or above the 99.5th percentile of
+#     (multiple - 1) / sqrt(1 / n + 1 / m) for windows of n answers drawn from
+#     each market's, the test mix's, and a 78 % ES mix's test errors of
+#     lgbm-basic, at every n from 200 (the fewest the job reports a figure
+#     for) to 1,000, with the test values taken as the truth;
 #   - coverage: below the nominal level p by more than 2.576 binomial standard
 #     errors of the window's labelled ranges, sqrt(p (1 - p) / n), and the
 #     continuity correction 0.5 / n.
@@ -33,9 +38,15 @@
 groups:
   - name: model-performance
     rules:
-      # The ceiling of ModelErrorHigh, as a multiple of the test MdAPE.
+      # The ceiling of ModelErrorHigh, as a multiple of the window's baseline
+      # MdAPE. A window without `baseline_test_rows`, of a model whose release
+      # recorded no test MdAPE per country, has none, so the alert cannot fire.
       - record: recommenditos_performance:mdape_ceiling_multiple
-        expr: 1 + 3.52 / sqrt(recommenditos_performance_labelled_requests)
+        expr: |
+          1 + 3.55 * sqrt(
+            1 / recommenditos_performance_labelled_requests
+            + 1 / recommenditos_performance_baseline_test_rows
+          )
 
       # The floor of ModelCoverageLow, a share of the labelled ranges.
       - record: recommenditos_performance:coverage_floor
@@ -60,17 +71,17 @@ groups:
           dashboard_url: "http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-14"
 
       # FR-14: the window's real MdAPE over its labelled answers, as a multiple
-      # of the test MdAPE. The value is that multiple.
+      # of the test MdAPE of its countries. The value is that multiple.
       - alert: ModelErrorHigh
         expr: |
-          recommenditos_performance_mdape / recommenditos_performance_test_mdape
+          recommenditos_performance_mdape / recommenditos_performance_baseline_mdape
             > recommenditos_performance:mdape_ceiling_multiple
           and ignoring(figure) recommenditos_performance_labels_sufficient{figure="mdape"} == 1
         labels:
           severity: critical
         annotations:
-          summary: 'The real MdAPE of window {{ with query "recommenditos_performance_window_id" }}{{ . | first | value | printf "%.0f" }}{{ end }} is {{ $value | printf "%.3f" }} times the test MdAPE, above its ceiling of {{ with query "recommenditos_performance:mdape_ceiling_multiple" }}{{ . | first | value | printf "%.3f" }}{{ end }} for {{ with query "recommenditos_performance_labelled_requests" }}{{ . | first | value | printf "%.0f" }}{{ end }} labelled answers (FR-14).'
-          description: "The model prices this window's listings worse than its test set, which users notice. Look at the drift panel for which inputs changed, and check that the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor container) as its reason."
+          summary: 'The real MdAPE of window {{ with query "recommenditos_performance_window_id" }}{{ . | first | value | printf "%.0f" }}{{ end }} is {{ $value | printf "%.3f" }} times the test MdAPE of its countries, above its ceiling of {{ with query "recommenditos_performance:mdape_ceiling_multiple" }}{{ . | first | value | printf "%.3f" }}{{ end }} for {{ with query "recommenditos_performance_labelled_requests" }}{{ . | first | value | printf "%.0f" }}{{ end }} labelled answers (FR-14).'
+          description: "The model prices this window's listings worse than its test set did in the same countries, which users notice. Look at the drift panel for which inputs changed, and check that the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor container) as its reason."
           runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelerrorhigh"
           dashboard_url: "http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-11"
 

@@ -111,6 +111,7 @@ Window 18's MdAPE is 1.149 times the test MdAPE, above the ceiling of 1.111 for 
 Prometheus's alert history shows both alerts absent while window 17 was the latest, from 16:12 to 16:28, and firing for window 18 from 16:28 ([after-prometheus-alerts-history.json](fr15/after-prometheus-alerts-history.json), in 1-minute steps; [after-prometheus-alerts.json](fr15/after-prometheus-alerts.json) has the exact 16:27:58); a silence kept them from Discord.
 The cause is the baseline: the alerts compare a window with the overall test MdAPE of 6.80 %, while `ES` on the test set itself is at 7.61 %, 1.12 times that, so an `ES` window at the model's own `ES` error sits at the ceiling.
 [#306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306) follows this up: judging a window against its market's baseline.
+Under its rule (EDN-103), which judges the MdAPE against the test MdAPE of a window's countries with a ceiling that allows for the baseline's own sampling error, window 18 is at 1.03 times the 7.61 % of the 593 `ES` test rows, below its ceiling of 1.18; ModelCoverageLow keeps the nominal floor and fires as it did.
 
 Drift stays flagged, as the criterion expected: the `ES` inputs still differ from a reference that is 3.8 % `ES`.
 

@@ -89,16 +89,16 @@ The job stores every window with each feature's p-value in SQLite, so a finding 
 \begin{figure}[ht]
   \centering
   \includegraphics{es-replay-windows}
-  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds at each window's 1,000 answers and 500 ranges. The coverage of windows 9 and 10, 86.6\,\%, lies just above the floor. The control figures are in-sample; the test coverage of the model the replay ran against, before the retrain of \cref{sec:m6-feedback}, is 90.2\,\%, close to the nominal level.}
+  \caption{The ten windows of the replay on the VM: five of control listings (circles), then five of the \texttt{ES} holdout (squares). Dashed lines are the alert thresholds of the rule at the time of the replay, at each window's 1,000 answers and 500 ranges. The coverage of windows 9 and 10, 86.6\,\%, lies just above the floor. The control figures are in-sample; the test coverage of the model the replay ran against, before the retrain of \cref{sec:m6-feedback}, is 90.2\,\%, close to the nominal level.}
   \label{fig:m6-replay}
 \end{figure}
 
 \paragraph{Performance degradation and user impact.}
 To see whether users get worse prices, the job also computes the real MdAPE and the share of price ranges that hold the price, from the observed prices of a window's own requests (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229}{\#229}).
 It reports the MdAPE only with at least 200 labelled answers and the coverage only with at least 300 labelled ranges, so that a window whose prices have not arrived shows no value instead of a good one.
-The MdAPE is compared with the test MdAPE, and the coverage with the nominal 90\,\% the ranges promise; for the model the replay below ran against, before the retrain of \cref{sec:m6-feedback}, these were 6.73\,\% and 90.2\,\% on the test set.
-Each alerts at a one-sided level of about 0.005 per window, the false-alarm level of NFR-11 (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230}{\#230}): \texttt{ModelErrorHigh} above $1 + 3.52/\sqrt{n}$ times the test MdAPE, \texttt{ModelCoverageLow} more than 2.576 standard errors and a continuity correction below the nominal 90\,\%, with $n$ the window's labels.
-At 1,000 answers and 500 ranges these are 7.48\,\% and 86.44\,\%.
+The MdAPE is compared with the test MdAPE of the window's countries, and the coverage with the nominal 90\,\% the ranges promise; for the model the replay below ran against, before the retrain of \cref{sec:m6-feedback}, these were 6.73\,\% and 90.2\,\% on the test set, which had no \texttt{ES} rows, so an \texttt{ES} window takes the overall 6.73\,\%.
+Each alerts at a one-sided level of about 0.005 per window, the false-alarm level of NFR-11 (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230}{\#230}, EDN-103): \texttt{ModelErrorHigh} above $1 + 3.55\sqrt{1/n + 1/m}$ times that test MdAPE, with $m$ the test rows it rests on, \texttt{ModelCoverageLow} more than 2.576 standard errors and a continuity correction below the nominal 90\,\%, with $n$ the window's labels.
+At 1,000 answers and 500 ranges these are 7.50\,\% and 86.44\,\%.
 \texttt{DriftDetected} names the drifted features.
 Each alert's runbook step ends in the Retrain workflow of FR-15, with the job's finding as its reason; a person starts it (EDN-12).
 
@@ -225,6 +225,7 @@ Point 3a is not paired: the replay alternates price and range requests, and the 
 The recovery criterion is not met in full: points 1 and 2 hold, and point 3 holds for coverage, but \texttt{ModelErrorHigh} and \texttt{ModelCoverageLow} still fire on one of the two \texttt{ES} windows.
 Window 18's MdAPE of 7.82\,\% is 1.149 times the test MdAPE, above the ceiling of 1.111 at 1,000 labels, and its coverage of 86.40\,\% is below the floor of 86.44\,\%; window 17, at 7.49\,\% and 90.6\,\%, fires neither.
 The cause is the baseline: the ceiling is relative to the overall test MdAPE of 6.80\,\%, while \texttt{ES} on the test set itself is at 7.61\,\%, 1.12 times that, so an \texttt{ES} window at the model's own \texttt{ES} error sits at the ceiling.
-\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306}{\#306} follows this up by judging a window against its market's baseline.
-\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307}{\#307} tracks a second weakness the rehearsal showed: a window that is not final is scored again on every pass against the test values of the running release, so after the promotion the windows of the old model read against 6.80\,\% instead of the 6.73\,\% they were judged on.
+Since \href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306}{\#306} (EDN-103), \texttt{ModelErrorHigh} judges a window against the test MdAPE of its countries, with a ceiling that allows for the sampling error of the 593 \texttt{ES} test rows: window 18 is then at 1.03 times 7.61\,\%, below its ceiling of 1.18, while \texttt{ModelCoverageLow}, which keeps the 90\,\% the ranges promise, still fires on it.
+\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307}{\#307} fixed a second weakness the rehearsal showed: a window that was not final was scored again on every pass against the test values of the running release, so after the promotion the windows of the old model read against 6.80\,\% instead of the 6.73\,\% they were judged on.
+Since then, a window is judged against the values of the model that answered it (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/327}{\#327}).
 Drift stays flagged after the promotion, as the criterion expected: the \texttt{ES} inputs still differ from a reference that is 3.8\,\% \texttt{ES}, and the job tests inputs, not error.

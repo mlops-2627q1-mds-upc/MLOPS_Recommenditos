@@ -1,6 +1,7 @@
 # Unit tests of ../rules/model-performance.yml (`promtool test rules`, run by
 # make prometheus-check and CI): for each alert, the values the drift job wrote
-# for the control and ES windows of reports/monitoring/laptop-es-replay-2026-11-04.md,
+# for the control and ES windows of reports/monitoring/laptop-es-replay-2026-11-04.md
+# (for ModelErrorHigh, the ES windows of reports/monitoring/fr15-rehearsal.md),
 # where it must stay quiet and where it must fire, and both edges of its
 # threshold at two counts. The series carry node-exporter's labels, which serves them from
 # the textfile collector. Series values: "axn" repeats a n more times, one
@@ -39,17 +40,26 @@ tests:
           workflow (FR-15) with the finding as its reason.'
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#driftdetected
         dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-14
-- name: ModelErrorHigh fires at the ES window's 1.40 times the test MdAPE, not at a control window's
+# The FR-15 rehearsal's ES windows (reports/monitoring/fr15-rehearsal.md):
+# window 14, answered by a model whose test set had no ES, so its baseline is
+# the overall 6.73 % on all 19,665 test rows, and window 18, answered by the
+# retrained model, whose 593 ES test rows have an MdAPE of 7.61 %. Against
+# the overall test MdAPE of 6.80 %, window 18 was at 1.149, above 1.111.
+- name: ModelErrorHigh fires at window 14's 1.36 times its baseline, not at window 18's 1.03 times the ES test MdAPE
   interval: 1m
   input_series:
   - series: recommenditos_performance_mdape{instance="node-exporter:9100",job="node"}
-    values: 0.0528x14 0.0941x14
+    values: 0.0916x14 0.0782x14
+  - series: recommenditos_performance_baseline_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.0673x14 0.0761x14
+  - series: recommenditos_performance_baseline_test_rows{instance="node-exporter:9100",job="node"}
+    values: 19665x14 593x14
   - series: recommenditos_performance_test_mdape{instance="node-exporter:9100",job="node"}
-    values: 0.0673x29
+    values: 0.0673x14 0.0680x14
   - series: recommenditos_performance_labelled_requests{instance="node-exporter:9100",job="node"}
     values: 1000x29
   - series: recommenditos_performance_window_id{instance="node-exporter:9100",job="node"}
-    values: 2x14 3x14
+    values: 14x14 18x14
   - series: recommenditos_performance_labels_sufficient{figure="mdape",instance="node-exporter:9100",job="node"}
     values: 1x29
   - series: recommenditos_performance_labels_sufficient{figure="coverage",instance="node-exporter:9100",job="node"}
@@ -57,32 +67,35 @@ tests:
   alert_rule_test:
   - eval_time: 10m
     alertname: ModelErrorHigh
-    exp_alerts: []
-  - eval_time: 16m
-    alertname: ModelErrorHigh
     exp_alerts:
     - exp_labels:
         severity: critical
         job: node
         instance: node-exporter:9100
       exp_annotations:
-        summary: 'The real MdAPE of window 3 is 1.398 times the test MdAPE, above its ceiling of 1.111 for 1000 labelled answers (FR-14).'
-        description: The model prices this window's listings worse than its test set, which users notice.
-          Look at the drift panel for which inputs changed, and check that the observed prices (feedback)
-          are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor
-          container) as its reason.
+        summary: 'The real MdAPE of window 14 is 1.361 times the test MdAPE of its countries, above its ceiling of 1.115 for 1000 labelled answers (FR-14).'
+        description: The model prices this window's listings worse than its test set did in the same
+          countries, which users notice. Look at the drift panel for which inputs changed, and check that
+          the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding
+          (`report` in the monitor container) as its reason.
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelerrorhigh
         dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-11
-# The ceiling 1 + 3.52 / sqrt(n) is 1.248902 at 200 labelled answers and 1.111312 at 1,000:
-# just above it fires, just below it is quiet, at both counts, so a changed
-# constant or a changed dependence on n fails a case.
+  - eval_time: 25m
+    alertname: ModelErrorHigh
+    exp_alerts: []
+# The ceiling 1 + 3.55 sqrt(1 / n + 1 / m) with m = 1,000 baseline test rows is
+# 1.274982 at 200 labelled answers and 1.158761 at 1,000: just above it fires,
+# just below it is quiet, at both counts, so a changed constant, a changed
+# dependence on n, or a missing baseline term (1.112261 at 1,000) fails a case.
 - name: ModelErrorHigh fires just above its ceiling, at 200 and at 1,000 labelled answers
   interval: 1m
   input_series:
   - series: recommenditos_performance_mdape{instance="node-exporter:9100",job="node"}
-    values: 0.12510x9 0.11125x9
-  - series: recommenditos_performance_test_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.12752x9 0.11590x9
+  - series: recommenditos_performance_baseline_mdape{instance="node-exporter:9100",job="node"}
     values: 0.1x19
+  - series: recommenditos_performance_baseline_test_rows{instance="node-exporter:9100",job="node"}
+    values: 1000x19
   - series: recommenditos_performance_labelled_requests{instance="node-exporter:9100",job="node"}
     values: 200x9 1000x9
   - series: recommenditos_performance_window_id{instance="node-exporter:9100",job="node"}
@@ -98,11 +111,11 @@ tests:
         job: node
         instance: node-exporter:9100
       exp_annotations:
-        summary: 'The real MdAPE of window 4 is 1.251 times the test MdAPE, above its ceiling of 1.249 for 200 labelled answers (FR-14).'
-        description: The model prices this window's listings worse than its test set, which users notice.
-          Look at the drift panel for which inputs changed, and check that the observed prices (feedback)
-          are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor
-          container) as its reason.
+        summary: 'The real MdAPE of window 4 is 1.275 times the test MdAPE of its countries, above its ceiling of 1.275 for 200 labelled answers (FR-14).'
+        description: The model prices this window's listings worse than its test set did in the same
+          countries, which users notice. Look at the drift panel for which inputs changed, and check that
+          the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding
+          (`report` in the monitor container) as its reason.
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelerrorhigh
         dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-11
   - eval_time: 15m
@@ -113,24 +126,28 @@ tests:
         job: node
         instance: node-exporter:9100
       exp_annotations:
-        summary: 'The real MdAPE of window 5 is 1.113 times the test MdAPE, above its ceiling of 1.111 for 1000 labelled answers (FR-14).'
-        description: The model prices this window's listings worse than its test set, which users notice.
-          Look at the drift panel for which inputs changed, and check that the observed prices (feedback)
-          are real. Then start the Retrain workflow (FR-15) with the finding (`report` in the monitor
-          container) as its reason.
+        summary: 'The real MdAPE of window 5 is 1.159 times the test MdAPE of its countries, above its ceiling of 1.159 for 1000 labelled answers (FR-14).'
+        description: The model prices this window's listings worse than its test set did in the same
+          countries, which users notice. Look at the drift panel for which inputs changed, and check that
+          the observed prices (feedback) are real. Then start the Retrain workflow (FR-15) with the finding
+          (`report` in the monitor container) as its reason.
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#modelerrorhigh
         dashboard_url: http://localhost:3000/d/model-performance/model-performance?viewPanel=panel-11
-- name: ModelErrorHigh stays quiet just below its ceiling, at 200 and at 1,000 labelled answers, and without enough labels
+- name: ModelErrorHigh stays quiet just below its ceiling, at 200 and at 1,000 labelled answers, without enough labels, and without a baseline
   interval: 1m
   input_series:
   - series: recommenditos_performance_mdape{instance="node-exporter:9100",job="node"}
-    values: 0.12470x9 0.11100x9 0.2x9
+    values: 0.12748x9 0.11586x9 0.2x9 0.2x9
+  - series: recommenditos_performance_baseline_mdape{instance="node-exporter:9100",job="node"}
+    values: 0.1x29 _x9
+  - series: recommenditos_performance_baseline_test_rows{instance="node-exporter:9100",job="node"}
+    values: 1000x29 _x9
   - series: recommenditos_performance_test_mdape{instance="node-exporter:9100",job="node"}
-    values: 0.1x29
+    values: 0.1x39
   - series: recommenditos_performance_labelled_requests{instance="node-exporter:9100",job="node"}
-    values: 200x9 1000x9 150x9
+    values: 200x9 1000x9 150x9 1000x9
   - series: recommenditos_performance_labels_sufficient{figure="mdape",instance="node-exporter:9100",job="node"}
-    values: 1x19 0x9
+    values: 1x19 0x9 1x9
   alert_rule_test:
   - eval_time: 5m
     alertname: ModelErrorHigh
@@ -139,6 +156,9 @@ tests:
     alertname: ModelErrorHigh
     exp_alerts: []
   - eval_time: 25m
+    alertname: ModelErrorHigh
+    exp_alerts: []
+  - eval_time: 38m
     alertname: ModelErrorHigh
     exp_alerts: []
 - name: ModelCoverageLow fires at the ES window's 85.8 % of 500 labelled ranges, below the floor of 86.4

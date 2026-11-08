@@ -206,7 +206,7 @@
       "id": 3,
       "type": "stat",
       "title": "Real MdAPE",
-      "description": "The latest tested window's median absolute percentage error over its answers with an observed price (FR-14), the alert's ceiling, a multiple of the test MdAPE that falls as the labelled answers grow (recorded by the alert rules), and the test MdAPE (metrics.json). No value: fewer than 200 labelled answers. Alert: ModelErrorHigh.",
+      "description": "The latest tested window's median absolute percentage error over its answers with an observed price (FR-14), the alert's ceiling, a multiple of the baseline that falls as the labelled answers grow (recorded by the alert rules), and the baseline: the test MdAPE of the window's countries, weighted by its labelled answers (segments.csv, #306). No value: fewer than 200 labelled answers, or a model without a test MdAPE per country. Alert: ModelErrorHigh.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -234,7 +234,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "recommenditos_performance:mdape_ceiling_multiple * recommenditos_performance_test_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
+          "expr": "recommenditos_performance:mdape_ceiling_multiple * recommenditos_performance_baseline_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
           "legendFormat": "alert above",
           "refId": "B",
           "instant": true,
@@ -245,8 +245,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "recommenditos_performance_test_mdape",
-          "legendFormat": "test",
+          "expr": "recommenditos_performance_baseline_mdape",
+          "legendFormat": "baseline",
           "refId": "C",
           "instant": true,
           "range": false
@@ -290,7 +290,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "test"
+              "options": "baseline"
             },
             "properties": [
               {
@@ -1022,8 +1022,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Real MdAPE against the test MdAPE",
-      "description": "The latest tested window's MdAPE over its labelled answers, the test MdAPE, and the alert's ceiling, a multiple of it that falls as the labelled answers grow (ModelErrorHigh). A gap: fewer than 200 labelled answers.",
+      "title": "Real MdAPE against the test MdAPE of its countries",
+      "description": "The latest tested window's MdAPE over its labelled answers, the baseline, the test MdAPE of its countries weighted by its labelled answers (#306), and the alert's ceiling, a multiple of it that falls as the labelled answers grow and widens for a baseline of few test rows (ModelErrorHigh). A gap: fewer than 200 labelled answers.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1050,8 +1050,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "recommenditos_performance_test_mdape",
-          "legendFormat": "test",
+          "expr": "recommenditos_performance_baseline_mdape",
+          "legendFormat": "baseline",
           "refId": "B",
           "range": true
         },
@@ -1060,7 +1060,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "recommenditos_performance:mdape_ceiling_multiple * recommenditos_performance_test_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
+          "expr": "recommenditos_performance:mdape_ceiling_multiple * recommenditos_performance_baseline_mdape and ignoring(figure) recommenditos_performance_labels_sufficient{figure=\"mdape\"} == 1",
           "legendFormat": "alert above",
           "refId": "C",
           "range": true
@@ -1115,7 +1115,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "test"
+              "options": "baseline"
             },
             "properties": [
               {
