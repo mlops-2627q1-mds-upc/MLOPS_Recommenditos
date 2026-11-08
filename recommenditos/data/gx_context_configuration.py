@@ -131,6 +131,7 @@ import great_expectations as gx
 from great_expectations.data_context.types.base import ProgressBarsConfig
 import great_expectations.expectations as gxe
 from great_expectations.render.view import DefaultJinjaIndexPageView, DefaultJinjaPageView
+from jinja2 import BaseLoader
 from loguru import logger
 import pandas as pd
 import typer
@@ -369,22 +370,81 @@ def _without_query(url: str, add_datetime: bool = True) -> str:
     return url
 
 
+_S3_IMAGES = (
+    '{% set static_images_dir = "https://great-expectations-web-assets.s3.us-east-2.'
+    'amazonaws.com/" -%}'
+)
+
+_LOCAL_IMAGES_ON_THE_INDEX = (
+    '{% if "SiteIndex" in renderer_type %}'
+    + '{% set static_images_dir = "./static/images/" -%}'
+    + "{% endif %}"
+)
+
+#: What Great Expectations 1.24.1 gets wrong in two of its page templates, as
+#: (old, new) per template. Each `old` is checked to be there, so an upgrade
+#: that moves it fails the render instead of silently bringing the bug back.
+#:
+#: - `top_navbar.j2` overwrites the image directory it has just worked out with
+#:   its S3 bucket, which answers 301 since the bucket moved region, so the logo
+#:   never loads. Dropping that line leaves the local directory, which the
+#:   template sets for every page but the index, so the index gets it here. The
+#:   site copies `logo-long.png` there, which also means no page asks the
+#:   internet for it.
+#: - `favicon.j2` goes up one level too few on a validation page, three where
+#:   `top_navbar.j2` goes up four: `validations/<suite>/<run name>/<run time>/
+#:   <page>.html` is four levels below the site's root.
+_TEMPLATE_FIXES = {
+    "top_navbar.j2": (
+        _S3_IMAGES,
+        _LOCAL_IMAGES_ON_THE_INDEX,
+    ),
+    "favicon.j2": (
+        '{% set static_images_dir = ((expectation_suite_name_dot_count + 3) * "../")',
+        '{% set static_images_dir = ((expectation_suite_name_dot_count + 4) * "../")',
+    ),
+}
+
+
+class _FixedTemplates(BaseLoader):
+    """Great Expectations' template loader, with `_TEMPLATE_FIXES` applied."""
+
+    def __init__(self, loader: BaseLoader) -> None:
+        self.loader = loader
+
+    def get_source(self, environment, template):
+        source, filename, uptodate = self.loader.get_source(environment, template)
+        if template in _TEMPLATE_FIXES:
+            old, new = _TEMPLATE_FIXES[template]
+            if old not in source:
+                raise RuntimeError(
+                    f"Great Expectations' {template} no longer contains {old!r}; "
+                    "update _TEMPLATE_FIXES in recommenditos.data.gx_context_configuration."
+                )
+            source = source.replace(old, new)
+        return source, filename, uptodate
+
+
 class StablePageView(DefaultJinjaPageView):
     """A Data Docs page that renders the same bytes from the same results.
 
     Great Expectations' default view puts two things into a page that depend on
     the moment and not on the results: every collapsible block gets a fresh
-    `uuid4` as its HTML id, and the logo is loaded from Great Expectations' S3
-    bucket with the render time and the context's id as query parameters. Here
-    the ids count up within the page, which is all an HTML id needs, and the
-    logo's URL carries no query, which also stops the page sending that bucket
-    the context's id.
+    `uuid4` as its HTML id, and the logo's URL carries the render time and the
+    context's id as query parameters. Here the ids count up within the page,
+    which is all an HTML id needs, and the logo's URL carries no query. The page
+    also loads its logo and its favicon from the site itself (`_TEMPLATE_FIXES`),
+    where Great Expectations points the first at a bucket that no longer answers
+    and the second one level too high.
     """
 
     def __init__(self, custom_styles_directory=None, custom_views_directory=None) -> None:
         super().__init__(custom_styles_directory, custom_views_directory)
         self._element_ids: Iterator[int] = itertools.count(1)
         self.env.filters["add_data_context_id_to_url"] = _without_query
+        if self.env.loader is None:
+            raise RuntimeError("Great Expectations' view has no template loader to fix.")
+        self.env.loader = _FixedTemplates(self.env.loader)
 
     def render(self, document, template=None, **kwargs):
         self._element_ids = itertools.count(1)
