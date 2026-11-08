@@ -149,9 +149,9 @@ Anyone reusing it outside that API has to reimplement the scope check (FR-04), t
   Closing that gap, by raising the support threshold, lowering SC-04's segment size, or naming these makes as low-confidence in the response, is an open task for Milestone 3.
 - **Classic and old cars: an accepted limitation.**
   The candidate misses SC-04 for cars older than 20 years: its MdAPE there is 17.64 % over 817 test rows against the 15 % bound.
-  The earlier model, on the whole-country holdout, was at 16.80 %, and at 18.2 % on average over 20 other splits of its pool (standard deviation 0.69 pp, range 17.10 % to 19.81 %), so its figure was the most favourable of 21 draws.
+  Over 20 other splits of the current pool it averages 18.1 % (standard deviation 0.77 pp, range 16.93 % to 19.87 %), and its committed 17.64 % is lower than 14 of them.
   The team accepted the miss and reports the criterion as missed (EDN-62), because an upper age bound would pass SC-04 by removing the rows it fails on and a higher threshold would fit the criterion to its result: the 15 % bound, the scope and the age breakdown stay as they are, and NFR-01's gate reports SC-04 as missed and waived by EDN-62 (`gate_waived` in `metrics.json`) rather than blocking on it.
-  The extended features do not close the gap (17.09 %), the hyperparameter search kept the committed values after 34 fits (EDN-73), and the segment was over the bound on 20 of 20 other splits of the earlier pool (EDN-32).
+  The extended features do not close the gap (17.09 %), the hyperparameter search kept the committed values after 34 fits (EDN-73), and the segment is over the bound on 20 of 20 other splits of the current pool (EDN-32).
   What a user must know: an estimate for a car older than 20 years is less reliable than for a younger one, with half of these estimates off by more than 17.64 % of the listing price against 6.80 % over all cars, and 54.3 % of them within 20 % of it against 89.7 %.
   The limitation is accepted for this model and this delivery, and a scope change of the kind EDN-04 made for price or a segment-specific model would be a new decision.
 - **Reference-date drift.**
@@ -542,61 +542,60 @@ The split assigns whole sellers by a hash of the seed and the seller key and str
 **That was measured, and the split is kept as it is (EDN-32).**
 What changed is the reporting: this section states the distribution of every set, and a figure of the committed split is given with its spread over 20 other splits.
 It was enough to keep the split because the three things that could have argued against it did not show: the committed draw is better balanced than most, the pooled criteria hold on every split tried, and the one criterion that fails, SC-04, fails on every one of them.
-A stratified-group split would have narrowed the largest make gap from 4.86 pp to 2.04 pp, and would have moved 52.6 % of the rows between sets as soon as the `ES` listings join the pool, which is the retrain FR-15 compares against the current model; the hash split moves none.
+A stratified-group split would have narrowed the largest make gap from 3.76 pp to 1.93 pp, and would move 47.6 % of the rows between sets if the held-out `ES` sellers joined the pool, as the other 60 % of them did for the retrain FR-15 compares against the current model; the hash split moves none.
 Choosing another seed for a better mix was rejected as well, since it is a new split picked by its outcome.
 
-Every number of this section was measured on the earlier pool, before EDN-102 moved 60 % of the `ES` sellers into it, and is quoted as that measurement: `split_strategy.py` has not been re-run on the current pool, whose sets are counted in the [pipeline documentation](pipeline.md#the-es-holdout).
-This is what the draw committed then looked like, over every row the `split` stage wrote (the served makes are 98.6 % of them):
+Every number of this section was measured on the current pool, the one EDN-102 gave 60 % of the `ES` sellers, whose sets are also counted in the [pipeline documentation](pipeline.md#the-es-holdout).
+This is what the committed draw looks like, over every row the `split` stage wrote (the served makes are 98.6 % of them):
 
 | | train | validation | calibration | test | pool |
 |---|---|---|---|---|---|
-| rows | 61,180 | 8,992 | 9,169 | 19,985 | 99,326 |
-| seller groups | 16,907 | 2,810 | 2,848 | 5,870 | 28,435 |
-| BMW | 33.73 % | 33.91 % | 37.66 % | 36.12 % | 34.59 % |
-| Porsche | 22.47 % | 22.29 % | 23.71 % | 22.57 % | 22.59 % |
-| Mercedes-Benz | 14.95 % | 14.28 % | 8.67 % | 11.11 % | 13.54 % |
-| Audi | 12.27 % | 12.20 % | 11.80 % | 12.16 % | 12.20 % |
-| median price (EUR) | 39,750 | 37,000 | 35,945 | 36,949 | 38,699 |
-| older than 20 years | 3.98 % | 4.26 % | 4.36 % | 4.07 % | 4.06 % |
+| rows | 63,547 | 9,283 | 9,586 | 20,587 | 103,003 |
+| seller groups | 17,565 | 2,926 | 2,957 | 6,116 | 29,564 |
+| BMW | 33.91 % | 33.90 % | 37.28 % | 36.23 % | 34.69 % |
+| Porsche | 22.71 % | 22.72 % | 23.57 % | 22.66 % | 22.78 % |
+| Mercedes-Benz | 14.77 % | 14.24 % | 9.75 % | 11.04 % | 13.51 % |
+| Audi | 12.21 % | 12.07 % | 11.54 % | 12.15 % | 12.12 % |
+| median price (EUR) | 39,500 | 37,444 | 35,990 | 36,900 | 38,500 |
+| older than 20 years | 3.97 % | 4.29 % | 4.40 % | 4.11 % | 4.07 % |
 
 The other seven supported makes are within 0.9 pp of their pool share in every set, and the price quantiles from the 10th to the 90th are in [`split_strategy_results.txt`](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/analysis/split_strategy_results.txt), which holds every number of this section.
 
 - **Mercedes-Benz is the one make that is visibly unbalanced, and one dealer is why.**
-  The largest seller group holds 3,383 listings, 3.41 % of the pool, and 3,382 of them are Mercedes-Benz: a quarter (25.2 %) of all Mercedes-Benz rows belong to one dealer.
-  It landed in train, and without it train's Mercedes-Benz share is 9.97 % and the pool's is 10.49 %, so the gap between train and the other sets is that dealer raising train rather than calibration being short.
-  The remaining 1.8 pp in calibration is the next tier: of the 20 dealers with the most Mercedes-Benz listings, one landed in calibration, against ten in train, three in validation and six in test.
+  The largest seller group holds 3,383 listings, 3.28 % of the pool, and 3,382 of them are Mercedes-Benz: about a quarter (24.3 %) of all Mercedes-Benz rows belong to one dealer.
+  It landed in train, and without it train's Mercedes-Benz share is 9.98 % and the pool's is 10.58 %, so the gap between train and the other sets is that dealer raising train rather than calibration being short.
+  The remaining 0.8 pp in calibration is the next tier: of the 20 dealers with the most Mercedes-Benz listings, two landed in calibration, against eleven in train, two in validation and five in test.
   No grouped split can balance this make, because that dealer has to go somewhere whole, and in a 10 % set it would make the set one third Mercedes-Benz.
 - **The committed draw is an ordinary one, on the favourable side.**
-  Over 1,000 seeds of the same assignment, the largest distance of any make's share in any set from its pool share is 9.07 pp on average and 6.30 pp at the median; the committed split is at 4.86 pp, and 72 % of the seeds are less balanced.
-  What decides it is where the largest dealer lands: train in 61 % of the seeds (mean gap 5.09 pp), test in 19 % (10.30 pp), and validation or calibration in the remaining 20 % (20 pp).
-  The calibration set's 8.67 % Mercedes-Benz is around the 21st percentile of its own distribution, and its median price at the 17th.
+  Over 1,000 seeds of the same assignment, the largest distance of any make's share in any set from its pool share is 8.83 pp on average and 6.22 pp at the median; the committed split is at 3.76 pp, and 88 % of the seeds are less balanced.
+  What decides it is where the largest dealer lands: train in 61 % of the seeds (mean gap 4.97 pp), test in 19 % (10.03 pp), and validation or calibration in the remaining 20 % (20 pp).
+  The calibration set's 9.75 % Mercedes-Benz is around the 38th percentile of its own distribution, and its median price at the 21st.
 - **A classifier cannot tell train from test once sellers are held out.**
-  One LightGBM classifier on the model's features and the price, asked to separate train rows from test rows, reaches an AUC of 0.495 on sellers it did not see.
+  One LightGBM classifier on the model's features and the price, asked to separate train rows from test rows, reaches an AUC of 0.503 on sellers it did not see.
   For sellers assigned at random that is nearly a tautology, so it confirms the assignment rather than adding evidence about it.
-  The same classifier reaches 0.599 when rows are held out at random, which is the dealer signature a row-wise split would have leaked (EDN-14) and not a difference between the sets.
+  The same classifier reaches 0.598 when rows are held out at random, which is the dealer signature a row-wise split would have leaked (EDN-14) and not a difference between the sets.
 
 How much a reported figure depends on which sellers landed where was measured by repeating the split with seeds 1 to 20 and refitting the candidate `lgbm-basic` on each, through the `split` and `features` stages and the `train` stage's own fit, with the committed hyperparameters and model seed.
 The seeds were fixed before any of them was run, and none of them is a candidate split: this measures noise, it does not select a seed.
 The 20 splits share one pool of listings, so the spread describes how a figure moves with the assignment and is not a confidence interval for new data.
 
-| earlier `lgbm-basic`, test set | its committed split | mean of 20 other splits | standard deviation | range |
+| `lgbm-basic`, test set | its committed split | mean of 20 other splits | standard deviation | range |
 |---|---|---|---|---|
-| MdAPE (SC-01) | 6.73 % | 6.72 % | 0.26 pp | 6.22 % to 7.02 % |
-| within 20 % (SC-02) | 89.99 % | 90.11 % | 0.70 pp | 89.08 % to 91.39 % |
-| MdAPE, older than 20 years (SC-04) | 16.80 % | 18.18 % | 0.69 pp | 17.10 % to 19.81 % |
-| test rows older than 20 years | 784 | 773 | 31 | 731 to 833 |
+| MdAPE (SC-01) | 6.80 % | 6.74 % | 0.26 pp | 6.22 % to 7.02 % |
+| within 20 % (SC-02) | 89.74 % | 90.08 % | 0.71 pp | 89.29 % to 91.59 % |
+| MdAPE, older than 20 years (SC-04) | 17.64 % | 18.13 % | 0.77 pp | 16.93 % to 19.87 % |
+| test rows older than 20 years | 817 | 800 | 30 | 763 to 857 |
 
 - **The verdict on the pooled criteria is stable.**
-  SC-01 and SC-02 hold on all 20 splits, with the worst MdAPE 2.0 pp under the bound, and the committed 6.73 % is within a tenth of a standard deviation of the mean.
-  Most of that spread is again the largest dealer: on the five splits that put it in test the MdAPE is 6.32 % on average, and on the other fifteen it is 6.85 %: that dealer's listings are then about 15 % of the test set, and the lower figure implies they are priced more accurately than the rest.
+  SC-01 and SC-02 hold on all 20 splits, with the worst MdAPE 2.0 pp under the bound, and the committed 6.80 % is within a quarter of a standard deviation of the mean.
+  Most of that spread is again the largest dealer: on the five splits that put it in test the MdAPE is 6.33 % on average, and on the other fifteen it is 6.88 %: that dealer's listings are then about 16 % of the test set, and the lower figure implies they are priced more accurately than the rest.
   The committed split has that dealer in train, so its figure is of the less flattering kind.
 - **SC-04's miss on old cars is not an artefact of the draw.**
   The segment is over the 15 % bound on 20 of 20 splits, and it is the worst qualifying level on every one.
-  The committed 16.80 % comes with a mean of 18.2 % over the 20 other splits and is lower than every one of them, the most favourable of 21 draws, so the figure the card reported then understated the miss by about 1.4 pp against the typical split rather than overstating it.
+  The committed 17.64 % comes with a mean of 18.1 % over the 20 other splits and is lower than 14 of them.
 - **A tuning difference has to be read against this.**
-  The validation MdAPE of the committed hyperparameters has a standard deviation of 0.40 pp over the splits, and a range of 1.22 pp, against the 0.16 pp the whole grid of EDN-73 spans on the committed one.
-  Compared on the same split the noise is much smaller: the grid's lowest-MdAPE point, 255 leaves, is lower than the committed 63 on 17 of 20 splits, by 0.08 pp on average, and higher in validation L1, the metric the tuning protocol decides by, on 9 of 20.
-  A gain of that size is consistent in sign and a third of the noise of the test figure it would be reported in.
+  The validation MdAPE of the committed hyperparameters has a standard deviation of 0.40 pp over the splits, and a range of 1.10 pp, against the 0.16 pp the whole grid of EDN-73 spans on the committed one.
+  Compared on the same split the noise is much smaller: the grid's lowest-MdAPE point, 255 leaves, is lower than the committed 63 on 14 of 20 splits, by 0.05 pp on average (standard deviation 0.08 pp), and higher in validation L1, the metric the tuning protocol decides by, on 10 of 20.
 
 Two things this does not cover.
 A temporal split would be the stronger test for a price model and is impossible, because the snapshot carries no listing dates (see [Bias, Risks, and Limitations](#bias-risks-and-limitations)).
@@ -618,7 +617,7 @@ It is a **measured candidate, not a release**: the gate passes for it with SC-04
 | SC-05 | Empirical coverage of the nominal 90 % intervals, full inputs and partial scenario P1 | 88 % to 92 % | 90.6 % full, 91.8 % P1, yes | no price range, not measured, **no** |
 | SC-06 | MdAPE with each optional field masked, and with all masked at once | at most 1.5x the full-input MdAPE | 1.02x, yes | 1.48x, yes |
 
-These are the figures of the committed split; how much they move with the split was measured for the earlier model: over 20 other splits of its pool its test MdAPE was 6.72 % on average (standard deviation 0.26 pp) against 6.73 % committed, and its MdAPE for cars older than 20 years 18.2 % against 16.80 %, the most favourable of 21 draws ([How comparable the sets are, and how much a figure moves with the split](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)).
+These are the figures of the committed split; how much they move with the split was measured on the current pool: over 20 other splits the candidate's test MdAPE is 6.74 % on average (standard deviation 0.26 pp) against 6.80 % committed, and its MdAPE for cars older than 20 years 18.1 % against 17.64 % ([How comparable the sets are, and how much a figure moves with the split](#how-comparable-the-sets-are-and-how-much-a-figure-moves-with-the-split)).
 
 `b0` and `b1` miss SC-01, SC-02 and SC-03 as well, and are baselines rather than candidates; their per-criterion numbers are in `reports/metrics/<variant>.json`.
 
@@ -770,7 +769,7 @@ So the honest statement about it is not that it is tuned to an optimum but that 
 Three risks going into the rest of Milestone 3, all three now measured rather than anticipated:
 
 - **SC-04 is missed on cars older than 20 years, and the miss is an accepted limitation, not open work (EDN-62).**
-  The candidate is at 17.64 % against the 15 % bound (the earlier one at 16.80 %, and 18.2 % on average over 20 other splits), NFR-01's gate reports it as waived by EDN-62, and [Bias, Risks, and Limitations](#bias-risks-and-limitations) states it in full.
+  The candidate is at 17.64 % against the 15 % bound (18.1 % on average over 20 other splits), NFR-01's gate reports it as waived by EDN-62, and [Bias, Risks, and Limitations](#bias-risks-and-limitations) states it in full.
 - The low-support makes SC-04 cannot see at all, because they do not reach its 500-row minimum: `Honda` at 186 test rows down to `Ethanol` at 3, ten levels in all, reported in `reports/metrics/segments.csv` with the rule that excluded each one.
 - **SC-06 did genuinely fail, on the earlier `lgbm-extended`** (1.65x), which is what settled the candidate; the promoted retrain passes it at 1.48x.
   It cannot be demonstrated on the synthetic fixture, whose generator derives price from a formula that ignores the optional columns, so the test suite drives it with a constructed degrading model instead.

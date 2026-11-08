@@ -68,8 +68,8 @@ It reports the committed split set by set (rows, make shares, price quantiles, t
 It then measures the split noise of the reported metrics: the real `split` and `features` stages and the `train` stage's own `fit_variant`, once per seed for seeds 1 to 20, in a temporary directory with tracking off, with the test MdAPE, the over-20 segment and SC-04's verdict of each.
 The seeds are fixed in the script before any of them was run, and none of them is a candidate: the script measures noise, it does not select a split.
 Only the split seed varies; every fit uses the committed `seed` and hyperparameters, and the run of the committed seed must reproduce `metrics.json` exactly, which the output states.
-The last blocks hold an adversarial-validation check, the stratified-group alternative as an assignment (its make balance, and how many sellers move when the `ES` listings join the pool), and the state of SC-05.
-`split_strategy_results.txt` is the output of the run recorded in EDN-32 and cited in the model card (2026-10-12).
+The last blocks hold an adversarial-validation check, the stratified-group alternative as an assignment (its make balance, and how many sellers move when the `ES` listings still held out join the pool), and the state of SC-05.
+`split_strategy_results.txt` is the output of the latest run (2026-11-08, on the pool with the `ES` training sellers of EDN-102, #315), recorded in EDN-32 and cited in the model card.
 
 Like `split_gate.py` it imports the stages' own functions and runs from the repository root after `dvc pull`, and it writes nothing under `data/`, `models/` or `metrics.json`:
 

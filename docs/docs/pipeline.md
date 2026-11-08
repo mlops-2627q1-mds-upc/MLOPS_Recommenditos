@@ -255,8 +255,7 @@ Three rules follow from it:
   Changing it reshuffles the sellers, so it is a new split, and every figure and any FR-15 comparison starts over.
   No seed is chosen for a better mix or a better number.
 - **A figure of the committed split is reported with its spread.**
-  On the whole-country split the candidate's test MdAPE of 6.73 % came with a standard deviation of 0.26 pp over the 20 other splits, and the 16.80 % of cars older than 20 years with their mean of 18.2 %.
-  EDN-102 changed the pool, so by the next rule the spread of the promoted model (6.80 % and 17.64 %) is due to be measured again.
+  On the current pool the candidate's test MdAPE of 6.80 % comes with a standard deviation of 0.26 pp over the 20 other splits, and the 17.64 % of cars older than 20 years with their mean of 18.1 %.
 - **The script is re-run when what it measured changes**: the snapshot, the scope, the split ratios, or the candidate and its hyperparameters, because the spread is that model's on that pool.
 
 Data validation
