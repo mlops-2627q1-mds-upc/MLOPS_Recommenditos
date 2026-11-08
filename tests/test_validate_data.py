@@ -18,6 +18,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -214,6 +215,43 @@ def test_a_rerun_on_the_same_data_writes_the_same_bytes(frames, tmp_path):
     first, second = runs
     assert len(first) > 20 and any(name.startswith("results/") for name in first)
     assert first == second
+
+
+def test_every_data_docs_page_loads_its_logo_and_favicon_from_the_site(stage, built):
+    # Great Expectations 1.24.1 points the logo at an S3 bucket that answers 301
+    # and the favicon of a validation page one level too high (#335). A page's
+    # image has to be a file of the site, found by the path the page gives, at
+    # every depth: the index, an expectation suite and a validation result.
+    docs = built["docs"]
+    pages = sorted(docs.rglob("*.html"))
+    depths = {len(page.relative_to(docs).parts) for page in pages}
+    assert {1, 2, 5} <= depths
+
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        favicon = re.findall(r'<link rel="shortcut icon" href="([^"]+)"', html)
+        logo = re.findall(r'<img\s+class="NO-CACHE"\s+src="([^"]+)"', html)
+        assert len(favicon) == 1 and len(logo) == 1, page
+        for reference in (*favicon, *logo):
+            assert "://" not in reference, f"{page.name} loads {reference} from elsewhere"
+            image = (page.parent / reference).resolve()
+            assert image.is_relative_to(docs.resolve()) and image.is_file(), f"{page}: {reference}"
+
+
+def test_the_stage_fails_when_a_data_docs_page_cannot_be_rendered(frames, tmp_path, monkeypatch):
+    # Great Expectations renders every page inside a `try` that only logs the
+    # exception, so a template it can no longer patch used to leave an empty
+    # index and no pages while the stage exited 0 and recorded them. Here the
+    # patched text of `top_navbar.j2` is one that is not there, as after an
+    # upgrade that moves it.
+    context_dir = tmp_path / "gx"
+    configure_gx.main(context_dir, tmp_path / "results", tmp_path / "data-docs", PARAMS_FILE)
+    monkeypatch.setitem(configure_gx._TEMPLATE_FIXES, "top_navbar.j2", ("not in the template", ""))
+
+    with pytest.raises(DataValidationError, match="are incomplete"):
+        validate_main(
+            frames["raw_path"], frames["interim_path"], tmp_path / "summary.json", context_dir
+        )
 
 
 def test_the_data_docs_views_import_from_where_the_site_config_says():

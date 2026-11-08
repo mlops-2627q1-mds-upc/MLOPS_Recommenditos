@@ -298,6 +298,9 @@ Great Expectations stamps every result, its path and its Data Docs page with the
 Great Expectations would also write that time in the machine's time zone, in the stored results and on the Data Docs' index page, so the stage makes both calls that ask for the zone answer UTC while it runs, on every platform.
 The Data Docs therefore show `2025-11-08 00:00:00 UTC` as the run time, whoever renders them; when a validation was computed is in the commit that recorded its `dvc.lock`.
 `configure_gx` gives the results store a fixed id instead of a fresh UUID, and its Data Docs views number the page's collapsible blocks instead of giving each a random id, and load the logo without the render time and the context's id in its URL.
+The same views load the logo and the favicon from the site's own `static/images/` at every page depth: Great Expectations 1.24.1 points the logo at an S3 bucket that answers 301 and the favicon of a validation page one level too high, so the views patch the two templates (`_TEMPLATE_FIXES`), and the stage's test checks that every page's logo and favicon is a file of the site ([#335](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/335)).
+Great Expectations logs an exception that stops a page instead of raising it, so after rendering the stage counts the site and fails when the index is empty or a stored result or suite has no page.
+The pages still load their scripts and styles from public CDNs, so the Data Docs need a network connection for those.
 `tests/test_validate_data.py` runs the stage twice on the fixture as DVC does, each run in a process of its own with the outputs deleted first, off Windows in two time zones, and fails when any file differs.
 
 `gx/` itself is `configure_gx`'s output, cached and pushed rather than committed.
