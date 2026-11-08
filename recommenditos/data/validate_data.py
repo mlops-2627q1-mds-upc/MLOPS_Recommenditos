@@ -244,17 +244,27 @@ def _great_expectations_in_utc() -> Iterator[None]:
 
 
 def _store_with_the_run_time(context, run) -> None:
-    """Store each result again with the batch's load time set to the run's time.
+    """Store each result again with what Great Expectations leaves out of it.
 
-    The load time is the one moment left in a result once the run has a fixed
-    id: the pandas engine stamps a batch with the clock when it receives the
-    frame, and the stamp is shown on the frame's Data Docs page.
+    - **The batch's load time is set to the run's time.** It is the one moment
+      left in a result once the run has a fixed id: the pandas engine stamps a
+      batch with the clock when it receives the frame, and the stamp is shown on
+      the frame's Data Docs page.
+    - **The data asset's name is copied into `meta.batch_spec`.** The validation
+      page's header reads it only from there or from `meta.batch_kwargs`, and a
+      dataframe asset's batch spec is `{"batch_data": "PandasDataFrame"}`, so
+      every page said "Data asset: None" although the result names the asset in
+      `active_batch_definition` (#347). The same name also lands in the page's
+      title, which is its breadcrumb, where it repeats the suite's, because the
+      two share a name; `_TEMPLATE_FIXES` takes it out again there.
     """
     for key, validation in run.run_results.items():
         markers = validation.meta.get("batch_markers") or {}
-        if "ge_load_time" not in markers:
-            continue
-        markers["ge_load_time"] = run.run_id.run_time.strftime(_LOAD_TIME_FORMAT)
+        if "ge_load_time" in markers:
+            markers["ge_load_time"] = run.run_id.run_time.strftime(_LOAD_TIME_FORMAT)
+        if validation.asset_name:
+            batch_spec = validation.meta.setdefault("batch_spec", {})
+            batch_spec["data_asset_name"] = validation.asset_name
         context.validation_results_store.set(key, validation)
 
 

@@ -381,10 +381,17 @@ _LOCAL_IMAGES_ON_THE_INDEX = (
     + "{% endif %}"
 )
 
+_BREADCRUMB_WITHOUT_THE_REPEATED_SUITE = (
+    "{{ page_title.replace("
+    + '" / " ~ expectation_suite_name ~ " / " ~ expectation_suite_name ~ " / ", '
+    + '" / " ~ expectation_suite_name ~ " / ")'
+    + " if expectation_suite_name else page_title }}"
+)
+
 #: What Great Expectations 1.24.1 gets wrong in two of its page templates, as
-#: (old, new) per template. Each `old` is checked to be there, and a template
-#: that no longer holds it raises while the page renders. Great Expectations
-#: catches that and logs it, so the check that fails the stage is
+#: (old, new) pairs per template. Each `old` is checked to be there, and a
+#: template that no longer holds it raises while the page renders. Great
+#: Expectations catches that and logs it, so the check that fails the stage is
 #: `validate_data._check_the_data_docs`, which finds the site incomplete.
 #:
 #: - `top_navbar.j2` overwrites the image directory it has just worked out with
@@ -393,17 +400,25 @@ _LOCAL_IMAGES_ON_THE_INDEX = (
 #:   template sets for every page but the index, so the index gets it here. The
 #:   site copies `logo-long.png` there, which also means no page asks the
 #:   internet for it.
+#: - `top_navbar.j2` prints the page's title as the breadcrumb. A validation
+#:   page's title is "Validations / <suite> / <asset> / <run name> / <run time>"
+#:   once the result names its asset (#347, `validate_data`), and asset and suite
+#:   share a name here, so the breadcrumb said "interim / interim". The asset is
+#:   dropped when it repeats the suite. The index and an expectation suite's page
+#:   carry no suite name or no asset in their title, and are left as they are.
 #: - `favicon.j2` goes up one level too few on a validation page, three where
 #:   `top_navbar.j2` goes up four: `validations/<suite>/<run name>/<run time>/
 #:   <page>.html` is four levels below the site's root.
 _TEMPLATE_FIXES = {
     "top_navbar.j2": (
-        _S3_IMAGES,
-        _LOCAL_IMAGES_ON_THE_INDEX,
+        (_S3_IMAGES, _LOCAL_IMAGES_ON_THE_INDEX),
+        ("{{page_title}}", _BREADCRUMB_WITHOUT_THE_REPEATED_SUITE),
     ),
     "favicon.j2": (
-        '{% set static_images_dir = ((expectation_suite_name_dot_count + 3) * "../")',
-        '{% set static_images_dir = ((expectation_suite_name_dot_count + 4) * "../")',
+        (
+            '{% set static_images_dir = ((expectation_suite_name_dot_count + 3) * "../")',
+            '{% set static_images_dir = ((expectation_suite_name_dot_count + 4) * "../")',
+        ),
     ),
 }
 
@@ -416,8 +431,7 @@ class _FixedTemplates(BaseLoader):
 
     def get_source(self, environment, template):
         source, filename, uptodate = self.loader.get_source(environment, template)
-        if template in _TEMPLATE_FIXES:
-            old, new = _TEMPLATE_FIXES[template]
+        for old, new in _TEMPLATE_FIXES.get(template, ()):
             if old not in source:
                 raise RuntimeError(
                     f"Great Expectations' {template} no longer contains {old!r}; "
