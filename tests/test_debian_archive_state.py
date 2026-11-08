@@ -6,8 +6,8 @@ reaches a build argument above the apt line of each image CD builds.
 """
 
 from datetime import UTC, datetime
-import os
 from pathlib import Path
+import posixpath
 import re
 
 import pytest
@@ -96,7 +96,8 @@ def test_the_runtime_stage_declares_the_key_above_its_apt_line(dockerfile):
 
 def dockerfile_of(build: dict[str, str]) -> str:
     """The Dockerfile of a build-push-action step, relative to the repository."""
-    return os.path.normpath(build.get("file", os.path.join(build["context"], "Dockerfile")))
+    # posixpath, not os.path: the workflow's paths use "/" on every runner.
+    return posixpath.normpath(build.get("file", posixpath.join(build["context"], "Dockerfile")))
 
 
 @pytest.mark.req("NFR-09")
