@@ -48,7 +48,11 @@ runs:
       id: cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/release-archives/${{ inputs.name }}
+        # No `inputs` in the path: in the post step of an action called from
+        # another composite action (setup-trivy), `inputs.*` evaluates to an
+        # empty string, so the save used another path, and with it another cache
+        # version, than the restore, and the entry it made was never found.
+        path: ${{ runner.temp }}/release-archives
         key: release-binary-${{ inputs.name }}-${{ inputs.version }}-${{ inputs.sha256 }}
     - name: Install ${{ inputs.name }} ${{ inputs.version }}
       shell: bash
@@ -61,8 +65,8 @@ runs:
         CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
       run: |
         set -euo pipefail
-        dir="$RUNNER_TEMP/release-archives/$NAME"
-        archive="$dir/archive.tar.gz"
+        dir="$RUNNER_TEMP/release-archives"
+        archive="$dir/$NAME-$VERSION.tar.gz"
         mkdir -p "$dir"
         if [ "$CACHE_HIT" = true ] && [ -f "$archive" ]; then
           echo "$NAME $VERSION: archive restored from the cache, no download from github.com"
