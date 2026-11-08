@@ -188,7 +188,7 @@ INTEGRATION_MARKERS ?= integration
 ## Run the integration suite against a running stack: make test-integration [STACK_URL=...]
 .PHONY: test-integration
 test-integration:
-	RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
+	LOG_DRIVER="$${LOG_DRIVER:-local}" RECOMMENDITOS_STACK_URL=$(STACK_URL) uv run pytest tests/integration -m "$(INTEGRATION_MARKERS)" \
 		--no-cov --junitxml=reports/junit-integration.xml
 
 # The load test of docs/docs/load-testing.md (issue #143): Locust against a base

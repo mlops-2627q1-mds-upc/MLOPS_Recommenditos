@@ -443,10 +443,10 @@ def test_a_deploy_keeps_the_log_of_the_api_container_it_replaces(drill: Stack) -
         timeout=60,
         check=False,
     )
+    assert before, "the API logged nothing before the deploy"
     lines = journal.stdout.splitlines()
     assert lines, f"no journal entries of the replaced container: {journal.stderr.strip()}"
-    assert before, "the API logged nothing before the deploy"
-    assert before[0] in lines
+    assert set(before) <= set(lines)
 
 
 @pytest.mark.req("FR-15", "NFR-13")

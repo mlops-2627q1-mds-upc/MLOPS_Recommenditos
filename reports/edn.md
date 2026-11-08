@@ -1623,7 +1623,7 @@ How to add an entry:
   The default cap, 2 GB of the VM's 20 GB, fits NFR-04.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI measured which options keep the log across a recreate and recommended journald.
+- **Assessment of the AI contribution:** AI measured which options keep the log across a recreate and recommended journald, which Lukas took unchanged; the team checked that a recreated container's log survives, in a throwaway project and in CI's rollback drill, and that `json-file` fails it.
   Its burst test kept 19,998 of 30,000 lines, probably journald's rate limit, unverified, and far above NFR-03's 20 requests/s.
 - **AI interaction evidence:** Claude Code session of 2026-11-07.
   Question (translated from German, paraphrased): "#313: how should the containers' logs (nginx, the API, the drift job) survive a deploy? Today every recreate loses them (json-file driver, measured)."
