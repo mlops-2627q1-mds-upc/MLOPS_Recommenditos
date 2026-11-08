@@ -37,6 +37,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
 FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+# The state of Debian's archive, which CD passes so that its cached apt layer is
+# rebuilt whenever Debian publishes, as in the API's Dockerfile, which says how.
+ARG DEBIAN_ARCHIVE_STATE
 # zlib1g from trixie-security, as in the API's Dockerfile, which says why
 # (CVE-2026-76844 and CVE-2026-85091) and when the line can go (#334). Not
 # pinned to a version, for the reason the API's Dockerfile gives for libgomp1.
@@ -50,16 +53,18 @@ RUN groupadd --system --gid 10002 monitor \
 # the job runs as, the API's (10001, deploy/compose.yaml), so that Docker gives
 # a new volume that owner when it first mounts it.
 RUN mkdir -p /var/lib/recommenditos-monitor && chown 10001:10001 /var/lib/recommenditos-monitor
-COPY --from=dependencies /app/.venv /app/.venv
+# `--link`, here and on every COPY below, so that a rebuilt apt layer leaves
+# these layers' digests alone, as the API's Dockerfile says.
+COPY --link --from=dependencies /app/.venv /app/.venv
 # The package, compiled here, since the read-only root lets Python write no
 # bytecode at run time.
-COPY monitoring/recommenditos_monitoring /app/recommenditos_monitoring
+COPY --link monitoring/recommenditos_monitoring /app/recommenditos_monitoring
 RUN /app/.venv/bin/python -m compileall -q /app/recommenditos_monitoring
 # The drift job's loop, which the stack's `monitor` service runs.
-COPY monitoring/monitor-loop.sh /app/monitor-loop.sh
+COPY --link monitoring/monitor-loop.sh /app/monitor-loop.sh
 # The samples of the `monitoring_samples` stage: the replay's control and ES
 # listings, the drift reference and the manifest with its reference date.
-COPY data/monitoring /app/data/monitoring
+COPY --link data/monitoring /app/data/monitoring
 # The evaluate stage's outputs of the commit the image is built from, the same
 # commit as the API image's model, both committed to git: the test MdAPE and the
 # full-input coverage the drift job compares each window's error and coverage
@@ -67,10 +72,10 @@ COPY data/monitoring /app/data/monitoring
 # values, so that a window is judged against its own model's after a
 # promotion (#307), and the test MdAPE per country, the market baseline of a
 # window's MdAPE (#306).
-COPY metrics.json /app/metrics.json
-COPY reports/metrics/interval-coverage-by-make.csv /app/interval-coverage-by-make.csv
-COPY reports/metrics/segments.csv /app/segments.csv
-COPY dvc.lock /app/dvc.lock
+COPY --link metrics.json /app/metrics.json
+COPY --link reports/metrics/interval-coverage-by-make.csv /app/interval-coverage-by-make.csv
+COPY --link reports/metrics/segments.csv /app/segments.csv
+COPY --link dvc.lock /app/dvc.lock
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

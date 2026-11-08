@@ -76,6 +76,14 @@ FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12
 # copied whole and unchanged, and FR-12's check compares it with dvc.lock.
 ARG MODEL_VARIANT=lgbm-basic
 
+# The state of Debian's archive, which CD passes (the Date of the trixie and
+# trixie-security Release files): every RUN below a changed build argument
+# misses the cache, so CD's cached apt layer is rebuilt whenever Debian
+# publishes, and a security fix reaches the next release (#314,
+# docs/docs/deployment.md#vulnerabilities-and-dependency-updates). Unused by the
+# commands themselves; a build without it, such as CI's, has no cache to miss.
+ARG DEBIAN_ARCHIVE_STATE
+
 # LightGBM's native library links against GNU OpenMP, which the slim image lacks.
 # zlib1g comes from trixie-security: the pinned base image, the newest
 # python:3.12-slim-trixie (built 2026-11-05), ships 1:1.3.dfsg+really1.3.1-1+b1,
@@ -107,12 +115,17 @@ RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
 # promotion changes; and last the project's files, laid over the dependencies,
 # so a code change rebuilds only that layer, which holds the healthcheck's
 # script too, and the VM pulls only that one.
-COPY --from=dependencies /app/.venv /app/.venv
-COPY models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
+# `--link` builds each of these layers on an empty snapshot instead of on the
+# layers below, so that its digest depends on its files alone: when CD rebuilds
+# the apt layer for a new DEBIAN_ARCHIVE_STATE, these layers keep their digests
+# and the VM pulls only the apt layer and the two small ones after it, not the
+# environment again (#314).
+COPY --link --from=dependencies /app/.venv /app/.venv
+COPY --link models/${MODEL_VARIANT} /app/models/${MODEL_VARIANT}
 # FR-09's index, beside the bundle, where the API looks for it; `/health`
 # reports its md5, which is what dvc.lock records for it.
-COPY data/processed/comparables.parquet /app/models/comparables.parquet
-COPY --from=builder /project/app /app
+COPY --link data/processed/comparables.parquet /app/models/comparables.parquet
+COPY --link --from=builder /project/app /app
 
 # PROMETHEUS_MULTIPROC_DIR: where every uvicorn worker writes its metrics, so
 # that /metrics adds them up whatever the worker count (docs/docs/api.md#metrics).
