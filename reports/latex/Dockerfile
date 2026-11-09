@@ -6,7 +6,7 @@
 # the same package versions.
 ARG TL_REPO=https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final
 
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS texlive
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS texlive
 ARG TL_REPO
 # Not pinned to a version: Debian replaces a package version in its archive with
 # every security update, so a pin would break the build instead of patching it.
@@ -63,7 +63,7 @@ RUN rm -rf tlpkg install-tl* texmf-var/web2c/*.log \
         bin/linux/luatex bin/linux/luahbtex texmf-var/web2c/luatex texmf-var/web2c/luahbtex \
         texmf-dist/fonts/afm texmf-dist/fonts/opentype texmf-dist/fonts/source
 
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 # latexmk needs Perl modules beyond the perl-base shipped in the slim image.
 # Not pinned to a version, for the reason the first stage gives.
 # hadolint ignore=DL3008
