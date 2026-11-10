@@ -11,7 +11,8 @@ Record of each sprint's goal and outcome.
 | 4 | 2026-10-13 - 2026-10-20 | Finalise and submit the first report and prepare the M1-M3 presentation. | Met. The first report was finalised with no placeholder left (#123, PR #124) and submitted on Atenea (#93), and the M1-M3 presentation was given on 2026-10-20 (#92). 4 pull requests merged and 3 issues closed after planning. Access to the FIB Virtech VM was still missing, so getting it became a ticket of sprint 5 (#134). |
 | 5 | 2026-10-20 - 2026-10-27 | Milestone 4: serve the model through a documented and tested API in a Compose stack behind a reverse proxy, and deploy and load test it on the FIB Virtech VM. | Partly met. The API serves valuations, price ranges, explanations, and comparables, with its OpenAPI document and its contract, integration, and load tests, and runs as a Compose stack behind nginx. The CI half of Milestone 5 was pulled in: the image is published to GHCR, scanned, and hardened, and a workflow retrains on request. 52 pull requests merged and 41 issues closed after planning. The VM was not available yet, so its setup (#134), the deployment on it (#142), its load test (#143), and CD (#198) moved into sprint 6, together with report section 2.4 (#145). |
 | 6 | 2026-10-27 - 2026-11-03 | Milestone 4 on the VM: set it up, deploy the API behind the reverse proxy, load test it, and write report section 2.4; Milestone 5: deploy from CI with a rollback. | Partly met. The VM is set up (#134), the API runs on it behind nginx (#142), its load test settled NFR-02 to NFR-04 and NFR-10 (#143, EDN-88), and CD deploys every release through a runner on the VM that may only run `deploy.sh`, and puts the previous tag back when the check from outside fails (#198, EDN-94). 29 pull requests merged and 6 issues closed after planning. Report section 2.4 (#145) and the records of sprints 4 and 5 (#146, #202) were not done and move into sprint 7. |
-| 7 | 2026-11-03 - 2026-11-10 | Milestone 6: monitor the deployed stack and the model, rehearse the retraining chain, and write report section 2.6; finish report section 2.4 and the sprint records that sprint 6 left. | In progress |
+| 7 | 2026-11-03 - 2026-11-10 | Milestone 6: monitor the deployed stack and the model, rehearse the retraining chain, and write report section 2.6; finish report section 2.4 and the sprint records that sprint 6 left. | Mostly met. Milestone 6 is done: Prometheus, cAdvisor, node-exporter, Grafana with alerts to Discord, and the Better Stack uptime check monitor the stack (#224 to #226, EDN-99), the replay, the drift job, and the error and coverage per window monitor the model (#227 to #230, EDN-100, EDN-101), the retraining chain was rehearsed on the VM from the finding to the rollback (#231, EDN-102), and report section 2.6 is written (#232). The team confirmed the retrospectives of sprints 4 to 6 (#146, #202). 51 pull requests merged and 28 issues closed after planning. Report section 2.4 (#145) was not done and moves into sprint 8. |
+| 8 | 2026-11-10 - 2026-11-17 | The second report: start first drafts of its sections, with report sections 2.4 and 2.5.2 and the monitoring slides first. | In progress |
 
 ## Sprint 1 planning notes (2026-09-22)
 
@@ -522,6 +523,76 @@ Recorded on day 5 of the sprint from the merged and open pull requests: 27 pull 
 
 **Still open:** report sections 2.4 and 2.5.2 ([#145](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/145), [#316](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/316)), the monitoring slides ([#298](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/298)), the HTML error page ([#273](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/273)), the team's confirmation of the retrospectives of sprints 4 and 5 ([#146](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/146), [#202](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/202)) and of sprint 6, and the follow-ups opened during the sprint ([#286](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/286), [#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289), [#301](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/301), [#306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), [#307](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307), [#311](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/311) to [#315](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/315)).
 
+## Sprint 7 review (2026-11-10)
+
+From the merged pull requests and the closed issues.
+@kadameit led the meeting as scrum master, because @lukas2510 could not attend.
+
+**The backlog and how each issue ended:**
+
+| Issue | Title | Assignee | Outcome |
+| ----- | ----- | -------- | ------- |
+| [#224](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/224) | Run Prometheus, cAdvisor and node-exporter in the Compose stack and scrape the API and the VM (FR-11, NFR-04) | unassigned | Done |
+| [#225](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/225) | Provision the Grafana dashboard for resources and service health, with alerts against the NFR-02 to NFR-05 targets | unassigned | Done |
+| [#226](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/226) | Set up the Better Uptime check on /health and report the monitored uptime (NFR-05) | unassigned | Done |
+| [#227](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/227) | Replay the held-out ES market against the API and report the observed prices (FR-10, NFR-11) | unassigned | Done |
+| [#228](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/228) | Build the Alibi Detect drift job in its own scheduled container and verify NFR-11 (FR-14) | unassigned | Done |
+| [#229](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/229) | Report the real error and the interval coverage per window by joining feedback to the prediction log (FR-14) | unassigned | Done |
+| [#230](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/230) | Show drift, error and coverage in Grafana and alert on them (FR-14, NFR-11) | unassigned | Done |
+| [#231](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/231) | Rehearse the full retraining chain on the ES replay: finding, retrain, gate, promotion, rollback (FR-15) | unassigned | Done |
+| [#232](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/232) | Write report section 2.6 and close Milestone 6: monitoring, model performance and the feedback loop | unassigned | Done |
+| [#191](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/191) | Log only the fields a client sent, or mark defaults, in the prediction log | @lukas2510 | Done |
+| [#259](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/259) | Make preprocess's log_price bit-identical across CPUs (numpy SIMD on AVX-512) | unassigned | Done |
+| [#272](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/272) | Let the integration tests read the Compose project name from the environment | @kadameit | Done |
+| [#273](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/273) | Serve an HTML error page when the API is down and a browser loads / | @lukas2510 | Done |
+| [#274](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/274) | Bring the VM's nginx to the slim image (rerun the bootstrap) | unassigned | Done |
+| [#145](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/145) | Write report section 2.4 and close Milestone 4: architecture, API design, API testing and the M4 gate | unassigned | Moved into sprint 8 |
+| [#146](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/146) | Close sprint 4 and plan sprint 5 around Milestone 4 | unassigned | Done, retrospective confirmed at this meeting |
+| [#202](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/202) | Close sprint 5 and plan sprint 6 around Milestone 5 | @kadameit | Done, retrospective confirmed at this meeting |
+
+**Done and merged since the progress of 2026-11-07,** in addition to the list above:
+
+- The lecturer's feedback on the first report, with its lessons carried into the final report's guidance ([#304](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/304), [PR #305](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/305)).
+- Each window is scored against the test values of the model that answered it, and judged against the test error of its countries ([#306](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/306), [#307](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/307)).
+- The HTML page a browser gets while the API restarts ([#273](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/273), [PR #338](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/338)).
+- Deployment fixes: the containers' logs survive a deploy ([#313](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/313)), `deploy.sh` names the variable it rejects ([#312](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/312)), and CD rebuilds its cached apt layers when Debian publishes ([#314](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/314)).
+- The prediction log is pruned without being emptied when the limit is small ([#311](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/311)), and validate-data's outputs are byte-stable ([#289](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/289)).
+- The image findings: the expiring ignores resolved and renewed to 2027-01-31 ([#286](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/286), [#301](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/301)).
+- The split strategy and split gate analyses re-run on the current pool ([#315](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/315), [PR #344](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/344)), and the Data Docs fixed ([#335](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/335), [#347](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/347)).
+
+**Not done, moved into sprint 8:** report sections 2.4 and 2.5.2 ([#145](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/145), [#316](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/316)) and the monitoring slides ([#298](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/298)).
+
+**Retrospectives.**
+The team confirmed the retrospectives of sprints 4, 5, and 6 as drafted.
+
+## Sprint 8 planning notes (2026-11-10)
+
+From the issues open at the start of the sprint and the decisions of the meeting.
+
+**Sprint goal:** the second report.
+The technical milestones M4 to M6 are done, so the sprint starts first drafts of the report's sections, with report sections 2.4 and 2.5.2 and the monitoring slides first.
+
+**Backlog:**
+
+| Issue | Title | Assignee |
+| ----- | ----- | -------- |
+| [#145](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/145) | Write report section 2.4 and close Milestone 4: architecture, API design, API testing and the M4 gate | to be agreed |
+| [#316](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/316) | Write report section 2.5.2 on CI/CD | to be agreed |
+| [#298](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/298) | Prepare the monitoring slides for the final presentation | to be agreed |
+| [#348](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/348) | Rebuild dvc.lock under pyarrow 26 | unassigned |
+| [#346](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/346) | Keep the images' environment layer when only a dev dependency changes | unassigned |
+| [#345](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/345) | Survive an outage of GitHub's release downloads in CI's binary downloads | unassigned |
+| [#334](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/334) | Drop the zlib1g upgrade step once the base image ships zlib1g +deb13u1 | unassigned |
+
+**Owners.**
+The team is busy with exams this week, and the second report is not due yet, so the meeting did not split the report sections and the slides.
+The team agrees on who takes #145, #316, and #298 during the week.
+
+**Dates:**
+
+- The sprint runs Tuesday to Tuesday, from 2026-11-10 to 2026-11-17.
+- The M4-M6 presentation is on 2026-12-15, and the due date of the second report is not announced yet.
+
 ## Retrospective notes
 
 ### Sprint 1
@@ -616,7 +687,7 @@ Drafted from the sprint's record on 2026-10-17, and confirmed by the team at the
 
 ### Sprint 4
 
-Drafted from the sprint's record, for the team to confirm.
+Drafted from the sprint's record, confirmed by the team at the sprint meeting of 2026-11-10.
 
 - **What went well:**
     - The sprint goal was met: the first report was submitted and the M1-M3 presentation was given (#92, #93).
@@ -633,7 +704,7 @@ Drafted from the sprint's record, for the team to confirm.
 
 ### Sprint 5
 
-Drafted from the sprint's record, in addition to what the team said at the meeting of 2026-10-27, for the team to confirm.
+Drafted from the sprint's record, in addition to what the team said at the meeting of 2026-10-27, confirmed by the team at the sprint meeting of 2026-11-10.
 
 - **What went well:**
     - The API was built and tested before the VM existed: contract tests from the OpenAPI document, an integration suite against the Compose stack, and a load test dry run on a laptop (#144, #163, PR #176), so the deployment in sprint 6 had its smoke check and its load test ready.
@@ -653,7 +724,7 @@ Drafted from the sprint's record, in addition to what the team said at the meeti
 
 ### Sprint 6
 
-Drafted from the sprint's record, for the team to confirm.
+Drafted from the sprint's record, confirmed by the team at the sprint meeting of 2026-11-10.
 
 - **What went well:**
     - @W11W11W11, one of the three owners the sprint 5 meeting named, created the VM and ran the first four phases of the runbook, and the API ran on it the same day (#134).
@@ -668,3 +739,20 @@ Drafted from the sprint's record, for the team to confirm.
       Pinning both took two pull requests (PR #253, PR #256), and a third dependence on the CPU became a follow-up (#259).
 - **Action items:**
     - Give report section 2.4 (#145) an owner, and plan it with the other report sections of the second delivery.
+
+### Sprint 7
+
+Drafted from the sprint's record, for the team to confirm.
+
+- **What went well:**
+    - Every Milestone 6 ticket was done inside the sprint, most of them by day 5, and each decision was recorded as it was taken (EDN-98 to EDN-102).
+    - The retraining chain was rehearsed on the real VM, from the drift finding to the rollback, instead of only on a laptop (#231, PR #308).
+    - The lecturer's feedback on the first report was recorded with the lessons for the final report while the sprint was running (#304).
+    - The team confirmed the retrospectives of sprints 4 to 6, which had been open since sprint 5.
+- **What to improve:**
+    - 44 of the 51 pull requests were opened from @lukas2510's account, 1 from @kadameit's, and 6 by Dependabot.
+    - The Milestone 6 tickets had no owner at planning, so the sprint 3 action item that every part of the sprint goal gets an owner before the sprint starts was again not met.
+    - Report section 2.4 (#145) moved into the next sprint for the second time.
+- **Action items:**
+    - Agree the owners of report sections 2.4 and 2.5.2 and of the monitoring slides (#145, #316, #298) during the week of 2026-11-10.
+    - Start the first drafts of the second report's sections in sprint 8, so the drafts are ready before the due date is announced.
