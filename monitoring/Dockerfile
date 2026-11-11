@@ -19,16 +19,17 @@
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
 # The part of monitoring/uv.lock the image installs, without the dev group, as a
-# PEP 751 lock file, as in the API's Dockerfile, which says why: a bump in the
-# dev group leaves the file, and so the environment layer, unchanged (#346).
+# requirements file with hashes, as in the API's Dockerfile, which says why: a
+# bump in the dev group leaves the file, and so the environment layer,
+# unchanged (#346, EDN-106).
 FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS runtime-lock
 COPY --from=uv /uv /bin/uv
 ENV UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
 RUN --mount=type=bind,source=monitoring/uv.lock,target=uv.lock \
     --mount=type=bind,source=monitoring/pyproject.toml,target=pyproject.toml \
-    uv export --locked --no-dev --no-emit-project --format pylock.toml \
-        --quiet --output-file /pylock.toml
+    uv export --locked --no-dev --no-emit-project --format requirements.txt \
+        --quiet --output-file /requirements.txt
 
 FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS dependencies
 COPY --from=uv /uv /bin/uv
@@ -40,9 +41,9 @@ WORKDIR /app
 # step stays cached until a runtime dependency changes. The interpreter
 # request and the prompt are the ones `uv sync` would take from pyproject.toml.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,from=runtime-lock,source=/pylock.toml,target=/tmp/pylock.toml \
+    --mount=type=bind,from=runtime-lock,source=/requirements.txt,target=/tmp/requirements.txt \
     uv venv --quiet --python "~=3.12.0" --prompt recommenditos-monitoring /app/.venv \
-    && uv pip sync --python /app/.venv/bin/python --require-hashes /tmp/pylock.toml
+    && uv pip sync --python /app/.venv/bin/python --require-hashes /tmp/requirements.txt
 # Pillow out again: Alibi Detect 0.13 requires Pillow<11, which has dozens of
 # fixed HIGH and CRITICAL findings, and only its image detectors and
 # Matplotlib use it, none of which the jobs import. The stack's integration
