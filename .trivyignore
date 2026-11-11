@@ -103,10 +103,12 @@ CVE-2026-85091 exp:2027-01-31
 # tag is rebuilt with it on 2026-11-11. Nothing that runs in the container loads
 # Kerberos: cadvisor links only libpfm and musl, the healthcheck is busybox
 # wget, and krb5-libs is there only for libtirpc, which only the ZFS tools load
-# (through libnvpair). cadvisor runs `zfs` only when it sees /dev/zfs, and the
-# container gets no device. The image has no KDC or kadmind, which most of
-# these findings are in. Accepted until a rebuilt image, which Dependabot
-# proposes.
+# (through libnvpair). cadvisor runs `zfs` only when it sees /dev/zfs or, with
+# the `disk` metric on, when Docker uses the zfs storage driver; neither holds
+# here (the container gets no device, --enable_metrics leaves `disk` out, and
+# the VM runs overlay2), and even then `zfs` would load the libraries without
+# network input. The image has no KDC or kadmind, which most of these findings
+# are in. Accepted until a rebuilt image, which Dependabot proposes.
 # KDC ASN.1 decoder read overrun: the image runs no KDC, and nothing in it loads krb5.
 CVE-2026-107364 exp:2027-01-31
 # kadmind RPCSEC_GSS buffer decode leak: the image runs no kadmind, and nothing in it loads krb5.
