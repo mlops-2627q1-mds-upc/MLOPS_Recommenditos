@@ -211,10 +211,15 @@ Only the `dvc pull` step sees the DagsHub token.
 It is a secret of the GitHub Environment `dagshub`, which only `main` may use, and the step writes it into `.dvc/config.local`, as on a laptop, and deletes that file when it ends.
 The job's token may read the repository and write packages, nothing more.
 
-The build stages' layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves `uv.lock` and `pyproject.toml` unchanged skips the `uv sync` of the third-party dependencies.
+The build stages' layers come from the GitHub Actions cache (`type=gha`, `mode=max`), so a commit that leaves the serving runtime unchanged skips the install of the third-party dependencies.
+Each Dockerfile first exports the part of its lock the image installs (`uv export --locked --format pylock.toml`, without the project and without the dependency groups the image leaves out) and installs the environment from that file alone, with `uv pip sync --require-hashes`.
+BuildKit keys the install step on the file's content, so only a change to the serving runtime's packages rebuilds the environment layer: a version, a hash, or a package added or removed in `[project] dependencies` of `pyproject.toml` or among their dependencies, and for the monitoring image any package of `monitoring/uv.lock` outside its `dev` group.
+A change to `uv.lock` that touches only dependency groups the image does not install, such as Dependabot's weekly bumps of `types-*` stubs, runs the export again, under a second, but leaves its output byte for byte the same, so the install step stays `CACHED` and the environment layer keeps its digest ([#346](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/346)).
+This matters because a rebuilt environment is never byte-identical to the one before: an uncached install writes new bytecode files and timestamps, so its layer gets a new digest even with the same packages, and the VM pulls it again, 176 MB for the API image and 370 MB for the monitoring image.
+Before #346 the install read `uv.lock` itself, so every change to the lock rebuilt the layer: the dev-only bumps #330 and #268 each gave the API image a new environment layer.
 The runtime stage copies the environment in two layers, with the bundle and the index between them, ordered from the least to the most often changed (`docker history`, measured on 2026-10-23):
 
-1. the third-party dependencies, 535 MB, which only a change to `uv.lock` or `pyproject.toml` rebuilds;
+1. the third-party dependencies, 535 MB, which only a change to the serving runtime in `uv.lock` rebuilds;
 2. the model bundle, 45 MB, and the comparables index, 2 MB, which a model promotion changes;
 3. the `recommenditos` package, 1.5 MB, laid over the dependencies' environment.
 
@@ -236,7 +241,7 @@ Debian publishes into `trixie-security` about daily: it announced 126 security a
 The rebuild costs at most about 60 s for the API image and 100 s for the monitoring image, most of it in exporting the rebuilt layers to the runner's Docker and to the cache, measured on CD run [42399145722](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42399145722), which rebuilt both runtime stages.
 The dependencies are not installed again, and every `COPY` below the apt line uses `--link`, which builds its layer on an empty snapshot instead of on the layers below, so that its digest depends on its files alone.
 Built locally with two keys on 2026-11-08 (a `docker-container` builder and gzip-compressed OCI output, as a registry stores the layers), the images changed only in the apt layer and the small `RUN` layers after it, 0.3 MB for the API image and 0.7 MB for the monitoring image, which is what the VM pulls after such a rebuild; without `--link`, the environment's layer changed too, 171 MB and 370 MB.
-The release that introduced `--link` (94afbdc, #340) changed the environment layers of the API image (171 MB) and the monitoring image (370 MB) once, so the VM pulled them once; later releases keep them unless `uv.lock` or the code changes.
+The release that introduced `--link` (94afbdc, #340) changed the environment layers of the API image (171 MB) and the monitoring image (370 MB) once, so the VM pulled them once; later releases keep them unless the serving runtime in the lock changes.
 `--link` left the final file trees the same, with the same paths, owners, permissions, sizes, and link targets.
 The step's log names the key it used, and on a run after Debian published, the build shows the apt step as `DONE` instead of `CACHED`.
 When a Release file cannot be read, the key is today's date and the job shows a warning, so an outage of Debian's archive costs at most one rebuild a day and never a release.

@@ -3,7 +3,8 @@
 # `models/<variant>` and `data/processed/comparables.parquet` are present.
 # docs/docs/deployment.md says how it is built, run and deployed.
 #
-# After uv's Docker guide: the `dependencies` stage installs the third-party
+# After uv's Docker guide: the `runtime-lock` stage exports the part of uv.lock
+# the image installs, the `dependencies` stage installs those third-party
 # dependencies into a virtual environment with uv, the `builder` stage adds the
 # project, and the runtime stage copies both and the bundle onto the same slim
 # Python image, without uv, the build cache or the source tree. The runtime stage
@@ -20,6 +21,28 @@
 # the pin.
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
+FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS runtime-lock
+
+COPY --from=uv /uv /bin/uv
+
+ENV UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+# The part of uv.lock the image installs, as a PEP 751 lock file: the serving
+# runtime, `[project] dependencies`, with the URL and the hash of every file,
+# and without the project itself and every dependency group
+# (`--no-default-groups`). `--locked` fails the build when uv.lock is out of
+# date with pyproject.toml. This step runs again on every change to either
+# file, in well under a second, but its output changes only with the runtime:
+# a bump in a group the image does not install, such as a `types-*` stub in
+# `dev`, leaves the file byte for byte the same (#346).
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv export --locked --no-default-groups --no-emit-project --format pylock.toml \
+        --quiet --output-file /pylock.toml
+
+
 FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS dependencies
 
 COPY --from=uv /uv /bin/uv
@@ -33,14 +56,21 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# The dependencies, in a stage of its own that only a change to the lock or to
-# pyproject.toml invalidates. `--no-default-groups` leaves out every dependency
-# group: the image holds `[project] dependencies`, the serving runtime, and
-# nothing else.
+# The dependencies, in a stage of its own whose one input is the runtime lock
+# above: BuildKit keys the bind mount on the file's content, so this step stays
+# cached, and the environment layer keeps its digest, until the serving runtime
+# changes, while a change to uv.lock that touches only dependency groups does
+# not reach it. An uncached run would write new bytecode and timestamps, so the
+# VM would pull the whole environment again (docs/docs/deployment.md). The
+# environment holds exactly the packages of the lock file, from the URLs it
+# names, each checked against its hash. The interpreter request is the
+# project's `requires-python` and the prompt its name, as `uv sync` would set
+# them, so the environment holds the files `uv sync` gave it, with the same
+# content apart from the bytecode, which no uncached run writes the same twice.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-default-groups --no-install-project
+    --mount=type=bind,from=runtime-lock,source=/pylock.toml,target=/tmp/pylock.toml \
+    uv venv --quiet --python "~=3.12.0" --prompt recommenditos /app/.venv \
+    && uv pip sync --python /app/.venv/bin/python --require-hashes /tmp/pylock.toml
 
 
 FROM dependencies AS builder
@@ -110,8 +140,8 @@ RUN mkdir -p /var/lib/recommenditos && chown 10001:10001 /var/lib/recommenditos
 # Owned by root and only readable by the service user: the API writes nothing
 # into its own code or model.
 # Ordered from the least to the most often changed, as Docker rebuilds every
-# layer above a changed one: the dependencies, which only a change to the lock
-# or to pyproject.toml rebuilds; the bundle and the index, which a model
+# layer above a changed one: the dependencies, which only a change to the
+# serving runtime in the lock rebuilds; the bundle and the index, which a model
 # promotion changes; and last the project's files, laid over the dependencies,
 # so a code change rebuilds only that layer, which holds the healthcheck's
 # script too, and the VM pulls only that one.
