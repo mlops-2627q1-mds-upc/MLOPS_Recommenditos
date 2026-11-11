@@ -7,7 +7,8 @@
 #   CVE-2026-12345 exp:2026-12-31
 #
 # Every entry below was re-checked against the current advisories on
-# 2026-11-07 (#286). The expiry, 2027-01-31, lies after the final
+# 2026-11-07 (#286), the krb5-libs entries of cAdvisor added on 2026-11-11.
+# The expiry, 2027-01-31, lies after the final
 # presentation of 2026-12-15 and the end of the course, so the scan cannot
 # turn main red while the project is graded; it is the date of the next
 # review that the scan forces.
@@ -96,6 +97,50 @@ CVE-2026-78661 exp:2027-01-31
 CVE-2026-107891 exp:2027-01-31
 # zlib's gzwrite()/gzprintf() path: nginx imports zlib's deflate and inflate but no gz* function, cadvisor links no zlib. The API and monitoring images take the fixed zlib1g (Dockerfile), and CVE-2026-76844, fixed by the same package and not accepted, still fails the scan if zlib1g regresses there.
 CVE-2026-85091 exp:2027-01-31
+
+# krb5-libs 1.22.1-r0 in the Alpine layer of cAdvisor v0.60.6
+# (deploy/compose.yaml): Alpine ships the fix in 1.22.3-r0, but no image of the
+# tag is rebuilt with it on 2026-11-11. Nothing that runs in the container loads
+# Kerberos: cadvisor links only libpfm and musl, the healthcheck is busybox
+# wget, and krb5-libs is there only for libtirpc, which only the ZFS tools load
+# (through libnvpair). cadvisor runs `zfs` only when it sees /dev/zfs or, with
+# the `disk` metric on, when Docker uses the zfs storage driver; neither holds
+# here (the container gets no device, --enable_metrics leaves `disk` out, and
+# the VM runs overlay2), and even then `zfs` would load the libraries without
+# network input. The image has no KDC or kadmind, which most of these findings
+# are in. Accepted until a rebuilt image, which Dependabot proposes.
+# KDC ASN.1 decoder read overrun: the image runs no KDC, and nothing in it loads krb5.
+CVE-2026-107364 exp:2027-01-31
+# kadmind RPCSEC_GSS buffer decode leak: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112315 exp:2027-01-31
+# kadmind xdr_krb5_tl_data() decode leak: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112316 exp:2027-01-31
+# KDC keytab key decryption leak: the image runs no KDC, and nothing in it loads krb5.
+CVE-2026-112317 exp:2027-01-31
+# kadmind null policy name dereference: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112318 exp:2027-01-31
+# kadmind unbounded RPC XDR allocation: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112319 exp:2027-01-31
+# kadmind GSS-RPC auth flavor switching leak: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112320 exp:2027-01-31
+# kadmind AUTH_GSSAPI_INIT error path leak: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112321 exp:2027-01-31
+# kadmind AUTH_GSSAPI client state cleanup: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112322 exp:2027-01-31
+# kadmind failed AUTH_GSSAPI_INIT requests: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-112323 exp:2027-01-31
+# kadmind request alteration and disclosure: the image runs no kadmind, and nothing in it loads krb5.
+CVE-2026-118380 exp:2027-01-31
+# KDC quadratic ASN.1 SEQUENCE OF decoding: the image runs no KDC, and nothing in it loads krb5.
+CVE-2026-119079 exp:2027-01-31
+# NegoEx NULL dereference in gss_accept_sec_context(): nothing in the image loads krb5 or accepts a GSS token.
+CVE-2026-40355 exp:2027-01-31
+# NegoEx integer underflow in gss_accept_sec_context(): nothing in the image loads krb5 or accepts a GSS token.
+CVE-2026-40356 exp:2027-01-31
+# CAMMAC authentication indicator bypass: nothing in the image loads krb5 or accepts a Kerberos ticket.
+CVE-2026-71199 exp:2027-01-31
+# KDC PKINIT pre-auth NULL dereference: the image runs no KDC, and nothing in it loads krb5.
+CVE-2026-71200 exp:2027-01-31
 
 # transformers 4.57.6 in the monitoring image (monitoring/Dockerfile): Alibi
 # Detect 0.13 requires transformers<5 and imports it when it is imported, but
