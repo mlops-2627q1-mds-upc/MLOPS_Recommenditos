@@ -65,10 +65,10 @@ WORKDIR /app
 # VM would pull the whole environment again (docs/docs/deployment.md). The
 # environment holds exactly the packages of the file, whose files uv finds
 # through the index, PyPI, and checks against the locked hashes. The
-# interpreter request is the
-# project's `requires-python` and the prompt its name, as `uv sync` would set
-# them, so the environment holds the files `uv sync` gave it, with the same
-# content apart from the bytecode, which no uncached run writes the same twice.
+# interpreter request is the project's `requires-python` and the prompt its
+# name, as `uv sync` would set them, so the environment holds the files
+# `uv sync` gave it, with the same content apart from the bytecode, which no
+# uncached run writes the same twice.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,from=runtime-lock,source=/requirements.txt,target=/tmp/requirements.txt \
     uv venv --quiet --python "~=3.12.0" --prompt recommenditos /app/.venv \

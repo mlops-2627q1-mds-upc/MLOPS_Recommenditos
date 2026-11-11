@@ -1666,22 +1666,22 @@ How to add an entry:
 - **Activity / Topic:** Containerization, Dependency Management, CI/CD
 - **Participants:** Lukas Häußler (decided), AI agents (options, measurements, implementation, review)
 - **Decision:** A stage of each Dockerfile exports the part of its lock the image installs, `uv export --locked` as a requirements file with hashes, without the project and the groups the image leaves out.
-  The environment is installed from that file alone with `uv pip sync --require-hashes`, so a lock change in a group only keeps the install step cached and the environment layer's digest unchanged.
+  The environment is installed from that file alone with `uv pip sync --require-hashes`, so a lock change that touches only groups the image leaves out keeps the install step cached and the environment layer's digest unchanged.
 - **Alternatives considered:**
   - A `pylock.toml` export, taken first: installing from it is experimental in uv 0.13.6 and warns on every build.
   - `uv sync` on `uv.lock`, as before: every weekly dev bump makes the VM pull the environment again.
   - `uv sync` keyed on the export: impossible, as `uv sync` reads `uv.lock`, which keys the step on the whole lock.
-- **Rationale:** An uncached install never writes the same bytes twice, so only a cached step keeps the layer.
+- **Rationale:** An uncached install writes new timestamps and bytecode, so only a cached step keeps the layer.
   Measured with a fresh builder and a cache, a `types-tqdm` bump kept the API's 176 MB layer and a `types-pyyaml` bump the monitoring image's 370 MB one, while the previous Dockerfiles rebuilt both and a `pydantic` bump still rebuilds.
   The environments are unchanged apart from the bytecode.
-  The cost is that the install finds its files through PyPI's index, each checked against the locked hash.
+  The cost: the install finds its files through PyPI's index, each checked against the locked hash.
 - **AI involvement:** Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted with modifications
 - **Assessment of the AI contribution:** An AI worker proposed the export, measured layer digests with and without the change and compared the environments; an independent AI review found that the `pylock.toml` install was experimental and that the docs left out base and uv image updates.
   Lukas first took the `pylock.toml` recommendation, then, asked again with that fact, the requirements file.
 - **AI interaction evidence:** Claude Code session of 2026-11-11.
   Question (translated from German): "#346 once more, with a new fact: the review of PR #359 showed that uv marks installing from a pylock.toml (`uv pip sync` with pylock) as experimental in uv 0.13.6 (a warning in every build). That was not in my question earlier, so I ask again. Which way should it be?"
-  Orchestrator briefing (core, paraphrased): "Keep the environment layer of both images byte-identical when a lock change touches only groups the image does not install; verify that BuildKit keys the install on a runtime-only export and that the environment stays the same; stop with DECISION NEEDED on an EDN decision."
+  Orchestrator briefing (core, paraphrased): "Review PR #359 on its merits; the install mechanism (a pylock export with `uv pip sync`) awaits Lukas's confirmation, so say plainly if it is worse than the alternatives, and flag it if its `uv` support is preview only."
   Lukas answered: "requirements.txt export (recommended): the stable uv way with the same effect: export only the runtime, `uv pip sync --require-hashes`; the reviewer measured: the export is byte-identical for dev bumps, the same 37 packages, no warning, every file checked by hash. Con: files are resolved through the index (requests to PyPI during the build)." (translated from German)
 - **Other evidence:** [Issue #346](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/346), [PR #359](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/359), [What rebuilds the environment layer](../docs/docs/deployment.md#continuous-delivery), EDN-47, EDN-105.
 - **In LaTeX:** yes
