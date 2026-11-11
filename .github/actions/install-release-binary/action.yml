@@ -1,0 +1,95 @@
+name: Install a release binary
+description: >-
+  Installs one binary from a release archive on github.com, pinned by SHA-256,
+  and keeps the archive in the Actions cache so that a warm run needs no
+  request to github.com/releases. Used by setup-trivy and by the Secret scan
+  job (gitleaks).
+
+# GitHub's release downloads were down for about two hours on 2026-11-08 (HTTP
+# 504 for every repository), which failed the required Integration and Secret
+# scan jobs on every pull request (#345). Two defences, neither of which weakens
+# the pin:
+#
+# - The archive is cached under a key made of the tool, its version and its
+#   SHA-256, so a run after the first one on a branch (a pull request restores
+#   main's entry too) does not download. The cache is a convenience, never a
+#   source of trust: the archive is checked against the pinned SHA-256 whether
+#   it came from the cache or the network, and a mismatch fails the step. An
+#   archive that fails the check is never saved, because the cache saves only
+#   when the job succeeds. Unlike setup-uv's cache (ci.yml), a pull request
+#   saves its entry too: the two archives are about 58 MiB of the repository's
+#   10 GB, and they keep its later runs warm when main has no entry.
+# - A cold run retries every error, not only the transient ones curl knows, with
+#   a doubling wait (1 s, 2 s, ... 128 s). No new attempt starts after five
+#   minutes, but the last one can still run its two-minute limit, so about seven
+#   minutes at worst, inside the timeout of every job that calls this (10 to 30
+#   minutes). That rides out a short outage; a
+#   long one still fails the job, loudly, with curl's last error in the log. A
+#   404, such as a mistyped version, is retried the same way and fails after
+#   about four minutes.
+#
+# The checksum is written in the caller, not fetched beside the archive: a
+# checksum from the same place as the file it checks proves nothing about who
+# put either there (EDN-95, EDN-71).
+inputs:
+  name:
+    description: The tool, as in the cache key and the log.
+    required: true
+  version:
+    description: The release, as in the cache key and the log.
+    required: true
+  url:
+    description: Where the release archive is downloaded from on a cache miss.
+    required: true
+  sha256:
+    description: SHA-256 of the archive, from that release's checksums file.
+    required: true
+  member:
+    description: The file in the archive to install.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Restore the archive from the cache
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        # No `inputs` in the path: in the post step of an action called from
+        # another composite action (setup-trivy), `inputs.*` evaluates to an
+        # empty string, so the save used another path, and with it another cache
+        # version, than the restore, and the entry it made was never found.
+        path: ${{ runner.temp }}/release-archives
+        key: release-binary-${{ inputs.name }}-${{ inputs.version }}-${{ inputs.sha256 }}
+    - name: Install ${{ inputs.name }} ${{ inputs.version }}
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        VERSION: ${{ inputs.version }}
+        URL: ${{ inputs.url }}
+        SHA256: ${{ inputs.sha256 }}
+        MEMBER: ${{ inputs.member }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        dir="$RUNNER_TEMP/release-archives"
+        archive="$dir/$NAME-$VERSION.tar.gz"
+        mkdir -p "$dir"
+        if [ "$CACHE_HIT" = true ] && [ -f "$archive" ]; then
+          echo "$NAME $VERSION: archive restored from the cache, no download from github.com"
+        else
+          echo "$NAME $VERSION: cache miss, downloading $URL"
+          rm -f "$archive" "$archive.part"
+          curl --silent --show-error --fail --location \
+            --retry 8 --retry-all-errors --retry-max-time 300 \
+            --connect-timeout 20 --max-time 120 \
+            --output "$archive.part" "$URL"
+          mv "$archive.part" "$archive"
+        fi
+        if ! echo "${SHA256}  $archive" | sha256sum --check --strict; then
+          echo "::error::the $NAME $VERSION archive does not match the SHA-256 pinned in the workflow; it is not installed"
+          exit 1
+        fi
+        bin="$RUNNER_TEMP/bin/$NAME"
+        mkdir -p "$bin"
+        tar -xzf "$archive" -C "$bin" "$MEMBER"
+        echo "$bin" >> "$GITHUB_PATH"

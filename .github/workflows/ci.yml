@@ -132,6 +132,7 @@ jobs:
               - "tools/image_scan.py"
               - ".trivyignore"
               - ".github/actions/setup-trivy/**"
+              - ".github/actions/install-release-binary/**"
 
   pre-commit:
     name: Lint & format
@@ -626,14 +627,16 @@ jobs:
             echo "::error file=.pre-commit-config.yaml::the gitleaks hook is not on v${GITLEAKS_VERSION}, the release this job scans with; move both together"
             exit 1
           fi
+      # Cached and downloaded with retries, and checked against the pinned
+      # checksum either way (install-release-binary, #345).
       - name: Install gitleaks
-        run: |
-          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/$archive" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
-          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
-          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+        uses: ./.github/actions/install-release-binary
+        with:
+          name: gitleaks
+          version: ${{ env.GITLEAKS_VERSION }}
+          url: https://github.com/gitleaks/gitleaks/releases/download/v${{ env.GITLEAKS_VERSION }}/gitleaks_${{ env.GITLEAKS_VERSION }}_linux_x64.tar.gz
+          sha256: ${{ env.GITLEAKS_SHA256 }}
+          member: gitleaks
       # A scan that finds nothing is evidence only if it could have found
       # something, and gitleaks has no rule of its own for a DagsHub token or a
       # Discord webhook URL. The canary plants both in a throwaway history and
