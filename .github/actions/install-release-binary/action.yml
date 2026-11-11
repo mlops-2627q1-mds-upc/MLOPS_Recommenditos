@@ -16,7 +16,9 @@ description: >-
 #   source of trust: the archive is checked against the pinned SHA-256 whether
 #   it came from the cache or the network, and a mismatch fails the step. An
 #   archive that fails the check is never saved, because the cache saves only
-#   when the job succeeds.
+#   when the job succeeds. Unlike setup-uv's cache (ci.yml), a pull request
+#   saves its entry too: the two archives are about 58 MiB of the repository's
+#   10 GB, and they keep its later runs warm when main has no entry.
 # - A cold run retries every error, not only the transient ones curl knows, with
 #   a doubling wait (1 s, 2 s, ... 128 s) for at most five minutes, which rides
 #   out a short outage; a long one still fails the job, loudly, with curl's last
