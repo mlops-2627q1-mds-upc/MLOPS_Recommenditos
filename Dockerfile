@@ -120,9 +120,11 @@ ARG DEBIAN_ARCHIVE_STATE
 # zlib1g comes from trixie-security: the pinned base image, the newest
 # python:3.12-slim-trixie (built 2026-11-05), ships 1:1.3.dfsg+really1.3.1-1+b1,
 # which has CVE-2026-76844 and CVE-2026-85091, fixed in
-# 1:1.3.dfsg+really1.3.1-1+deb13u1 (DSA-6613-1). Once Dependabot moves the base
-# to one that ships the fix, the upgrade does nothing and the line can go
-# (#334).
+# 1:1.3.dfsg+really1.3.1-1+deb13u1 (DSA-6613-1). The line stays for good (#334):
+# trixie-security gets a zlib fix before the base image does, and with the
+# archive state above, CD's rebuild of this layer takes it as soon as Debian
+# publishes it. Once the base ships the fix, the line upgrades nothing and costs
+# only an apt download per rebuild of this layer.
 # Not pinned to a version: Debian replaces a package version in its archive with
 # every security update, so a pin would break the build instead of patching it.
 # hadolint ignore=DL3008
