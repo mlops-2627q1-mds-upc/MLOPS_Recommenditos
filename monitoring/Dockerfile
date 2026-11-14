@@ -56,8 +56,8 @@ FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12
 # rebuilt whenever Debian publishes, as in the API's Dockerfile, which says how.
 ARG DEBIAN_ARCHIVE_STATE
 # zlib1g from trixie-security, as in the API's Dockerfile, which says why
-# (CVE-2026-76844 and CVE-2026-85091) and when the line can go (#334). Not
-# pinned to a version, for the reason the API's Dockerfile gives for libgomp1.
+# (CVE-2026-76844 and CVE-2026-85091) and why the line stays (#334). Not pinned
+# to a version, for the reason the API's Dockerfile gives for libgomp1.
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --only-upgrade zlib1g \
