@@ -699,7 +699,7 @@ with db:
         "DELETE FROM model_test_values WHERE model_variant = ? AND model_version = ?", sys.argv[1:]
     ).rowcount
 print(deleted, "row deleted")
-' lgbm-basic 2a60912bd232083e6950f26fe72fe6c4
+' lgbm-basic aacc0854dc20653b5f6d47ed078a9a72
 ```
 
 A window then takes the values recorded for its `model_version`, also when it is first scored by the next release's image.

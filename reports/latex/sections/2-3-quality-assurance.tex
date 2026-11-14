@@ -25,7 +25,7 @@ On our laptops and on the GitHub Actions runner that trained the served model, a
 We checked the estimate once against the real energy counter, before \texttt{lgbm-basic} got its copies (EDN-82).
 For \texttt{b1}, \texttt{lgbm-basic}, and \texttt{lgbm-extended} the estimate was about 70\,\% of the counter's reading.
 The fit of \texttt{b0}, 0.09 seconds in that check, is too short to compare.
-The ratio between the two LightGBM variants was 2.97 for both the estimate and the counter; it was 1.7 on the laptop run of 2026-10-13, after \texttt{lgbm-basic} got its copies on three times the rows, and in \cref{tab:energy} \texttt{lgbm-basic} costs 5.5 times \texttt{lgbm-extended}, because its fit also includes the price range.
+The ratio between the two LightGBM variants was 2.97 for both the estimate and the counter; it was 1.7 on the laptop run of 2026-10-13, after \texttt{lgbm-basic} got its copies on three times the rows, and in \cref{tab:energy} \texttt{lgbm-basic} costs 5.0 times \texttt{lgbm-extended}, because its fit also includes the price range.
 We therefore use the energy values to compare variants and not as absolute values.
 The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,g\,CO$_2$eq per kWh, so that two runs differ in emissions only through their energy and not through the location CodeCarbon detects.
 
@@ -35,17 +35,17 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
     \toprule
     & Fit time & Energy & Emissions (CO$_2$eq) \\
     \midrule
-    \texttt{b0} & 0.06\,s & 0.0003\,Wh & 0.05\,mg \\
-    \texttt{b1} & 0.87\,s & 0.0034\,Wh & 0.59\,mg \\
-    \texttt{lgbm-basic} & 102.72\,s & 0.4051\,Wh & 70.50\,mg \\
-    \texttt{lgbm-extended} & 17.02\,s & 0.0742\,Wh & 12.92\,mg \\
+    \texttt{b0} & 0.06\,s & 0.0002\,Wh & 0.04\,mg \\
+    \texttt{b1} & 0.77\,s & 0.0030\,Wh & 0.52\,mg \\
+    \texttt{lgbm-basic} & 97.07\,s & 0.3854\,Wh & 67.08\,mg \\
+    \texttt{lgbm-extended} & 16.99\,s & 0.0778\,Wh & 13.55\,mg \\
     \midrule
-    Whole ladder & 120.7\,s & 0.483\,Wh & 84.1\,mg \\
+    Whole ladder & 114.9\,s & 0.467\,Wh & 81.2\,mg \\
     Whole ladder on a laptop, before the price range & 51.6\,s & 0.191\,Wh & 33.2\,mg \\
     Hyperparameter search, 34 fits, on another laptop & 391\,s & 3.61\,Wh & 628\,mg \\
     \bottomrule
   \end{tabular}
-  \caption{Energy and emissions of training, as CodeCarbon estimates them. The four variants and the first total are the retrain of the served model on a GitHub Actions runner on 2026-11-05, from \texttt{reports/figures/energy-vs-error.csv}, which \cref{fig:energy} draws; CodeCarbon assumes the runner CPU's power there. The laptop total is the run of 2026-10-13 and the hyperparameter search is from its 34 MLflow runs (EDN-73). Each is one measurement per fit, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82), and its fit includes the price range.}
+  \caption{Energy and emissions of training, as CodeCarbon estimates them. The four variants and the first total are the retrain of the served model on a GitHub Actions runner on 2026-11-14, from \texttt{reports/figures/energy-vs-error.csv}, which \cref{fig:energy} draws; CodeCarbon assumes the runner CPU's power there. The laptop total is the run of 2026-10-13 and the hyperparameter search is from its 34 MLflow runs (EDN-73). Each is one measurement per fit, so fit time and energy vary between runs; \texttt{lgbm-basic} is fitted on three times the rows of the other variants (EDN-82), and its fit includes the price range.}
   \label{tab:energy}
 \end{table}
 
@@ -53,7 +53,7 @@ The emissions are the energy times a fixed factor for the Spanish grid, 174.05\,
 \begin{figure}[ht]
   \centering
   \includegraphics[width=0.66\textwidth]{energy-vs-error}
-  \caption{Training energy against test error for the four variants of the retrain of 2026-11-05 on a GitHub Actions runner, as in \cref{tab:energy}. A filled point is the error on requests with every field, a ring the error on requests with only the fields FR-01 requires.}
+  \caption{Training energy against test error for the four variants of the retrain of 2026-11-14 on a GitHub Actions runner, as in \cref{tab:energy}. A filled point is the error on requests with every field, a ring the error on requests with only the fields FR-01 requires.}
   \label{fig:energy}
 \end{figure}
 
@@ -63,8 +63,8 @@ The extended features therefore do not earn their energy.
 This, SC-06 at the time of the choice, and the missing price range of \texttt{lgbm-extended} are why \texttt{lgbm-basic} is the candidate (\cref{sec:m2-experiment-tracking}, EDN-62).
 
 \paragraph{Training budget.}
-According to \cref{tab:energy}, the whole ladder takes 121 seconds of fitting and 0.483\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
-By CodeCarbon's estimate the most expensive fit, \texttt{lgbm-basic} with its price range, uses about 0.41\,Wh, so the energy of training does not limit our choices.
+According to \cref{tab:energy}, the whole ladder takes 115 seconds of fitting and 0.467\,Wh, against NFR-10's budget of 15 minutes for training the chosen configuration.
+By CodeCarbon's estimate the most expensive fit, \texttt{lgbm-basic} with its price range, uses about 0.39\,Wh, so the energy of training does not limit our choices.
 
 \paragraph{Early stopping.}
 Early stopping now chooses the number of trees under a ceiling of 5,000; before, a ceiling of 1,000 ended the fit (EDN-73).
@@ -73,7 +73,7 @@ We accepted this cost so that the validation split, and not a fixed ceiling, dec
 
 \paragraph{Hyperparameter search.}
 The hyperparameter search ran 34 fits in 391 seconds and used 3.61\,Wh, or 628\,mg CO$_2$eq, on a second laptop (EDN-73).
-That is about 19 times the whole ladder.
+That is about 19 times the whole ladder on a laptop.
 The two were measured on different machines, so the ratio is only an order of magnitude.
 The search kept the committed values.
 We changed NFR-10 as a result: the 15-minute budget applies to training the chosen configuration, which every retraining pays, and a search is run and reported separately, because it is paid once per decision.
