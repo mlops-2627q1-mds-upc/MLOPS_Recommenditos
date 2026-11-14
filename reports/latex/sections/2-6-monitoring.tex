@@ -115,7 +115,7 @@ These known findings were silenced until the retraining rehearsal of \cref{sec:m
 
 \paragraph{The control clause of NFR-11.}
 \texttt{monitoring/tests/test\_nfr11.py} runs the job's own pass over 20 control windows and the first \texttt{ES} window of the versioned samples, and requires at most one flagged control window and the \texttt{ES} window flagged in at least three features besides \texttt{country\_code}.
-It needs the DagsHub credentials, which only \texttt{main} has (EDN-91), so CD runs it before any image is pushed, and it passed on the last release, of 2026-11-05.
+It needs the DagsHub credentials, which only \texttt{main} has (EDN-91), so CD runs it before any image is pushed, and no image is pushed unless it passes; it passed on the release of 2026-11-05 that deployed the retrained model of FR-15's rehearsal (\href{https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/actions/runs/42058543205}{CD run 42058543205}).
 When the test was written, on the samples of 2026-11-04, no control window was flagged, and the lowest p-value of any control feature was 0.0035, 16 times the threshold.
 
 \paragraph{What the dashboard cannot show.}
