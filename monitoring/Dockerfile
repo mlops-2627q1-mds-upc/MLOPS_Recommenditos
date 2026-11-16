@@ -16,13 +16,13 @@
 
 # The same uv and Python images as the API's Dockerfile, pinned by digest, which
 # Dependabot moves together with the tag.
-FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 AS uv
 
 # The part of monitoring/uv.lock the image installs, without the dev group, as a
 # requirements file with hashes, as in the API's Dockerfile, which says why: a
 # bump in the dev group leaves the file, and so the environment layer,
 # unchanged (#346, EDN-106).
-FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS runtime-lock
+FROM python:3.12-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS runtime-lock
 COPY --from=uv /uv /bin/uv
 ENV UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
@@ -31,7 +31,7 @@ RUN --mount=type=bind,source=monitoring/uv.lock,target=uv.lock \
     uv export --locked --no-dev --no-emit-project --format requirements.txt \
         --quiet --output-file /requirements.txt
 
-FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54 AS dependencies
+FROM python:3.12-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS dependencies
 COPY --from=uv /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # (tests/integration/test_deployed_monitor.py).
 RUN uv pip uninstall --python /app/.venv/bin/python pillow
 
-FROM python:3.12-slim-trixie@sha256:4840d514c583a4d3d8cad3940e68dee6f0f6f3635c12fcd0a3d74c21a5b93a54
+FROM python:3.12-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 # The state of Debian's archive, which CD passes so that its cached apt layer is
 # rebuilt whenever Debian publishes, as in the API's Dockerfile, which says how.
 ARG DEBIAN_ARCHIVE_STATE
