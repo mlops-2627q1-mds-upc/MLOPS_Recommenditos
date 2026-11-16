@@ -225,7 +225,7 @@ services:
   # has a read-only root and `no-new-privileges`, and it publishes no port.
   cadvisor:
     <<: *hardening
-    image: ghcr.io/google/cadvisor:v0.60.6@sha256:b8e7d1093144fd088f425ff003d75a4aa405de075db78dae3bc563730b1bd07a
+    image: ghcr.io/google/cadvisor:v0.61.0@sha256:448ca9b1ce0d3f2eb7563938030908a4b81ddfe959a3fe5e62f691fd4b2cb417
     command:
       # Only Docker's containers and the root cgroup, not every cgroup of the host.
       - --docker_only=true
@@ -304,7 +304,7 @@ services:
   alertmanager:
     <<: *hardening
     # Pinned by digest as well as by tag, which Dependabot moves together.
-    image: quay.io/prometheus/alertmanager:v0.34.2@sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b
+    image: quay.io/prometheus/alertmanager:v0.35.0@sha256:5f6e66c01bd610aef6dd671642a52eee775fd3a89bd8788ebada33efaf373d10
     # The webhook URL is a secret, and Alertmanager reads it only from its
     # configuration or a file (`webhook_url_file`). The image's busybox shell
     # writes it from the environment to a file on the tmpfs below, readable by
@@ -361,7 +361,7 @@ services:
     <<: *hardening
     # Pinned by digest as well as by tag, which Dependabot moves together. Not
     # the `-slim` variant, which leaves out the Prometheus data source.
-    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
     depends_on:
       - prometheus
     # 127.0.0.1 only. GRAFANA_PORT moves it for a second stack on the same
