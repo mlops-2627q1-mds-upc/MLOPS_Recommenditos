@@ -742,7 +742,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "API memory against its 768 MiB limit",
-      "description": "The API container's working set, the memory the kernel counts against its limit, from cAdvisor; the red dashed line is the container's limit from deploy/compose.yaml. Up to 60 s old.",
+      "description": "From cAdvisor: the API's RSS, the memory its processes allocated themselves, which ContainerMemoryNearLimit watches, and its working set, which adds the caches the kernel charges to the container and frees at the limit. The red dashed line is the container's limit from deploy/compose.yaml. Up to 60 s old.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -762,6 +762,16 @@
           "expr": "max(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"api\"})",
           "legendFormat": "working set",
           "refId": "A",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(container_memory_rss{container_label_com_docker_compose_service=\"api\"})",
+          "legendFormat": "RSS",
+          "refId": "C",
           "range": true
         },
         {
@@ -851,7 +861,7 @@
       "id": 15,
       "type": "timeseries",
       "title": "Memory of each container, share of its limit",
-      "description": "Each container's working set divided by its memory limit. Alert: ContainerMemoryNearLimit above 90 % for 5 minutes. Each service has its own fixed colour on every panel that names containers.",
+      "description": "Each container's RSS, the memory its processes allocated themselves, divided by its memory limit. Alert: ContainerMemoryNearLimit above 90 % for 5 minutes. Each service has its own fixed colour on every panel that names containers.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -868,7 +878,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=\"\"}) / max by (container_label_com_docker_compose_service) (container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=\"\"} > 0)",
+          "expr": "max by (container_label_com_docker_compose_service) (container_memory_rss{container_label_com_docker_compose_service!=\"\"}) / max by (container_label_com_docker_compose_service) (container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=\"\"} > 0)",
           "legendFormat": "{{container_label_com_docker_compose_service}}",
           "refId": "A",
           "range": true
