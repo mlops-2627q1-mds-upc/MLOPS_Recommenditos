@@ -266,6 +266,13 @@ function setupModelOptions(makes) {
   });
   // mousedown would blur the field and close the list before the click lands.
   list.addEventListener("mousedown", (event) => event.preventDefault());
+  // The pointer moves the one active row, so mouse and keyboard never mark two.
+  // mousemove, not mouseover, which would fire as the arrow keys scroll rows under a resting pointer.
+  list.addEventListener("mousemove", (event) => {
+    const option = event.target.closest("[role=option]");
+    const index = option ? [...list.children].indexOf(option) : -1;
+    if (index >= 0 && index !== active) setActive(index);
+  });
   list.addEventListener("click", (event) => {
     const option = event.target.closest("[role=option]");
     if (option) choose([...list.children].indexOf(option));
