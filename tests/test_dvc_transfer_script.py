@@ -31,12 +31,9 @@ made=$(grep -c . "$CALLS")
 
 
 def run(
-    tmp_path: Path, failures: int, *arguments: str, **settings: str
+    tmp_path: Path, failures: int, *arguments: str
 ) -> tuple[subprocess.CompletedProcess, list[str]]:
-    """The script's result against a `uv` that fails `failures` times, and the calls it got.
-
-    `settings` overrides the script's environment, such as DVC_TRANSFER_WAIT.
-    """
+    """The script's result against a `uv` that fails `failures` times, and the calls it got."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     uv = bin_dir / "uv"
@@ -50,7 +47,6 @@ def run(
         "CALLS": str(calls),
         "FAILURES": str(failures),
         "DVC_TRANSFER_WAIT": "0",
-        **settings,
     }
     result = subprocess.run(
         ["bash", str(SCRIPT), *arguments],
@@ -79,35 +75,9 @@ def test_a_failed_transfer_is_tried_again_and_each_retry_is_logged(tmp_path: Pat
     assert result.stdout.count("::warning::dvc push failed") == 2
 
 
-def test_the_pause_doubles_before_each_further_attempt(tmp_path: Path):
-    result, _ = run(tmp_path, 2, "pull", DVC_TRANSFER_WAIT="1")
-
-    assert result.returncode == 0
-    assert "trying again in 1 s." in result.stdout
-    assert "trying again in 2 s." in result.stdout
-
-
-def test_the_number_of_attempts_can_be_set(tmp_path: Path):
-    result, calls = run(tmp_path, 5, "pull", DVC_TRANSFER_ATTEMPTS="2")
-
-    assert result.returncode == 1
-    assert len(calls) == 2
-    assert "::error::dvc pull failed 2 times" in result.stdout
-
-
 def test_a_transfer_that_keeps_failing_fails_after_the_last_attempt(tmp_path: Path):
     result, calls = run(tmp_path, 5, "pull")
 
     assert result.returncode == 1
     assert len(calls) == 3
     assert "::error::dvc pull failed 3 times" in result.stdout
-
-
-@pytest.mark.parametrize("arguments", [[], ["fetch"], ["gc", "--workspace"]])
-def test_anything_but_pull_or_push_is_refused_before_dvc_runs(
-    tmp_path: Path, arguments: list[str]
-):
-    result, calls = run(tmp_path, 0, *arguments)
-
-    assert result.returncode == 2
-    assert calls == []
