@@ -208,6 +208,9 @@ For every other commit, one job:
 7. writes the pushed tags, the digests, the model and index versions `/health` reported, the image size and the job's runtime into the job summary.
 
 Only the `dvc pull` step sees the DagsHub token.
+It pulls through `.github/scripts/dvc-transfer.sh`, which runs `dvc pull` up to three times, 30 s and then 60 s apart, because DagsHub sometimes closes a connection before the last byte of a file (`TransferEncodingError`), which DVC does not retry itself; that failed the CD run of a merge twice on 2026-11-17 ([#375](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/375)).
+DVC keeps the files that arrived, so a later attempt only fetches the rest, and each failed attempt leaves a warning in the log.
+A pull takes about 10 s, but each failed attempt of 2026-11-17 hung for about 3.5 minutes first, so three failures cost about 12 minutes, within the job's 30; only when the third attempt fails too does the step fail, with DVC's errors above it.
 It is a secret of the GitHub Environment `dagshub`, which only `main` may use, and the step writes it into `.dvc/config.local`, as on a laptop, and deletes that file when it ends.
 The job's token may read the repository and write packages, nothing more.
 
