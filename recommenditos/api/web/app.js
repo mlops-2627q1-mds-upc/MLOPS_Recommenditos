@@ -271,6 +271,8 @@ function setupModelOptions(makes) {
     if (option) choose([...list.children].indexOf(option));
   });
   $("make").addEventListener("change", close);
+  // The list may arrive after a click into the field, which then found nothing to show.
+  open();
 }
 
 function showModel(health) {
