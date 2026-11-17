@@ -37,7 +37,7 @@ Each figure answers a question someone on call would ask, and the integration su
 
 | Question | PromQL |
 |----------|--------|
-| How close is the API to its memory limit? | `container_memory_working_set_bytes{container_label_com_docker_compose_service="api"} / container_spec_memory_limit_bytes{container_label_com_docker_compose_service="api"}` |
+| How close is the API to its memory limit? | `container_memory_rss{container_label_com_docker_compose_service="api"} / container_spec_memory_limit_bytes{container_label_com_docker_compose_service="api"}` |
 | Did a container restart, after a crash, an out-of-memory kill of its main process or a hang (EDN-93)? | `changes(container_start_time_seconds{container_label_com_docker_compose_service="api"}[1h])` |
 | How busy is the one vCPU, per container? | `rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=""}[5m])` |
 | How much memory is left on the host? | `node_memory_MemAvailable_bytes` |
@@ -137,7 +137,7 @@ Service health shows the figures of [Resource monitoring](#resource-monitoring) 
 | p95 latency of `/v1/price-range` and `/v1/comparables` | NFR-02: 300 ms | [RangeLatencyHigh](#predictlatencyhigh-and-rangelatencyhigh) |
 | Server error rate | NFR-03: 1 % | [ErrorRateHigh](#errorratehigh), [ServerErrors](#servererrors) |
 | API memory | its 768 MiB limit (NFR-04 caps it at 1 GB) | [ContainerMemoryNearLimit](#containermemorynearlimit) |
-| Memory of each container, share of its limit | 90 % | [ContainerMemoryNearLimit](#containermemorynearlimit) |
+| Memory of each container, share of its limit | 85 % | [ContainerMemoryNearLimit](#containermemorynearlimit) |
 | CPU of each container | the VM's one vCPU | - |
 | Host memory available | 512 MiB | [HostMemoryLow](#hostmemorylow) |
 | Disk free | NFR-04: 4 GB | [DiskFreeLow](#diskfreelow) |
@@ -275,7 +275,7 @@ While the API is down, its latency and error alerts are held back, and while Err
 | [ServerErrors](#servererrors) | the API answered at least 5 `/v1/` requests with a server error in the last 15 minutes, at any traffic | at once | warning |
 | [DiskFreeLow](#diskfreelow) | the host's root file system has less than 4 GB free | 5 minutes | critical |
 | [HostMemoryLow](#hostmemorylow) | the host has less than 512 MiB available | 5 minutes | warning |
-| [ContainerMemoryNearLimit](#containermemorynearlimit) | a container uses more than 90 % of its memory limit | 5 minutes | warning |
+| [ContainerMemoryNearLimit](#containermemorynearlimit) | the processes of a container hold more than 85 % of its memory limit | 5 minutes | warning |
 | [ContainerRestarting](#containerrestarting) | a container restarted 3 times in 30 minutes | at once | critical |
 | [TargetDown](#targetdown) | a monitoring target other than the API cannot be scraped | 5 minutes | warning |
 
@@ -433,10 +433,19 @@ The host has less than 512 MiB available, and the VM has no swap.
 
 #### ContainerMemoryNearLimit
 
-A container uses more than 90 % of its memory limit, and the kernel will soon kill its largest process.
+The processes of a container hold more than 85 % of its memory limit, and the kernel will soon kill its largest process.
+
+The alert reads the container's RSS, the memory its processes allocated themselves, which the kernel cannot free without swap.
+It does not read the working set, which `docker stats` shows: that also counts the kernel's caches charged to the container, which the kernel frees at the limit.
+Each healthcheck probe is a new Python process and leaves about 38 KiB of such cache, so the API's working set reaches its limit within a day of a start without any process growing (measured on the VM on 2026-11-16: 725 MiB of working set, 246 MiB of RSS, 480 MiB of kernel memory, no out-of-memory kill).
+RSS leaves out two things that also count against the limit and cannot be freed: the tmpfs mounts and the kernel memory a process needs, such as its page tables.
+With its 80 MiB of tmpfs full, the API is killed from about 88 % of RSS, the monitor with its 64 MiB from about 87 %, which is why the threshold is 85 % and not 90 %.
+On the VM, which runs cgroup v1 with Docker's cgroupfs driver, `memory.stat` in `/sys/fs/cgroup/memory/docker/<container id>/` splits the figures: `total_rss` is what cAdvisor reports as RSS, `memory.kmem.usage_in_bytes` the kernel's share (`container_memory_kernel_usage` in Prometheus).
 
 1. Steady growth without more traffic is a leak: restart the container (`docker restart recommenditos-<service>-1`) and open an issue with the panel.
 2. Growth with the traffic means the limit in `deploy/compose.yaml` is too small for that load: raise it in a pull request, with the measurement.
+
+In November 2026 this alert fired for days for the API without a leak, on the kernel's caches the healthcheck leaves ([the posts in Discord](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/memory-alert/discord-container-memory-near-limit.png), [#368](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/368)).
 
 #### ContainerRestarting
 
