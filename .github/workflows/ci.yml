@@ -91,6 +91,10 @@ jobs:
               # top-level directory, package and stage module.
               - "README.md"
               - ".github/workflows/ci.yml"
+              # Shell scripts a test here runs: tests/test_dvc_transfer_script.py
+              # and tests/test_deploy_script.py.
+              - ".github/scripts/**"
+              - "deploy/deploy.sh"
             # The serving job runs `make test-serving`, so a change to that target
             # alone has to run it too.
             serving:
