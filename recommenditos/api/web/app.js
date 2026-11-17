@@ -228,7 +228,7 @@ function setupModelOptions(makes) {
     names = suggestions(modelsOf(makes, $("make").value), input.value);
     // A list of only the name already typed would offer nothing new.
     if (!names.length || (names.length === 1 && names[0] === input.value)) { close(); return; }
-    active = -1;
+    setActive(-1);
     list.replaceChildren(...names.map((name, index) => el("li", { id: `model-option-${index}`, role: "option", "aria-selected": "false" }, name)));
     list.hidden = false;
     // Only a shown list can scroll, so it starts at the top after it is shown.
