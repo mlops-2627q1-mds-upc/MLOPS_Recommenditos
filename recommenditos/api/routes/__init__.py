@@ -17,6 +17,7 @@ from recommenditos.api.routes import (
     feedback,
     health,
     index,
+    makes,
     metrics,
     predict,
     price_range,
@@ -25,6 +26,7 @@ from recommenditos.api.routes import (
 V1_ROUTERS = [
     comparables.router,
     feedback.router,
+    makes.router,
     predict.router,
     price_range.router,
 ]

@@ -162,10 +162,13 @@ function fillSelects(properties) {
 async function loadService() {
   const alert = $("form-alert");
   try {
+    // Suggestions only, so neither a failed nor a slow answer holds the form back.
+    const makes = getJson("v1/makes").catch(() => null);
     const [openapi, health] = await Promise.all([getJson("openapi.json"), getJson("health").catch(() => null)]);
     schema = openapi.components.schemas.ValuationRequest.properties;
     fillSelects(schema);
     if (health) showModel(health);
+    makes.then((answer) => { if (answer) setupModelOptions(answer); });
     for (const fieldset of form.querySelectorAll("fieldset")) fieldset.disabled = false;
     $("submit").disabled = false;
     $("example").disabled = false;
@@ -178,6 +181,105 @@ async function loadService() {
     alert.hidden = false;
     console.error(error);
   }
+}
+
+/** The model names of `make` in a /v1/makes answer, or none for an unknown make. */
+export function modelsOf(makes, make) {
+  return makes.makes.find((entry) => entry.make === make)?.models ?? [];
+}
+
+/** The names that match what was typed, ignoring case: those starting with it first, then those containing it; all when nothing is typed. */
+export function suggestions(models, typed) {
+  const query = typed.trim().toLowerCase();
+  if (!query) return [...models];
+  const starts = models.filter((name) => name.toLowerCase().startsWith(query));
+  const contains = models.filter((name) => !starts.includes(name) && name.toLowerCase().includes(query));
+  return [...starts, ...contains];
+}
+
+/**
+ * The Model field's suggestions, as an ARIA combobox: the browser's datalist
+ * cannot be held to a height, so the page draws its own list, 8 rows high and
+ * scrollable (app.css). The field stays free text.
+ */
+function setupModelOptions(makes) {
+  const input = $("model");
+  const list = $("model-options");
+  let names = [];
+  let active = -1;
+
+  const setActive = (index) => {
+    list.children[active]?.setAttribute("aria-selected", "false");
+    active = index;
+    const option = list.children[active];
+    if (!option) { input.removeAttribute("aria-activedescendant"); return; }
+    option.setAttribute("aria-selected", "true");
+    input.setAttribute("aria-activedescendant", option.id);
+    option.scrollIntoView({ block: "nearest" });
+  };
+  const close = () => {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    setActive(-1);
+  };
+  const open = () => {
+    // "Fill in an example" sends an input event to a field without the focus.
+    if (document.activeElement !== input) return;
+    names = suggestions(modelsOf(makes, $("make").value), input.value);
+    // A list of only the name already typed would offer nothing new.
+    if (!names.length || (names.length === 1 && names[0] === input.value)) { close(); return; }
+    setActive(-1);
+    list.replaceChildren(...names.map((name, index) => el("li", { id: `model-option-${index}`, role: "option", "aria-selected": "false" }, name)));
+    list.hidden = false;
+    // Only a shown list can scroll, so it starts at the top after it is shown.
+    list.scrollTop = 0;
+    input.setAttribute("aria-expanded", "true");
+  };
+  const choose = (index) => {
+    input.value = names[index];
+    close();
+  };
+
+  // Not on focus: the form's error check focuses the field, and the list would cover its message.
+  input.addEventListener("click", open);
+  input.addEventListener("input", open);
+  input.addEventListener("blur", close);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (list.hidden) open();
+      if (list.hidden) return;
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActive((active + step + names.length) % names.length);
+    } else if (event.key === "Enter") {
+      // Enter on a name takes it; otherwise the form is submitted, and the list must not cover the result.
+      if (!list.hidden && active >= 0) {
+        event.preventDefault();
+        choose(active);
+      } else {
+        close();
+      }
+    } else if (event.key === "Escape" && !list.hidden) {
+      event.preventDefault();
+      close();
+    }
+  });
+  // mousedown would blur the field and close the list before the click lands.
+  list.addEventListener("mousedown", (event) => event.preventDefault());
+  // The pointer moves the one active row, so mouse and keyboard never mark two.
+  // mousemove, not mouseover, which would fire as the arrow keys scroll rows under a resting pointer.
+  list.addEventListener("mousemove", (event) => {
+    const option = event.target.closest("[role=option]");
+    const index = option ? [...list.children].indexOf(option) : -1;
+    if (index >= 0 && index !== active) setActive(index);
+  });
+  list.addEventListener("click", (event) => {
+    const option = event.target.closest("[role=option]");
+    if (option) choose([...list.children].indexOf(option));
+  });
+  $("make").addEventListener("change", close);
+  // The list may arrive after a click into the field, which then found nothing to show.
+  open();
 }
 
 function showModel(health) {

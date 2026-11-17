@@ -41,6 +41,7 @@ from recommenditos.api.middleware import (
 from recommenditos.api.prediction_log import SqliteStore, StoreError
 from recommenditos.api.routes import OPERATIONAL_ROUTERS, V1_ROUTERS
 from recommenditos.api.schemas.common import FieldError, ListingFields
+from recommenditos.api.schemas.makes import Makes
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import API_KEY_ENV_VAR, Settings
 from recommenditos.api.webui import WebPage
@@ -58,6 +59,7 @@ repository for how to run the service and how errors are shaped.
 
 _TAGS = [
     {"name": "valuation", "description": "Price estimates for a listing."},
+    {"name": "reference", "description": "What the served model knows, for a client's forms."},
     {
         "name": "feedback",
         "description": "Observed prices for the drift job. Internal: refused from outside the "
@@ -104,6 +106,7 @@ def create_app(model_dir: Path | None = None, settings: Settings | None = None) 
     app = _application(lifespan)
     app.state.served = served
     app.state.comparables = index
+    app.state.makes = None if index is None else Makes.of(served, index)
     app.state.metrics = ApiMetrics(served.info)
     app.state.settings = settings
     app.state.web = WebPage.load()

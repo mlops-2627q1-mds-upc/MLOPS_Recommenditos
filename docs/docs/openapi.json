@@ -268,6 +268,45 @@
         ]
       }
     },
+    "/v1/makes": {
+      "get": {
+        "tags": [
+          "reference"
+        ],
+        "summary": "The supported makes and the model names the served model knows for each",
+        "description": "Every make `/v1/predict` accepts, with the model names it knows for that make.\n\nA model name is listed under a make when the comparables index holds a\nlisting of both and the served model saw the name in training, so a client\ncan suggest names that reach the model rather than an unknown level (FR-05).\nThe answer is built once at startup and never changes while the service\nruns, so the route is `async` and waits for no thread. A service built\nwithout the index answers 503.",
+        "operationId": "makes_v1_makes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Makes"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service cannot answer: the prediction log cannot be written, so nothing was answered or stored (NFR-03), `/v1/price-range` was asked of a bundle without interval models (EDN-85), or `/v1/comparables` of a service without the comparables index (FR-09).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Service Unavailable",
+                  "status": 503,
+                  "detail": "The service cannot record requests right now, so it answers none. Try again later.",
+                  "instance": "urn:uuid:0b9f3c1e-6c0a-4b5e-9d1f-2a3b4c5d6e7f"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/predict": {
       "post": {
         "tags": [
@@ -1496,6 +1535,70 @@
           }
         ]
       },
+      "Make": {
+        "properties": {
+          "make": {
+            "type": "string",
+            "title": "Make"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models",
+            "description": "Model names in the served model's training data that the comparables index holds listings of for this make, sorted regardless of case. Another name is still accepted, and answered with a warning (FR-05)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "make",
+          "models"
+        ],
+        "title": "Make",
+        "description": "One supported make and the model names the served model knows for it."
+      },
+      "Makes": {
+        "properties": {
+          "makes": {
+            "items": {
+              "$ref": "#/components/schemas/Make"
+            },
+            "type": "array",
+            "title": "Makes"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "makes",
+          "model"
+        ],
+        "title": "Makes",
+        "description": "The supported makes with their known model names, for a client's suggestions.",
+        "examples": [
+          {
+            "makes": [
+              {
+                "make": "BMW",
+                "models": [
+                  "116",
+                  "118",
+                  "320",
+                  "X1"
+                ]
+              }
+            ],
+            "model": {
+              "trained_at": "2026-10-13T12:05:02+00:00",
+              "variant": "lgbm-basic",
+              "version": "2b53bd3487f97475ebf0e6bd268ba0f0"
+            }
+          }
+        ]
+      },
       "ModelInfo": {
         "properties": {
           "variant": {
@@ -2706,6 +2809,10 @@
     {
       "name": "valuation",
       "description": "Price estimates for a listing."
+    },
+    {
+      "name": "reference",
+      "description": "What the served model knows, for a client's forms."
     },
     {
       "name": "feedback",
