@@ -146,11 +146,13 @@ groups:
           runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#hostmemorylow"
           dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-11"
 
-      # NFR-04: each container's memory limit. Above 90 % of it, the kernel will
-      # soon kill the container's largest process. RSS, the memory the processes
-      # allocated themselves, and not the working set: on the VM's cgroup v1 the
-      # working set also counts kernel caches the kernel frees at the limit, and
-      # the healthcheck's probes alone fill the API's within a day
+      # NFR-04: each container's memory limit, before the kernel kills the
+      # container's largest process. RSS, the memory the processes allocated
+      # themselves, and not the working set: the working set also counts kernel
+      # caches the kernel frees at the limit, and the healthcheck's probes alone
+      # fill the API's within a day. RSS leaves out the tmpfs and the kernel
+      # memory that cannot be freed, so the threshold is 85 %: with its 80 MiB of
+      # tmpfs full, the API is killed from about 88 %
       # (docs/docs/monitoring.md#containermemorynearlimit).
       - alert: ContainerMemoryNearLimit
         expr: |
@@ -160,7 +162,7 @@ groups:
           / max by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (
             container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=""} > 0
           )
-          > 0.9
+          > 0.85
         for: 5m
         labels:
           severity: warning

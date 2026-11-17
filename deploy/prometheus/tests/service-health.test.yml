@@ -309,11 +309,11 @@ tests:
           kernel kills a process.
         runbook_url: https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#hostmemorylow
         dashboard_url: http://localhost:3000/d/service-health/service-health?viewPanel=panel-11
-- name: ContainerMemoryNearLimit fires above 90 % of a container's limit, not for one without a limit
+- name: ContainerMemoryNearLimit fires above 85 % of a container's limit, not for one without a limit
   interval: 1m
   input_series:
   - series: container_memory_rss{container_label_com_docker_compose_project="recommenditos",container_label_com_docker_compose_service="api",id="/docker/api"}
-    values: 7.3e8x10
+    values: 6.9e8x10
   - series: container_spec_memory_limit_bytes{container_label_com_docker_compose_project="recommenditos",container_label_com_docker_compose_service="api",id="/docker/api"}
     values: 805306368x10
   - series: container_memory_rss{container_label_com_docker_compose_project="recommenditos",container_label_com_docker_compose_service="proxy",id="/docker/proxy"}
@@ -336,7 +336,7 @@ tests:
         container_label_com_docker_compose_project: recommenditos
         container_label_com_docker_compose_service: api
       exp_annotations:
-        summary: The processes of the api container hold 90.65% of its memory limit.
+        summary: The processes of the api container hold 85.68% of its memory limit.
         description: 'A container at its limit loses its largest process to the kernel. If its memory
           grew steadily, it leaks: restart it (`docker restart recommenditos-api-1`) and open an issue
           with the panel; if it grew with load, its limit in deploy/compose.yaml is too small for that

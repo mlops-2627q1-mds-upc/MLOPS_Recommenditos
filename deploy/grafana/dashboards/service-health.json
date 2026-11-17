@@ -821,6 +821,36 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "RSS"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1B72ED"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "working set"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8E8E8E"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "limit"
             },
             "properties": [
@@ -861,7 +891,7 @@
       "id": 15,
       "type": "timeseries",
       "title": "Memory of each container, share of its limit",
-      "description": "Each container's RSS, the memory its processes allocated themselves, divided by its memory limit. Alert: ContainerMemoryNearLimit above 90 % for 5 minutes. Each service has its own fixed colour on every panel that names containers.",
+      "description": "Each container's RSS, the memory its processes allocated themselves, divided by its memory limit. Alert: ContainerMemoryNearLimit above 85 % for 5 minutes, below 90 % because RSS leaves out the tmpfs. Each service has its own fixed colour on every panel that names containers.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -909,7 +939,7 @@
               },
               {
                 "color": "red",
-                "value": 0.9
+                "value": 0.85
               }
             ]
           },

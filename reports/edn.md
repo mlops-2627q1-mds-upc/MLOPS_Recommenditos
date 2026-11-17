@@ -1686,26 +1686,26 @@ How to add an entry:
 - **Other evidence:** [Issue #346](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/346), [PR #359](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/359), [What rebuilds the environment layer](../docs/docs/deployment.md#continuous-delivery), EDN-47, EDN-105.
 - **In LaTeX:** yes
 
-### EDN-107: The memory alert watches the processes' RSS, not the working set
+### EDN-107: The memory alert watches the processes' RSS, at 85 % of the limit
 
 - **Date:** 2026-11-17
 - **Milestone:** M6: Monitoring
 - **Activity / Topic:** Monitoring, Alerting
-- **Participants:** Kevin Adameit (decided), AI agent (diagnosis on the VM, options, implementation)
-- **Decision:** ContainerMemoryNearLimit and the panel of each container's share of its limit divide `container_memory_rss`, the memory the processes allocated themselves, by the container's limit, instead of the working set.
+- **Participants:** Kevin Adameit (decided), AI agents (diagnosis on the VM, options, implementation, review)
+- **Decision:** ContainerMemoryNearLimit and the panel of each container's share of its limit divide `container_memory_rss`, the memory the processes allocated themselves, by the container's limit, instead of the working set, and fire at 85 % instead of 90 %.
   The API memory panel draws both, so the kernel's caches stay visible.
 - **Alternatives considered:**
   - A lighter healthcheck, a raw socket instead of `urllib.request`: it only slows the growth, from about 640 to 240 MiB a day, and changes the code that can kill the server (EDN-93).
-  - Both: the healthcheck change adds that risk and the alert gains nothing.
-  - The working set minus the kernel's memory: cAdvisor does not report that share on the VM's kernel, and the panel would be harder to read.
+  - The working set minus `container_memory_kernel_usage`: it still counts the log's file cache, and cAdvisor reports that kernel memory as 0 on cgroup v2, so CI would test another figure.
 - **Rationale:** The alert fired for about 4 of 7 days while the API never grew.
-  On the VM (kernel 5.4, cgroup v1) the working set counts kernel caches, and every healthcheck probe, a new Python process every 5 s, leaves about 38 KiB of them.
-  On 2026-11-16 the API held 246 MiB of RSS and 480 MiB of kernel memory, without an out-of-memory kill.
-  On the same 7 days of live data the RSS rule peaks at 34 %.
+  The working set counts kernel caches, and every healthcheck probe, a new Python process every 5 s, leaves about 38 KiB of them: on 2026-11-16 the API held 246 MiB of RSS and 480 MiB of kernel memory.
+  RSS leaves out the tmpfs, so with its 80 MiB full the API dies from about 88 %, hence 85 %.
+  Over those 7 days the API's RSS peaked at 34 %.
 - **AI involvement:** Information seeking, Alternative generation, Alternative assessment, Recommendation, Solution generation
 - **Response to AI:** Accepted
-- **Assessment of the AI contribution:** AI first blamed the prediction log's page cache, which its measurement on the VM refuted, then traced the memory to kernel caches and measured each probe's cost in a throwaway container.
-  Kevin asked for the trade-offs and a test under real conditions, then took the recommendation unchanged.
+- **Assessment of the AI contribution:** AI first blamed the prediction log's page cache, which its measurement on the VM refuted, then traced the memory to kernel caches and measured each probe's cost.
+  An independent AI review found the tmpfs gap and a wrong claim about cAdvisor, which led to 85 % and a corrected alternative.
+  Kevin asked for the trade-offs and a test under real conditions, then took both recommendations unchanged.
 - **AI interaction evidence:** Claude Code session of 2026-11-16 and 2026-11-17.
   Question (paraphrased): "The API's working set fills its limit with kernel cache from the healthcheck's Python processes, not a leak. Which option: alert on RSS instead of the working set, make the healthcheck lighter, or both?"
   Kevin answered: "Base the alert and the panel on the processes' own memory (`container_memory_rss`) instead of the working set."

@@ -36,7 +36,7 @@ A latency or error alert fires only when the share over the last minute stays ab
     API crashed or hung & Its healthcheck ends a hung process and Docker restarts it (NFR-05, EDN-93); rehearsed on the VM, \texttt{/health} answered again 19.0\,s after a hang and 19.8\,s after a reboot; \texttt{ApiDown} after 1 minute, \texttt{ContainerRestarting} at 3 restarts in 30 minutes. \\
     Slow answers & \texttt{PredictLatencyHigh} when more than 5\,\% of \texttt{/v1/predict} answers take over 250\,ms (NFR-02), read from the histogram bucket at the target; the same at 300\,ms for the other two endpoints. \\
     Server errors & \texttt{ErrorRateHigh} above 1\,\% of answers (NFR-03); \texttt{ServerErrors} at 5 in 15 minutes at any traffic, since outside a test the API is almost idle. \\
-    Memory running out & \texttt{ContainerMemoryNearLimit} at 90\,\% of a container's limit, \texttt{HostMemoryLow} below 512\,MiB on the host, where without swap the kernel would kill a process next. \\
+    Memory running out & \texttt{ContainerMemoryNearLimit} when a container's processes hold 85\,\% of its limit, \texttt{HostMemoryLow} below 512\,MiB on the host, where without swap the kernel would kill a process next. \\
     Disk filling up & \texttt{DiskFreeLow} below NFR-04's 4\,GB floor, which is headroom and leaves time to act. \\
     Monitoring itself failing & \texttt{TargetDown} for an exporter that cannot be scraped, \texttt{MonitorStale} for a drift job without a successful pass in 45 minutes. \\
     \bottomrule
