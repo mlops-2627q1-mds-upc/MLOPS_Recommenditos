@@ -98,7 +98,7 @@ jobs:
           trap 'rm -f .dvc/config.local' EXIT
           uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
           uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
-          uv run dvc pull
+          .github/scripts/dvc-transfer.sh pull
 
       # numpy's AVX-512 kernels round some logarithms differently (#259), so the
       # run records whether the runner it landed on has AVX-512: a GitHub job
@@ -175,7 +175,7 @@ jobs:
           trap 'rm -f .dvc/config.local' EXIT
           uv run dvc remote modify --local origin user "$DAGSHUB_USERNAME"
           uv run dvc remote modify --local origin password "$DAGSHUB_USER_TOKEN"
-          uv run dvc push
+          .github/scripts/dvc-transfer.sh push
 
       - name: Commit the promotion
         if: steps.changed.outputs.lock == 'true'
