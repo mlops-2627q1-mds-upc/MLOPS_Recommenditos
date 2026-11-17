@@ -1709,7 +1709,7 @@ How to add an entry:
 - **AI interaction evidence:** Claude Code session of 2026-11-16 and 2026-11-17.
   Question (paraphrased): "The API's working set fills its limit with kernel cache from the healthcheck's Python processes, not a leak. Which option: alert on RSS instead of the working set, make the healthcheck lighter, or both?"
   Kevin answered: "Base the alert and the panel on the processes' own memory (`container_memory_rss`) instead of the working set."
-- **Other evidence:** [Issue #368](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/368), [the alert's runbook](../docs/docs/monitoring.md#containermemorynearlimit), EDN-93, EDN-99.
+- **Other evidence:** [Issue #368](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/368), [PR #369](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/pull/369), [the alert's runbook](../docs/docs/monitoring.md#containermemorynearlimit), EDN-93, EDN-99.
 - **In LaTeX:** yes
 
 ## Retired and merged IDs
