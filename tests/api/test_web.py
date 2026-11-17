@@ -218,6 +218,9 @@ CONTRAST_PAIRS = [
     ("field-border", "form", 3.0),
     ("focus", "form", 3.0),
     ("focus", "ground", 3.0),
+    # The model suggestion the keyboard is on: its edge, and its text on its tint.
+    ("focus", "option", 3.0),
+    ("ink", "option", 4.5),
     ("band", "ground", 3.0),
     ("rule", "ground", 3.0),
     ("ink-2", "ground", 3.0),
@@ -245,6 +248,7 @@ def test_the_colours_reach_aa_contrast_in_both_themes(theme: str):
         name: _rgb(value, form if name == "surface" else ground) for name, value in colours.items()
     }
     rgb["field"] = _rgb(tokens["surface"], form)
+    rgb["option"] = _rgb(tokens["surface-hover"], form)
     rgb["form"] = form
     rgb["band-text"] = _rgb(tokens["band-text"], _rgb(tokens["band-ink"], ground))
     rgb["on-accent-busy"] = _rgb(tokens["on-accent-busy"], rgb["accent-busy"])

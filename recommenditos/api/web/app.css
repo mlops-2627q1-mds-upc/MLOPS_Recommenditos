@@ -976,6 +976,11 @@ fieldset:disabled select {
   background: var(--surface-hover);
 }
 
+/* The tint alone is 1.1:1 on the list, so the row Enter takes also gets a 3:1 edge. */
+.combo-list li[aria-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--focus);
+}
+
 .unit-input {
   position: relative;
 }
