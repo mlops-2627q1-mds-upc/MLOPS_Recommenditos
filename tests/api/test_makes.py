@@ -1,5 +1,6 @@
 """`GET /v1/makes`: the makes and the model names the web form suggests (FR-05)."""
 
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -7,7 +8,9 @@ import pytest
 from tests.api.helpers import assert_problem
 
 from recommenditos.api.app import create_app
+from recommenditos.api.comparables import ComparablesIndex
 from recommenditos.api.errors import pointer
+from recommenditos.api.schemas.makes import Makes
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import Settings
 from recommenditos.data.build_comparables import INDEX_FILE
@@ -26,6 +29,22 @@ def test_fr05_every_accepted_make_is_listed_with_the_models_it_knows(
     # The synthetic fixture's BMW names, sorted regardless of case.
     assert models["BMW"] == ["1 Series", "3 Series", "5 Series", "i4", "X3", "X3 M", "X5"]
     assert answer["model"] == served.info.model_dump(mode="json")
+
+
+@pytest.mark.req("FR-05")
+def test_fr05_a_name_the_model_never_saw_is_not_suggested(
+    served: ServedModel, index: ComparablesIndex
+):
+    # In the fixture every indexed name is also a model level, so one is added that is not.
+    unseen = "Isetta"
+    assert unseen not in served.model.input_schema.levels["model"]
+    bmw = (*index.models_by_make["BMW"], unseen)
+    extended = replace(index, models_by_make={**index.models_by_make, "BMW": bmw})
+
+    models = {entry.make: entry.models for entry in Makes.of(served, extended).makes}
+
+    assert unseen not in models["BMW"]
+    assert models["BMW"] == list(index.models_by_make["BMW"])
 
 
 @pytest.mark.req("FR-05")
