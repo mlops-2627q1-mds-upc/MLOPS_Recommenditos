@@ -445,6 +445,8 @@ On the VM, which runs cgroup v1 with Docker's cgroupfs driver, `memory.stat` in 
 1. Steady growth without more traffic is a leak: restart the container (`docker restart recommenditos-<service>-1`) and open an issue with the panel.
 2. Growth with the traffic means the limit in `deploy/compose.yaml` is too small for that load: raise it in a pull request, with the measurement.
 
+In November 2026 this alert fired for days for the API without a leak, on the kernel's caches the healthcheck leaves ([the posts in Discord](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/reports/monitoring/memory-alert/discord-container-memory-near-limit.png), [#368](https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/issues/368)).
+
 #### ContainerRestarting
 
 A container restarted three times in 30 minutes.
