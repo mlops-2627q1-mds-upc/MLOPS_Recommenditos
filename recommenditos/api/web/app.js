@@ -188,11 +188,83 @@ export function modelsOf(makes, make) {
   return makes.makes.find((entry) => entry.make === make)?.models ?? [];
 }
 
+/** The names that match what was typed, ignoring case: those starting with it first, then those containing it; all when nothing is typed. */
+export function suggestions(models, typed) {
+  const query = typed.trim().toLowerCase();
+  if (!query) return [...models];
+  const starts = models.filter((name) => name.toLowerCase().startsWith(query));
+  const contains = models.filter((name) => !starts.includes(name) && name.toLowerCase().includes(query));
+  return [...starts, ...contains];
+}
+
+/**
+ * The Model field's suggestions, as an ARIA combobox: the browser's datalist
+ * cannot be held to a height, so the page draws its own list, 8 rows high and
+ * scrollable (app.css). The field stays free text.
+ */
 function setupModelOptions(makes) {
+  const input = $("model");
   const list = $("model-options");
-  const fill = () => list.replaceChildren(...modelsOf(makes, $("make").value).map((name) => new Option(name)));
-  $("make").addEventListener("change", fill);
-  fill();
+  let names = [];
+  let active = -1;
+
+  const setActive = (index) => {
+    list.children[active]?.setAttribute("aria-selected", "false");
+    active = index;
+    const option = list.children[active];
+    if (!option) { input.removeAttribute("aria-activedescendant"); return; }
+    option.setAttribute("aria-selected", "true");
+    input.setAttribute("aria-activedescendant", option.id);
+    option.scrollIntoView({ block: "nearest" });
+  };
+  const close = () => {
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    setActive(-1);
+  };
+  const open = () => {
+    // "Fill in an example" sends an input event to a field without the focus.
+    if (document.activeElement !== input) return;
+    names = suggestions(modelsOf(makes, $("make").value), input.value);
+    // A list of only the name already typed would offer nothing new.
+    if (!names.length || (names.length === 1 && names[0] === input.value)) { close(); return; }
+    active = -1;
+    list.replaceChildren(...names.map((name, index) => el("li", { id: `model-option-${index}`, role: "option", "aria-selected": "false" }, name)));
+    list.hidden = false;
+    // Only a shown list can scroll, so it starts at the top after it is shown.
+    list.scrollTop = 0;
+    input.setAttribute("aria-expanded", "true");
+  };
+  const choose = (index) => {
+    input.value = names[index];
+    close();
+  };
+
+  input.addEventListener("focus", open);
+  input.addEventListener("input", open);
+  input.addEventListener("blur", close);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (list.hidden) open();
+      if (list.hidden) return;
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActive((active + step + names.length) % names.length);
+    } else if (event.key === "Enter" && !list.hidden && active >= 0) {
+      event.preventDefault();
+      choose(active);
+    } else if (event.key === "Escape" && !list.hidden) {
+      event.preventDefault();
+      close();
+    }
+  });
+  // mousedown would blur the field and close the list before the click lands.
+  list.addEventListener("mousedown", (event) => event.preventDefault());
+  list.addEventListener("click", (event) => {
+    const option = event.target.closest("[role=option]");
+    if (option) choose([...list.children].indexOf(option));
+  });
+  $("make").addEventListener("change", close);
 }
 
 function showModel(health) {

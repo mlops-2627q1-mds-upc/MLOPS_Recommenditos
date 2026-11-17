@@ -212,6 +212,19 @@ def test_the_model_suggestions_are_those_of_the_chosen_make(run: Run):
     ]
 
 
+def test_the_suggestions_match_what_was_typed_starting_matches_first(run: Run):
+    models = '["A1", "A4", "A4 allroad", "Q4 e-tron", "S4", "TT"]'
+    assert run(
+        f'[app.suggestions({models}, "a4"), app.suggestions({models}, " 4 "),'
+        f' app.suggestions({models}, ""), app.suggestions({models}, "x")]'
+    ) == [
+        ["A4", "A4 allroad"],
+        ["A4", "A4 allroad", "Q4 e-tron", "S4"],
+        ["A1", "A4", "A4 allroad", "Q4 e-tron", "S4", "TT"],
+        [],
+    ]
+
+
 def test_close_circles_are_stacked_into_rows(run: Run):
     assert run("app.stackRows([10, 14, 30, 31, 32], 8)") == [0, 1, 0, 1, 2]
 

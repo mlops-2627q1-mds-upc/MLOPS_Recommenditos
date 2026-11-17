@@ -934,6 +934,48 @@ fieldset:disabled select {
   cursor: progress;
 }
 
+/* The Model field's suggestions: 8 rows high, then it scrolls. */
+.combo {
+  --combo-row: 36px;
+  position: relative;
+}
+
+.combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 3;
+  max-height: calc(8 * var(--combo-row) + 2px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: var(--form);
+}
+
+.combo-list li {
+  height: var(--combo-row);
+  padding: 0 14px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: var(--combo-row);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.combo-list li:hover,
+.combo-list li[aria-selected="true"] {
+  background: var(--surface-hover);
+}
+
 .unit-input {
   position: relative;
 }

@@ -100,9 +100,10 @@ It needs fontTools from the `webfonts` group; like the Node tests, it is skipped
 
 - `GET /openapi.json` once, for the option lists of the selects and the limits of the number fields, so the form offers exactly what the served model accepts.
 - `GET /health` once, for the model's name and training date in the header.
-- `GET /v1/makes` once, for the model names the Model field suggests for the chosen make, so a person picks a spelling the model knows instead of meeting the unseen value warning after the estimate.
+- `GET /v1/makes` once, for the model names the Model field suggests for the chosen make, all of them before anything is typed and then those that match it, so a person picks a spelling the model knows instead of meeting the unseen value warning after the estimate.
   The field stays free text: a name off the list is still sent, and without the list the field just offers no suggestions.
-  The page does not wait for the list before it enables the form, and the field leaves out `autocomplete="off"`, because Firefox shows no suggestions on a field with it.
+  The page draws the list itself as an ARIA combobox, 8 rows high and scrollable, because the browser's own `<datalist>` cannot be held to a height and covered the window; the arrow keys move through it, Enter takes a name, Escape closes it.
+  The page does not wait for the list before it enables the form.
 - For each estimate, `POST /v1/predict`, `POST /v1/price-range` and `POST /v1/comparables` (with `k` 8) in parallel, with the same body.
   A second press of the button while an estimate runs is ignored; nothing is cancelled.
 
