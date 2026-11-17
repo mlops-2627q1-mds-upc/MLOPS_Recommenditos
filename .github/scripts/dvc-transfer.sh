@@ -20,7 +20,7 @@ case "${1:-}" in
 esac
 
 attempts=${DVC_TRANSFER_ATTEMPTS:-3}
-wait=${DVC_TRANSFER_WAIT:-30}
+delay=${DVC_TRANSFER_WAIT:-30}
 
 for ((attempt = 1; ; attempt++)); do
   if uv run dvc "$@"; then
@@ -30,7 +30,7 @@ for ((attempt = 1; ; attempt++)); do
     echo "::error::dvc $1 failed $attempts times, see the errors above."
     exit 1
   fi
-  echo "::warning::dvc $1 failed (attempt $attempt of $attempts), trying again in $wait s."
-  sleep "$wait"
-  wait=$((wait * 2))
+  echo "::warning::dvc $1 failed (attempt $attempt of $attempts), trying again in $delay s."
+  sleep "$delay"
+  delay=$((delay * 2))
 done
