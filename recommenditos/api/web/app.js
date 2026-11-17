@@ -251,9 +251,14 @@ function setupModelOptions(makes) {
       if (list.hidden) return;
       const step = event.key === "ArrowDown" ? 1 : -1;
       setActive((active + step + names.length) % names.length);
-    } else if (event.key === "Enter" && !list.hidden && active >= 0) {
-      event.preventDefault();
-      choose(active);
+    } else if (event.key === "Enter") {
+      // Enter on a name takes it; otherwise the form is submitted, and the list must not cover the result.
+      if (!list.hidden && active >= 0) {
+        event.preventDefault();
+        choose(active);
+      } else {
+        close();
+      }
     } else if (event.key === "Escape" && !list.hidden) {
       event.preventDefault();
       close();
