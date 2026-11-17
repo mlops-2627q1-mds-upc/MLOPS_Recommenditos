@@ -37,7 +37,7 @@ What a first visit loads, measured through nginx on the local stack on 2026-11-0
 | BDO Grotesk, Recommenditos Mono 400 and 500 (woff2) | 54.8 KB | 54.8 KB |
 | In all | 128.7 KB | 76.3 KB |
 
-The page also reads `/openapi.json` (52 KB, uncompressed) and `/health` on every load; the assets are cached for a year after the first visit.
+The page also reads `/openapi.json` (52 KB, uncompressed), `/health` and `/v1/makes` (4 KB) on every load; the assets are cached for a year after the first visit.
 Held in memory with their gzip copies, the files take about 150 KB per worker process.
 Measured with the first design, which sent 98 KB: after 300 loads of the page with all its assets, 2,400 requests in 3.6 s, nginx used 7.5 MiB against 7.3 MiB idle, of its 64 MiB limit, and the API 251.3 MiB against 250.0 MiB.
 
@@ -100,6 +100,8 @@ It needs fontTools from the `webfonts` group; like the Node tests, it is skipped
 
 - `GET /openapi.json` once, for the option lists of the selects and the limits of the number fields, so the form offers exactly what the served model accepts.
 - `GET /health` once, for the model's name and training date in the header.
+- `GET /v1/makes` once, for the model names the Model field suggests for the chosen make, so a person picks a spelling the model knows instead of meeting the unseen value warning after the estimate.
+  The field stays free text: a name off the list is still sent, and without the list the field just offers no suggestions.
 - For each estimate, `POST /v1/predict`, `POST /v1/price-range` and `POST /v1/comparables` (with `k` 8) in parallel, with the same body.
   A second press of the button while an estimate runs is ignored; nothing is cancelled.
 

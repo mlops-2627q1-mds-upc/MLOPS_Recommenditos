@@ -162,10 +162,16 @@ function fillSelects(properties) {
 async function loadService() {
   const alert = $("form-alert");
   try {
-    const [openapi, health] = await Promise.all([getJson("openapi.json"), getJson("health").catch(() => null)]);
+    const [openapi, health, makes] = await Promise.all([
+      getJson("openapi.json"),
+      getJson("health").catch(() => null),
+      // Suggestions only: without them the model field stays free text.
+      getJson("v1/makes").catch(() => null),
+    ]);
     schema = openapi.components.schemas.ValuationRequest.properties;
     fillSelects(schema);
     if (health) showModel(health);
+    if (makes) setupModelOptions(makes);
     for (const fieldset of form.querySelectorAll("fieldset")) fieldset.disabled = false;
     $("submit").disabled = false;
     $("example").disabled = false;
@@ -178,6 +184,18 @@ async function loadService() {
     alert.hidden = false;
     console.error(error);
   }
+}
+
+/** The model names of `make` in a /v1/makes answer, or none for an unknown make. */
+export function modelsOf(makes, make) {
+  return makes.makes.find((entry) => entry.make === make)?.models ?? [];
+}
+
+function setupModelOptions(makes) {
+  const list = $("model-options");
+  const fill = () => list.replaceChildren(...modelsOf(makes, $("make").value).map((name) => new Option(name)));
+  $("make").addEventListener("change", fill);
+  fill();
 }
 
 function showModel(health) {
