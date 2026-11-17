@@ -502,9 +502,9 @@ Start it under **Actions → Retrain → Run workflow** on `main`, with the reas
 
 The run:
 
-1. pulls the committed artefacts from the DVC remote and runs `dvc repro` with tracking required, so every training run is in the DagsHub MLflow and the run fails rather than training untracked;
+1. pulls the committed artefacts from the DVC remote, retried as in [CD](deployment.md#continuous-delivery), and runs `dvc repro` with tracking required, so every training run is in the DagsHub MLflow and the run fails rather than training untracked;
 2. stops with nothing to promote when `dvc.lock` did not change;
-3. copies the stage figures over the report's copies, tags the MLflow runs it trained with the machine (also when a later stage failed, so no run it trained stays unlabelled), and pushes the artefacts to the DVC remote;
+3. copies the stage figures over the report's copies, tags the MLflow runs it trained with the machine (also when a later stage failed, so no run it trained stays unlabelled), and pushes the artefacts to the DVC remote, retried the same way;
 4. commits the outputs to a branch `retrain/run-<run number>-<attempt>` and pushes it;
 5. writes the evidence into the run's summary: the model version (the MD5 `dvc.lock` records for `models/<candidate>`, which `/health` reports), the reason, the gate verdict as the Promotion gate check will see it, the metrics of every variant beside the committed ones with their MLflow runs, and NFR-06's comparison with the committed metrics.
 
