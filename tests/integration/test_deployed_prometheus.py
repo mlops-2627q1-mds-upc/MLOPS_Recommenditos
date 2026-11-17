@@ -98,9 +98,10 @@ def test_prometheus_keeps_at_most_2_gb_for_60_days_in_a_named_volume(prometheus_
 RESOURCE_QUERIES = {
     # The API's memory against its limit, and its start time, whose change is a restart.
     "api memory": f"container_memory_working_set_bytes{{{service_series('api')}}}",
+    "api rss": f"container_memory_rss{{{service_series('api')}}}",
     "api memory limit": f"container_spec_memory_limit_bytes{{{service_series('api')}}}",
     "api start time": f"container_start_time_seconds{{{service_series('api')}}}",
-    "proxy memory": f"container_memory_working_set_bytes{{{service_series('proxy')}}}",
+    "proxy memory": f"container_memory_rss{{{service_series('proxy')}}}",
     # The host: memory left and the root file system's free bytes (NFR-04's 4 GB floor).
     "host memory available": "node_memory_MemAvailable_bytes",
     "host root free": 'node_filesystem_avail_bytes{mountpoint="/"}',

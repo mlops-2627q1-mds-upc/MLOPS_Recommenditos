@@ -146,22 +146,28 @@ groups:
           runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#hostmemorylow"
           dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-11"
 
-      # NFR-04: each container's memory limit. Above 90 % of it, the kernel will
-      # soon kill the container's largest process.
+      # NFR-04: each container's memory limit, before the kernel kills the
+      # container's largest process. RSS, the memory the processes allocated
+      # themselves, and not the working set: the working set also counts kernel
+      # caches the kernel frees at the limit, and the healthcheck's probes alone
+      # fill the API's within a day. RSS leaves out the tmpfs and the kernel
+      # memory that cannot be freed, so the threshold is 85 %: with its 80 MiB of
+      # tmpfs full, the API is killed from about 88 %
+      # (docs/docs/monitoring.md#containermemorynearlimit).
       - alert: ContainerMemoryNearLimit
         expr: |
           max by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (
-            container_memory_working_set_bytes{container_label_com_docker_compose_service!=""}
+            container_memory_rss{container_label_com_docker_compose_service!=""}
           )
           / max by (container_label_com_docker_compose_project, container_label_com_docker_compose_service) (
             container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=""} > 0
           )
-          > 0.9
+          > 0.85
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "The {{ $labels.container_label_com_docker_compose_service }} container uses {{ $value | humanizePercentage }} of its memory limit."
+          summary: "The processes of the {{ $labels.container_label_com_docker_compose_service }} container hold {{ $value | humanizePercentage }} of its memory limit."
           description: "A container at its limit loses its largest process to the kernel. If its memory grew steadily, it leaks: restart it (`docker restart recommenditos-{{ $labels.container_label_com_docker_compose_service }}-1`) and open an issue with the panel; if it grew with load, its limit in deploy/compose.yaml is too small for that load."
           runbook_url: "https://github.com/mlops-2627q1-mds-upc/MLOPS_Recommenditos/blob/main/docs/docs/monitoring.md#containermemorynearlimit"
           dashboard_url: "http://localhost:3000/d/service-health/service-health?viewPanel=panel-15"
