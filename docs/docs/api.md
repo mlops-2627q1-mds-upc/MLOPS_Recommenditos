@@ -78,6 +78,7 @@ The operational endpoints are not part of that contract and stay at the root, wh
 | `POST /v1/predict` | The point estimate of the asking price in EUR, its explanation, the model that made it, a request ID and warnings | FR-01, FR-03 to FR-06, FR-08, FR-13 |
 | `POST /v1/price-range` | The typical price and the nominal 90 % price range in EUR for a car described by any fields that include its make, the model, a request ID and warnings | FR-02 to FR-05, FR-07, FR-13 |
 | `POST /v1/comparables` | Up to `k` real listings with their price and key features, comparable to a car described as for `/v1/price-range`, the index and the model, a request ID and warnings | FR-02 to FR-04, FR-09, FR-13 |
+| `GET /v1/makes` | Every accepted make with the model names the served model saw in training and the comparables index holds for it, and the model; the web form suggests these names. 503 without the index | FR-05, FR-16 |
 | `POST /v1/feedback` | Stores the observed price of an answered listing against its request ID; internal, requires the API key | FR-10 |
 | `GET /health` | `ok`, the served model (its variant, version and training time), `price_range`, whether the bundle can answer `/v1/price-range`, and `comparables`, the index's version and size | FR-11, FR-12 |
 | `GET /` | The service name, the served model and links to `/docs`, `/redoc` and `/openapi.json`; for a browser, which asks for `text/html`, the [web page](web-ui.md) | FR-16 |

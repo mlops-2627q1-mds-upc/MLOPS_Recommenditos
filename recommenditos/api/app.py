@@ -58,6 +58,7 @@ repository for how to run the service and how errors are shaped.
 
 _TAGS = [
     {"name": "valuation", "description": "Price estimates for a listing."},
+    {"name": "reference", "description": "What the served model knows, for a client's forms."},
     {
         "name": "feedback",
         "description": "Observed prices for the drift job. Internal: refused from outside the "
