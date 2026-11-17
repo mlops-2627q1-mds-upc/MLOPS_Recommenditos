@@ -102,6 +102,7 @@ It needs fontTools from the `webfonts` group; like the Node tests, it is skipped
 - `GET /health` once, for the model's name and training date in the header.
 - `GET /v1/makes` once, for the model names the Model field suggests for the chosen make, so a person picks a spelling the model knows instead of meeting the unseen value warning after the estimate.
   The field stays free text: a name off the list is still sent, and without the list the field just offers no suggestions.
+  The page does not wait for the list before it enables the form, and the field leaves out `autocomplete="off"`, because Firefox shows no suggestions on a field with it.
 - For each estimate, `POST /v1/predict`, `POST /v1/price-range` and `POST /v1/comparables` (with `k` 8) in parallel, with the same body.
   A second press of the button while an estimate runs is ignored; nothing is cancelled.
 

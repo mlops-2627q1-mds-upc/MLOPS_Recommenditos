@@ -274,7 +274,7 @@
           "reference"
         ],
         "summary": "The supported makes and the model names the served model knows for each",
-        "description": "Every make `/v1/predict` accepts, with the model names it knows for that make.\n\nA model name is listed under a make when the comparables index holds a\nlisting of both and the served model saw the name in training, so a client\ncan suggest names that reach the model rather than an unknown level (FR-05).\nThe model's own vocabulary has no make, which is why the index pairs them.\nA service built without the index answers 503.",
+        "description": "Every make `/v1/predict` accepts, with the model names it knows for that make.\n\nA model name is listed under a make when the comparables index holds a\nlisting of both and the served model saw the name in training, so a client\ncan suggest names that reach the model rather than an unknown level (FR-05).\nThe answer is built once at startup and never changes while the service\nruns, so the route is `async` and waits for no thread. A service built\nwithout the index answers 503.",
         "operationId": "makes_v1_makes_get",
         "responses": {
           "200": {
@@ -1547,7 +1547,7 @@
             },
             "type": "array",
             "title": "Models",
-            "description": "Model names in the served model's training data that the comparables index holds listings of for this make, sorted. Another name is still accepted, and answered with a warning (FR-05)."
+            "description": "Model names in the served model's training data that the comparables index holds listings of for this make, sorted regardless of case. Another name is still accepted, and answered with a warning (FR-05)."
           }
         },
         "type": "object",

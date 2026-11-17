@@ -78,7 +78,7 @@ class ComparablesIndex:
     _model: np.ndarray
     _age: np.ndarray
     _mileage: np.ndarray
-    #: Per make, the models the index holds listings of, sorted.
+    #: Per make, the models the index holds listings of, sorted regardless of case.
     models_by_make: dict[str, tuple[str, ...]]
 
     @classmethod
@@ -100,7 +100,7 @@ class ComparablesIndex:
             _age=listings["age_years"].to_numpy(dtype="float64"),
             _mileage=listings["mileage_km_raw"].to_numpy(dtype="float64"),
             models_by_make={
-                str(name): tuple(sorted(set(map(str, models.dropna()))))
+                str(name): tuple(sorted(set(map(str, models.dropna())), key=str.casefold))
                 for name, models in listings.groupby("make", observed=True)["model"]
             },
         )

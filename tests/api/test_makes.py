@@ -7,7 +7,7 @@ import pytest
 from tests.api.helpers import assert_problem
 
 from recommenditos.api.app import create_app
-from recommenditos.api.comparables import ComparablesIndex
+from recommenditos.api.errors import pointer
 from recommenditos.api.serving import ServedModel
 from recommenditos.api.settings import Settings
 from recommenditos.data.build_comparables import INDEX_FILE
@@ -16,31 +16,38 @@ MAKES = "/v1/makes"
 
 
 @pytest.mark.req("FR-05")
-def test_fr05_every_accepted_make_is_listed_with_models_of_both_index_and_model(
-    client: TestClient, served: ServedModel, index: ComparablesIndex
+def test_fr05_every_accepted_make_is_listed_with_the_models_it_knows(
+    client: TestClient, served: ServedModel
 ):
     answer = client.get(MAKES).json()
 
-    known = set(served.model.input_schema.levels["model"])
-    listings = index.listings
     assert [entry["make"] for entry in answer["makes"]] == list(served.allowed["make"])
-    for entry in answer["makes"]:
-        in_index = set(listings.loc[listings["make"] == entry["make"], "model"].dropna())
-        assert entry["models"] == sorted(in_index & known)
-    assert any(entry["models"] for entry in answer["makes"])
+    models = {entry["make"]: entry["models"] for entry in answer["makes"]}
+    # The synthetic fixture's BMW names, sorted regardless of case.
+    assert models["BMW"] == ["1 Series", "3 Series", "5 Series", "i4", "X3", "X3 M", "X5"]
     assert answer["model"] == served.info.model_dump(mode="json")
 
 
 @pytest.mark.req("FR-05")
-def test_fr05_a_listed_model_reaches_the_model_without_a_warning(
+def test_fr05_every_listed_model_reaches_the_model_without_a_warning(
     client: TestClient, listing: dict
 ):
-    entry = next(e for e in client.get(MAKES).json()["makes"] if e["models"])
-    body = {**listing, "make": entry["make"], "model": entry["models"][0]}
+    for entry in client.get(MAKES).json()["makes"]:
+        for model in entry["models"]:
+            body = {**listing, "make": entry["make"], "model": model}
+
+            warnings = client.post("/v1/predict", json=body).json()["warnings"]
+
+            assert pointer(["model"]) not in [warning["pointer"] for warning in warnings]
+
+
+@pytest.mark.req("FR-05")
+def test_fr05_a_model_off_the_list_is_answered_with_a_warning(client: TestClient, listing: dict):
+    body = {**listing, "make": "BMW", "model": "3 series"}
 
     warnings = client.post("/v1/predict", json=body).json()["warnings"]
 
-    assert "/model" not in [warning["pointer"] for warning in warnings]
+    assert pointer(["model"]) in [warning["pointer"] for warning in warnings]
 
 
 @pytest.mark.req("FR-16")

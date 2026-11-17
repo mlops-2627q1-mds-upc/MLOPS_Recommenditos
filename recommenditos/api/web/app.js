@@ -162,16 +162,13 @@ function fillSelects(properties) {
 async function loadService() {
   const alert = $("form-alert");
   try {
-    const [openapi, health, makes] = await Promise.all([
-      getJson("openapi.json"),
-      getJson("health").catch(() => null),
-      // Suggestions only: without them the model field stays free text.
-      getJson("v1/makes").catch(() => null),
-    ]);
+    // Suggestions only, so neither a failed nor a slow answer holds the form back.
+    const makes = getJson("v1/makes").catch(() => null);
+    const [openapi, health] = await Promise.all([getJson("openapi.json"), getJson("health").catch(() => null)]);
     schema = openapi.components.schemas.ValuationRequest.properties;
     fillSelects(schema);
     if (health) showModel(health);
-    if (makes) setupModelOptions(makes);
+    makes.then((answer) => { if (answer) setupModelOptions(answer); });
     for (const fieldset of form.querySelectorAll("fieldset")) fieldset.disabled = false;
     $("submit").disabled = false;
     $("example").disabled = false;

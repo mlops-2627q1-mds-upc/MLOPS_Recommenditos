@@ -213,6 +213,7 @@ client --> nginx (gateway) --> FastAPI (model bundle: LightGBM boosters, which g
                                  |-- /v1/predict      (UC1)
                                  |-- /v1/price-range  (UC2)
                                  |-- /v1/comparables
+                                 |-- /v1/makes        (model names per make, for the web form)
                                  |-- /v1/feedback     (internal only: the proxy refuses it
                                  |                     from outside; reported prices, no real
                                  |                     users, so replayed from the ES holdout)
