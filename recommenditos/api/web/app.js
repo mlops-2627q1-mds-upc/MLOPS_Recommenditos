@@ -240,7 +240,8 @@ function setupModelOptions(makes) {
     close();
   };
 
-  input.addEventListener("focus", open);
+  // Not on focus: the form's error check focuses the field, and the list would cover its message.
+  input.addEventListener("click", open);
   input.addEventListener("input", open);
   input.addEventListener("blur", close);
   input.addEventListener("keydown", (event) => {
